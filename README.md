@@ -44,8 +44,19 @@ cp .env.example .env
 ./gradlew run
 ```
 
-The `.env` file is excluded by `.gitignore`. If a key has ever been committed or shared publicly, revoke it in the Finnhub dashboard
-and create a replacement.
+The `.env` file is excluded by `.gitignore`. It may also contain `FINNHUB_WEBHOOK_SECRET` for future webhook handling; the current
+read-only UI does not use that value. If a key has ever been committed or shared publicly, revoke it in the Finnhub dashboard and
+create a replacement.
+
+If no API key is available on the first launch, MiMiTrends opens a setup dialog with a Finnhub registration link and fields for the
+API key and optional webhook secret. Values saved by the dialog are stored outside the repository:
+
+```text
+~/.mimi/trends/finnhub.properties
+```
+
+On POSIX-compatible systems, the application restricts this file to the current user (`0600`). Resolution priority is environment
+variables, project-local `.env`, then the user settings file.
 
 ## Build and run
 
@@ -60,9 +71,9 @@ compilation toolchain.
 
 ### IntelliJ IDEA
 
-Import the project as a **Gradle project**, allow Gradle synchronization to finish, and run
-`org.senatov.mimitrends.LauncherKt`. Do not create an Application run configuration for `App`: it is the JavaFX lifecycle class,
-not the JVM entry point.
+Import the project as a **Gradle project**, allow Gradle synchronization to finish, open `Launcher.kt`, and use the Run/Debug gutter
+button next to `Launcher` or its `main()` method. The run class is `org.senatov.mimitrends.Launcher`. Do not create an Application run
+configuration for `App`: it is the JavaFX lifecycle class, not the JVM entry point.
 
 Alternatively, create a Gradle run configuration with:
 
@@ -107,15 +118,15 @@ The application calls:
 - `GET /api/v1/quote`
 - `GET /api/v1/stock/candle`
 
-Availability and history depth can depend on the Finnhub subscription. When candle history is unavailable but a quote loads,
-MiMiTrends draws a minimal previous-close-to-current-price fallback so that the demo remains usable and labels this state in the
-status bar.
+Availability and history depth can depend on the Finnhub subscription. When candle history is unavailable but a quote loads, MiMiTrends
+draws a minimal previous-close-to-current-price fallback so that the demo remains usable and labels this state in the status bar.
 
 ## Security notes
 
-- Only `FINNHUB_API_KEY` is used.
+- Only `FINNHUB_API_KEY` is used by the current market-data client.
 - The key is sent only to `https://finnhub.io/api/v1`.
-- No account password, webhook secret, email address, 2FA setting, or passkey information is read or stored.
+- An optional webhook secret can be read from local configuration but is not sent or used yet.
+- No account password, email address, 2FA setting, or passkey information is read or stored.
 - This demo is read-only and does not place orders.
 
 ## Icon

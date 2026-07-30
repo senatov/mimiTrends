@@ -57,8 +57,13 @@
     -fx-font-size: 16px;
 }
 
-.gain { -fx-text-fill: #31885c; }
-.loss { -fx-text-fill: #d24f5d; }
+.gain {
+    -fx-text-fill: #31885c;
+}
+
+.loss {
+    -fx-text-fill: #d24f5d;
+}
 
 .metric-card {
     -fx-background-color: #f3f3f4;
@@ -123,4 +128,9 @@
 
 .status-bar .status-error {
     -fx-text-fill: #c74552;
+}
+
+.setup-path {
+    -fx-font-size: 12px;
+    -fx-text-fill: #74787e;
 }

@@ -38,7 +38,7 @@ dependencies {
 }
 
 application {
-    mainClass = "org.senatov.mimitrends.LauncherKt"
+    mainClass = "org.senatov.mimitrends.Launcher"
     applicationDefaultJvmArgs = listOf("--enable-native-access=ALL-UNNAMED")
 }
 

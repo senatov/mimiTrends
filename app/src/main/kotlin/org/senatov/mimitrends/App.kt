@@ -13,7 +13,9 @@ class App : Application() {
         loadFont("/fonts/SF-Pro-Display-Light.otf")
         loadFont("/fonts/SF-Pro-Display-Medium.otf")
 
-        val controller = MainController(ApiKeyResolver.resolve())
+        val apiKey = ApiKeyResolver.resolve()
+            ?: FinnhubSetupDialog(stage, hostServices).showAndSave()
+        val controller = MainController(apiKey)
         val scene = Scene(controller.createView(), 1120.0, 720.0)
         scene.stylesheets += requireNotNull(javaClass.getResource("/org/senatov/mimitrends/MiMiTrends.css")).toExternalForm()
 
