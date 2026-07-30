@@ -1,0 +1,2 @@
+# mimiTrends
+Börse Trends 
