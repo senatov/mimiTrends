@@ -38,7 +38,11 @@ object ApiKeyResolver {
     }
 
     private fun readDotEnv(variableName: String): String? {
-        val envFile = Path.of(".env")
+        val envFile = generateSequence(Path.of("").toAbsolutePath()) { current -> current.parent }
+            .take(4)
+            .map { directory -> directory.resolve(".env") }
+            .firstOrNull(Files::isRegularFile)
+            ?: return null
         if (!Files.isRegularFile(envFile)) return null
         return Files.readAllLines(envFile)
             .asSequence()

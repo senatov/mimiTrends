@@ -71,9 +71,9 @@ compilation toolchain.
 
 ### IntelliJ IDEA
 
-Import the project as a **Gradle project**, allow Gradle synchronization to finish, open `Launcher.kt`, and use the Run/Debug gutter
-button next to `Launcher` or its `main()` method. The run class is `org.senatov.mimitrends.Launcher`. Do not create an Application run
-configuration for `App`: it is the JavaFX lifecycle class, not the JVM entry point.
+Import the project as a **Gradle project** and allow Gradle synchronization to finish. Select the shared
+`MiMiTrends [run]` configuration in the toolbar for reliable Run and Debug support. Like MiMiComparator, the packaged entry point is
+the separate `org.senatov.mimitrends.LauncherKt` class.
 
 Alternatively, create a Gradle run configuration with:
 

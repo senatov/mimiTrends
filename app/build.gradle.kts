@@ -38,7 +38,9 @@ dependencies {
 }
 
 application {
-    mainClass = "org.senatov.mimitrends.Launcher"
+    // A separate launcher prevents the JDK launcher from treating App as a modular
+    // JavaFX entry point while the JavaFX libraries are supplied on the classpath.
+    mainClass = "org.senatov.mimitrends.LauncherKt"
     applicationDefaultJvmArgs = listOf("--enable-native-access=ALL-UNNAMED")
 }
 

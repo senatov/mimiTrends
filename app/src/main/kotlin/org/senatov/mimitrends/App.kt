@@ -8,6 +8,13 @@ import javafx.scene.text.Font
 import javafx.stage.Stage
 
 class App : Application() {
+    companion object {
+        @JvmStatic
+        fun main(args: Array<String>) {
+            launch(App::class.java, *args)
+        }
+    }
+
     override fun start(stage: Stage) {
         Application.setUserAgentStylesheet(CupertinoLight().userAgentStylesheet)
         loadFont("/fonts/SF-Pro-Display-Light.otf")
