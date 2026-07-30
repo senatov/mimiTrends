@@ -1,16 +1,14 @@
-# Compiled class file
-*.class
-
-# Log file
+.gradle/
+.idea/
+build/
+app/build/
+.env
+*.local
 *.log
-
-# BlueJ files
+.DS_Store
+*.class
 *.ctxt
-
-# Mobile Tools for Java (J2ME)
 .mtj.tmp/
-
-# Package Files #
 *.jar
 *.war
 *.nar
@@ -18,10 +16,9 @@
 *.zip
 *.tar.gz
 *.rar
-
-# virtual machine crash logs, see http://www.java.com/en/download/help/error_hotspot.xml
 hs_err_pid*
 replay_pid*
-
-# Kotlin Gradle plugin data, see https://kotlinlang.org/docs/whatsnew20.html#new-directory-for-kotlin-data-in-gradle-projects
 .kotlin/
+
+# The Gradle wrapper JAR is required for reproducible builds.
+!gradle/wrapper/gradle-wrapper.jar
