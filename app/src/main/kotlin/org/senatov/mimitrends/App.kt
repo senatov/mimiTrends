@@ -31,8 +31,4 @@ class App : Application() {
         javaClass.getResourceAsStream(path)?.use { Font.loadFont(it, 14.0) }
     }
 
-    companion object {
-        @JvmStatic
-        fun main(args: Array<String>) = launch(App::class.java, *args)
-    }
 }

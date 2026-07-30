@@ -1,3 +1,13 @@
 package org.senatov.mimitrends
 
-fun main(args: Array<String>) = App.main(args)
+import javafx.application.Application
+
+/**
+ * Non-JavaFX launcher class.
+ *
+ * Keeping the main function outside [App] prevents the JDK launcher from
+ * trying to resolve JavaFX modules before Gradle's runtime classpath is active.
+ */
+fun main(args: Array<String>) {
+    Application.launch(App::class.java, *args)
+}

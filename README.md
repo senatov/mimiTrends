@@ -58,6 +58,20 @@ compilation toolchain.
 ./gradlew build
 ```
 
+### IntelliJ IDEA
+
+Import the project as a **Gradle project**, allow Gradle synchronization to finish, and run
+`org.senatov.mimitrends.LauncherKt`. Do not create an Application run configuration for `App`: it is the JavaFX lifecycle class,
+not the JVM entry point.
+
+Alternatively, create a Gradle run configuration with:
+
+```text
+Task: :app:run
+```
+
+If an older `App` run configuration already exists, delete it and reload the Gradle project.
+
 To create a macOS application bundle (requires a full JDK 26 with `jpackage`):
 
 ```zsh
