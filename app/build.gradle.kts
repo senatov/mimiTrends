@@ -35,6 +35,7 @@ dependencies {
     implementation("org.apache.logging.log4j:log4j-api")
     implementation("org.apache.logging.log4j:log4j-core")
     implementation("org.apache.logging.log4j:log4j-slf4j2-impl")
+    implementation("org.xerial:sqlite-jdbc:3.50.3.0")
     testImplementation(platform("org.junit:junit-bom:5.14.4"))
     testImplementation("org.junit.jupiter:junit-jupiter")
     testImplementation("org.jetbrains.kotlin:kotlin-test-junit5")
@@ -66,6 +67,7 @@ tasks.named<JavaExec>("run") {
 
 tasks.test {
     useJUnitPlatform()
+    jvmArgs("--enable-native-access=ALL-UNNAMED")
 }
 
 val jpackageInputDir = layout.buildDirectory.dir("jpackage/input")
@@ -95,7 +97,8 @@ tasks.register<Exec>("packageMacApp") {
         "--dest", outputDir.absolutePath,
         "--input", inputDir.absolutePath,
         "--main-jar", tasks.named<Jar>("jar").get().archiveFileName.get(),
-        "--main-class", application.mainClass.get()
+        "--main-class", application.mainClass.get(),
+        "--java-options", "--enable-native-access=javafx.graphics,ALL-UNNAMED"
     )
     if (iconFile.exists()) args += listOf("--icon", iconFile.absolutePath)
     doFirst {

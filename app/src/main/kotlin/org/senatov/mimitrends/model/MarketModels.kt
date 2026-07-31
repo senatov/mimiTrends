@@ -19,7 +19,8 @@ data class MarketSnapshot(
     val symbol: String,
     val description: String? = null,
     val quote: Quote,
-    val candles: List<Candle>
+    val candles: List<Candle>,
+    val fromCache: Boolean = false
 )
 
 data class InstrumentMatch(

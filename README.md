@@ -21,7 +21,7 @@ The demo includes:
 - current price, daily change, open, high, low, and previous close;
 - a responsive JavaFX line chart;
 - asynchronous network requests, loading state, and readable API errors;
-- quote-derived fallback points if candle history is unavailable on the active Finnhub plan;
+- SQLite-backed accumulation of real quote and candle history;
 - a generated MiMiTrends application icon and a macOS `jpackage` task.
 
 ## API key
@@ -118,8 +118,10 @@ The application calls:
 - `GET /api/v1/quote`
 - `GET /api/v1/stock/candle`
 
-Availability and history depth can depend on the Finnhub subscription. When candle history is unavailable but a quote loads, MiMiTrends
-draws a minimal previous-close-to-current-price fallback so that the demo remains usable and labels this state in the status bar.
+Availability and history depth can depend on the Finnhub subscription. MiMiTrends never fabricates interpolated chart points. Real
+candles and live quotes are accumulated in `~/.mimi/trends/mimitrends.db`; if Finnhub is temporarily unavailable, the most recent
+cached quote and real local history are shown. Temporary HTTP `502`, `503`, and `504` responses are retried after 500 ms, 1.5 s, and
+3 s. Authentication, permission, validation, and missing-resource errors are not retried.
 
 ## Logging
 

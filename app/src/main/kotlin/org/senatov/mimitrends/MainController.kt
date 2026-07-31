@@ -13,6 +13,7 @@ import javafx.scene.chart.XYChart
 import javafx.scene.control.*
 import javafx.scene.layout.*
 import org.senatov.mimitrends.api.FinnhubClient
+import org.senatov.mimitrends.db.MarketRepository
 import org.senatov.mimitrends.model.MarketSnapshot
 import org.senatov.mimitrends.log.LogTag
 import org.slf4j.LoggerFactory
@@ -26,6 +27,7 @@ import java.util.concurrent.CompletionException
 
 class MainController(private val apiKey: String?) {
     private val log = LoggerFactory.getLogger(MainController::class.java)
+    private val repository = MarketRepository()
     private val symbolField = TextField("AAPL")
     private val rangeBox = ComboBox(FXCollections.observableArrayList("1M", "3M", "6M", "1Y"))
     private val refreshButton = Button("↻  Refresh")
@@ -131,15 +133,34 @@ class MainController(private val apiKey: String?) {
         setLoading(true)
         log.info(LogTag.API, "loading query={} rangeDays={}", query, selectedDays())
         setStatus("Searching for $query…", false)
-        FinnhubClient(key).resolveAndLoadSnapshot(query, selectedDays())
+        val days = selectedDays()
+        FinnhubClient(key).resolveAndLoadSnapshot(query, days)
+            .thenApply { snapshot ->
+                runCatching {
+                    repository.save(snapshot)
+                    repository.load(snapshot.symbol, days)?.copy(
+                        description = snapshot.description,
+                        fromCache = false
+                    ) ?: snapshot
+                }.onFailure { error ->
+                    log.error(LogTag.DB, "cache update failed symbol={}", snapshot.symbol, error)
+                }.getOrDefault(snapshot)
+            }
             .whenComplete { snapshot: MarketSnapshot?, error: Throwable? ->
+                val cached = if (error != null) {
+                    runCatching { repository.load(query.uppercase(), days) }
+                        .onFailure { cacheError -> log.error(LogTag.DB, "cache fallback failed query={}", query, cacheError) }
+                        .getOrNull()
+                } else null
                 Platform.runLater {
                     setLoading(false)
                     if (error != null) {
                         val cause = (error as? CompletionException)?.cause ?: error
                         log.error(LogTag.API, "load failed query={}", query, cause)
+                        if (cached != null) showSnapshot(cached)
                         setStatus(
-                            cause.message ?: "Could not load market data",
+                            if (cached != null) "Finnhub temporarily unavailable — showing cached data"
+                            else cause.message ?: "Could not load market data",
                             true,
                             formatErrorLog(query, cause)
                         )
@@ -172,11 +193,15 @@ class MainController(private val apiKey: String?) {
         series.data += snapshot.candles.map {
             XYChart.Data(formatter.format(Instant.ofEpochSecond(it.timestampSeconds)), it.close)
         }
+        chart.createSymbols = snapshot.candles.size < 2
         chart.data.setAll(series)
         chart.title = "${snapshot.symbol} · ${rangeBox.value}"
         setStatus(
-            if (snapshot.candles.size <= 30) "Live quote loaded · chart may use quote-derived fallback data"
-            else "${snapshot.candles.size} daily closes loaded",
+            when {
+                snapshot.fromCache -> "Showing ${snapshot.candles.size} cached real price points"
+                snapshot.candles.isEmpty() -> "Live quote saved · local history collection has started"
+                else -> "${snapshot.candles.size} real price points loaded"
+            },
             false
         )
     }

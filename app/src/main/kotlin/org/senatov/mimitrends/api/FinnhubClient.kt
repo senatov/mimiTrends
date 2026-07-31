@@ -41,12 +41,14 @@ class FinnhubClient(
         val candlesFuture = get(
             "/stock/candle?symbol=${encode(normalizedSymbol)}&resolution=D&from=$from&to=$to"
         ).handle { body, error ->
-            if (error == null) parseCandles(body) else emptyList()
+            if (error == null) parseCandles(body) else {
+                log.warn(LogTag.API, "candle history unavailable symbol={}: {}", normalizedSymbol, error.message)
+                emptyList()
+            }
         }
         return quoteFuture.thenCombine(candlesFuture) { quote, candles ->
-            val chartPoints = candles.ifEmpty { quoteFallback(quote, days) }
-            log.info(LogTag.API, "snapshot loaded symbol={} candles={} fallback={}", normalizedSymbol, chartPoints.size, candles.isEmpty())
-            MarketSnapshot(normalizedSymbol, quote = quote, candles = chartPoints)
+            log.info(LogTag.API, "snapshot loaded symbol={} candles={}", normalizedSymbol, candles.size)
+            MarketSnapshot(normalizedSymbol, quote = quote, candles = candles)
         }.orTimeout(REQUEST_CHAIN_TIMEOUT_SECONDS, TimeUnit.SECONDS)
     }
 
@@ -130,8 +132,8 @@ class FinnhubClient(
         }
     }
 
-    private fun get(path: String): CompletableFuture<String> {
-        log.debug(LogTag.API, "get(path={})", path)
+    private fun get(path: String, attempt: Int = 0): CompletableFuture<String> {
+        log.debug(LogTag.API, "get(path={}, attempt={})", path, attempt + 1)
         val separator = if ('?' in path) '&' else '?'
         val request = HttpRequest.newBuilder()
             .uri(URI.create("$BASE_URL$path${separator}token=${encode(apiKey)}"))
@@ -139,28 +141,29 @@ class FinnhubClient(
             .header("Accept", "application/json")
             .GET()
             .build()
-        return httpClient.sendAsync(request, HttpResponse.BodyHandlers.ofString())
-            .thenApply { response ->
-                log.debug(LogTag.API, "response path={} status={} chars={}", path, response.statusCode(), response.body().length)
-                if (response.statusCode() !in 200..299) {
-                    throw FinnhubException("Finnhub request failed (HTTP ${response.statusCode()})")
+        return httpClient.sendAsync(request, HttpResponse.BodyHandlers.ofString()).handle { response, error ->
+            when {
+                error != null && attempt < RETRY_DELAYS_MS.size -> retry(path, attempt, error.message ?: "network error")
+                error != null -> CompletableFuture.failedFuture(error)
+                response.statusCode() in RETRYABLE_STATUS && attempt < RETRY_DELAYS_MS.size ->
+                    retry(path, attempt, "HTTP ${response.statusCode()}")
+                response.statusCode() !in 200..299 -> CompletableFuture.failedFuture(
+                    FinnhubException("Finnhub request failed (HTTP ${response.statusCode()})")
+                )
+                else -> {
+                    log.debug(LogTag.API, "response path={} status={} chars={}", path, response.statusCode(), response.body().length)
+                    CompletableFuture.completedFuture(response.body())
                 }
-                response.body()
             }
+        }.thenCompose { it }
     }
 
-    private fun quoteFallback(quote: Quote, days: Long): List<Candle> {
-        log.debug(LogTag.API, "quoteFallback(days={}, current={})", days, quote.current)
-        val start = if (quote.previousClose > 0.0) quote.previousClose else quote.current
-        val count = days.coerceIn(2, 30).toInt()
-        val now = Instant.now()
-        return (0 until count).map { index ->
-            val fraction = index.toDouble() / (count - 1).coerceAtLeast(1)
-            Candle(
-                now.minus((count - index - 1).toLong(), ChronoUnit.DAYS).epochSecond,
-                start + (quote.current - start) * fraction
-            )
-        }
+    private fun retry(path: String, attempt: Int, reason: String): CompletableFuture<String> {
+        val delay = RETRY_DELAYS_MS[attempt]
+        log.warn(LogTag.API, "temporary failure path={} reason={} retry={} delayMs={}", path, reason, attempt + 2, delay)
+        return CompletableFuture.runAsync(
+            {}, CompletableFuture.delayedExecutor(delay, TimeUnit.MILLISECONDS)
+        ).thenCompose { get(path, attempt + 1) }
     }
 
     private fun encode(value: String): String =
@@ -190,6 +193,8 @@ class FinnhubClient(
     companion object {
         private const val BASE_URL = "https://finnhub.io/api/v1"
         private const val REQUEST_CHAIN_TIMEOUT_SECONDS = 15L
+        private val RETRY_DELAYS_MS = longArrayOf(500, 1_500, 3_000)
+        private val RETRYABLE_STATUS = setOf(502, 503, 504)
     }
 }
 
