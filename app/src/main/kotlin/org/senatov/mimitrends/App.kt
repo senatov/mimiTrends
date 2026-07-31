@@ -6,16 +6,22 @@ import javafx.scene.Scene
 import javafx.scene.image.Image
 import javafx.scene.text.Font
 import javafx.stage.Stage
+import org.senatov.mimitrends.log.LogTag
+import org.slf4j.LoggerFactory
 
 class App : Application() {
+    private val log = LoggerFactory.getLogger(App::class.java)
+
     companion object {
         @JvmStatic
         fun main(args: Array<String>) {
+            LoggerFactory.getLogger(App::class.java).debug(LogTag.APP, "main(args={})", args.contentToString())
             launch(App::class.java, *args)
         }
     }
 
     override fun start(stage: Stage) {
+        log.debug(LogTag.APP, "start(stage={})", stage)
         Application.setUserAgentStylesheet(CupertinoLight().userAgentStylesheet)
         loadFont("/fonts/SF-Pro-Display-Light.otf")
         loadFont("/fonts/SF-Pro-Display-Medium.otf")
@@ -34,10 +40,13 @@ class App : Application() {
         stage.minHeight = 560.0
         stage.scene = scene
         stage.show()
+        log.info(LogTag.APP, "stage shown width={} height={}", stage.width, stage.height)
     }
 
     private fun loadFont(path: String) {
+        log.debug(LogTag.IO, "loadFont(path={})", path)
         javaClass.getResourceAsStream(path)?.use { Font.loadFont(it, 14.0) }
+            ?: log.warn(LogTag.IO, "font resource missing path={}", path)
     }
 
 }

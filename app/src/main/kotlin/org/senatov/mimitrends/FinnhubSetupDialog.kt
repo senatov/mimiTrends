@@ -14,17 +14,21 @@ import javafx.scene.control.TextField
 import javafx.scene.layout.GridPane
 import javafx.scene.layout.VBox
 import javafx.stage.Window
+import org.senatov.mimitrends.log.LogTag
+import org.slf4j.LoggerFactory
 
 class FinnhubSetupDialog(
     owner: Window,
     private val hostServices: HostServices
 ) {
+    private val log = LoggerFactory.getLogger(FinnhubSetupDialog::class.java)
     private val dialog = Dialog<ButtonType>()
     private val apiKeyField = PasswordField()
     private val webhookField = PasswordField()
     private val saveButtonType = ButtonType("Save and continue", ButtonBar.ButtonData.OK_DONE)
 
     init {
+        log.debug(LogTag.UI, "init(ownerHasScene={})", owner.scene != null)
         // JavaFX 26 cannot bind a heavyweight Dialog to a Stage before that Stage
         // has a Scene. The first-run dialog is intentionally ownerless at that point.
         if (owner.scene != null) dialog.initOwner(owner)
@@ -42,12 +46,15 @@ class FinnhubSetupDialog(
     }
 
     fun showAndSave(): String? {
+        log.debug(LogTag.UI, "showAndSave()")
         if (dialog.showAndWait().orElse(ButtonType.CANCEL) != saveButtonType) return null
         return try {
             val apiKey = apiKeyField.text.trim()
             ApiKeyResolver.saveLocal(apiKey, webhookField.text)
+            log.info(LogTag.STATE, "first-run credentials accepted")
             apiKey
         } catch (error: Exception) {
+            log.error(LogTag.STATE, "credential save failed", error)
             Alert(Alert.AlertType.ERROR).apply {
                 initOwner(dialog.owner)
                 title = "Could not save credentials"
@@ -84,6 +91,7 @@ class FinnhubSetupDialog(
             isWrapText = true
         }
     ).apply {
+        log.debug(LogTag.UI, "createContent()")
         padding = Insets(4.0)
         prefWidth = 480.0
     }

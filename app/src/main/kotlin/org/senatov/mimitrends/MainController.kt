@@ -14,6 +14,8 @@ import javafx.scene.control.*
 import javafx.scene.layout.*
 import org.senatov.mimitrends.api.FinnhubClient
 import org.senatov.mimitrends.model.MarketSnapshot
+import org.senatov.mimitrends.log.LogTag
+import org.slf4j.LoggerFactory
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -23,6 +25,7 @@ import java.time.ZonedDateTime
 import java.util.concurrent.CompletionException
 
 class MainController(private val apiKey: String?) {
+    private val log = LoggerFactory.getLogger(MainController::class.java)
     private val symbolField = TextField("AAPL")
     private val rangeBox = ComboBox(FXCollections.observableArrayList("1M", "3M", "6M", "1Y"))
     private val refreshButton = Button("↻  Refresh")
@@ -41,6 +44,7 @@ class MainController(private val apiKey: String?) {
     private val chartStack = StackPane(chart, progress)
 
     fun createView(): Parent {
+        log.debug(LogTag.UI, "createView()")
         rangeBox.value = "3M"
         symbolField.promptText = "Ticker, e.g. AAPL"
         symbolField.prefColumnCount = 12
@@ -117,6 +121,7 @@ class MainController(private val apiKey: String?) {
     }
 
     private fun refresh() {
+        log.debug(LogTag.UI, "refresh()")
         val key = apiKey ?: return
         val query = symbolField.text.trim()
         if (query.isEmpty()) {
@@ -124,6 +129,7 @@ class MainController(private val apiKey: String?) {
             return
         }
         setLoading(true)
+        log.info(LogTag.API, "loading query={} rangeDays={}", query, selectedDays())
         setStatus("Searching for $query…", false)
         FinnhubClient(key).resolveAndLoadSnapshot(query, selectedDays())
             .whenComplete { snapshot: MarketSnapshot?, error: Throwable? ->
@@ -131,12 +137,14 @@ class MainController(private val apiKey: String?) {
                     setLoading(false)
                     if (error != null) {
                         val cause = (error as? CompletionException)?.cause ?: error
+                        log.error(LogTag.API, "load failed query={}", query, cause)
                         setStatus(
                             cause.message ?: "Could not load market data",
                             true,
                             formatErrorLog(query, cause)
                         )
                     } else if (snapshot != null) {
+                        log.info(LogTag.API, "load completed symbol={} points={}", snapshot.symbol, snapshot.candles.size)
                         showSnapshot(snapshot)
                     } else {
                         setStatus("Finnhub returned an empty response", true)
@@ -146,6 +154,7 @@ class MainController(private val apiKey: String?) {
     }
 
     private fun showSnapshot(snapshot: MarketSnapshot) {
+        log.debug(LogTag.UI, "showSnapshot(symbol={}, points={})", snapshot.symbol, snapshot.candles.size)
         val quote = snapshot.quote
         titleLabel.text = snapshot.description?.let { "${snapshot.symbol} · $it" } ?: snapshot.symbol
         symbolField.text = snapshot.symbol
@@ -176,19 +185,24 @@ class MainController(private val apiKey: String?) {
         VBox(5.0, Label(caption).apply { styleClass += "metric-caption" }, value.apply {
             styleClass += "metric-value"
         }).apply {
+            log.debug(LogTag.UI, "metricCard(caption={})", caption)
             styleClass += "metric-card"
             HBox.setHgrow(this, Priority.ALWAYS)
             maxWidth = Double.MAX_VALUE
         }
 
-    private fun selectedDays(): Long = when (rangeBox.value) {
+    private fun selectedDays(): Long {
+        log.debug(LogTag.UI, "selectedDays(range={})", rangeBox.value)
+        return when (rangeBox.value) {
         "1M" -> 30
         "6M" -> 180
         "1Y" -> 365
         else -> 90
+        }
     }
 
     private fun setLoading(value: Boolean) {
+        log.debug(LogTag.UI, "setLoading(value={})", value)
         progress.isVisible = value
         refreshButton.isDisable = value
         symbolField.isDisable = value
@@ -196,10 +210,12 @@ class MainController(private val apiKey: String?) {
     }
 
     private fun setStatus(message: String, error: Boolean) {
+        log.debug(LogTag.UI, "setStatus(message={}, error={})", message, error)
         setStatus(message, error, if (error) formatErrorLog(symbolField.text, null, message) else null)
     }
 
     private fun setStatus(message: String, error: Boolean, details: String?) {
+        log.debug(LogTag.UI, "setStatus(message={}, error={}, details={})", message, error, details != null)
         statusLabel.text = message
         statusLabel.styleClass.removeAll("status-error")
         if (error) statusLabel.styleClass += "status-error"
@@ -209,6 +225,7 @@ class MainController(private val apiKey: String?) {
     }
 
     private fun showErrorDetails() {
+        log.debug(LogTag.UI, "showErrorDetails()")
         val details = lastErrorDetails ?: return
         val textArea = TextArea(details).apply {
             isEditable = false
@@ -228,6 +245,7 @@ class MainController(private val apiKey: String?) {
     }
 
     private fun formatErrorLog(query: String, error: Throwable?, message: String? = null): String {
+        log.debug(LogTag.UI, "formatErrorLog(query={}, hasError={})", query, error != null)
         val stackTrace = if (error == null) {
             message ?: "No exception stack trace is available."
         } else {
@@ -243,7 +261,13 @@ class MainController(private val apiKey: String?) {
         }
     }
 
-    private fun money(value: Double) = if (value > 0) "\$${"%,.2f".format(value)}" else "—"
+    private fun money(value: Double): String {
+        log.debug(LogTag.UI, "money(value={})", value)
+        return if (value > 0) "\$${"%,.2f".format(value)}" else "—"
+    }
 
-    private fun spacer() = Region().also { HBox.setHgrow(it, Priority.ALWAYS) }
+    private fun spacer(): Region {
+        log.debug(LogTag.UI, "spacer()")
+        return Region().also { HBox.setHgrow(it, Priority.ALWAYS) }
+    }
 }

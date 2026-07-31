@@ -121,6 +121,20 @@ The application calls:
 Availability and history depth can depend on the Finnhub subscription. When candle history is unavailable but a quote loads, MiMiTrends
 draws a minimal previous-close-to-current-price fallback so that the demo remains usable and labels this state in the status bar.
 
+## Logging
+
+MiMiTrends uses the same SLF4J + Log4j2 approach as MiMiComparator. Application, UI, API, state, I/O, and database operations are
+tagged with markers and written at DEBUG level to both the run console and a rolling log file:
+
+```text
+/tmp/MiMiTrends.log
+```
+
+The active file rolls at 10 MB and keeps four compressed archives at `/tmp/MiMiTrends.N.log.gz`. API keys and webhook secrets are
+never written to the log. A complete asynchronous exception stack trace is also available through the red details button in the
+application status bar. A complete Finnhub operation is limited to 15 seconds so a stalled service request cannot leave the UI in a
+permanent loading state.
+
 ## Security notes
 
 - Only `FINNHUB_API_KEY` is used by the current market-data client.

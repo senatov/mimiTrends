@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Configuration status="WARN">
+    <Properties>
+        <Property name="LOG_FILE">/tmp/MiMiTrends.log</Property>
+        <Property name="PATTERN">%d{HH:mm:ss.SSS} %-5level [%t] %notEmpty{[%marker] }%logger{1} - %msg%n</Property>
+    </Properties>
+    <Appenders>
+        <Console name="Console" target="SYSTEM_OUT">
+            <PatternLayout pattern="${PATTERN}"/>
+        </Console>
+        <RollingFile name="File" fileName="${LOG_FILE}" filePattern="/tmp/MiMiTrends.%i.log.gz">
+            <PatternLayout pattern="${PATTERN}"/>
+            <Policies>
+                <SizeBasedTriggeringPolicy size="10 MB"/>
+            </Policies>
+            <DefaultRolloverStrategy max="4" fileIndex="min"/>
+        </RollingFile>
+    </Appenders>
+    <Loggers>
+        <Logger name="org.senatov.mimitrends" level="DEBUG" additivity="false">
+            <AppenderRef ref="Console"/>
+            <AppenderRef ref="File"/>
+        </Logger>
+        <Root level="INFO">
+            <AppenderRef ref="Console"/>
+            <AppenderRef ref="File"/>
+        </Root>
+    </Loggers>
+</Configuration>
