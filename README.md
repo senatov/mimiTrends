@@ -59,11 +59,34 @@ In IntelliJ IDEA, import the root as a Gradle project and use the shared `MiMiTr
 
 The application version starts at `0.0.0.1`. Gradle generates `build-info.properties` for every build with a unique build ID, build type, timestamp, and host; the same metadata is embedded in the JAR manifest and displayed in the title bar and About dialog. Override it when needed with `-PappVersion=… -PbuildNumber=… -PbuildType=…`.
 
-To create a macOS bundle with a JDK containing `jpackage`:
+## Native distributions
+
+Gradle builds self-contained packages with a private Java runtime, so users do not need to install a JDK. Native installers must be built on their target OS: DMG on macOS, EXE on Windows, and `tar.gz`/DEB on Linux.
+
+The simplest macOS build uses the project script. It automatically finds the first available `Developer ID Application` certificate:
 
 ```zsh
-./gradlew packageMacApp
+./Scripts/build-macos-dmg.zsh
+./Scripts/build-macos-dmg.zsh --notarize
 ```
+
+```zsh
+# Local unsigned macOS application
+./gradlew :app:packageMacApp
+
+# Developer ID signed macOS DMG
+MAC_SIGNING_KEY_USER_NAME="Iakov Senatov (G2V9T9AD95)" \
+  ./gradlew :app:packageMacDmg
+
+# Signed + Apple-notarized + stapled DMG
+APPLE_NOTARY_PROFILE="MiMiTrends-notary" \
+MAC_SIGNING_KEY_USER_NAME="Iakov Senatov (G2V9T9AD95)" \
+  ./gradlew :app:packageNotarizedMacDmg
+```
+
+On Windows run `gradlew.bat :app:packageWindowsExe`; on Linux run `./gradlew :app:packageLinuxPortable :app:packageLinuxDeb`. Outputs are written below `app/build/distributions/native/`. See [Native packaging](Doc/NativePackaging.md) for prerequisites, Apple credential setup, output names, and verification.
+
+The displayed application version remains `0.0.0.1`. Native package metadata uses `1.0.1`, because `jpackage` requires one to three numeric components and macOS rejects a zero major package version.
 
 ## Architecture
 

@@ -119,40 +119,189 @@ tasks.named<Jar>("jar") {
 }
 
 val jpackageInputDir = layout.buildDirectory.dir("jpackage/input")
-val appImageOutputDir = layout.buildDirectory.dir("jpackage/output")
+val nativeOutputDir = layout.buildDirectory.dir("distributions/native")
+val macOutputDir = nativeOutputDir.map { it.dir("macos") }
+val windowsOutputDir = nativeOutputDir.map { it.dir("windows") }
+val linuxOutputDir = nativeOutputDir.map { it.dir("linux") }
+val nativePackageVersion = appVersion.split('.').let { parts ->
+    val major = parts.firstOrNull()?.toIntOrNull()?.coerceAtLeast(1) ?: 1
+    val minor = parts.getOrNull(1)?.toIntOrNull()?.coerceAtLeast(0) ?: 0
+    val patch = parts.drop(2).joinToString("").toIntOrNull()?.coerceAtLeast(0) ?: 0
+    "$major.$minor.$patch"
+}
+val hostOs = System.getProperty("os.name").lowercase()
+val isMac = hostOs.contains("mac")
+val isWindows = hostOs.contains("win")
+val isLinux = hostOs.contains("linux")
+val jpackageExecutable = javaToolchains.launcherFor {
+    languageVersion = JavaLanguageVersion.of(26)
+}.get().metadata.installationPath.asFile.resolve("bin/jpackage${if (isWindows) ".exe" else ""}")
+val macDmgFile = macOutputDir.map { it.file("MiMiTrends-$nativePackageVersion.dmg") }
+val linuxAppImage = linuxOutputDir.map { it.dir("MiMiTrends") }
 
-val prepareJpackageInput = tasks.register<Copy>("prepareJpackageInput") {
+val prepareJpackageInput = tasks.register<Sync>("prepareJpackageInput") {
     dependsOn(tasks.named("jar"))
     into(jpackageInputDir)
     from(tasks.named<Jar>("jar"))
     from(configurations.runtimeClasspath)
 }
 
+val macOut = macOutputDir.get().asFile
+val windowsOut = windowsOutputDir.get().asFile
+val linuxOut = linuxOutputDir.get().asFile
+val macIcon = file("src/main/resources/icons/MiMiTrends.icns")
+val windowsIcon = file("src/main/resources/icons/MiMiTrends.ico")
+val linuxIcon = file("src/main/resources/icons/icon_512x512.png")
+val cleanMacApp = tasks.register<Delete>("cleanMacAppPackage") { delete(macOut.resolve("MiMiTrends.app")) }
+val cleanMacDmg = tasks.register<Delete>("cleanMacDmgPackage") { delete(fileTree(macOut) { include("*.dmg") }) }
+val cleanWindowsExe = tasks.register<Delete>("cleanWindowsExePackage") { delete(fileTree(windowsOut) { include("*.exe") }) }
+val cleanLinuxApp = tasks.register<Delete>("cleanLinuxAppPackage") { delete(linuxAppImage) }
+val cleanLinuxDeb = tasks.register<Delete>("cleanLinuxDebPackage") { delete(fileTree(linuxOut) { include("*.deb") }) }
+
 tasks.register<Exec>("packageMacApp") {
     group = "distribution"
-    description = "Builds a macOS MiMiTrends.app image."
-    dependsOn(prepareJpackageInput)
-    val javaHome = javaToolchains.launcherFor {
-        languageVersion = JavaLanguageVersion.of(26)
-    }.get().metadata.installationPath.asFile
-    val inputDir = jpackageInputDir.get().asFile
-    val outputDir = appImageOutputDir.get().asFile
-    val iconFile = project.file("src/main/resources/icons/MiMiTrends.icns")
-    val args = mutableListOf(
-        javaHome.resolve("bin/jpackage").absolutePath,
-        "--type", "app-image",
-        "--name", "MiMiTrends",
-        "--dest", outputDir.absolutePath,
-        "--input", inputDir.absolutePath,
-        "--main-jar", tasks.named<Jar>("jar").get().archiveFileName.get(),
-        "--main-class", application.mainClass.get(),
-        "--app-version", appVersion,
-        "--java-options", "--enable-native-access=javafx.graphics,ALL-UNNAMED"
-    )
-    if (iconFile.exists()) args += listOf("--icon", iconFile.absolutePath)
-    doFirst {
-        outputDir.mkdirs()
-        outputDir.resolve("MiMiTrends.app").deleteRecursively()
-    }
-    commandLine(args)
+    description = "Builds an unsigned macOS MiMiTrends.app image for local testing."
+    dependsOn(prepareJpackageInput, cleanMacApp)
+    onlyIf("packageMacApp requires macOS") { System.getProperty("os.name").lowercase().contains("mac") }
+    commandLine(commonJpackageArgs("app-image", macOut) + listOf(
+            "--icon", macIcon.absolutePath,
+            "--mac-package-identifier", "org.senatov.mimitrends",
+            "--mac-app-category", "public.app-category.finance"
+    ))
 }
+
+tasks.register<Exec>("packageMacDmg") {
+    group = "distribution"
+    description = "Builds a Developer ID signed macOS DMG. Requires MAC_SIGNING_KEY_USER_NAME."
+    dependsOn(prepareJpackageInput, cleanMacDmg)
+    onlyIf("packageMacDmg requires macOS") { System.getProperty("os.name").lowercase().contains("mac") }
+    val signingIdentity = providers.environmentVariable("MAC_SIGNING_KEY_USER_NAME").orNull
+    val macDmgArgs = commonJpackageArgs("dmg", macOut).toMutableList().apply {
+            addAll(listOf(
+                "--icon", macIcon.absolutePath,
+                "--mac-package-identifier", "org.senatov.mimitrends",
+                "--mac-app-category", "public.app-category.finance",
+                "--mac-sign"
+            ))
+            signingIdentity?.takeIf(String::isNotBlank)?.let {
+                addAll(listOf("--mac-signing-key-user-name", it))
+            }
+            providers.environmentVariable("MAC_SIGNING_KEYCHAIN").orNull?.takeIf(String::isNotBlank)?.let {
+                addAll(listOf("--mac-signing-keychain", it))
+            }
+    }
+    doFirst {
+        check(!signingIdentity.isNullOrBlank()) {
+            "Set MAC_SIGNING_KEY_USER_NAME to a Developer ID Application identity from: security find-identity -v -p codesigning"
+        }
+    }
+    commandLine(macDmgArgs)
+}
+
+val submitMacNotarization = tasks.register<Exec>("submitMacNotarization") {
+    group = "distribution"
+    description = "Submits the signed DMG to Apple Notary Service and waits for acceptance."
+    dependsOn("packageMacDmg")
+    onlyIf("submitMacNotarization requires macOS") { System.getProperty("os.name").lowercase().contains("mac") }
+    val dmg = macDmgFile.get().asFile
+    val profile = providers.environmentVariable("APPLE_NOTARY_PROFILE").orNull
+    val keyFile = providers.environmentVariable("APPLE_NOTARY_KEY_FILE").orNull
+    val keyId = providers.environmentVariable("APPLE_NOTARY_KEY_ID").orNull
+    val issuer = providers.environmentVariable("APPLE_NOTARY_ISSUER_ID").orNull
+    val authentication = when {
+            !profile.isNullOrBlank() -> listOf("--keychain-profile", profile)
+            !keyFile.isNullOrBlank() && !keyId.isNullOrBlank() && !issuer.isNullOrBlank() ->
+                listOf("--key", keyFile, "--key-id", keyId, "--issuer", issuer)
+            else -> emptyList()
+    }
+    doFirst {
+        check(dmg.isFile) { "Signed DMG was not created: $dmg" }
+        check(authentication.isNotEmpty()) { "Set APPLE_NOTARY_PROFILE, or APPLE_NOTARY_KEY_FILE + APPLE_NOTARY_KEY_ID + APPLE_NOTARY_ISSUER_ID" }
+    }
+    commandLine(listOf("xcrun", "notarytool", "submit", dmg.absolutePath, "--wait") + authentication)
+}
+
+val stapleMacDmg = tasks.register<Exec>("stapleMacDmg") {
+    group = "distribution"
+    description = "Staples the Apple notarization ticket to the DMG."
+    dependsOn(submitMacNotarization)
+    onlyIf("stapleMacDmg requires macOS") { System.getProperty("os.name").lowercase().contains("mac") }
+    commandLine("xcrun", "stapler", "staple", macDmgFile.get().asFile.absolutePath)
+}
+
+val validateNotarizedMacDmg = tasks.register<Exec>("validateNotarizedMacDmg") {
+    group = "verification"
+    description = "Validates the stapled notarization ticket."
+    dependsOn(stapleMacDmg)
+    onlyIf("validateNotarizedMacDmg requires macOS") { System.getProperty("os.name").lowercase().contains("mac") }
+    commandLine("xcrun", "stapler", "validate", macDmgFile.get().asFile.absolutePath)
+}
+
+tasks.register("packageNotarizedMacDmg") {
+    group = "distribution"
+    description = "Builds, signs, notarizes, staples, and validates the distributable macOS DMG."
+    dependsOn(validateNotarizedMacDmg)
+}
+
+tasks.register<Exec>("packageWindowsExe") {
+    group = "distribution"
+    description = "Builds a self-contained Windows EXE installer (requires WiX)."
+    dependsOn(prepareJpackageInput, cleanWindowsExe)
+    onlyIf("packageWindowsExe requires Windows") { System.getProperty("os.name").lowercase().contains("win") }
+    commandLine(commonJpackageArgs("exe", windowsOut) + listOf(
+            "--icon", windowsIcon.absolutePath,
+            "--win-menu", "--win-menu-group", "MiMiTrends",
+            "--win-shortcut", "--win-dir-chooser", "--win-per-user-install"
+    ))
+}
+
+tasks.register<Exec>("packageLinuxAppImage") {
+    group = "distribution"
+    description = "Builds a portable self-contained Linux application directory."
+    dependsOn(prepareJpackageInput, cleanLinuxApp)
+    onlyIf("packageLinuxAppImage requires Linux") { System.getProperty("os.name").lowercase().contains("linux") }
+    commandLine(commonJpackageArgs("app-image", linuxOut) + listOf("--icon", linuxIcon.absolutePath))
+}
+
+tasks.register<Tar>("packageLinuxPortable") {
+    group = "distribution"
+    description = "Builds a portable Linux tar.gz containing the executable and Java runtime."
+    dependsOn("packageLinuxAppImage")
+    onlyIf("packageLinuxPortable requires Linux") { System.getProperty("os.name").lowercase().contains("linux") }
+    compression = Compression.GZIP
+    archiveBaseName = "MiMiTrends"
+    archiveVersion = nativePackageVersion
+    archiveClassifier = "linux-${System.getProperty("os.arch")}"
+    destinationDirectory = linuxOutputDir
+    from(linuxAppImage) { into("MiMiTrends-$nativePackageVersion") }
+}
+
+tasks.register<Exec>("packageLinuxDeb") {
+    group = "distribution"
+    description = "Builds a self-contained Debian/Ubuntu package (requires fakeroot)."
+    dependsOn(prepareJpackageInput, cleanLinuxDeb)
+    onlyIf("packageLinuxDeb requires Linux") { System.getProperty("os.name").lowercase().contains("linux") }
+    commandLine(commonJpackageArgs("deb", linuxOut) + listOf(
+            "--icon", linuxIcon.absolutePath,
+            "--linux-package-name", "mimitrends",
+            "--linux-menu-group", "Office",
+            "--linux-app-category", "Finance",
+            "--linux-shortcut",
+            "--linux-deb-maintainer", "senatov@outlook.de"
+    ))
+}
+
+fun commonJpackageArgs(type: String, outputDir: File): List<String> = listOf(
+    jpackageExecutable.absolutePath,
+    "--type", type,
+    "--name", "MiMiTrends",
+    "--dest", outputDir.absolutePath,
+    "--input", jpackageInputDir.get().asFile.absolutePath,
+    "--main-jar", tasks.named<Jar>("jar").get().archiveFileName.get(),
+    "--main-class", application.mainClass.get(),
+    "--app-version", nativePackageVersion,
+    "--vendor", "MiMiTrends",
+    "--description", "Local-first market anomaly scanner",
+    "--copyright", "Copyright 2026 MiMiTrends",
+    "--java-options", "--enable-native-access=javafx.graphics,ALL-UNNAMED"
+)
