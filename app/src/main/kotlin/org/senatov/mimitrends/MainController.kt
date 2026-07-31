@@ -9,6 +9,8 @@ import javafx.geometry.Pos
 import javafx.scene.Parent
 import javafx.scene.control.*
 import javafx.scene.layout.*
+import javafx.scene.image.Image
+import javafx.scene.image.ImageView
 import org.senatov.mimitrends.charts.TrendChartView
 import org.senatov.mimitrends.db.MarketRepository
 import org.senatov.mimitrends.log.LogTag
@@ -41,6 +43,7 @@ class MainController(
     private val log = LoggerFactory.getLogger(MainController::class.java)
     private val repository = MarketRepository()
     private var currentSymbol = initialSymbol
+    private var currentSignal: ScanResult? = null
     private var selectedRangeValue = initialRange.takeIf { it in setOf("1D", "5D", "1M", "3M", "6M", "1Y") } ?: "3M"
     private val refreshButton = Button("↻")
     private val settingsButton = Button("⚙")
@@ -56,7 +59,7 @@ class MainController(
     private val profileService = CompanyProfileService(
         repository, apiKey?.let(::FinnhubProfileClient), CompanyLogoClient()
     )
-    private val scannerPanel = ScannerPanel(::openScannerSymbol, profileService::load)
+    private val scannerPanel = ScannerPanel(::openScannerResult, profileService::load)
     private val batchScheduler = Executors.newSingleThreadScheduledExecutor { task ->
         Thread(task, "mimitrends-scanner-rotation").apply { isDaemon = true }
     }
@@ -163,10 +166,10 @@ class MainController(
         val symbols = selectedMarketSymbols()
         lateinit var scan: () -> Unit
         scan = scan@ {
-            log.debug(LogTag.API, "scanYahoo(symbols={}, window={})", symbols.size, scannerCriteria.anomalyWindow)
+            log.debug(LogTag.API, "scanYahoo(symbols={}, recentWindow=15m)", symbols.size)
             Platform.runLater {
                 scannerPanel.beginScan(1, 1, symbols)
-                setStatus("Yahoo Finance: scanning ${symbols.size} symbols · ${scannerCriteria.anomalyWindow}")
+                setStatus("Yahoo/SQLite: scanning ${symbols.size} symbols · recent 0–15m signals")
             }
             val results = mutableListOf<ScanResult>()
             val errors = mutableListOf<String>()
@@ -253,10 +256,11 @@ class MainController(
         }
     }
 
-    private fun openScannerSymbol(symbol: String) {
-        log.debug(LogTag.UI, "openScannerSymbol(symbol={})", symbol)
-        currentSymbol = symbol
-        loadLocalChart(symbol)
+    private fun openScannerResult(result: ScanResult) {
+        log.debug(LogTag.UI, "openScannerResult(symbol={}, age={})", result.symbol, result.signalAgeMinutes)
+        currentSymbol = result.symbol
+        currentSignal = result
+        loadLocalChart(result.symbol)
     }
 
     private fun showScannerSettings() {
@@ -272,21 +276,64 @@ class MainController(
 
     private fun showAbout() {
         log.debug(LogTag.UI, "showAbout()")
-        Alert(Alert.AlertType.INFORMATION).apply {
+        Dialog<Unit>().apply {
             aboutButton.scene?.window?.let(::initOwner)
             title = "About MiMiTrends"
-            headerText = "MiMiTrends 1.0"
-            contentText = """Kotlin · JavaFX market momentum scanner
+            dialogPane.buttonTypes.setAll(ButtonType.OK)
+            dialogPane.headerText = "MiMiTrends ${BuildInfo.displayVersion}"
+            dialogPane.graphic = ImageView(Image(
+                requireNotNull(javaClass.getResourceAsStream("/icons/icon_128x128.png"))
+            )).apply { fitWidth = 72.0; fitHeight = 72.0; isPreserveRatio = true }
+            dialogPane.content = TabPane(
+                aboutTab("Overview", """
+                    Local-first market anomaly scanner for macOS, Linux, and Windows.
 
-Market data: Yahoo Finance (default), Finnhub (optional)
-Currency reference rates: European Central Bank
-Local storage: ~/.mimi/trends/
+                    Market data       Yahoo Finance (default); Finnhub profile fallback (optional)
+                    Currency rates    European Central Bank
+                    Local database    ~/.mimi/trends/mimitrends.db
+                    Settings          ~/.mimi/trends/
+                    Log file          /tmp/MiMiTrends.log
 
-Read-only demonstration application.
-© 2026 MiMiTrends"""
-            buttonTypes.setAll(ButtonType.OK)
-            isResizable = false
+                    Read-only demonstration application. It does not place orders.
+                    © 2026 MiMiTrends
+                """.trimIndent()),
+                aboutTab("Libraries", """
+                    Kotlin Standard Library ${KotlinVersion.CURRENT} — Apache License 2.0
+                    JavaFX ${System.getProperty("javafx.runtime.version", "26")} — GPLv2 with Classpath Exception
+                    AtlantaFX 2.1.0 — MIT License
+                    JFreeChart 1.5.6 — LGPL 2.1 or later
+                    JFreeChart-FX 2.0.2 — LGPL 2.1 or later
+                    SQLite JDBC 3.50.3.0 — Apache License 2.0
+                    Jackson Databind 2.22.1 — Apache License 2.0
+                    SLF4J API 2.0.17 — MIT License
+                    Apache Log4j 2.26.1 — Apache License 2.0
+
+                    Data and branding services are not bundled libraries. Their availability and
+                    terms are governed by the respective providers.
+                """.trimIndent()),
+                aboutTab("System", """
+                    Application       ${BuildInfo.displayVersion}
+                    Java runtime      ${System.getProperty("java.runtime.version")}
+                    Java VM           ${System.getProperty("java.vm.name")}
+                    JavaFX runtime    ${System.getProperty("javafx.runtime.version", "26")}
+                    Operating system  ${System.getProperty("os.name")} ${System.getProperty("os.version")}
+                    Architecture      ${System.getProperty("os.arch")}
+                    Locale            ${java.util.Locale.getDefault().toLanguageTag()}
+                """.trimIndent())
+            ).apply { tabClosingPolicy = TabPane.TabClosingPolicy.UNAVAILABLE }
+            dialogPane.prefWidth = 680.0
+            dialogPane.prefHeight = 520.0
+            isResizable = true
         }.showAndWait()
+    }
+
+    private fun aboutTab(title: String, text: String): Tab {
+        log.debug(LogTag.UI, "aboutTab(title={})", title)
+        return Tab(title, TextArea(text).apply {
+            isEditable = false
+            isWrapText = true
+            style = "-fx-font-family: 'SF Pro Display'; -fx-font-size: 13px;"
+        })
     }
 
     private fun loadLocalChart(symbol: String) {
@@ -305,7 +352,10 @@ Read-only demonstration application.
                         setStatus("SQLite read failed: ${error.message ?: "unknown error"}", true, formatErrorLog(symbol, error))
                     } else if (!bars.isNullOrEmpty()) {
                         val currency = scannerCriteria.displayCurrency
-                        trendChart.renderMinuteBars(symbol, bars, selectedRangeValue, displayPrice(symbol, 1.0), currency.symbol)
+                        trendChart.renderMinuteBars(
+                            symbol, bars, selectedRangeValue, displayPrice(symbol, 1.0), currency.symbol,
+                            currentSignal?.takeIf { it.symbol == symbol }?.signalAgeMinutes
+                        )
                         setStatus("Read SQLite: $symbol · ${bars.size} minute bars · $selectedRangeValue")
                     } else {
                         trendChart.clear()

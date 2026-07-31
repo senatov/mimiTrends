@@ -4,12 +4,16 @@
 
 ### A local-first market anomaly scanner for macOS
 
-MiMiTrends is a Kotlin/JVM + JavaFX desktop application styled after MiMiComparator. It ranks 50 liquid US and European shares by unusual price or turnover activity and stores downloaded minute OHLCV history in SQLite.
+MiMiTrends is a Kotlin/JVM + JavaFX desktop application styled after MiMiComparator. It ranks a 100-instrument liquid US and European universe by unusual recent price or turnover activity and stores downloaded minute OHLCV history in SQLite.
+
+## Main window
+
+<img src="./Doc/MainWindow.png" alt="MiMiTrends main window with anomaly scanner and market chart" width="900">
 
 ## What it does
 
 - scans a configurable US, European, or combined universe;
-- compares the latest minute, hour, or session with historical local baselines;
+- compares the rolling 0–5, 5–10, and 10–15 minute windows with historical local baselines;
 - ranks price and volume anomalies instead of requiring every instrument to pass fixed thresholds;
 - keeps the visible table unchanged while scanning and publishes the completed ranking atomically;
 - scans every three minutes by default and shows a countdown or animated hourglass;
@@ -76,15 +80,15 @@ SQLite runs in WAL mode with `synchronous=NORMAL`. Minute rows use an upsert key
 
 ## Anomaly score
 
-For the selected period, the scanner calculates:
+For each of the three most recent five-minute windows, the scanner calculates:
 
 - absolute price return divided by the median historical absolute return;
-- current period volume divided by the median historical period volume;
-- overall score as the larger of those two ratios.
+- window volume divided by the median historical five-minute volume;
+- a recency-weighted score, favouring activity still present in the latest five minutes.
 
-The table is sorted by score and limited to 50 rows by default. A cold database receives a neutral baseline until enough comparable periods exist, avoiding artificial extreme scores. Minimum source price and session turnover remain configurable quality/liquidity guards.
+The winning window is displayed as `now–5m`, `5–10m ago`, or `10–15m ago`, together with `Price ↑`, `Price ↓`, or `Volume` as its source. Activity older than 15 minutes cannot keep an otherwise quiet instrument at the top. The table is sorted by score and limited to 50 rows by default. A cold database receives a neutral baseline until enough comparable periods exist, avoiding artificial extreme scores. Minimum source price and session turnover remain configurable quality/liquidity guards.
 
-The default watchlist contains 25 liquid US listings and 25 liquid European listings. Yahoo suffixes such as `.DE`, `.PA`, `.AS`, and `.MI` identify European exchanges. The universe, region, period, interval, result count, liquidity guards, and baseline length are editable under Settings.
+The expanded default watchlist contains 100 liquid US and European listings. Yahoo suffixes such as `.DE`, `.PA`, `.AS`, and `.MI` identify European exchanges. The universe, region, interval, result count, liquidity guards, and baseline length are editable under Settings.
 
 ## Chart
 

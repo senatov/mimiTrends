@@ -50,7 +50,7 @@ data class ScannerCriteria(
     val marketRegion: MarketRegion = MarketRegion.BOTH,
     val scanIntervalSeconds: Long = 180,
     val resultLimit: Int = 50,
-    val minPrice: Double = 5.0,
+    val minPrice: Double = 2.0,
     val minSessionTurnover: Double = 0.0,
     val baselineSessions: Int = 5,
     val displayCurrency: DisplayCurrency = DisplayCurrency.EUR,
@@ -61,7 +61,13 @@ data class ScannerCriteria(
         "CVX", "CRM", "KO", "PEP", "DIS",
         "SAP.DE", "SIE.DE", "ALV.DE", "DTE.DE", "BMW.DE", "MBG.DE", "BAS.DE", "RWE.DE", "DBK.DE", "DHL.DE",
         "ASML.AS", "INGA.AS", "AD.AS", "UNA.AS", "PHIA.AS", "MC.PA", "OR.PA", "TTE.PA", "AIR.PA", "BNP.PA",
-        "SAN.PA", "SU.PA", "ENEL.MI", "ISP.MI", "STLAM.MI"
+        "SAN.PA", "SU.PA", "ENEL.MI", "ISP.MI", "STLAM.MI",
+        "UBER", "ABNB", "PYPL", "QCOM", "INTC", "MU", "AMAT", "TSM", "NVO", "PFE",
+        "MRK", "ABBV", "GS", "MS", "C", "CAT", "GE", "BA", "NKE", "SBUX",
+        "SHOP", "PLTR", "COIN", "SOFI", "SNAP",
+        "ADS.DE", "IFX.DE", "VOW3.DE", "HEN3.DE", "BEI.DE", "BAYN.DE", "MTX.DE", "ZAL.DE", "FRE.DE", "EOAN.DE",
+        "VNA.DE", "RMS.PA", "DG.PA", "CS.PA", "RI.PA", "ACA.PA", "STMPA.PA", "ASM.AS", "HEIA.AS", "KPN.AS",
+        "PRX.AS", "UCG.MI", "ENI.MI", "G.MI", "NOKIA.HE"
     )
 )
 
@@ -75,6 +81,8 @@ data class ScanResult(
     val windowVolume: Double,
     val sessionVolume: Double,
     val sessionTurnover: Double,
+    val signalAgeMinutes: Int,
+    val signalSource: String,
     val updatedAtMillis: Long
 )
 

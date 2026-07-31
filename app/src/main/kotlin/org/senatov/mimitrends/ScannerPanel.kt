@@ -32,7 +32,7 @@ import java.io.ByteArrayInputStream
 import javafx.util.Duration
 
 class ScannerPanel(
-    private val onOpen: (String) -> Unit,
+    private val onOpen: (ScanResult) -> Unit,
     private val loadProfile: ((String) -> CompletableFuture<CompanyProfile>)? = null
 ) : VBox(7.0) {
     private val log = LoggerFactory.getLogger(javaClass)
@@ -58,16 +58,18 @@ class ScannerPanel(
         symbolColumn()
         column("Price") { "${currency.symbol}%,.2f".format(convertPrice(it.symbol, it.price)) }
         column("Score") { "%.2f×".format(it.anomalyScore) }
-        column("Price anomaly") { "%.2f×".format(it.priceAnomaly) }
-        column("Volume anomaly") { "%.2f×".format(it.volumeAnomaly) }
-        column("Δ period") { percent(it.windowChangePercent) }
+        column("Signal") { it.signalSource }
+        column("When") { when (it.signalAgeMinutes) { 0 -> "now–5m"; 5 -> "5–10m ago"; else -> "10–15m ago" } }
+        column("Δ 5m") { percent(it.windowChangePercent) }
+        column("Price ×") { "%.2f×".format(it.priceAnomaly) }
+        column("Volume ×") { "%.2f×".format(it.volumeAnomaly) }
         column("Turnover") { compactMoney(convertPrice(it.symbol, it.sessionTurnover)) }
         column("Updated") { time.format(Instant.ofEpochMilli(it.updatedAtMillis)) }
         table.placeholder = empty
         table.columnResizePolicy = TableView.UNCONSTRAINED_RESIZE_POLICY
         table.fixedCellSize = 30.0
         table.setRowFactory {
-            TableRow<ScanResult>().apply { setOnMouseClicked { e -> if (!isEmpty && e.button == MouseButton.PRIMARY && e.clickCount == 1) onOpen(item.symbol) } }
+            TableRow<ScanResult>().apply { setOnMouseClicked { e -> if (!isEmpty && e.button == MouseButton.PRIMARY && e.clickCount == 1) onOpen(item) } }
         }
         table.minHeight = 0.0
         table.maxHeight = Double.MAX_VALUE

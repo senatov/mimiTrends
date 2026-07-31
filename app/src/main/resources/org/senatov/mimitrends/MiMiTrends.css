@@ -267,3 +267,64 @@
 .content-split-pane > .split-pane-divider:hover {
     -fx-background-color: #f29a38;
 }
+
+/* JavaFX cannot access macOS' private Liquid Glass compositor. These surfaces mirror its
+   hierarchy with translucent layers, soft highlights, rounded cards, and lightweight type. */
+.glass-settings-dialog {
+    -fx-font-family: "SF Pro Display", "Helvetica Neue", sans-serif;
+    -fx-font-weight: 300;
+    -fx-background-color: linear-gradient(to bottom right, rgba(250,252,255,0.97), rgba(232,239,248,0.94));
+}
+.glass-settings-dialog > .header-panel {
+    -fx-background-color: linear-gradient(to bottom, rgba(255,255,255,0.94), rgba(238,244,251,0.82));
+    -fx-border-color: transparent transparent rgba(115,137,161,0.24) transparent;
+    -fx-padding: 17px 22px;
+}
+.glass-settings-dialog > .header-panel .label {
+    -fx-font-size: 20px;
+    -fx-font-weight: 300;
+    -fx-text-fill: #20354d;
+}
+.glass-settings-dialog .tab-pane .tab-header-area .tab-header-background {
+    -fx-background-color: rgba(245,249,253,0.72);
+}
+.glass-settings-dialog .tab {
+    -fx-background-color: transparent;
+    -fx-padding: 8px 18px;
+}
+.glass-settings-dialog .tab:selected {
+    -fx-background-color: rgba(255,255,255,0.78);
+    -fx-background-radius: 12px 12px 0 0;
+}
+.glass-settings-dialog .tab .tab-label { -fx-font-weight: 300; -fx-text-fill: #27425f; }
+.settings-scroll, .settings-scroll > .viewport { -fx-background-color: transparent; }
+.settings-glass-card {
+    -fx-padding: 16px 18px;
+    -fx-background-color: linear-gradient(to bottom right, rgba(255,255,255,0.86), rgba(242,247,252,0.66));
+    -fx-background-radius: 18px;
+    -fx-border-color: rgba(255,255,255,0.92), rgba(105,129,154,0.20);
+    -fx-border-radius: 18px;
+    -fx-effect: dropshadow(gaussian, rgba(46,68,92,0.13), 16, 0.08, 0, 5);
+}
+.settings-section-title { -fx-font-size: 16px; -fx-font-weight: 400; -fx-text-fill: #173653; }
+.settings-row-title { -fx-font-size: 13px; -fx-font-weight: 400; -fx-text-fill: #20364e; }
+.settings-row-detail { -fx-font-size: 11px; -fx-font-weight: 300; -fx-text-fill: #66798c; }
+.settings-help, .settings-footnote { -fx-font-size: 12px; -fx-font-weight: 300; -fx-text-fill: #536b82; }
+.settings-footnote { -fx-padding: 2px 8px; }
+.settings-value-badge {
+    -fx-padding: 7px 13px;
+    -fx-background-color: rgba(213,229,246,0.68);
+    -fx-background-radius: 12px;
+    -fx-text-fill: #244a70;
+    -fx-font-weight: 300;
+}
+.glass-settings-dialog .text-field,
+.glass-settings-dialog .text-area,
+.glass-settings-dialog .combo-box,
+.glass-settings-dialog .spinner {
+    -fx-font-weight: 300;
+    -fx-background-color: rgba(255,255,255,0.82);
+    -fx-background-radius: 11px;
+    -fx-border-color: rgba(83,111,139,0.26);
+    -fx-border-radius: 11px;
+}

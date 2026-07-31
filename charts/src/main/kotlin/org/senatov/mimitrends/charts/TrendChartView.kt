@@ -15,6 +15,7 @@ import org.jfree.chart.labels.StandardXYToolTipGenerator
 import org.jfree.chart.plot.CombinedDomainXYPlot
 import org.jfree.chart.plot.PlotOrientation
 import org.jfree.chart.plot.ValueMarker
+import org.jfree.chart.plot.IntervalMarker
 import org.jfree.chart.plot.XYPlot
 import org.jfree.chart.renderer.xy.CandlestickRenderer
 import org.jfree.chart.renderer.xy.XYBarRenderer
@@ -28,6 +29,7 @@ import org.jfree.chart.ui.RectangleAnchor
 import org.jfree.chart.ui.RectangleInsets
 import org.jfree.chart.ui.RectangleEdge
 import org.jfree.chart.ui.TextAnchor
+import org.jfree.chart.ui.Layer
 import org.senatov.mimitrends.log.LogTag
 import org.senatov.mimitrends.model.MinuteBar
 import org.slf4j.LoggerFactory
@@ -60,6 +62,8 @@ class TrendChartView : StackPane() {
     private var cursorMarkersInstalled = false
     private var cursorDateFormat = SimpleDateFormat("dd MMM HH:mm")
     private var cursorPriceFormat = DecimalFormat("$#,##0.00")
+    private var priceSignalMarker: IntervalMarker? = null
+    private var volumeSignalMarker: IntervalMarker? = null
 
     init {
         log.debug(LogTag.UI, "init()")
@@ -81,7 +85,8 @@ class TrendChartView : StackPane() {
         bars: List<MinuteBar>,
         rangeLabel: String,
         priceMultiplier: Double = 1.0,
-        currencySymbol: String = "$"
+        currencySymbol: String = "$",
+        signalAgeMinutes: Int? = null
     ) {
         log.debug(LogTag.UI, "renderMinuteBars(symbol={}, bars={}, range={})", symbol, bars.size, rangeLabel)
         val visible = aggregate(bars.sortedBy { it.minuteEpochSeconds })
@@ -111,6 +116,7 @@ class TrendChartView : StackPane() {
         cursorDateFormat = SimpleDateFormat("dd MMM yyyy  HH:mm")
         cursorPriceFormat = DecimalFormat("$currencySymbol#,##0.00")
         chart.title.text = "$symbol  ·  OHLC  ·  $rangeLabel  ·  ${bars.size} minute bars"
+        showSignalWindow(visible.last().minuteEpochSeconds, signalAgeMinutes)
         chart.fireChartChanged()
     }
 
@@ -124,8 +130,34 @@ class TrendChartView : StackPane() {
         pricePlot.dataset = null
         pricePlot.setDataset(1, null)
         volumePlot.dataset = null
+        showSignalWindow(0, null)
         chart.title.text = "No collected market data"
         chart.fireChartChanged()
+    }
+
+    private fun showSignalWindow(latestEpoch: Long, ageMinutes: Int?) {
+        log.debug(LogTag.UI, "showSignalWindow(latest={}, age={})", latestEpoch, ageMinutes)
+        priceSignalMarker?.let { pricePlot.removeDomainMarker(it, Layer.BACKGROUND) }
+        volumeSignalMarker?.let { volumePlot.removeDomainMarker(it, Layer.BACKGROUND) }
+        priceSignalMarker = null
+        volumeSignalMarker = null
+        if (ageMinutes == null || latestEpoch <= 0) return
+        val start = (latestEpoch - (ageMinutes + 5) * 60L) * 1_000.0
+        val end = (latestEpoch - ageMinutes * 60L) * 1_000.0
+        fun marker(label: String?): IntervalMarker = IntervalMarker(start, end).apply {
+            paint = Color(242, 154, 56, 48)
+            outlinePaint = Color(224, 124, 31, 150)
+            outlineStroke = BasicStroke(1.0f)
+            this.label = label
+            labelFont = Font("SansSerif", Font.PLAIN, 10)
+            labelPaint = Color(126, 69, 20)
+            labelAnchor = RectangleAnchor.TOP_LEFT
+            labelTextAnchor = TextAnchor.TOP_LEFT
+        }
+        priceSignalMarker = marker("Anomaly ${if (ageMinutes == 0) "now–5m" else "$ageMinutes–${ageMinutes + 5}m ago"}")
+        volumeSignalMarker = marker(null)
+        pricePlot.addDomainMarker(priceSignalMarker, Layer.BACKGROUND)
+        volumePlot.addDomainMarker(volumeSignalMarker, Layer.BACKGROUND)
     }
 
     private fun configureChart() {
@@ -231,6 +263,20 @@ class TrendChartView : StackPane() {
         priceCursor.value = priceValue
         volumeTimeCursor.label = cursorDateFormat.format(Date(timeValue.toLong()))
         priceCursor.label = cursorPriceFormat.format(priceValue)
+        // Keep both labels inside the plot canvas. TextAnchor describes the part of the
+        // label placed on the marker anchor, so bottom anchors make the text grow upward.
+        volumeTimeCursor.labelTextAnchor = when {
+            x < priceArea.minX + 95.0 -> TextAnchor.BOTTOM_LEFT
+            x > priceArea.maxX - 95.0 -> TextAnchor.BOTTOM_RIGHT
+            else -> TextAnchor.BOTTOM_CENTER
+        }
+        if (y < priceArea.centerY) {
+            priceCursor.labelAnchor = RectangleAnchor.BOTTOM_RIGHT
+            priceCursor.labelTextAnchor = TextAnchor.TOP_RIGHT
+        } else {
+            priceCursor.labelAnchor = RectangleAnchor.TOP_RIGHT
+            priceCursor.labelTextAnchor = TextAnchor.BOTTOM_RIGHT
+        }
     }
 
     private fun installCursorMarkers() {
@@ -247,7 +293,7 @@ class TrendChartView : StackPane() {
         priceCursor.labelAnchor = RectangleAnchor.TOP_RIGHT
         priceCursor.labelTextAnchor = TextAnchor.BOTTOM_RIGHT
         volumeTimeCursor.labelAnchor = RectangleAnchor.BOTTOM
-        volumeTimeCursor.labelTextAnchor = TextAnchor.TOP_CENTER
+        volumeTimeCursor.labelTextAnchor = TextAnchor.BOTTOM_CENTER
         pricePlot.addDomainMarker(priceTimeCursor)
         volumePlot.addDomainMarker(volumeTimeCursor)
         pricePlot.addRangeMarker(priceCursor)

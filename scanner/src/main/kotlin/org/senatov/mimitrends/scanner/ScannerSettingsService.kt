@@ -23,8 +23,8 @@ class ScannerSettingsService(private val path: Path = Path.of(System.getProperty
                 anomalyWindow = enumValue(p.getProperty("anomalyWindow"), AnomalyWindow.HOUR),
                 marketRegion = enumValue(p.getProperty("marketRegion"), MarketRegion.BOTH),
                 scanIntervalSeconds = p.getProperty("scanIntervalSeconds", "180").toLong().coerceIn(60, 3_600),
-                resultLimit = p.getProperty("resultLimit", "50").toInt().coerceIn(1, 50),
-                minPrice = p.getProperty("minPrice", "5.0").toDouble(),
+                resultLimit = p.getProperty("resultLimit", "50").toInt().coerceIn(1, 100),
+                minPrice = p.getProperty("minPrice", "2.0").toDouble(),
                 minSessionTurnover = p.getProperty("minSessionTurnover", "0").toDouble(),
                 baselineSessions = p.getProperty("baselineSessions", "5").toInt().coerceIn(3, 20),
                 displayCurrency = runCatching { DisplayCurrency.valueOf(p.getProperty("displayCurrency", "EUR")) }.getOrDefault(DisplayCurrency.EUR),
@@ -37,7 +37,13 @@ class ScannerSettingsService(private val path: Path = Path.of(System.getProperty
                     selectionColor = color(p.getProperty("table.selectionColor"), "#DCE8F6"),
                     gridColor = color(p.getProperty("table.gridColor"), "#9CA9B5")
                 ),
-                symbols = normalizeSymbols(p.getProperty("symbols", ScannerCriteria().symbols.joinToString(",")))
+                symbols = normalizeSymbols(p.getProperty("symbols", ScannerCriteria().symbols.joinToString(","))).let { stored ->
+                    // Extend the original 50-symbol installation profile with the broader liquid
+                    // universe without overwriting a genuinely customized watchlist.
+                    if (stored.size == 50 && "AAPL" in stored && "STLAM.MI" in stored) {
+                        (stored + ScannerCriteria().symbols).distinct()
+                    } else stored
+                }
             )
         }.onFailure { log.error(LogTag.IO, "scanner settings load failed", it) }.getOrDefault(ScannerCriteria())
     }

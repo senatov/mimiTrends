@@ -5,6 +5,12 @@ plugins {
     kotlin("jvm") version "2.4.0"
 }
 
+val appVersion = providers.gradleProperty("appVersion").getOrElse("1.0.0")
+version = appVersion
+val buildNumber = providers.environmentVariable("BUILD_NUMBER")
+    .orElse(providers.gradleProperty("buildNumber"))
+    .getOrElse("dev")
+
 repositories {
     mavenCentral()
 }
@@ -72,6 +78,17 @@ tasks.test {
     jvmArgs("--enable-native-access=ALL-UNNAMED")
 }
 
+tasks.named<Jar>("jar") {
+    manifest {
+        attributes(
+            "Implementation-Title" to "MiMiTrends",
+            "Implementation-Version" to appVersion,
+            "Build-Number" to buildNumber,
+            "Main-Class" to application.mainClass.get()
+        )
+    }
+}
+
 val jpackageInputDir = layout.buildDirectory.dir("jpackage/input")
 val appImageOutputDir = layout.buildDirectory.dir("jpackage/output")
 
@@ -100,6 +117,7 @@ tasks.register<Exec>("packageMacApp") {
         "--input", inputDir.absolutePath,
         "--main-jar", tasks.named<Jar>("jar").get().archiveFileName.get(),
         "--main-class", application.mainClass.get(),
+        "--app-version", appVersion,
         "--java-options", "--enable-native-access=javafx.graphics,ALL-UNNAMED"
     )
     if (iconFile.exists()) args += listOf("--icon", iconFile.absolutePath)
