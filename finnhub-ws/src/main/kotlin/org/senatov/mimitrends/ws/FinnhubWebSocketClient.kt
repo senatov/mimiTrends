@@ -22,10 +22,10 @@ class FinnhubWebSocketClient(
     private val onError: Consumer<Throwable>,
     private val httpClient: HttpClient = HttpClient.newBuilder()
         .connectTimeout(Duration.ofSeconds(10))
-        .build(),
-    private val mapper: ObjectMapper = ObjectMapper()
+        .build()
 ) : WebSocket.Listener, AutoCloseable {
     private val log = LoggerFactory.getLogger(FinnhubWebSocketClient::class.java)
+    private val mapper = ObjectMapper()
     private val subscriptions = CopyOnWriteArraySet<String>()
     private val messageBuffer = StringBuilder()
     @Volatile private var webSocket: WebSocket? = null

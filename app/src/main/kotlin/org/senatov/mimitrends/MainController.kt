@@ -22,6 +22,8 @@ import org.senatov.mimitrends.model.ScanResult
 import org.senatov.mimitrends.scanner.ScannerEngine
 import org.senatov.mimitrends.scanner.ScannerSettingsService
 import org.senatov.mimitrends.ws.FinnhubProfileClient
+import org.senatov.mimitrends.ws.FinnhubWebSocketClient
+import org.senatov.mimitrends.ws.FinnhubMinuteAggregator
 import org.senatov.mimitrends.marketdata.YahooFinanceClient
 import org.senatov.mimitrends.marketdata.CompanyLogoClient
 import org.slf4j.LoggerFactory
@@ -35,6 +37,7 @@ import java.util.concurrent.ScheduledFuture
 import java.util.concurrent.TimeUnit
 import java.util.function.BiConsumer
 import java.util.concurrent.atomic.AtomicLong
+import java.util.concurrent.ConcurrentHashMap
 
 class MainController(
     private val apiKey: String?, initialSymbol: String = "AAPL", initialRange: String = "3M",
@@ -56,10 +59,10 @@ class MainController(
     private var scannerCriteria: ScannerCriteria = scannerSettings.load()
     private val scannerEngine = ScannerEngine()
     private val yahooFinance = YahooFinanceClient()
-    private val profileService = CompanyProfileService(
+    private var profileService = CompanyProfileService(
         repository, apiKey?.let(::FinnhubProfileClient), CompanyLogoClient()
     )
-    private val scannerPanel = ScannerPanel(::openScannerResult, profileService::load)
+    private val scannerPanel = ScannerPanel(::openScannerResult) { symbol -> profileService.load(symbol) }
     private val batchScheduler = Executors.newSingleThreadScheduledExecutor { task ->
         Thread(task, "mimitrends-scanner-rotation").apply { isDaemon = true }
     }
@@ -68,6 +71,12 @@ class MainController(
     private val exchangeRates = ExchangeRateService()
     private val initialDivider = initialDividerPosition.coerceIn(0.15, 0.75)
     private val contentSplitPane = SplitPane()
+    private var finnhubClient: FinnhubWebSocketClient? = null
+    private val liveTicks = ConcurrentHashMap<String, Long>()
+    private val liveAggregator = FinnhubMinuteAggregator { bar ->
+        repository.upsertMinuteBar(bar)
+        liveTicks[bar.symbol] = System.currentTimeMillis()
+    }
 
     fun createView(): Parent {
         log.debug(LogTag.UI, "createView()")
@@ -121,6 +130,7 @@ class MainController(
         val root = BorderPane(content, toolbar, null, null, null)
         root.styleClass += "app-root"
 
+        apiKey?.takeIf(String::isNotBlank)?.let(::restartFinnhubLive)
         startScanner()
         Platform.runLater { loadLocalChart(currentSymbol) }
         setStatus("Requesting ECB EUR/USD reference rate")
@@ -138,6 +148,7 @@ class MainController(
     fun close() {
         log.debug(LogTag.UI, "close()")
         rotationTask?.cancel(false)
+        finnhubClient?.close()
         batchScheduler.shutdownNow()
         repository.close()
     }
@@ -166,17 +177,17 @@ class MainController(
         val symbols = selectedMarketSymbols()
         lateinit var scan: () -> Unit
         scan = scan@ {
-            log.debug(LogTag.API, "scanYahoo(symbols={}, recentWindow=15m)", symbols.size)
+            log.debug(LogTag.API, "scanHybrid(symbols={}, recentWindow={}m)", symbols.size, criteria.maxSignalAgeMinutes)
             Platform.runLater {
                 scannerPanel.beginScan(1, 1, symbols)
-                setStatus("Yahoo/SQLite: scanning ${symbols.size} symbols · recent 0–15m signals")
+                setStatus("Finnhub live + Yahoo/SQLite: scanning ${symbols.size} symbols · fresh impulses only")
             }
             val results = mutableListOf<ScanResult>()
             val errors = mutableListOf<String>()
             symbols.forEachIndexed { index, symbol ->
                 if (generation != scanGeneration.get()) return@forEachIndexed
                 runCatching { loadAndEvaluate(symbol, criteria) }
-                    .onSuccess { result -> result?.let(results::add) }
+                    .onSuccess { result -> result?.let { results += it.copy(dataStatus = dataStatus(symbol)) } }
                     .onFailure { error ->
                         errors += "$symbol: ${error.message ?: error.javaClass.simpleName}"
                         log.warn(LogTag.API, "Yahoo scan failed symbol={}", symbol, error)
@@ -193,7 +204,7 @@ class MainController(
                     results.forEach(scannerPanel::update)
                     scannerPanel.completeScan(criteria.resultLimit)
                     scannerPanel.showCountdown(criteria.scanIntervalSeconds)
-                    setStatus("Yahoo/SQLite scan complete · ${results.size} ranked · next in ${criteria.scanIntervalSeconds}s")
+                    setStatus("Hybrid scan complete · ${results.size} fresh impulses · next in ${criteria.scanIntervalSeconds}s")
                 }
             }
             if (generation != scanGeneration.get()) return@scan
@@ -227,7 +238,8 @@ class MainController(
             ))
             repository.loadMinuteBars(symbol, now - 30 * 86_400)
         }
-        return scannerEngine.evaluate(symbol, bars, criteria)
+        val lastCompletedMinute = now / 60L * 60L - 60L
+        return scannerEngine.evaluate(symbol, bars.filter { it.minuteEpochSeconds <= lastCompletedMinute }, criteria)
     }
 
     private fun isMarketOpen(symbol: String, instant: java.time.Instant = java.time.Instant.now()): Boolean {
@@ -265,12 +277,57 @@ class MainController(
 
     private fun showScannerSettings() {
         log.debug(LogTag.UI, "showScannerSettings()")
-        ScannerSettingsDialog(refreshButton.scene?.window, scannerCriteria, scannerSettings).showAndWait()?.let {
-            scannerCriteria = it; scannerSettings.save(it)
-            scannerPanel.setCurrency(it.displayCurrency, ::displayPrice)
-            scannerPanel.setAppearance(it.tableAppearance)
+        ScannerSettingsDialog(refreshButton.scene?.window, scannerCriteria, scannerSettings, ApiKeyResolver.resolve() != null)
+            .showAndWait()?.let { result ->
+            result.finnhubApiKey?.let { key ->
+                ApiKeyResolver.saveLocal(key, ApiKeyResolver.resolveWebhookSecret())
+                restartFinnhubLive(key)
+            }
+            scannerCriteria = result.criteria; scannerSettings.save(result.criteria)
+            scannerPanel.setCurrency(result.criteria.displayCurrency, ::displayPrice)
+            scannerPanel.setAppearance(result.criteria.tableAppearance)
             loadLocalChart(currentSymbol)
             startScanner()
+        }
+    }
+
+    private fun restartFinnhubLive(key: String) {
+        log.debug(LogTag.API, "restartFinnhubLive(keyPresent={})", key.isNotBlank())
+        finnhubClient?.close()
+        liveTicks.clear()
+        if (key.isBlank()) return
+        profileService = CompanyProfileService(repository, FinnhubProfileClient(key), CompanyLogoClient())
+        val client = FinnhubWebSocketClient(
+            apiKey = key,
+            onTrade = java.util.function.Consumer { tick ->
+                liveTicks[tick.symbol] = System.currentTimeMillis()
+                liveAggregator.accept(tick)
+            },
+            onError = java.util.function.Consumer { error: Throwable ->
+                log.warn(LogTag.API, "Finnhub live feed unavailable; Yahoo fallback remains active", error)
+                Platform.runLater { setStatus("Finnhub unavailable · Yahoo/SQLite fallback active") }
+            }
+        )
+        selectedMarketSymbols().filterNot { it.contains('.') }.forEach(client::subscribe)
+        finnhubClient = client
+        client.connect().whenComplete { _, error ->
+            Platform.runLater {
+                if (error == null) setStatus("Finnhub live connected · Yahoo/SQLite history ready")
+                else setStatus("Finnhub connection failed · Yahoo/SQLite fallback active")
+            }
+        }
+    }
+
+    private fun dataStatus(symbol: String): String {
+        val liveAt = liveTicks[symbol]
+        if (liveAt != null && System.currentTimeMillis() - liveAt <= 180_000L) return "LIVE"
+        if (!isMarketOpen(symbol)) return "CACHE"
+        return when {
+            !symbol.contains('.') -> "YAHOO RT"
+            symbol.endsWith(".MI") -> "DELAYED 20m"
+            symbol.endsWith(".DE") || symbol.endsWith(".PA") || symbol.endsWith(".AS") -> "DELAYED 15m"
+            symbol.endsWith(".HE") -> "YAHOO RT"
+            else -> "YAHOO"
         }
     }
 
@@ -288,9 +345,10 @@ class MainController(
             }
             dialogPane.content = TabPane(
                 aboutTab("Overview", """
-                    Local-first market anomaly scanner for macOS, Linux, and Windows.
+                    Local-first fresh market impulse scanner for macOS, Linux, and Windows.
 
-                    Market data       Yahoo Finance (default); Finnhub profile fallback (optional)
+                    Market history    Yahoo Finance and SQLite
+                    Live market data  Finnhub WebSocket (optional, user-owned API key)
                     Currency rates    European Central Bank
                     Local database    ~/.mimi/trends/mimitrends.db
                     Settings          ~/.mimi/trends/

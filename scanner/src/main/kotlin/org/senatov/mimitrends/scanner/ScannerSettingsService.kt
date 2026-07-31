@@ -27,6 +27,12 @@ class ScannerSettingsService(private val path: Path = Path.of(System.getProperty
                 minPrice = p.getProperty("minPrice", "2.0").toDouble(),
                 minSessionTurnover = p.getProperty("minSessionTurnover", "0").toDouble(),
                 baselineSessions = p.getProperty("baselineSessions", "5").toInt().coerceIn(3, 20),
+                maxSignalAgeMinutes = p.getProperty("maxSignalAgeMinutes", "2").toInt().coerceIn(0, 5),
+                minJumpZ = p.getProperty("minJumpZ", "3.0").toDouble().coerceIn(1.0, 20.0),
+                minRangeZ = p.getProperty("minRangeZ", "3.5").toDouble().coerceIn(1.0, 20.0),
+                minVolumeZ = p.getProperty("minVolumeZ", "2.0").toDouble().coerceIn(0.0, 20.0),
+                minRelativeVolume = p.getProperty("minRelativeVolume", "1.8").toDouble().coerceIn(0.0, 20.0),
+                minBodyRatio = p.getProperty("minBodyRatio", "0.55").toDouble().coerceIn(0.0, 1.0),
                 displayCurrency = runCatching { DisplayCurrency.valueOf(p.getProperty("displayCurrency", "EUR")) }.getOrDefault(DisplayCurrency.EUR),
                 tableAppearance = TableAppearance(
                     fontFamily = p.getProperty("table.fontFamily", "SF Pro Display"),
@@ -56,6 +62,12 @@ class ScannerSettingsService(private val path: Path = Path.of(System.getProperty
             setProperty("scanIntervalSeconds", value.scanIntervalSeconds.toString()); setProperty("resultLimit", value.resultLimit.toString())
             setProperty("minPrice", value.minPrice.toString()); setProperty("minSessionTurnover", value.minSessionTurnover.toString())
             setProperty("baselineSessions", value.baselineSessions.toString())
+            setProperty("maxSignalAgeMinutes", value.maxSignalAgeMinutes.toString())
+            setProperty("minJumpZ", value.minJumpZ.toString())
+            setProperty("minRangeZ", value.minRangeZ.toString())
+            setProperty("minVolumeZ", value.minVolumeZ.toString())
+            setProperty("minRelativeVolume", value.minRelativeVolume.toString())
+            setProperty("minBodyRatio", value.minBodyRatio.toString())
             setProperty("displayCurrency", value.displayCurrency.name)
             setProperty("table.fontFamily", value.tableAppearance.fontFamily)
             setProperty("table.fontSize", value.tableAppearance.fontSize.toString())

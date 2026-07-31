@@ -149,7 +149,7 @@ class TrendChartView : StackPane() {
         cursorPriceFormat = DecimalFormat("$currencySymbol#,##0.00")
         instrumentLabel.text = "$symbol   $currencySymbol${"%,.2f".format(closes.last())}"
         chartDetailsLabel.text = "$rangeLabel · ${bars.size} minute bars" + signalAgeMinutes?.let {
-            " · anomaly ${if (it == 0) "now–5m" else "$it–${it + 5}m ago"}"
+            " · impulse ${if (it == 0) "latest minute" else "${it}m ago"}"
         }.orEmpty()
         showLatestPrice(closes.last(), currencySymbol)
         showSignalWindow(visible.last().minuteEpochSeconds, signalAgeMinutes)
@@ -183,7 +183,7 @@ class TrendChartView : StackPane() {
         priceSignalMarker = null
         volumeSignalMarker = null
         if (ageMinutes == null || latestEpoch <= 0) return
-        val start = (latestEpoch - (ageMinutes + 5) * 60L) * 1_000.0
+        val start = (latestEpoch - (ageMinutes + 1) * 60L) * 1_000.0
         val end = (latestEpoch - ageMinutes * 60L) * 1_000.0
         fun marker(label: String?): IntervalMarker = IntervalMarker(start, end).apply {
             paint = Color(242, 154, 56, 48)
@@ -195,7 +195,7 @@ class TrendChartView : StackPane() {
             labelAnchor = if (ageMinutes == 0) RectangleAnchor.TOP_RIGHT else RectangleAnchor.TOP_LEFT
             labelTextAnchor = if (ageMinutes == 0) TextAnchor.TOP_RIGHT else TextAnchor.TOP_LEFT
         }
-        priceSignalMarker = marker("Anomaly ${if (ageMinutes == 0) "now–5m" else "$ageMinutes–${ageMinutes + 5}m ago"}")
+        priceSignalMarker = marker("Impulse ${if (ageMinutes == 0) "latest minute" else "${ageMinutes}m ago"}")
         volumeSignalMarker = marker(null)
         pricePlot.addDomainMarker(priceSignalMarker, Layer.BACKGROUND)
         volumePlot.addDomainMarker(volumeSignalMarker, Layer.BACKGROUND)

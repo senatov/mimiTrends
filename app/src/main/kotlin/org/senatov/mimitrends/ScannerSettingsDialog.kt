@@ -18,15 +18,29 @@ import javafx.scene.paint.Color
 import javafx.scene.text.Font
 import org.senatov.mimitrends.scanner.ScannerSettingsService
 
-class ScannerSettingsDialog(owner: Window?, current: ScannerCriteria, private val service: ScannerSettingsService) {
-    private val dialog = Dialog<ScannerCriteria>()
+data class ScannerSettingsResult(val criteria: ScannerCriteria, val finnhubApiKey: String?)
+
+class ScannerSettingsDialog(
+    owner: Window?, current: ScannerCriteria, private val service: ScannerSettingsService,
+    finnhubConfigured: Boolean
+) {
+    private val dialog = Dialog<ScannerSettingsResult>()
     private val marketRegion = ComboBox(FXCollections.observableArrayList(MarketRegion.entries)).apply { value = current.marketRegion }
     private val scanInterval = Spinner<Int>(60, 3_600, current.scanIntervalSeconds.toInt(), 30).apply { isEditable = true }
     private val resultLimit = Spinner<Int>(10, 100, current.resultLimit, 5).apply { isEditable = true }
     private val price = Spinner<Double>(0.0, 10_000.0, current.minPrice, 0.5).apply { isEditable = true }
     private val turnover = Spinner<Double>(0.0, 10_000_000_000.0, current.minSessionTurnover, 100_000.0).apply { isEditable = true }
     private val sessions = Spinner<Int>(3, 20, current.baselineSessions, 1).apply { isEditable = true }
+    private val signalAge = Spinner<Int>(0, 5, current.maxSignalAgeMinutes, 1).apply { isEditable = true }
+    private val jumpZ = Spinner<Double>(1.0, 20.0, current.minJumpZ, 0.25).apply { isEditable = true }
+    private val rangeZ = Spinner<Double>(1.0, 20.0, current.minRangeZ, 0.25).apply { isEditable = true }
+    private val volumeZ = Spinner<Double>(0.0, 20.0, current.minVolumeZ, 0.25).apply { isEditable = true }
+    private val relativeVolume = Spinner<Double>(0.0, 20.0, current.minRelativeVolume, 0.1).apply { isEditable = true }
+    private val bodyRatio = Spinner<Double>(0.0, 1.0, current.minBodyRatio, 0.05).apply { isEditable = true }
     private val currency = ComboBox(FXCollections.observableArrayList(DisplayCurrency.entries)).apply { value = current.displayCurrency }
+    private val finnhubApiKey = PasswordField().apply {
+        promptText = if (finnhubConfigured) "Configured — leave blank to keep" else "Optional API key"
+    }
     private val symbols = TextArea(current.symbols.joinToString(", ")).apply { prefRowCount = 3; isWrapText = true }
     private val fontFamily = ComboBox(FXCollections.observableArrayList(Font.getFamilies())).apply {
         value = current.tableAppearance.fontFamily
@@ -49,8 +63,12 @@ class ScannerSettingsDialog(owner: Window?, current: ScannerCriteria, private va
 
         val scanner = VBox(14.0,
             section("Signal detection",
-                settingRow("Recent signal horizon", "Three rolling windows: now–5, 5–10 and 10–15 minutes.",
-                    Label("0–15 minutes").apply { styleClass += "settings-value-badge" }),
+                settingRow("Maximum signal age", "Only the latest candle and this many preceding minutes are eligible.", signalAge),
+                settingRow("Minimum jump Z", "Return deviation measured in robust local standard deviations.", jumpZ),
+                settingRow("Minimum range Z", "High–low range deviation that can independently identify an impulse.", rangeZ),
+                settingRow("Volume confirmation Z", "Unusual log-volume confirmation; price movement remains mandatory.", volumeZ),
+                settingRow("Relative volume", "Current candle volume divided by its robust local median.", relativeVolume),
+                settingRow("Minimum candle body", "Body/range ratio; 0.55 rejects weak wicks and random ticks.", bodyRatio),
                 settingRow("Market universe", "Select US listings, European listings, or both.", marketRegion),
                 settingRow("Results to display", "Highest current anomaly scores retained after a complete scan.", resultLimit),
                 settingRow("Minimum source price", "Low-priced instruments below this value are ignored.", price),
@@ -59,7 +77,8 @@ class ScannerSettingsDialog(owner: Window?, current: ScannerCriteria, private va
             ),
             section("Refresh and presentation",
                 settingRow("Scan interval", "Seconds between complete scans; 180 is quota-friendly.", scanInterval),
-                settingRow("Display currency", "Prices and turnover are converted only for presentation.", currency)
+                settingRow("Display currency", "Prices and turnover are converted only for presentation.", currency),
+                settingRow("Finnhub live feed", "Optional. A new key is stored locally; blank keeps the existing configuration.", finnhubApiKey)
             ),
             section("Candidate universe",
                 Label("Comma-separated Yahoo symbols. The expanded default universe contains 100 liquid US and European listings.").apply {
@@ -67,7 +86,7 @@ class ScannerSettingsDialog(owner: Window?, current: ScannerCriteria, private va
                 },
                 symbols.apply { prefRowCount = 5; maxHeight = 130.0 }
             ),
-            Label("Ranking uses only activity found in the latest 15 minutes. Every downloaded minute bar is retained in SQLite and reused as the normal baseline.").apply {
+            Label("Only fresh directional price impulses are ranked. Volume alone cannot qualify a symbol. Historical Yahoo bars and live Finnhub bars are retained in SQLite.").apply {
                 isWrapText = true; styleClass += "settings-footnote"
             }
         ).apply { padding = Insets(18.0) }
@@ -116,14 +135,20 @@ class ScannerSettingsDialog(owner: Window?, current: ScannerCriteria, private va
         children += listOf(description, control)
     }
 
-    fun showAndWait(): ScannerCriteria? = dialog.showAndWait().orElse(null)
+    fun showAndWait(): ScannerSettingsResult? = dialog.showAndWait().orElse(null)
 
-    private fun parse(): ScannerCriteria? = runCatching {
-        ScannerCriteria(anomalyWindow = AnomalyWindow.HOUR, marketRegion = marketRegion.value,
+    private fun parse(): ScannerSettingsResult? = runCatching {
+        val criteria = ScannerCriteria(anomalyWindow = AnomalyWindow.HOUR, marketRegion = marketRegion.value,
             scanIntervalSeconds = scanInterval.value.toLong(),
             resultLimit = resultLimit.value,
             minPrice = price.value, minSessionTurnover = turnover.value,
             baselineSessions = sessions.value,
+            maxSignalAgeMinutes = signalAge.value,
+            minJumpZ = jumpZ.value,
+            minRangeZ = rangeZ.value,
+            minVolumeZ = volumeZ.value,
+            minRelativeVolume = relativeVolume.value,
+            minBodyRatio = bodyRatio.value,
             displayCurrency = currency.value,
             tableAppearance = TableAppearance(
                 fontFamily = fontFamily.value ?: "SF Pro Display",
@@ -135,6 +160,7 @@ class ScannerSettingsDialog(owner: Window?, current: ScannerCriteria, private va
                 gridColor = hex(gridColor.value)
             ),
             symbols = service.normalizeSymbols(symbols.text).also { require(it.isNotEmpty()) })
+        ScannerSettingsResult(criteria, finnhubApiKey.text.trim().takeIf(String::isNotEmpty))
     }.onFailure { Alert(Alert.AlertType.ERROR, "Check numeric values and enter at least one symbol.", ButtonType.OK).showAndWait() }.getOrNull()
 
     private fun hex(color: Color): String = "#%02X%02X%02X".format(

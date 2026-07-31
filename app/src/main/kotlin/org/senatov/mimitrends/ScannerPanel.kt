@@ -63,13 +63,16 @@ class ScannerPanel(
         symbolColumn()
         numberColumn("Price", { convertPrice(it.symbol, it.price) }) { "${currency.symbol}%,.2f".format(it) }
         val scoreColumn = numberColumn("Score", ScanResult::anomalyScore) { "%.2f×".format(it) }
-        signalColumn(ScanResult::signalSource)
+        signalColumn(value = ScanResult::signalSource)
         numberColumn("When", { it.signalAgeMinutes.toDouble() }) {
-            when (it.toInt()) { 0 -> "now–5m"; 5 -> "5–10m ago"; else -> "10–15m ago" }
+            when (it.toInt()) { 0 -> "latest"; 1 -> "1m ago"; else -> "${it.toInt()}m ago" }
         }
-        numberColumn("Δ 5m", ScanResult::windowChangePercent, ::percent)
-        numberColumn("Price ×", ScanResult::priceAnomaly) { "%.2f×".format(it) }
-        numberColumn("Volume ×", ScanResult::volumeAnomaly) { "%.2f×".format(it) }
+        numberColumn("Δ 1m", ScanResult::windowChangePercent, ::percent)
+        numberColumn("Jump Z", ScanResult::priceAnomaly) { "%.2fσ".format(it) }
+        numberColumn("Range Z", ScanResult::rangeAnomaly) { "%.2fσ".format(it) }
+        numberColumn("Volume Z", ScanResult::volumeAnomaly) { "%.2fσ".format(it) }
+        numberColumn("RVOL", ScanResult::relativeVolume) { "%.2f×".format(it) }
+        signalColumn("Feed", ScanResult::dataStatus)
         numberColumn("Turnover", { convertPrice(it.symbol, it.sessionTurnover) }, ::compactMoney)
         updatedColumn(ScanResult::updatedAtMillis) { time.format(Instant.ofEpochMilli(it)) }
         scoreColumn.sortType = TableColumn.SortType.DESCENDING
@@ -165,9 +168,9 @@ class ScannerPanel(
         table.refresh()
     }
 
-    private fun signalColumn(value: (ScanResult) -> String): TableColumn<ScanResult, String> {
-        log.debug(LogTag.UI, "signalColumn()")
-        return TableColumn<ScanResult, String>("Signal").apply {
+    private fun signalColumn(title: String = "Signal", value: (ScanResult) -> String): TableColumn<ScanResult, String> {
+        log.debug(LogTag.UI, "signalColumn(title={})", title)
+        return TableColumn<ScanResult, String>(title).apply {
             setCellValueFactory { ReadOnlyObjectWrapper(value(it.value)) }
             isResizable = true
             isReorderable = true

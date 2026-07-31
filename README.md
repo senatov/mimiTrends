@@ -4,7 +4,7 @@
 
 ### A local-first market anomaly scanner for macOS
 
-MiMiTrends is a Kotlin/JVM + JavaFX desktop application styled after MiMiComparator. It ranks a 100-instrument liquid US and European universe by unusual recent price or turnover activity and stores downloaded minute OHLCV history in SQLite.
+MiMiTrends is a Kotlin/JVM + JavaFX desktop application styled after MiMiComparator. It detects sudden directional one-minute price impulses in a liquid US and European universe and stores historical Yahoo and optional live Finnhub OHLCV data in SQLite.
 
 ## Main window
 
@@ -13,11 +13,12 @@ MiMiTrends is a Kotlin/JVM + JavaFX desktop application styled after MiMiCompara
 ## What it does
 
 - scans a configurable US, European, or combined universe;
-- compares the rolling 0–5, 5–10, and 10–15 minute windows with historical local baselines;
-- ranks price and volume anomalies instead of requiring every instrument to pass fixed thresholds;
+- examines only the latest minute candle and the immediately preceding configurable freshness horizon;
+- detects `Impulse ↑` and `Impulse ↓` using robust return/range Z-scores, candle shape, and volume confirmation;
+- never promotes a symbol for volume alone when its price is quiet;
 - keeps the visible table unchanged while scanning and publishes the completed ranking atomically;
 - scans every three minutes by default and shows a countdown or animated hourglass;
-- uses SQLite first and requests Yahoo Finance only when a market is open and local data is stale;
+- uses SQLite first, Yahoo Finance for history/fallback, and optional Finnhub WebSocket trades for live US candles;
 - downloads five days on first use, then requests only the missing tail and upserts overlapping minutes;
 - displays candlesticks, volume, a turquoise close line, zoom/pan, tooltips, and a mouse crosshair;
 - shows cached company favicons and marketing names; ticker and exchange remain in the delayed help popup;
@@ -28,9 +29,11 @@ The scanner is informational and does not place orders.
 
 ## Data providers
 
-Yahoo Finance is the default OHLCV/profile source and needs no API key. Its public chart endpoint is not a contracted market-data API, so availability and fields can change; this project is intended for personal/demo use. For redistribution or a commercial product, replace it with a licensed provider behind the isolated `market-data` module.
+Yahoo Finance is the default OHLCV/profile source and needs no API key. Its public chart endpoint is not a contracted market-data API, so availability and fields can change; this project is intended for personal/demo use. Yahoo documents US Nasdaq quotes as real-time, but common European feeds are delayed: Xetra, Paris, and Amsterdam by 15 minutes and Milan by 20 minutes. The scanner labels every result as `YAHOO RT`, `DELAYED 15m`, `DELAYED 20m`, `LIVE`, or `CACHE` instead of presenting delayed data as current.
 
-Finnhub is optional and is currently used only as a cached company-profile/logo fallback when `FINNHUB_API_KEY` is configured. Missing Finnhub credentials never block startup.
+Finnhub is optional. When configured, one WebSocket connection subscribes to the selected US symbols, aggregates trade ticks into updatable minute OHLCV bars, and writes them to SQLite. It also remains a company-profile/logo fallback. A WebSocket failure automatically leaves Yahoo/SQLite active; missing credentials never block startup. European real-time availability depends on the user's Finnhub plan and exchange licensing, so Yahoo European results remain explicitly delayed in the default configuration.
+
+Users can enter or replace their own Finnhub API key under **Settings → Finnhub live feed**. Leaving the field blank preserves the current local key. Credentials can also be supplied through `FINNHUB_API_KEY` or an ignored project `.env` file.
 
 Credential lookup order is environment variable, ignored project `.env`, then:
 
@@ -64,7 +67,7 @@ database/     SQLite WAL connection, schema, profiles, and minute-bar repository
 market-data/  Yahoo Finance HTTP client and response mapping
 scanner/      Configurable anomaly scoring and settings persistence
 charts/       Reusable JFreeChart-FX candlestick/volume component
-finnhub-ws/   Optional Finnhub profile and legacy realtime adapter
+finnhub-ws/   Optional Finnhub profiles, WebSocket client, and minute aggregator
 app/          JavaFX lifecycle, dialogs, state, and orchestration
 ```
 
@@ -78,15 +81,17 @@ Market history is stored in:
 
 SQLite runs in WAL mode with `synchronous=NORMAL`. Minute rows use an upsert key, so a repeated or incomplete provider bar is updated rather than duplicated. Settings and UI state are stored beside the database.
 
-## Anomaly score
+## Fresh impulse score
 
-For each of the three most recent five-minute windows, the scanner calculates:
+For the latest eligible one-minute candles, the scanner calculates:
 
-- absolute price return divided by the median historical absolute return;
-- window volume divided by the median historical five-minute volume;
-- a recency-weighted score, favouring activity still present in the latest five minutes.
+- a robust return jump Z-score using median absolute deviation (MAD);
+- a robust high–low range Z-score;
+- log-volume Z-score and relative volume against a local median;
+- candle body/range ratio and closing location, rejecting weak wicks and random ticks;
+- same-direction continuation and exponential freshness decay.
 
-The winning window is displayed as `now–5m`, `5–10m ago`, or `10–15m ago`, together with `Price ↑`, `Price ↓`, or `Volume` as its source. Activity older than 15 minutes cannot keep an otherwise quiet instrument at the top. The table is sorted by score and limited to 50 rows by default. A cold database receives a neutral baseline until enough comparable periods exist, avoiding artificial extreme scores. Minimum source price and session turnover remain configurable quality/liquidity guards.
+A signal requires an exceptional price return or range plus confirmation from candle shape, relative/log volume, or immediate continuation. Volume by itself cannot qualify a symbol. The default maximum age is two minutes and the score decays exponentially, so a completed move disappears unless fresh bars continue it. Baselines prefer prior sessions at comparable times of day and fall back to recent cached bars when history is still short. Thresholds, freshness, liquidity guards, universe, region, and scan interval are editable under Settings.
 
 The expanded default watchlist contains 100 liquid US and European listings. Yahoo suffixes such as `.DE`, `.PA`, `.AS`, and `.MI` identify European exchanges. The universe, region, interval, result count, liquidity guards, and baseline length are editable under Settings.
 

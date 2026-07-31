@@ -53,6 +53,12 @@ data class ScannerCriteria(
     val minPrice: Double = 2.0,
     val minSessionTurnover: Double = 0.0,
     val baselineSessions: Int = 5,
+    val maxSignalAgeMinutes: Int = 2,
+    val minJumpZ: Double = 3.0,
+    val minRangeZ: Double = 3.5,
+    val minVolumeZ: Double = 2.0,
+    val minRelativeVolume: Double = 1.8,
+    val minBodyRatio: Double = 0.55,
     val displayCurrency: DisplayCurrency = DisplayCurrency.EUR,
     val tableAppearance: TableAppearance = TableAppearance(),
     val symbols: List<String> = listOf(
@@ -77,13 +83,17 @@ data class ScanResult(
     val anomalyScore: Double,
     val priceAnomaly: Double,
     val volumeAnomaly: Double,
+    val rangeAnomaly: Double,
+    val relativeVolume: Double,
+    val candleBodyRatio: Double,
     val windowChangePercent: Double,
     val windowVolume: Double,
     val sessionVolume: Double,
     val sessionTurnover: Double,
     val signalAgeMinutes: Int,
     val signalSource: String,
-    val updatedAtMillis: Long
+    val updatedAtMillis: Long,
+    val dataStatus: String = "CACHE"
 )
 
 data class CompanyProfile(
