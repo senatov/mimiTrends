@@ -64,8 +64,7 @@ class ScannerEngine(private val zone: ZoneId = ZoneId.systemDefault()) {
             minRangeZ = criteria.minRangeZ * 0.80,
             minVolumeZ = criteria.minVolumeZ * 0.75,
             minRelativeVolume = criteria.minRelativeVolume * 0.85,
-            minBodyRatio = criteria.minBodyRatio * 0.90,
-            minAbsoluteMovePercent = criteria.minAbsoluteMovePercent * 0.70
+            minBodyRatio = criteria.minBodyRatio * 0.90
         )
         evaluate(symbol, bars, relaxed)?.let { impulse ->
             return impulse.copy(signalSource = "${impulse.signalSource} · relaxed", anomalyScore = impulse.anomalyScore * 0.85)
@@ -259,7 +258,7 @@ class ScannerEngine(private val zone: ZoneId = ZoneId.systemDefault()) {
         const val LOG_VOLUME_FLOOR = 0.15
         const val FRESHNESS_HALF_LIFE = 1.8
         const val MIN_TREND_BARS = 60
-        const val MIN_TREND_R_SQUARED = 0.25
+        const val MIN_TREND_R_SQUARED = 0.18
         const val MAX_RECENT_PULLBACK_PERCENT = 0.35
     }
 }

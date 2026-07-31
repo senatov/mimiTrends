@@ -32,6 +32,12 @@ class ScannerEngineTest {
         assertNull(engine().evaluate("TEST", bars, criteria()))
     }
 
+    @Test fun `rejects a statistically unusual but economically tiny candle`() {
+        val bars = normalBars().toMutableList()
+        bars += candle(nextMinute(bars), 100.0, 100.10, 10_000.0)
+        assertNull(engine().evaluate("TEST", bars, criteria()))
+    }
+
     @Test fun `drops an impulse older than configured freshness horizon`() {
         val bars = normalBars().toMutableList()
         var minute = nextMinute(bars)
@@ -80,6 +86,6 @@ class ScannerEngineTest {
         minVolumeZ = 2.0,
         minRelativeVolume = 1.8,
         minBodyRatio = 0.55,
-        minAbsoluteMovePercent = 0.10
+        minAbsoluteMovePercent = 0.20
     )
 }

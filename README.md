@@ -16,7 +16,7 @@ MiMiTrends is a Kotlin/JVM + JavaFX desktop application styled after MiMiCompara
 - examines only the latest minute candle and the immediately preceding configurable freshness horizon;
 - detects `Impulse ↑` and `Impulse ↓` using robust return/range Z-scores, candle shape, and volume confirmation;
 - never promotes a symbol for volume alone when its price is quiet;
-- requires at least two cached sessions and a configurable absolute move floor (0.10% by default);
+- requires at least two cached sessions and a configurable absolute move floor (0.20% by default);
 - fills a sparse strict-impulse list to 12 rows by default with relaxed fresh impulses and statistically persistent rising trends;
 - excludes closed exchanges from the fresh ranking instead of recycling their final cached candle;
 - keeps the visible table unchanged while scanning and publishes the completed ranking atomically;
@@ -97,9 +97,9 @@ For the latest eligible one-minute candles, the scanner calculates:
 
 A signal requires an exceptional price return or range plus confirmation from candle shape, relative/log volume, or immediate continuation. Volume by itself cannot qualify a symbol. The default maximum age is two minutes and the score decays exponentially, so a completed move disappears unless fresh bars continue it. Baselines prefer prior sessions at comparable times of day and fall back to recent cached bars when history is still short. Thresholds, freshness, liquidity guards, universe, region, and scan interval are editable under Settings.
 
-At least two historical sessions are required before a symbol can generate a signal. A cold or incomplete cache is bootstrapped from Yahoo before evaluation. Only completed, minute-aligned bars with positive volume participate in statistics; malformed zero-volume quote snapshots are removed during database migration. The absolute-move floor prevents a mathematically large Z-score on economically insignificant movements such as 0.02% in an unusually quiet stock.
+At least two historical sessions are required before a symbol can generate a signal. A cold or incomplete cache is bootstrapped from Yahoo before evaluation. Only completed, minute-aligned bars with positive volume participate in statistics; malformed zero-volume quote snapshots are removed during database migration. The 0.20% default absolute-move floor prevents a mathematically large Z-score on economically insignificant movements such as 0.02–0.10% in an unusually quiet stock. Such a symbol can still qualify as `Trend ↑` when its multi-hour path shows meaningful persistent growth.
 
-If fewer than the configured minimum number of strict impulses are available, the scanner adds two lower-priority fallback classes. A relaxed impulse reduces the strict thresholds moderately while retaining recency and the absolute-move guard. `Trend ↑` examines up to 180 minutes of the current session and requires positive net return, a positive least-squares slope, minimum R², and a minimum efficiency ratio (net progress divided by total travelled price path). This permits pullbacks without treating a noisy sideways chart as sustained growth. Strict results are never removed to make room for fallbacks.
+If fewer than the configured minimum number of strict impulses are available, the scanner adds two lower-priority fallback classes. A relaxed impulse reduces the strict thresholds moderately while retaining recency and the absolute-move guard. `Trend ↑` examines up to 180 minutes of the current session and requires at least 0.45% net growth by default, a positive least-squares slope, R² of at least 0.18, and an efficiency ratio of at least 0.08 (net progress divided by total travelled price path). This permits pullbacks without treating a noisy sideways chart as sustained growth. Strict results are never removed to make room for fallbacks.
 
 The expanded default watchlist contains 100 liquid US and European listings. Yahoo suffixes such as `.DE`, `.PA`, `.AS`, and `.MI` identify European exchanges. The universe, region, interval, result count, liquidity guards, and baseline length are editable under Settings.
 
