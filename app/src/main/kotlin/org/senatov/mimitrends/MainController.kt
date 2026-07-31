@@ -174,7 +174,7 @@ class MainController(
         val criteria = scannerCriteria
         rotationTask?.cancel(false)
         scannerPanel.clear()
-        val symbols = selectedMarketSymbols()
+        val symbols = selectedMarketSymbols().filter(::isMarketOpen)
         lateinit var scan: () -> Unit
         scan = scan@ {
             log.debug(LogTag.API, "scanHybrid(symbols={}, recentWindow={}m)", symbols.size, criteria.maxSignalAgeMinutes)
@@ -197,14 +197,15 @@ class MainController(
             repository.flushPending()
             Platform.runLater {
                 if (generation != scanGeneration.get()) return@runLater
-                if (results.isEmpty()) {
+                if (results.isEmpty() && errors.size == symbols.size && symbols.isNotEmpty()) {
                     scannerPanel.abortScan()
                     setStatus("Yahoo scan produced no data; previous table retained", true, errors.joinToString("\n"))
                 } else {
                     results.forEach(scannerPanel::update)
                     scannerPanel.completeScan(criteria.resultLimit)
                     scannerPanel.showCountdown(criteria.scanIntervalSeconds)
-                    setStatus("Hybrid scan complete · ${results.size} fresh impulses · next in ${criteria.scanIntervalSeconds}s")
+                    val marketState = if (symbols.isEmpty()) "all selected markets closed" else "${results.size} fresh impulses"
+                    setStatus("Hybrid scan complete · $marketState · next in ${criteria.scanIntervalSeconds}s")
                 }
             }
             if (generation != scanGeneration.get()) return@scan

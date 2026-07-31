@@ -16,12 +16,14 @@ MiMiTrends is a Kotlin/JVM + JavaFX desktop application styled after MiMiCompara
 - examines only the latest minute candle and the immediately preceding configurable freshness horizon;
 - detects `Impulse ↑` and `Impulse ↓` using robust return/range Z-scores, candle shape, and volume confirmation;
 - never promotes a symbol for volume alone when its price is quiet;
+- excludes closed exchanges from the fresh ranking instead of recycling their final cached candle;
 - keeps the visible table unchanged while scanning and publishes the completed ranking atomically;
 - scans every three minutes by default and shows a countdown or animated hourglass;
 - uses SQLite first, Yahoo Finance for history/fallback, and optional Finnhub WebSocket trades for live US candles;
 - downloads five days on first use, then requests only the missing tail and upserts overlapping minutes;
 - displays candlesticks, volume, a turquoise close line, zoom/pan, tooltips, and a mouse crosshair;
 - shows cached company favicons and marketing names; ticker and exchange remain in the delayed help popup;
+- copies the selected company name with `⌘C`/`Ctrl+C`; the row menu can copy either name or ticker;
 - shows prices in EUR by default, with USD selectable in Settings;
 - remembers window geometry, divider position, selected instrument, columns, colors, and fonts.
 

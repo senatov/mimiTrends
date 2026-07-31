@@ -15,6 +15,9 @@ import javafx.scene.image.Image
 import javafx.scene.image.ImageView
 import javafx.scene.control.*
 import javafx.scene.input.MouseButton
+import javafx.scene.input.Clipboard
+import javafx.scene.input.ClipboardContent
+import javafx.scene.input.KeyCode
 import javafx.scene.layout.HBox
 import javafx.scene.layout.Priority
 import javafx.scene.layout.StackPane
@@ -53,6 +56,7 @@ class ScannerPanel(
     private var currency = DisplayCurrency.EUR
     private var convertPrice: (String, Double) -> Double = { _, value -> value }
     private val logoImages = ConcurrentHashMap<String, Image>()
+    private val companyNames = ConcurrentHashMap<String, String>()
 
     init {
         log.debug(LogTag.UI, "init()")
@@ -84,7 +88,19 @@ class ScannerPanel(
         table.columnResizePolicy = TableView.UNCONSTRAINED_RESIZE_POLICY
         table.fixedCellSize = 30.0
         table.setRowFactory {
-            TableRow<ScanResult>().apply { setOnMouseClicked { e -> if (!isEmpty && e.button == MouseButton.PRIMARY && e.clickCount == 1) onOpen(item) } }
+            TableRow<ScanResult>().apply {
+                setOnMouseClicked { e -> if (!isEmpty && e.button == MouseButton.PRIMARY && e.clickCount == 1) onOpen(item) }
+                contextMenu = ContextMenu(
+                    MenuItem("Copy company name").apply { setOnAction { item?.let { copyText(companyNames[it.symbol] ?: it.symbol) } } },
+                    MenuItem("Copy ticker").apply { setOnAction { item?.let { copyText(it.symbol) } } }
+                )
+            }
+        }
+        table.setOnKeyPressed { event ->
+            if (event.code == KeyCode.C && event.isShortcutDown) {
+                table.selectionModel.selectedItem?.let { copyText(companyNames[it.symbol] ?: it.symbol) }
+                event.consume()
+            }
         }
         table.minHeight = 0.0
         table.maxHeight = Double.MAX_VALUE
@@ -237,6 +253,7 @@ class ScannerPanel(
                         tooltip = companyTooltip(symbol, null)
                         loadProfile?.invoke(symbol)?.whenComplete(BiConsumer<CompanyProfile?, Throwable?> { profile, error ->
                             if (error == null && profile != null) Platform.runLater {
+                                companyNames[symbol] = profile.name
                                 if (renderedSymbol == symbol && item == symbol) {
                                     text = profile.name
                                     graphic = logoBadge(symbol, profile.logoBytes, 22.0)
@@ -296,6 +313,12 @@ class ScannerPanel(
     }
 
     private fun percent(value: Double?) = value?.let { "%+.2f%%".format(it) } ?: "N/A"
+
+    private fun copyText(value: String) {
+        log.debug(LogTag.UI, "copyText(chars={})", value.length)
+        Clipboard.getSystemClipboard().setContent(ClipboardContent().apply { putString(value) })
+    }
+
     private fun compactMoney(value: Double): String = when {
         value >= 1_000_000_000 -> "${currency.symbol}%.1fB".format(value / 1_000_000_000)
         value >= 1_000_000 -> "${currency.symbol}%.1fM".format(value / 1_000_000)
