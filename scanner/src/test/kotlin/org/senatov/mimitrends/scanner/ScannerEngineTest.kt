@@ -55,14 +55,29 @@ class ScannerEngineTest {
         }
         var previous = 100.0
         (0 until 180).forEach { minute ->
-            val close = 100.0 + minute * 0.008 + kotlin.math.sin(minute / 7.0) * 0.08
+            val close = 100.0 + minute * 0.08 + kotlin.math.sin(minute / 7.0) * 0.08
             bars += candle(2 * 1_440 + minute, previous, close, 150.0)
             previous = close
         }
         assertNull(engine().evaluate("TEST", bars, criteria()))
         val result = requireNotNull(engine().evaluateFallback("TEST", bars, criteria()))
         assertEquals("Trend ↑", result.signalSource)
+        assertEquals("10m", result.signalWindowLabel)
         assertTrue(result.windowChangePercent >= 0.60)
+    }
+
+    @Test fun `rejects an old trend that is flat now`() {
+        val bars = mutableListOf<MinuteBar>()
+        (0 until 2).forEach { day ->
+            (0 until 180).forEach { minute -> bars += candle(day * 1_440 + minute, 100.0, 100.01, 100.0) }
+        }
+        var previous = 100.0
+        (0 until 180).forEach { minute ->
+            val close = if (minute < 140) 100.0 + minute * 0.04 else 105.6 + (minute % 2) * 0.01
+            bars += candle(2 * 1_440 + minute, previous, close, 150.0)
+            previous = close
+        }
+        assertNull(engine().evaluateFallback("TEST", bars, criteria()))
     }
 
     private fun normalBars() = (0 until 3).flatMap { day ->

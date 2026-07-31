@@ -17,5 +17,11 @@ object BuildInfo {
         ?: fallback.getProperty("version", "development")
     val buildNumber: String = manifest?.mainAttributes?.getValue("Build-Number")
         ?: fallback.getProperty("build", "dev")
-    val displayVersion: String = "$version (build $buildNumber)"
+    val buildType: String = manifest?.mainAttributes?.getValue("Build-Type")
+        ?: fallback.getProperty("type", "DEV BUILD")
+    val buildTime: String = manifest?.mainAttributes?.getValue("Build-Time")
+        ?: fallback.getProperty("time", "unknown")
+    val buildHost: String = manifest?.mainAttributes?.getValue("Build-Host")
+        ?: fallback.getProperty("host", "unknown")
+    val displayVersion: String = "$version · build $buildNumber"
 }

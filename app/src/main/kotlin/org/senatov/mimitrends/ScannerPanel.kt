@@ -65,11 +65,11 @@ class ScannerPanel(
             javafx.scene.layout.Region().also { javafx.scene.layout.HBox.setHgrow(it, Priority.ALWAYS) })
         sortedRows.comparatorProperty().bind(table.comparatorProperty())
         symbolColumn()
+        signalColumn("Trend", ScanResult::signalSource)
+        numberColumn("Δ 10m", ScanResult::windowChangePercent, ::percent)
         numberColumn("Price", { convertPrice(it.symbol, it.price) }) { "${currency.symbol}%,.2f".format(it) }
         val scoreColumn = numberColumn("Score", ScanResult::anomalyScore) { "%.2f×".format(it) }
-        signalColumn(value = ScanResult::signalSource)
         signalColumn("Window", ScanResult::signalWindowLabel)
-        numberColumn("Δ signal", ScanResult::windowChangePercent, ::percent)
         numberColumn("Jump Z", ScanResult::priceAnomaly) { "%.2fσ".format(it) }
         numberColumn("Range Z", ScanResult::rangeAnomaly) { "%.2fσ".format(it) }
         numberColumn("Volume Z", ScanResult::volumeAnomaly) { "%.2fσ".format(it) }
@@ -186,6 +186,24 @@ class ScannerPanel(
         log.debug(LogTag.UI, "signalColumn(title={})", title)
         return TableColumn<ScanResult, String>(title).apply {
             setCellValueFactory { ReadOnlyObjectWrapper(value(it.value)) }
+            setCellFactory {
+                object : TableCell<ScanResult, String>() {
+                    override fun updateItem(item: String?, empty: Boolean) {
+                        super.updateItem(item, empty)
+                        val result = tableRow?.item
+                        if (empty || item == null || result == null) {
+                            text = null
+                            style = ""
+                            tooltip = null
+                            return
+                        }
+                        val visual = signalVisual(result)
+                        text = item
+                        style = "-fx-text-fill: ${visual.color}; -fx-font-weight: ${visual.weight};"
+                        tooltip = Tooltip(visual.description).apply { showDelay = Duration.millis(450.0) }
+                    }
+                }
+            }
             isResizable = true
             isReorderable = true
             prefWidth = 115.0
@@ -193,6 +211,26 @@ class ScannerPanel(
             table.columns += this
         }
     }
+
+    private fun signalVisual(result: ScanResult): SignalVisual {
+        val down = result.signalSource.contains('↓')
+        val directionalColor = if (down) "#c43d4b" else "#138a55"
+        val weakColor = if (down) "#a9787d" else "#668b72"
+        return when {
+            result.signalAgeMinutes > 0 -> SignalVisual("#7b8189", 400,
+                "Old signal · ${result.signalAgeMinutes} minute(s) ago")
+            result.signalSource.contains("relaxed", ignoreCase = true) -> SignalVisual("#ad7100", 500,
+                "Questionable signal · accepted only by relaxed statistical thresholds")
+            result.signalSource.startsWith("Trend") && kotlin.math.abs(result.windowChangePercent) < 0.90 ->
+                SignalVisual(weakColor, 500, "Weak current trend · direction is active but close to the minimum threshold")
+            result.anomalyScore < 1.25 -> SignalVisual("#ad7100", 500,
+                "Questionable signal · low composite confidence")
+            else -> SignalVisual(directionalColor, 600,
+                if (down) "Strong current downward movement" else "Strong current upward movement")
+        }
+    }
+
+    private data class SignalVisual(val color: String, val weight: Int, val description: String)
 
     private fun numberColumn(
         title: String,

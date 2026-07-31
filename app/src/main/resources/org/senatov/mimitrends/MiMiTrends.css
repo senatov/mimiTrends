@@ -16,9 +16,41 @@
 }
 
 .app-title {
-    -fx-font-size: 16px;
-    -fx-font-weight: 500;
-    -fx-text-fill: #273f63;
+    -fx-font-size: 18px;
+    -fx-font-weight: 300;
+    -fx-text-fill: #3e3f43;
+}
+
+.app-version {
+    -fx-font-size: 10px;
+    -fx-font-weight: 300;
+    -fx-text-fill: #8b8e94;
+}
+
+.build-badge {
+    -fx-padding: 3 9 3 5;
+    -fx-background-color: linear-gradient(to bottom right, rgba(255,255,255,0.88), rgba(226,239,252,0.76));
+    -fx-background-radius: 9px;
+    -fx-border-color: rgba(73,151,225,0.62);
+    -fx-border-radius: 9px;
+    -fx-border-width: 1px;
+    -fx-effect: dropshadow(gaussian, rgba(45,91,140,0.16), 7, 0.14, 0, 2);
+}
+
+.build-badge-icon {
+    -fx-effect: dropshadow(gaussian, rgba(38,55,75,0.16), 3, 0.10, 0, 1);
+}
+
+.build-badge-type {
+    -fx-font-size: 9px;
+    -fx-font-weight: 600;
+    -fx-text-fill: #58616d;
+}
+
+.build-badge-details {
+    -fx-font-size: 9px;
+    -fx-font-weight: 300;
+    -fx-text-fill: #747b84;
 }
 
 .request-status-bar {

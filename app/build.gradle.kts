@@ -1,15 +1,41 @@
 import org.gradle.jvm.tasks.Jar
+import org.gradle.language.jvm.tasks.ProcessResources
+import org.gradle.api.tasks.WriteProperties
+import java.net.InetAddress
+import java.time.ZonedDateTime
+import java.time.format.DateTimeFormatter
 
 plugins {
     application
     kotlin("jvm") version "2.4.0"
 }
 
-val appVersion = providers.gradleProperty("appVersion").getOrElse("1.0.0")
+val appVersion = providers.gradleProperty("appVersion").getOrElse("0.0.0.1")
 version = appVersion
+val buildTime = ZonedDateTime.now().format(DateTimeFormatter.ofPattern("yyyy.MM.dd HH:mm:ss z"))
 val buildNumber = providers.environmentVariable("BUILD_NUMBER")
     .orElse(providers.gradleProperty("buildNumber"))
-    .getOrElse("dev")
+    .getOrElse(ZonedDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMddHHmmss")))
+val buildType = providers.gradleProperty("buildType")
+    .orElse(providers.environmentVariable("BUILD_TYPE"))
+    .getOrElse("DEV BUILD")
+val buildHost = providers.environmentVariable("HOSTNAME")
+    .getOrElse(runCatching { InetAddress.getLocalHost().hostName }.getOrElse { "unknown" })
+val generatedBuildInfoDir = layout.buildDirectory.dir("generated/build-info")
+
+val generateBuildInfo = tasks.register<WriteProperties>("generateBuildInfo") {
+    destinationFile = generatedBuildInfoDir.map { it.file("build-info.properties") }
+    property("version", appVersion)
+    property("build", buildNumber)
+    property("type", buildType)
+    property("time", buildTime)
+    property("host", buildHost)
+}
+
+tasks.named<ProcessResources>("processResources") {
+    dependsOn(generateBuildInfo)
+    from(generatedBuildInfoDir)
+}
 
 repositories {
     mavenCentral()
@@ -84,6 +110,9 @@ tasks.named<Jar>("jar") {
             "Implementation-Title" to "MiMiTrends",
             "Implementation-Version" to appVersion,
             "Build-Number" to buildNumber,
+            "Build-Type" to buildType,
+            "Build-Time" to buildTime,
+            "Build-Host" to buildHost,
             "Main-Class" to application.mainClass.get()
         )
     }

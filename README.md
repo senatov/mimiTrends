@@ -57,6 +57,8 @@ Never commit credentials. Revoke any key that has been shared publicly.
 
 In IntelliJ IDEA, import the root as a Gradle project and use the shared `MiMiTrends [run]` configuration. The packaged entry point is `org.senatov.mimitrends.LauncherKt`. If Run/Debug is disabled, reload the Gradle project and remove an obsolete configuration pointing directly at `App`.
 
+The application version starts at `0.0.0.1`. Gradle generates `build-info.properties` for every build with a unique build ID, build type, timestamp, and host; the same metadata is embedded in the JAR manifest and displayed in the title bar and About dialog. Override it when needed with `-PappVersion=… -PbuildNumber=… -PbuildType=…`.
+
 To create a macOS bundle with a JDK containing `jpackage`:
 
 ```zsh
@@ -95,13 +97,15 @@ For the latest eligible one-minute candles, the scanner calculates:
 - candle body/range ratio and closing location, rejecting weak wicks and random ticks;
 - same-direction continuation and exponential freshness decay.
 
-A signal requires an exceptional price return or range plus confirmation from candle shape, relative/log volume, or immediate continuation. Volume by itself cannot qualify a symbol. The default maximum age is two minutes and the score decays exponentially, so a completed move disappears unless fresh bars continue it. Baselines prefer prior sessions at comparable times of day and fall back to recent cached bars when history is still short. Thresholds, freshness, liquidity guards, universe, region, and scan interval are editable under Settings.
+A signal requires an exceptional price return or range plus confirmation from candle shape, relative/log volume, or immediate continuation. Volume by itself cannot qualify a symbol. The default maximum age is two minutes and the score decays exponentially, so a completed move disappears unless fresh bars continue it. Trend fallback uses up to three hours only to establish context; publication additionally requires at least +0.60% over the latest ten minutes and +0.15% over the latest five minutes. The first table columns are Company, color-coded Trend, and signed Δ 10m; this percentage always describes the same current ten-minute interval for impulses and trends. Baselines prefer prior sessions at comparable times of day and fall back to recent cached bars when history is still short. Thresholds, freshness, liquidity guards, universe, region, and scan interval are editable under Settings.
 
 At least two historical sessions are required before a symbol can generate a signal. A cold or incomplete cache is bootstrapped from Yahoo before evaluation. Only completed, minute-aligned bars with positive volume participate in statistics; malformed zero-volume quote snapshots are removed during database migration. The 0.20% default absolute-move floor prevents a mathematically large Z-score on economically insignificant movements such as 0.02–0.10% in an unusually quiet stock. Such a symbol can still qualify as `Trend ↑` when its multi-hour path shows meaningful persistent growth.
 
 If fewer than the configured minimum number of strict impulses are available, the scanner adds two lower-priority fallback classes. A relaxed impulse reduces the strict thresholds moderately while retaining recency and the absolute-move guard. `Trend ↑` examines up to 180 minutes of the current session and requires at least 0.45% net growth by default, a positive least-squares slope, R² of at least 0.18, and an efficiency ratio of at least 0.08 (net progress divided by total travelled price path). This permits pullbacks without treating a noisy sideways chart as sustained growth. Strict results are never removed to make room for fallbacks.
 
 The expanded default watchlist contains 100 liquid US and European listings. Yahoo suffixes such as `.DE`, `.PA`, `.AS`, and `.MI` identify European exchanges. The universe, region, interval, result count, liquidity guards, and baseline length are editable under Settings.
+
+Signal colors follow trading conventions: saturated green/red indicates a strong current upward/downward move, muted green/red marks a weak trend, amber marks a relaxed or statistically questionable result, and gray marks an aging signal. Hovering the Signal cell explains its classification.
 
 ## Chart
 
@@ -115,7 +119,7 @@ Application, UI, API, state, I/O, and database operations use SLF4J + Log4j2 and
 /tmp/MiMiTrends.log
 ```
 
-The active log rolls at 10 MB and retains four compressed archives. The status line reports the symbol currently being read or analyzed. A red details button opens the complete error report. Credentials are never logged.
+The default `INFO` level records lifecycle events, scan summaries, warnings, and errors without per-tick, per-row, or per-query noise. For temporary diagnostics, start with `-Dmimitrends.logLevel=DEBUG`. The active log rolls at 10 MB and retains four compressed archives. The status line reports the symbol currently being read or analyzed. A red details button opens the complete error report. Credentials are never logged.
 
 ## Icon and licenses
 

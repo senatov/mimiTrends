@@ -91,8 +91,13 @@ class MainController(
 
         val titleBar = HBox(
             8.0,
-            Label("MiMiTrends").apply { styleClass += "app-title" },
+            HBox(
+                6.0,
+                Label("MiMiTrends").apply { styleClass += "app-title" },
+                Label("v${BuildInfo.version}").apply { styleClass += "app-version" }
+            ).apply { alignment = Pos.BASELINE_LEFT },
             spacer(),
+            buildBadge(),
             refreshButton,
             settingsButton,
             aboutButton
@@ -145,6 +150,34 @@ class MainController(
         return root
     }
 
+    private fun buildBadge(): HBox {
+        val icon = javaClass.getResourceAsStream("/icons/icon_128x128.png")?.use { stream ->
+            ImageView(Image(stream)).apply {
+                fitWidth = 30.0
+                fitHeight = 30.0
+                isPreserveRatio = true
+                styleClass += "build-badge-icon"
+            }
+        } ?: ImageView()
+        return HBox(
+            7.0,
+            icon,
+            VBox(
+                0.0,
+                Label(BuildInfo.buildType).apply { styleClass += "build-badge-type" },
+                Label("${BuildInfo.buildTime} · #${BuildInfo.buildNumber} at Host: ${BuildInfo.buildHost}").apply {
+                    styleClass += "build-badge-details"
+                }
+            ).apply { alignment = Pos.CENTER_LEFT }
+        ).apply {
+            alignment = Pos.CENTER_LEFT
+            styleClass += "build-badge"
+            Tooltip.install(this, Tooltip(
+                "MiMiTrends ${BuildInfo.displayVersion}\nBuilt ${BuildInfo.buildTime} on ${BuildInfo.buildHost}"
+            ))
+        }
+    }
+
     fun close() {
         log.debug(LogTag.UI, "close()")
         rotationTask?.cancel(false)
@@ -177,7 +210,7 @@ class MainController(
         val symbols = selectedMarketSymbols().filter(::isMarketOpen)
         lateinit var scan: () -> Unit
         scan = scan@ {
-            log.debug(LogTag.API, "scanHybrid(symbols={}, recentWindow={}m)", symbols.size, criteria.maxSignalAgeMinutes)
+            log.info(LogTag.API, "scan started symbols={} recentWindow={}m", symbols.size, criteria.maxSignalAgeMinutes)
             Platform.runLater {
                 scannerPanel.beginScan(1, 1, symbols)
                 setStatus("Finnhub live + Yahoo/SQLite: scanning ${symbols.size} symbols · fresh impulses only")
@@ -194,11 +227,14 @@ class MainController(
                     }
                     .onFailure { error ->
                         errors += "$symbol: ${error.message ?: error.javaClass.simpleName}"
-                        log.warn(LogTag.API, "Yahoo scan failed symbol={}", symbol, error)
+                        log.debug(LogTag.API, "scan failed symbol={} cause={}", symbol, error.toString())
                     }
                 Platform.runLater { setStatus("Yahoo Finance: analyzed ${index + 1}/${symbols.size} · $symbol") }
             }
             repository.flushPending()
+            if (errors.isNotEmpty()) {
+                log.warn(LogTag.API, "scan completed with failures count={} sample={}", errors.size, errors.take(3).joinToString("; "))
+            }
             Platform.runLater {
                 if (generation != scanGeneration.get()) return@runLater
                 val target = criteria.minimumTableResults.coerceAtMost(criteria.resultLimit)
@@ -214,6 +250,7 @@ class MainController(
                     scannerPanel.showCountdown(criteria.scanIntervalSeconds)
                     val marketState = if (symbols.isEmpty()) "all selected markets closed"
                         else "${results.size} strict impulses + ${supplements.size} trend/relaxed"
+                    log.info(LogTag.API, "scan completed: {}", marketState)
                     setStatus("Hybrid scan complete · $marketState · next in ${criteria.scanIntervalSeconds}s")
                 }
             }
@@ -242,7 +279,7 @@ class MainController(
             // Yahoo permits one-minute history only for a short recent window. An old cache is
             // refreshed with the normal five-day bootstrap instead of an invalid long request.
             val incrementalAfter = if (needsBootstrap) null else latestLocal?.takeIf { it >= now - 7 * 86_400 }
-            if (needsBootstrap) log.info(LogTag.DB, "bootstrapping historical baseline symbol={} cachedSessions={}", symbol, cachedSessions)
+            if (needsBootstrap) log.debug(LogTag.DB, "bootstrapping historical baseline symbol={} cachedSessions={}", symbol, cachedSessions)
             val series = yahooFinance.loadIntraday(symbol, incrementalAfter)
             series.bars.forEach(repository::upsertMinuteBar)
             val oldProfile = repository.loadCompanyProfile(symbol)
@@ -390,6 +427,9 @@ class MainController(
                 """.trimIndent()),
                 aboutTab("System", """
                     Application       ${BuildInfo.displayVersion}
+                    Build type        ${BuildInfo.buildType}
+                    Built             ${BuildInfo.buildTime}
+                    Build host        ${BuildInfo.buildHost}
                     Java runtime      ${System.getProperty("java.runtime.version")}
                     Java VM           ${System.getProperty("java.vm.name")}
                     JavaFX runtime    ${System.getProperty("javafx.runtime.version", "26")}
