@@ -221,15 +221,19 @@ class MainController(
         log.debug(LogTag.API, "loadAndEvaluate(symbol={})", symbol)
         val now = java.time.Instant.now().epochSecond
         val freshAfter = now - criteria.scanIntervalSeconds
-        val latestLocal = repository.latestMinuteEpoch(symbol)
-        val localFresh = latestLocal != null && (!isMarketOpen(symbol) || latestLocal >= freshAfter)
+        val cached = repository.loadMinuteBars(symbol, now - 7 * 86_400)
+        val latestLocal = cached.lastOrNull()?.minuteEpochSeconds
+        val cachedSessions = cached.map { it.minuteEpochSeconds / 86_400L }.distinct().size
+        val needsBootstrap = cachedSessions < 2
+        val localFresh = !needsBootstrap && latestLocal != null && latestLocal >= freshAfter
         val bars = if (localFresh) {
             log.debug(LogTag.DB, "using fresh SQLite bars symbol={}", symbol)
-            repository.loadMinuteBars(symbol, now - 7 * 86_400)
+            cached
         } else {
             // Yahoo permits one-minute history only for a short recent window. An old cache is
             // refreshed with the normal five-day bootstrap instead of an invalid long request.
-            val incrementalAfter = latestLocal?.takeIf { it >= now - 7 * 86_400 }
+            val incrementalAfter = if (needsBootstrap) null else latestLocal?.takeIf { it >= now - 7 * 86_400 }
+            if (needsBootstrap) log.info(LogTag.DB, "bootstrapping historical baseline symbol={} cachedSessions={}", symbol, cachedSessions)
             val series = yahooFinance.loadIntraday(symbol, incrementalAfter)
             series.bars.forEach(repository::upsertMinuteBar)
             val oldProfile = repository.loadCompanyProfile(symbol)

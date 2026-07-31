@@ -33,6 +33,11 @@ class ScannerSettingsService(private val path: Path = Path.of(System.getProperty
                 minVolumeZ = p.getProperty("minVolumeZ", "2.0").toDouble().coerceIn(0.0, 20.0),
                 minRelativeVolume = p.getProperty("minRelativeVolume", "1.8").toDouble().coerceIn(0.0, 20.0),
                 minBodyRatio = p.getProperty("minBodyRatio", "0.55").toDouble().coerceIn(0.0, 1.0),
+                minAbsoluteMovePercent = p.getProperty("minAbsoluteMovePercent", "0.10").toDouble().coerceIn(0.0, 10.0),
+                minimumTableResults = p.getProperty("minimumTableResults", "12").toInt().coerceIn(1, 50),
+                trendWindowMinutes = p.getProperty("trendWindowMinutes", "180").toInt().coerceIn(60, 360),
+                minTrendReturnPercent = p.getProperty("minTrendReturnPercent", "0.60").toDouble().coerceIn(0.1, 20.0),
+                minTrendEfficiency = p.getProperty("minTrendEfficiency", "0.12").toDouble().coerceIn(0.01, 1.0),
                 displayCurrency = runCatching { DisplayCurrency.valueOf(p.getProperty("displayCurrency", "EUR")) }.getOrDefault(DisplayCurrency.EUR),
                 tableAppearance = TableAppearance(
                     fontFamily = p.getProperty("table.fontFamily", "SF Pro Display"),
@@ -68,6 +73,11 @@ class ScannerSettingsService(private val path: Path = Path.of(System.getProperty
             setProperty("minVolumeZ", value.minVolumeZ.toString())
             setProperty("minRelativeVolume", value.minRelativeVolume.toString())
             setProperty("minBodyRatio", value.minBodyRatio.toString())
+            setProperty("minAbsoluteMovePercent", value.minAbsoluteMovePercent.toString())
+            setProperty("minimumTableResults", value.minimumTableResults.toString())
+            setProperty("trendWindowMinutes", value.trendWindowMinutes.toString())
+            setProperty("minTrendReturnPercent", value.minTrendReturnPercent.toString())
+            setProperty("minTrendEfficiency", value.minTrendEfficiency.toString())
             setProperty("displayCurrency", value.displayCurrency.name)
             setProperty("table.fontFamily", value.tableAppearance.fontFamily)
             setProperty("table.fontSize", value.tableAppearance.fontSize.toString())

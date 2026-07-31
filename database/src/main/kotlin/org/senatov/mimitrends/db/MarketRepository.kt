@@ -183,6 +183,12 @@ class MarketRepository(
                 )"""
             )
             statement.executeUpdate("CREATE INDEX IF NOT EXISTS idx_minute_symbol_time ON minute_bars(symbol, minute_epoch)")
+            val removedSnapshots = statement.executeUpdate(
+                "DELETE FROM minute_bars WHERE minute_epoch % 60 != 0 AND volume <= 0"
+            )
+            if (removedSnapshots > 0) {
+                log.info(LogTag.DB, "removed malformed zero-volume quote snapshots count={}", removedSnapshots)
+            }
             statement.executeUpdate(
                 """CREATE TABLE IF NOT EXISTS company_profiles (
                     symbol TEXT PRIMARY KEY, name TEXT NOT NULL, exchange TEXT NOT NULL,

@@ -18,10 +18,17 @@ class ScannerEngine(private val zone: ZoneId = ZoneId.systemDefault()) {
 
     fun evaluate(symbol: String, bars: List<MinuteBar>, criteria: ScannerCriteria): ScanResult? {
         log.debug(LogTag.DB, "evaluate(symbol={}, bars={}, maxAge={}m)", symbol, bars.size, criteria.maxSignalAgeMinutes)
-        val sorted = bars.sortedBy(MinuteBar::minuteEpochSeconds)
+        val sorted = bars.asSequence()
+            .filter { it.minuteEpochSeconds % 60L == 0L && it.volume > 0.0 }
+            .sortedBy(MinuteBar::minuteEpochSeconds)
+            .toList()
         val latest = sorted.lastOrNull() ?: return null
         val features = features(sorted)
         if (features.size < MIN_FEATURES) return null
+        if (features.map { local(it.bar).toLocalDate() }.distinct().size < MIN_SESSIONS) {
+            log.debug(LogTag.DB, "insufficient baseline sessions symbol={}", symbol)
+            return null
+        }
         val candidates = features.takeLast(criteria.maxSignalAgeMinutes + 1).mapNotNull { candidate ->
             score(candidate, features, latest, criteria)
         }
@@ -74,12 +81,17 @@ class ScannerEngine(private val zone: ZoneId = ZoneId.systemDefault()) {
         val confirmed = volumeZ >= criteria.minVolumeZ || relativeVolume >= criteria.minRelativeVolume ||
             candidate.bodyRatio >= criteria.minBodyRatio || continuation > 0.0
         val exceptionalPrice = jumpZ >= criteria.minJumpZ || rangeZ >= criteria.minRangeZ
-        if (!exceptionalPrice || !confirmed || !directionalClose) return null
+        val meaningfulMove = abs(candidate.returnPercent) >= criteria.minAbsoluteMovePercent
+        if (!exceptionalPrice || !confirmed || !directionalClose || !meaningfulMove) return null
 
         val freshness = exp(-age / FRESHNESS_HALF_LIFE)
         val quality = 0.60 + 0.40 * candidate.bodyRatio.coerceIn(0.0, 1.0)
         val raw = 0.65 * max(jumpZ, rangeZ * 0.8) + 0.25 * volumeZ + 0.10 * continuation
-        return Signal(candidate, age, jumpZ, rangeZ, volumeZ, relativeVolume, raw * quality * freshness)
+        val signal = Signal(candidate, age, jumpZ, rangeZ, volumeZ, relativeVolume, raw * quality * freshness)
+        log.debug(LogTag.DB,
+            "impulse accepted symbol={} age={} return={} jumpZ={} rangeZ={} volumeZ={} rvol={} body={}",
+            candidate.bar.symbol, age, candidate.returnPercent, jumpZ, rangeZ, volumeZ, relativeVolume, candidate.bodyRatio)
+        return signal
     }
 
     private fun baseline(all: List<Feature>, candidate: Feature, sessions: Int): List<Feature> {
@@ -150,6 +162,7 @@ class ScannerEngine(private val zone: ZoneId = ZoneId.systemDefault()) {
 
     private companion object {
         const val MIN_FEATURES = 20
+        const val MIN_SESSIONS = 2
         const val MIN_BASELINE = 15
         const val RETURN_FLOOR = 0.01
         const val RANGE_FLOOR = 0.01

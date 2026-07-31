@@ -16,6 +16,7 @@ MiMiTrends is a Kotlin/JVM + JavaFX desktop application styled after MiMiCompara
 - examines only the latest minute candle and the immediately preceding configurable freshness horizon;
 - detects `Impulse ↑` and `Impulse ↓` using robust return/range Z-scores, candle shape, and volume confirmation;
 - never promotes a symbol for volume alone when its price is quiet;
+- requires at least two cached sessions and a configurable absolute move floor (0.10% by default);
 - excludes closed exchanges from the fresh ranking instead of recycling their final cached candle;
 - keeps the visible table unchanged while scanning and publishes the completed ranking atomically;
 - scans every three minutes by default and shows a countdown or animated hourglass;
@@ -94,6 +95,8 @@ For the latest eligible one-minute candles, the scanner calculates:
 - same-direction continuation and exponential freshness decay.
 
 A signal requires an exceptional price return or range plus confirmation from candle shape, relative/log volume, or immediate continuation. Volume by itself cannot qualify a symbol. The default maximum age is two minutes and the score decays exponentially, so a completed move disappears unless fresh bars continue it. Baselines prefer prior sessions at comparable times of day and fall back to recent cached bars when history is still short. Thresholds, freshness, liquidity guards, universe, region, and scan interval are editable under Settings.
+
+At least two historical sessions are required before a symbol can generate a signal. A cold or incomplete cache is bootstrapped from Yahoo before evaluation. Only completed, minute-aligned bars with positive volume participate in statistics; malformed zero-volume quote snapshots are removed during database migration. The absolute-move floor prevents a mathematically large Z-score on economically insignificant movements such as 0.02% in an unusually quiet stock.
 
 The expanded default watchlist contains 100 liquid US and European listings. Yahoo suffixes such as `.DE`, `.PA`, `.AS`, and `.MI` identify European exchanges. The universe, region, interval, result count, liquidity guards, and baseline length are editable under Settings.
 

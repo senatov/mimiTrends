@@ -37,6 +37,11 @@ class ScannerSettingsDialog(
     private val volumeZ = Spinner<Double>(0.0, 20.0, current.minVolumeZ, 0.25).apply { isEditable = true }
     private val relativeVolume = Spinner<Double>(0.0, 20.0, current.minRelativeVolume, 0.1).apply { isEditable = true }
     private val bodyRatio = Spinner<Double>(0.0, 1.0, current.minBodyRatio, 0.05).apply { isEditable = true }
+    private val absoluteMove = Spinner<Double>(0.0, 10.0, current.minAbsoluteMovePercent, 0.05).apply { isEditable = true }
+    private val minimumResults = Spinner<Int>(1, 50, current.minimumTableResults, 1).apply { isEditable = true }
+    private val trendWindow = Spinner<Int>(60, 360, current.trendWindowMinutes, 30).apply { isEditable = true }
+    private val trendReturn = Spinner<Double>(0.1, 20.0, current.minTrendReturnPercent, 0.1).apply { isEditable = true }
+    private val trendEfficiency = Spinner<Double>(0.01, 1.0, current.minTrendEfficiency, 0.01).apply { isEditable = true }
     private val currency = ComboBox(FXCollections.observableArrayList(DisplayCurrency.entries)).apply { value = current.displayCurrency }
     private val finnhubApiKey = PasswordField().apply {
         promptText = if (finnhubConfigured) "Configured — leave blank to keep" else "Optional API key"
@@ -69,6 +74,11 @@ class ScannerSettingsDialog(
                 settingRow("Volume confirmation Z", "Unusual log-volume confirmation; price movement remains mandatory.", volumeZ),
                 settingRow("Relative volume", "Current candle volume divided by its robust local median.", relativeVolume),
                 settingRow("Minimum candle body", "Body/range ratio; 0.55 rejects weak wicks and random ticks.", bodyRatio),
+                settingRow("Minimum absolute move", "Hard percentage floor; prevents tiny low-volatility noise from qualifying by Z-score alone.", absoluteMove),
+                settingRow("Minimum table results", "If strict impulses are scarce, fill to this count with relaxed impulses and rising trends.", minimumResults),
+                settingRow("Trend window", "Minutes used to recognize persistent half-session growth with tolerable pullbacks.", trendWindow),
+                settingRow("Minimum trend return", "Required net growth over the trend window, in percent.", trendReturn),
+                settingRow("Trend efficiency", "Net progress divided by total path length; lower values permit deeper pullbacks.", trendEfficiency),
                 settingRow("Market universe", "Select US listings, European listings, or both.", marketRegion),
                 settingRow("Results to display", "Highest current anomaly scores retained after a complete scan.", resultLimit),
                 settingRow("Minimum source price", "Low-priced instruments below this value are ignored.", price),
@@ -149,6 +159,11 @@ class ScannerSettingsDialog(
             minVolumeZ = volumeZ.value,
             minRelativeVolume = relativeVolume.value,
             minBodyRatio = bodyRatio.value,
+            minAbsoluteMovePercent = absoluteMove.value,
+            minimumTableResults = minimumResults.value,
+            trendWindowMinutes = trendWindow.value,
+            minTrendReturnPercent = trendReturn.value,
+            minTrendEfficiency = trendEfficiency.value,
             displayCurrency = currency.value,
             tableAppearance = TableAppearance(
                 fontFamily = fontFamily.value ?: "SF Pro Display",

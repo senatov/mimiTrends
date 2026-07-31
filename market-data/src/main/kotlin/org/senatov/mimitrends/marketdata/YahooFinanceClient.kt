@@ -64,7 +64,8 @@ class YahooFinanceClient(
                 val low = quote.numberAt("low", index) ?: continue
                 val close = quote.numberAt("close", index) ?: continue
                 val volume = quote.numberAt("volume", index) ?: 0.0
-                add(MinuteBar(symbol, timestamps[index].asLong(), open, high, low, close, volume))
+                val minuteEpoch = timestamps[index].asLong() / 60L * 60L
+                add(MinuteBar(symbol, minuteEpoch, open, high, low, close, volume))
             }
         }
         check(bars.isNotEmpty()) { "Yahoo Finance returned empty OHLCV data for $symbol" }

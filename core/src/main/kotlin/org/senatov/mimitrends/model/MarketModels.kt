@@ -59,6 +59,11 @@ data class ScannerCriteria(
     val minVolumeZ: Double = 2.0,
     val minRelativeVolume: Double = 1.8,
     val minBodyRatio: Double = 0.55,
+    val minAbsoluteMovePercent: Double = 0.10,
+    val minimumTableResults: Int = 12,
+    val trendWindowMinutes: Int = 180,
+    val minTrendReturnPercent: Double = 0.60,
+    val minTrendEfficiency: Double = 0.12,
     val displayCurrency: DisplayCurrency = DisplayCurrency.EUR,
     val tableAppearance: TableAppearance = TableAppearance(),
     val symbols: List<String> = listOf(
@@ -93,7 +98,8 @@ data class ScanResult(
     val signalAgeMinutes: Int,
     val signalSource: String,
     val updatedAtMillis: Long,
-    val dataStatus: String = "CACHE"
+    val dataStatus: String = "CACHE",
+    val signalWindowLabel: String = "1m"
 )
 
 data class CompanyProfile(
