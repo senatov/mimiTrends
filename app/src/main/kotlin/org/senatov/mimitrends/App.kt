@@ -30,7 +30,7 @@ class App : Application() {
             ?: FinnhubSetupDialog(stage, hostServices).showAndSave()
         val uiStateService = UiStateService()
         val uiState = uiStateService.load()
-        val controller = MainController(apiKey, uiState.symbol, uiState.range)
+        val controller = MainController(apiKey, uiState.symbol, uiState.range, uiState.dividerPosition)
         val scene = Scene(controller.createView(), 1120.0, 720.0)
         scene.stylesheets += requireNotNull(javaClass.getResource("/org/senatov/mimitrends/MiMiTrends.css")).toExternalForm()
 
@@ -43,7 +43,7 @@ class App : Application() {
         stage.scene = scene
         uiStateService.restore(stage, uiState)
         stage.setOnCloseRequest {
-            uiStateService.save(stage, controller.selectedSymbol(), controller.selectedRange())
+            uiStateService.save(stage, controller.selectedSymbol(), controller.selectedRange(), controller.dividerPosition())
             controller.close()
         }
         stage.show()

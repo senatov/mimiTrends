@@ -20,11 +20,6 @@ object ApiKeyResolver {
         return resolveValue("FINNHUB_WEBHOOK_SECRET")
     }
 
-    fun premiumCandlesEnabled(): Boolean {
-        log.debug(LogTag.STATE, "premiumCandlesEnabled()")
-        return resolveValue("FINNHUB_ENABLE_PREMIUM_CANDLES")?.toBooleanStrictOrNull() ?: false
-    }
-
     fun saveLocal(apiKey: String, webhookSecret: String?) {
         log.debug(LogTag.STATE, "saveLocal(apiKeyPresent={}, webhookPresent={})", apiKey.isNotBlank(), !webhookSecret.isNullOrBlank())
         val properties = Properties().apply {

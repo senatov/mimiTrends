@@ -4,17 +4,15 @@ import javafx.application.Platform
 import javafx.animation.Interpolator
 import javafx.animation.RotateTransition
 import javafx.animation.ScaleTransition
-import javafx.collections.FXCollections
 import javafx.geometry.Insets
 import javafx.geometry.Pos
 import javafx.scene.Parent
 import javafx.scene.control.*
 import javafx.scene.layout.*
 import org.senatov.mimitrends.charts.TrendChartView
-import org.senatov.mimitrends.api.FinnhubClient
 import org.senatov.mimitrends.db.MarketRepository
-import org.senatov.mimitrends.model.MarketSnapshot
 import org.senatov.mimitrends.log.LogTag
+import org.senatov.mimitrends.model.MinuteBar
 import org.senatov.mimitrends.model.ScannerCriteria
 import org.senatov.mimitrends.scanner.ScannerEngine
 import org.senatov.mimitrends.scanner.ScannerSettingsService
@@ -24,17 +22,20 @@ import java.io.PrintWriter
 import java.io.StringWriter
 import java.time.ZonedDateTime
 import javafx.util.Duration
-import java.util.concurrent.CompletionException
+import java.util.concurrent.CompletableFuture
 import java.util.concurrent.Executors
 import java.util.concurrent.ScheduledFuture
 import java.util.concurrent.TimeUnit
 import java.util.function.BiConsumer
 
-class MainController(private val apiKey: String?, initialSymbol: String = "AAPL", initialRange: String = "3M") {
+class MainController(
+    private val apiKey: String?, initialSymbol: String = "AAPL", initialRange: String = "3M",
+    initialDividerPosition: Double = 0.34
+) {
     private val log = LoggerFactory.getLogger(MainController::class.java)
     private val repository = MarketRepository()
-    private val symbolField = TextField(initialSymbol)
-    private val rangeBox = ComboBox(FXCollections.observableArrayList("1D", "5D", "1M", "3M", "6M", "1Y"))
+    private var currentSymbol = initialSymbol
+    private var selectedRangeValue = initialRange.takeIf { it in setOf("1D", "5D", "1M", "3M", "6M", "1Y") } ?: "3M"
     private val refreshButton = Button("↻")
     private val settingsButton = Button("⚙")
     private val aboutButton = Button("ⓘ")
@@ -52,19 +53,14 @@ class MainController(private val apiKey: String?, initialSymbol: String = "AAPL"
     }
     private var rotationTask: ScheduledFuture<*>? = null
     private val exchangeRates = ExchangeRateService()
-    private var currentSnapshot: MarketSnapshot? = null
-    private val initialRangeValue = initialRange.takeIf { it in setOf("1D", "5D", "1M", "3M", "6M", "1Y") } ?: "3M"
+    private val initialDivider = initialDividerPosition.coerceIn(0.15, 0.75)
+    private val contentSplitPane = SplitPane()
 
     fun createView(): Parent {
         log.debug(LogTag.UI, "createView()")
         scannerPanel.setCurrency(scannerCriteria.displayCurrency, ::displayPrice)
-        rangeBox.value = initialRangeValue
-        rangeBox.setOnAction { if (rangeBox.scene != null && !refreshButton.isDisable) refresh() }
-        symbolField.promptText = "Ticker, e.g. AAPL"
-        symbolField.prefColumnCount = 12
-        symbolField.setOnAction { refresh() }
-        configureIconButton(refreshButton, "Refresh market data", rotateOnHover = true)
-        refreshButton.setOnAction { refresh() }
+        configureIconButton(refreshButton, "Refresh local chart", rotateOnHover = true)
+        refreshButton.setOnAction { loadLocalChart(currentSymbol) }
         configureIconButton(settingsButton, "Scanner and currency settings", rotateOnHover = false)
         settingsButton.setOnAction { showScannerSettings() }
         configureIconButton(aboutButton, "About MiMiTrends", rotateOnHover = false)
@@ -74,32 +70,24 @@ class MainController(private val apiKey: String?, initialSymbol: String = "AAPL"
             8.0,
             Label("MiMiTrends").apply { styleClass += "app-title" },
             spacer(),
-            aboutButton,
+            refreshButton,
             settingsButton,
-            refreshButton
+            aboutButton
         ).apply {
             alignment = Pos.CENTER_LEFT
             styleClass += "title-toolbar"
         }
 
-        val searchBar = HBox(
-            8.0,
-            Label("Symbol"),
-            symbolField,
-            Separator(),
-            Label("Range"),
-            rangeBox
-        ).apply {
-            alignment = Pos.CENTER_LEFT
-            styleClass += "search-toolbar"
+        contentSplitPane.apply {
+            orientation = javafx.geometry.Orientation.VERTICAL
+            items.setAll(scannerPanel, trendChart)
+            styleClass += "content-split-pane"
         }
-        val toolbar = VBox(titleBar, searchBar)
+        Platform.runLater { contentSplitPane.setDividerPosition(0, initialDivider) }
 
-        VBox.setVgrow(trendChart, Priority.ALWAYS)
-
-        val content = VBox(14.0, scannerPanel, Separator(), trendChart).apply {
+        val content = VBox(contentSplitPane).apply {
             padding = Insets(22.0, 24.0, 16.0, 24.0)
-            VBox.setVgrow(trendChart, Priority.ALWAYS)
+            VBox.setVgrow(contentSplitPane, Priority.ALWAYS)
         }
 
         errorDetailsButton.apply {
@@ -109,11 +97,12 @@ class MainController(private val apiKey: String?, initialSymbol: String = "AAPL"
             isManaged = false
             setOnAction { showErrorDetails() }
         }
-        val statusBar = HBox(8.0, statusLabel, spacer(), errorDetailsButton).apply {
+        val requestStatusBar = HBox(8.0, statusLabel, spacer(), errorDetailsButton).apply {
             alignment = Pos.CENTER_LEFT
-            styleClass += "status-bar"
+            styleClass += "request-status-bar"
         }
-        val root = BorderPane(content, toolbar, null, statusBar, null)
+        val toolbar = VBox(titleBar, requestStatusBar)
+        val root = BorderPane(content, toolbar, null, null, null)
         root.styleClass += "app-root"
 
         if (apiKey == null) {
@@ -121,12 +110,14 @@ class MainController(private val apiKey: String?, initialSymbol: String = "AAPL"
             refreshButton.isDisable = true
         } else {
             startScanner()
-            Platform.runLater(::refresh)
-            exchangeRates.refresh().whenComplete(BiConsumer<Double?, Throwable?> { _, error ->
+            Platform.runLater { loadLocalChart(currentSymbol) }
+            setStatus("Requesting ECB EUR/USD reference rate", false)
+            exchangeRates.refresh().whenComplete(BiConsumer<Double?, Throwable?> { rate, error ->
                 if (error != null) log.warn(LogTag.API, "ECB exchange-rate refresh failed; cached rate remains active", error)
                 Platform.runLater {
                     scannerPanel.setCurrency(scannerCriteria.displayCurrency, ::displayPrice)
-                    currentSnapshot?.let(::showSnapshot)
+                    loadLocalChart(currentSymbol)
+                    if (error == null && rate != null) setStatus("Read ECB EUR/USD reference rate: $rate", false)
                 }
             })
         }
@@ -142,12 +133,17 @@ class MainController(private val apiKey: String?, initialSymbol: String = "AAPL"
 
     fun selectedSymbol(): String {
         log.debug(LogTag.UI, "selectedSymbol()")
-        return symbolField.text.trim().ifEmpty { "AAPL" }
+        return currentSymbol.ifEmpty { "AAPL" }
     }
 
     fun selectedRange(): String {
         log.debug(LogTag.UI, "selectedRange()")
-        return rangeBox.value ?: "3M"
+        return selectedRangeValue
+    }
+
+    fun dividerPosition(): Double {
+        log.debug(LogTag.UI, "dividerPosition()")
+        return contentSplitPane.dividers.firstOrNull()?.position ?: initialDivider
     }
 
     private fun startScanner() {
@@ -157,7 +153,12 @@ class MainController(private val apiKey: String?, initialSymbol: String = "AAPL"
         webSocket?.close(); scannerPanel.clear()
         webSocket = FinnhubWebSocketClient(key, { tick ->
             runCatching { scannerEngine.accept(tick, scannerCriteria) }
-                .onSuccess { result -> result?.let { Platform.runLater { scannerPanel.update(it) } } }
+                .onSuccess { result -> result?.let {
+                    Platform.runLater {
+                        scannerPanel.update(it)
+                        setStatus("Read ${it.symbol}: price ${"%.2f".format(it.price)}, session volume ${"%,.0f".format(it.sessionVolume)}", false)
+                    }
+                } }
                 .onFailure { error -> log.error(LogTag.DB, "scanner evaluation failed symbol={}", tick.symbol, error) }
         }, { error ->
             log.error(LogTag.API, "scanner websocket failed", error)
@@ -173,11 +174,15 @@ class MainController(private val apiKey: String?, initialSymbol: String = "AAPL"
                 active.forEach(client::subscribe)
                 val shownIndex = batchIndex + 1
                 val shownSymbols = active.toList()
-                Platform.runLater { scannerPanel.showBatch(shownIndex, batches.size, shownSymbols, scannerCriteria.rotationSeconds) }
+                Platform.runLater {
+                    scannerPanel.showBatch(shownIndex, batches.size, shownSymbols, scannerCriteria.rotationSeconds)
+                    setStatus("Requesting Finnhub batch $shownIndex/${batches.size}: ${shownSymbols.joinToString(", ")}", false)
+                }
                 batchIndex = (batchIndex + 1) % batches.size
             }
             activateNextBatch()
-            client.connect().exceptionally { error -> log.error(LogTag.API, "scanner connection failed", error); null }
+            client.connect().thenRun { Platform.runLater { setStatus("Finnhub WebSocket connected · reading realtime trades", false) } }
+                .exceptionally { error -> log.error(LogTag.API, "scanner connection failed", error); null }
             if (batches.size > 1) rotationTask = batchScheduler.scheduleAtFixedRate(
                 { runCatching(::activateNextBatch).onFailure { log.error(LogTag.API, "scanner batch rotation failed", it) } },
                 scannerCriteria.rotationSeconds, scannerCriteria.rotationSeconds, TimeUnit.SECONDS
@@ -187,8 +192,8 @@ class MainController(private val apiKey: String?, initialSymbol: String = "AAPL"
 
     private fun openScannerSymbol(symbol: String) {
         log.debug(LogTag.UI, "openScannerSymbol(symbol={})", symbol)
-        symbolField.text = symbol
-        refresh()
+        currentSymbol = symbol
+        loadLocalChart(symbol)
     }
 
     private fun showScannerSettings() {
@@ -196,7 +201,7 @@ class MainController(private val apiKey: String?, initialSymbol: String = "AAPL"
         ScannerSettingsDialog(refreshButton.scene?.window, scannerCriteria, scannerSettings).showAndWait()?.let {
             scannerCriteria = it; scannerSettings.save(it)
             scannerPanel.setCurrency(it.displayCurrency, ::displayPrice)
-            currentSnapshot?.let(::showSnapshot)
+            loadLocalChart(currentSymbol)
             startScanner()
         }
     }
@@ -220,85 +225,35 @@ Read-only demonstration application.
         }.showAndWait()
     }
 
-    private fun refresh() {
-        log.debug(LogTag.UI, "refresh()")
-        val key = apiKey ?: return
-        val query = symbolField.text.trim()
-        if (query.isEmpty()) {
-            setStatus("Enter a ticker, company name, ISIN or WKN", true)
-            return
-        }
+    private fun loadLocalChart(symbol: String) {
+        log.debug(LogTag.UI, "loadLocalChart(symbol={})", symbol)
+        if (symbol.isBlank()) return
         setLoading(true)
-        log.info(LogTag.API, "loading query={} rangeDays={}", query, selectedDays())
-        setStatus("Searching for $query…", false)
         val days = selectedDays()
-        FinnhubClient(
-            apiKey = key,
-            premiumCandlesEnabled = ApiKeyResolver.premiumCandlesEnabled()
-        ).resolveAndLoadSnapshot(query, days)
-            .thenApply { snapshot ->
-                runCatching {
-                    repository.save(snapshot)
-                    repository.load(snapshot.symbol, days)?.copy(
-                        description = snapshot.description,
-                        fromCache = false
-                    ) ?: snapshot
-                }.onFailure { error ->
-                    log.error(LogTag.DB, "cache update failed symbol={}", snapshot.symbol, error)
-                }.getOrDefault(snapshot)
-            }
-            .whenComplete { snapshot: MarketSnapshot?, error: Throwable? ->
-                val cached = if (error != null) {
-                    runCatching { repository.load(query.uppercase(), days) }
-                        .onFailure { cacheError -> log.error(LogTag.DB, "cache fallback failed query={}", query, cacheError) }
-                        .getOrNull()
-                } else null
+        setStatus("Requesting SQLite: $symbol · $selectedRangeValue", false)
+        CompletableFuture.supplyAsync {
+            repository.loadMinuteBars(symbol, java.time.Instant.now().minusSeconds(days * 86_400).epochSecond)
+        }.whenComplete(BiConsumer<List<MinuteBar>?, Throwable?> { bars, error ->
                 Platform.runLater {
                     setLoading(false)
                     if (error != null) {
-                        val cause = (error as? CompletionException)?.cause ?: error
-                        log.error(LogTag.API, "load failed query={}", query, cause)
-                        if (cached != null) showSnapshot(cached)
-                        setStatus(
-                            if (cached != null) "Finnhub temporarily unavailable — showing cached data"
-                            else cause.message ?: "Could not load market data",
-                            true,
-                            formatErrorLog(query, cause)
-                        )
-                    } else if (snapshot != null) {
-                        log.info(LogTag.API, "load completed symbol={} points={}", snapshot.symbol, snapshot.candles.size)
-                        showSnapshot(snapshot)
+                        log.error(LogTag.DB, "local chart load failed symbol={}", symbol, error)
+                        setStatus("SQLite read failed: ${error.message ?: "unknown error"}", true, formatErrorLog(symbol, error))
+                    } else if (!bars.isNullOrEmpty()) {
+                        val currency = scannerCriteria.displayCurrency
+                        trendChart.renderMinuteBars(symbol, bars, selectedRangeValue, displayPrice(symbol, 1.0), currency.symbol)
+                        setStatus("Read SQLite: $symbol · ${bars.size} minute bars · $selectedRangeValue", false)
                     } else {
-                        setStatus("Finnhub returned an empty response", true)
+                        trendChart.clear()
+                        setStatus("Read SQLite: no collected minute bars for $symbol · $selectedRangeValue", false)
                     }
                 }
-            }
-    }
-
-    private fun showSnapshot(snapshot: MarketSnapshot) {
-        log.debug(LogTag.UI, "showSnapshot(symbol={}, points={})", snapshot.symbol, snapshot.candles.size)
-        currentSnapshot = snapshot
-        val currency = scannerCriteria.displayCurrency
-        symbolField.text = snapshot.symbol
-
-        val minuteBars = runCatching { repository.loadMinuteBars(snapshot.symbol, java.time.Instant.now().minusSeconds(selectedDays() * 86_400).epochSecond) }
-            .onFailure { log.error(LogTag.DB, "minute bars load failed symbol={}", snapshot.symbol, it) }.getOrDefault(emptyList())
-        val multiplier = displayPrice(snapshot.symbol, 1.0)
-        if (minuteBars.isNotEmpty()) trendChart.renderMinuteBars(snapshot.symbol, minuteBars, rangeBox.value, multiplier, currency.symbol)
-        else trendChart.render(snapshot, rangeBox.value, multiplier, currency.symbol)
-        setStatus(
-            when {
-                snapshot.fromCache -> "Showing ${snapshot.candles.size} cached real price points"
-                snapshot.candles.isEmpty() -> "Live quote saved · local history collection has started"
-                else -> "${snapshot.candles.size} real price points loaded"
-            },
-            false
-        )
+            })
     }
 
     private fun selectedDays(): Long {
-        log.debug(LogTag.UI, "selectedDays(range={})", rangeBox.value)
-        return when (rangeBox.value) {
+        log.debug(LogTag.UI, "selectedDays(range={})", selectedRangeValue)
+        return when (selectedRangeValue) {
         "1D" -> 1
         "5D" -> 5
         "1M" -> 30
@@ -312,13 +267,11 @@ Read-only demonstration application.
         log.debug(LogTag.UI, "setLoading(value={})", value)
         trendChart.setLoading(value)
         refreshButton.isDisable = value
-        symbolField.isDisable = value
-        rangeBox.isDisable = value
     }
 
     private fun setStatus(message: String, error: Boolean) {
         log.debug(LogTag.UI, "setStatus(message={}, error={})", message, error)
-        setStatus(message, error, if (error) formatErrorLog(symbolField.text, null, message) else null)
+        setStatus(message, error, if (error) formatErrorLog(currentSymbol, null, message) else null)
     }
 
     private fun setStatus(message: String, error: Boolean, details: String?) {
@@ -362,7 +315,7 @@ Read-only demonstration application.
             appendLine("MiMiTrends error report")
             appendLine("Time: ${ZonedDateTime.now()}")
             appendLine("Query: $query")
-            appendLine("Range: ${rangeBox.value}")
+            appendLine("Range: $selectedRangeValue")
             appendLine()
             append(stackTrace)
         }

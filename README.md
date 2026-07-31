@@ -11,20 +11,20 @@
 
 ## About
 
-MiMiTrends is a small Kotlin/JVM + JavaFX application that loads a live stock quote and daily closing prices from Finnhub. Its compact
+MiMiTrends is a small Kotlin/JVM + JavaFX application that scans realtime Finnhub trades and builds local minute price/volume history. Its compact
 Cupertino-style toolbar, SF Pro typography, light surfaces, borders, buttons, and status bar follow the visual language of
 MiMiComparator without sharing its business logic.
 
 The demo includes:
 
-- ticker input and standard 1-day, 5-day, 1/3/6/12-month ranges;
+- locally retained chart-range state;
 - a focused price chart without a redundant quote-characteristics panel;
 - a responsive JavaFX price chart paired with locally collected trading volume;
 - a WebSocket momentum scanner with configurable 1/5-minute, price, volume, and relative-volume filters;
 - locally aggregated one-minute OHLCV bars and a volume chart for confirming price moves;
 - EUR price display by default, switchable to USD in scanner Settings, using the cached daily ECB reference rate;
-- asynchronous network requests, loading state, and readable API errors;
-- SQLite-backed accumulation of real quote and candle history;
+- a live request/read status line with readable API errors;
+- SQLite-backed accumulation of real minute price and volume history;
 - a generated MiMiTrends application icon and a macOS `jpackage` task.
 
 ## API key
@@ -102,8 +102,7 @@ app/build/jpackage/output/MiMiTrends.app
 
 ```text
 core/           Domain models, realtime trade model, and shared log markers
-database/       SQLite connection policy, schema migration, quote/history repository
-finnhub-rest/    REST search, quote/candles, parsing, timeout, retry, and host failover
+database/       SQLite connection policy, minute-bar schema and repository
 finnhub-ws/      WebSocket lifecycle, subscriptions, and realtime trade decoding
 scanner/         Minute-bar aggregation, configurable momentum rules, and RVOL calculation
 charts/          Reusable JavaFX TrendChartView and market-series rendering
@@ -111,7 +110,7 @@ app/             JavaFX lifecycle, credentials, dialogs, UI orchestration, and r
 ```
 
 The dependency direction is one-way: infrastructure and presentation modules depend on `core`; `app` composes them. Database,
-REST, WebSocket, and chart code do not depend on each other, so each can be tested or replaced independently.
+WebSocket, database, scanner, and chart code do not depend on the UI, so each can be tested or replaced independently.
 
 Run every module test from the root:
 
@@ -123,17 +122,12 @@ Run only a module test suite:
 
 ```zsh
 ./gradlew :database:test
-./gradlew :finnhub-rest:test
 ./gradlew :finnhub-ws:test
 ```
 
 ## Finnhub usage
 
-The application calls:
-
-- `GET /api/v1/quote`
-- `GET /api/v1/stock/candle`
-- `wss://ws.finnhub.io` for realtime trades in the scanner watchlist
+The application uses `wss://ws.finnhub.io` for realtime trades in the scanner watchlist. It does not request REST quotes or Premium candles.
 
 ### Momentum scanner
 
@@ -163,20 +157,9 @@ It restores them on the next launch. If a remembered position belonged to a moni
 back to the primary display instead of opening off-screen. UI state is stored in `~/.mimi/trends/ui-state.properties`; scanner settings,
 exchange-rate cache, and accumulated SQLite market history remain in their respective files in the same directory.
 
-Availability and history depth can depend on the Finnhub subscription. MiMiTrends never fabricates interpolated chart points. Real
-candles and live quotes are accumulated in `~/.mimi/trends/mimitrends.db`; if Finnhub is temporarily unavailable, the most recent
-cached quote and real local history are shown. Temporary HTTP `502`, `503`, and `504` responses are retried after 500 ms, 1.5 s, and
-3 s. Authentication, permission, validation, and missing-resource errors are not retried.
-
-Finnhub currently marks Stock Candles/OHLC as Premium, so `/stock/candle` is disabled by default. Enable it only for an account whose
-plan includes that endpoint:
-
-```text
-FINNHUB_ENABLE_PREMIUM_CANDLES=true
-```
-
-The free plan is documented at 60 calls per minute, with an additional global ceiling of 30 calls per second. MiMiTrends uses the
-documented `X-Finnhub-Token` header and a 10-second per-request timeout matching the official Python client's default.
+Availability and local history depth depend on how long symbols have been actively scanned. MiMiTrends never fabricates or interpolates
+chart points. The status line directly below the title reports current Finnhub subscription requests, realtime trades read from the
+WebSocket, SQLite chart reads, and ECB exchange-rate requests.
 
 ## Logging
 

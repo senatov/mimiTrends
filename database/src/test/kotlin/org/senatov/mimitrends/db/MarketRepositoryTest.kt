@@ -1,34 +1,16 @@
 package org.senatov.mimitrends.db
 
-import org.junit.jupiter.api.io.TempDir
-import org.senatov.mimitrends.model.Candle
-import org.senatov.mimitrends.model.MarketSnapshot
-import org.senatov.mimitrends.model.Quote
-import java.nio.file.Path
-import java.time.Instant
-import kotlin.test.Test
+import org.senatov.mimitrends.model.MinuteBar
+import org.junit.jupiter.api.Test
+import java.nio.file.Files
 import kotlin.test.assertEquals
-import kotlin.test.assertNotNull
-import kotlin.test.assertTrue
 
 class MarketRepositoryTest {
-    @TempDir
-    lateinit var directory: Path
-
-    @Test
-    fun `stores and reloads real market points`() {
-        val repository = MarketRepository(directory.resolve("market.db"))
-        val now = Instant.now().epochSecond
-        repository.save(
-            MarketSnapshot(
-                symbol = "SAP.DE",
-                quote = Quote(200.0, 1.0, 0.5, 202.0, 197.0, 198.0, 199.0),
-                candles = listOf(Candle(now - 86_400, 198.0))
-            )
-        )
-        val cached = assertNotNull(repository.load("SAP.DE", 30))
-        assertEquals(200.0, cached.quote.current)
-        assertTrue(cached.candles.size >= 2)
-        assertTrue(cached.fromCache)
+    @Test fun `stores and updates minute bars`() {
+        val repository = MarketRepository(Files.createTempDirectory("mimitrends-db").resolve("test.db"))
+        repository.upsertMinuteBar(MinuteBar("SAP.DE", 60, 100.0, 102.0, 99.0, 101.0, 500.0))
+        repository.upsertMinuteBar(MinuteBar("SAP.DE", 60, 100.0, 103.0, 99.0, 102.0, 750.0))
+        val bars = repository.loadMinuteBars("SAP.DE", 0)
+        assertEquals(1, bars.size); assertEquals(102.0, bars.single().close); assertEquals(750.0, bars.single().volume)
     }
 }

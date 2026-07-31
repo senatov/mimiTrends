@@ -26,7 +26,6 @@ val javafxPlatform = providers.systemProperty("os.name").zip(providers.systemPro
 dependencies {
     implementation(project(":core"))
     implementation(project(":database"))
-    implementation(project(":finnhub-rest"))
     implementation(project(":finnhub-ws"))
     implementation(project(":scanner"))
     implementation(project(":charts"))
