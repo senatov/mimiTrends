@@ -123,6 +123,16 @@ candles and live quotes are accumulated in `~/.mimi/trends/mimitrends.db`; if Fi
 cached quote and real local history are shown. Temporary HTTP `502`, `503`, and `504` responses are retried after 500 ms, 1.5 s, and
 3 s. Authentication, permission, validation, and missing-resource errors are not retried.
 
+Finnhub currently marks Stock Candles/OHLC as Premium, so `/stock/candle` is disabled by default. Enable it only for an account whose
+plan includes that endpoint:
+
+```text
+FINNHUB_ENABLE_PREMIUM_CANDLES=true
+```
+
+The free plan is documented at 60 calls per minute, with an additional global ceiling of 30 calls per second. MiMiTrends uses the
+documented `X-Finnhub-Token` header and a 10-second per-request timeout matching the official Python client's default.
+
 ## Logging
 
 MiMiTrends uses the same SLF4J + Log4j2 approach as MiMiComparator. Application, UI, API, state, I/O, and database operations are
@@ -140,7 +150,7 @@ permanent loading state.
 ## Security notes
 
 - Only `FINNHUB_API_KEY` is used by the current market-data client.
-- The key is sent only to `https://finnhub.io/api/v1`.
+- The key is sent only to the official SDK endpoint `https://api.finnhub.io/api/v1`.
 - An optional webhook secret can be read from local configuration but is not sent or used yet.
 - No account password, email address, 2FA setting, or passkey information is read or stored.
 - This demo is read-only and does not place orders.

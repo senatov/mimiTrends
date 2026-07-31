@@ -134,7 +134,10 @@ class MainController(private val apiKey: String?) {
         log.info(LogTag.API, "loading query={} rangeDays={}", query, selectedDays())
         setStatus("Searching for $query…", false)
         val days = selectedDays()
-        FinnhubClient(key).resolveAndLoadSnapshot(query, days)
+        FinnhubClient(
+            apiKey = key,
+            premiumCandlesEnabled = ApiKeyResolver.premiumCandlesEnabled()
+        ).resolveAndLoadSnapshot(query, days)
             .thenApply { snapshot ->
                 runCatching {
                     repository.save(snapshot)
