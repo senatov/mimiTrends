@@ -17,6 +17,7 @@ import org.senatov.mimitrends.model.ScannerCriteria
 import org.senatov.mimitrends.scanner.ScannerEngine
 import org.senatov.mimitrends.scanner.ScannerSettingsService
 import org.senatov.mimitrends.ws.FinnhubWebSocketClient
+import org.senatov.mimitrends.ws.FinnhubProfileClient
 import org.slf4j.LoggerFactory
 import java.io.PrintWriter
 import java.io.StringWriter
@@ -46,7 +47,8 @@ class MainController(
     private val scannerSettings = ScannerSettingsService()
     private var scannerCriteria: ScannerCriteria = scannerSettings.load()
     private val scannerEngine = ScannerEngine(repository)
-    private val scannerPanel = ScannerPanel(::openScannerSymbol)
+    private val profileService = apiKey?.let { CompanyProfileService(repository, FinnhubProfileClient(it)) }
+    private val scannerPanel = ScannerPanel(::openScannerSymbol, profileService?.let { service -> service::load })
     private var webSocket: FinnhubWebSocketClient? = null
     private val batchScheduler = Executors.newSingleThreadScheduledExecutor { task ->
         Thread(task, "mimitrends-scanner-rotation").apply { isDaemon = true }
@@ -59,6 +61,7 @@ class MainController(
     fun createView(): Parent {
         log.debug(LogTag.UI, "createView()")
         scannerPanel.setCurrency(scannerCriteria.displayCurrency, ::displayPrice)
+        scannerPanel.setAppearance(scannerCriteria.tableAppearance)
         configureIconButton(refreshButton, "Refresh local chart", rotateOnHover = true)
         refreshButton.setOnAction { loadLocalChart(currentSymbol) }
         configureIconButton(settingsButton, "Scanner and currency settings", rotateOnHover = false)
@@ -204,6 +207,7 @@ class MainController(
         ScannerSettingsDialog(refreshButton.scene?.window, scannerCriteria, scannerSettings).showAndWait()?.let {
             scannerCriteria = it; scannerSettings.save(it)
             scannerPanel.setCurrency(it.displayCurrency, ::displayPrice)
+            scannerPanel.setAppearance(it.tableAppearance)
             loadLocalChart(currentSymbol)
             startScanner()
         }

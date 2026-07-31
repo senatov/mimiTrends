@@ -4,6 +4,7 @@ package org.senatov.mimitrends.db
 
 import org.senatov.mimitrends.log.LogTag
 import org.senatov.mimitrends.model.MinuteBar
+import org.senatov.mimitrends.model.CompanyProfile
 import org.slf4j.LoggerFactory
 import java.nio.file.Files
 import java.nio.file.Path
@@ -59,6 +60,44 @@ class MarketRepository(
                             result.getDouble(3), result.getDouble(4), result.getDouble(5), result.getDouble(6)))
                     }
                 }
+            }
+        }
+    }
+
+    fun loadCompanyProfile(symbol: String): CompanyProfile? {
+        log.debug(LogTag.DB, "loadCompanyProfile(symbol={})", symbol)
+        return lock.withLock {
+            connection.prepareStatement(
+                "SELECT name, exchange, logo_url, logo, updated_at FROM company_profiles WHERE symbol = ?"
+            ).use { statement ->
+                val normalized = symbol.trim().uppercase()
+                statement.setString(1, normalized)
+                statement.executeQuery().use { result ->
+                    if (!result.next()) null else CompanyProfile(
+                        symbol = normalized,
+                        name = result.getString(1),
+                        exchange = result.getString(2),
+                        logoUrl = result.getString(3),
+                        logoBytes = result.getBytes(4),
+                        updatedAtMillis = result.getLong(5)
+                    )
+                }
+            }
+        }
+    }
+
+    fun upsertCompanyProfile(profile: CompanyProfile) {
+        log.debug(LogTag.DB, "upsertCompanyProfile(symbol={}, logoBytes={})", profile.symbol, profile.logoBytes?.size ?: 0)
+        check(!closed.get()) { "MarketRepository is closed" }
+        lock.withLock {
+            connection.prepareStatement(UPSERT_PROFILE_SQL).use { statement ->
+                statement.setString(1, profile.symbol.trim().uppercase())
+                statement.setString(2, profile.name)
+                statement.setString(3, profile.exchange)
+                statement.setString(4, profile.logoUrl)
+                statement.setBytes(5, profile.logoBytes)
+                statement.setLong(6, profile.updatedAtMillis)
+                statement.executeUpdate()
             }
         }
     }
@@ -131,6 +170,12 @@ class MarketRepository(
                 )"""
             )
             statement.executeUpdate("CREATE INDEX IF NOT EXISTS idx_minute_symbol_time ON minute_bars(symbol, minute_epoch)")
+            statement.executeUpdate(
+                """CREATE TABLE IF NOT EXISTS company_profiles (
+                    symbol TEXT PRIMARY KEY, name TEXT NOT NULL, exchange TEXT NOT NULL,
+                    logo_url TEXT, logo BLOB, updated_at INTEGER NOT NULL
+                )"""
+            )
         }
     }
 
@@ -138,5 +183,9 @@ class MarketRepository(
         const val UPSERT_SQL = """INSERT INTO minute_bars(symbol, minute_epoch, open, high, low, close, volume)
             VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT(symbol, minute_epoch) DO UPDATE SET
             open=excluded.open, high=excluded.high, low=excluded.low, close=excluded.close, volume=excluded.volume"""
+        const val UPSERT_PROFILE_SQL = """INSERT INTO company_profiles(symbol, name, exchange, logo_url, logo, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(symbol) DO UPDATE SET
+            name=excluded.name, exchange=excluded.exchange, logo_url=excluded.logo_url,
+            logo=excluded.logo, updated_at=excluded.updated_at"""
     }
 }

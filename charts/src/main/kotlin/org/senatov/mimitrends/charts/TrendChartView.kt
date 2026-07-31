@@ -1,6 +1,5 @@
 package org.senatov.mimitrends.charts
 
-import javafx.scene.chart.CategoryAxis
 import javafx.scene.chart.BarChart
 import javafx.scene.chart.LineChart
 import javafx.scene.chart.NumberAxis
@@ -9,6 +8,7 @@ import javafx.scene.control.ProgressIndicator
 import javafx.scene.layout.StackPane
 import javafx.scene.layout.Priority
 import javafx.scene.layout.VBox
+import javafx.util.StringConverter
 import org.senatov.mimitrends.log.LogTag
 import org.senatov.mimitrends.model.MinuteBar
 import org.slf4j.LoggerFactory
@@ -16,11 +16,16 @@ import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import kotlin.math.ceil
+import kotlin.math.max
 
 class TrendChartView : StackPane() {
     private val log = LoggerFactory.getLogger(TrendChartView::class.java)
-    private val chart = LineChart<String, Number>(CategoryAxis(), NumberAxis())
-    private val volumeChart = BarChart<String, Number>(CategoryAxis(), NumberAxis())
+    private val priceTimeAxis = NumberAxis()
+    private val priceAxis = NumberAxis()
+    private val volumeTimeAxis = NumberAxis()
+    private val volumeAxis = NumberAxis()
+    private val chart = LineChart<Number, Number>(priceTimeAxis, priceAxis)
+    private val volumeChart = BarChart<Number, Number>(volumeTimeAxis, volumeAxis)
     private val progress = ProgressIndicator()
 
     init {
@@ -28,6 +33,7 @@ class TrendChartView : StackPane() {
         minHeight = 0.0
         maxHeight = Double.MAX_VALUE
         chart.setAnimated(false)
+        priceAxis.isForceZeroInRange = false
         chart.createSymbols = false
         chart.legendVisibleProperty().set(false)
         chart.verticalGridLinesVisibleProperty().set(false)
@@ -57,21 +63,47 @@ class TrendChartView : StackPane() {
             val first = chunk.first(); val last = chunk.last()
             MinuteBar(first.symbol, last.minuteEpochSeconds, first.open, chunk.maxOf { it.high }, chunk.minOf { it.low }, last.close, chunk.sumOf { it.volume })
         }
-        val priceSeries = XYChart.Series<String, Number>()
-        val volumeSeries = XYChart.Series<String, Number>()
-        val minuteFormatter = DateTimeFormatter.ofPattern(when (rangeLabel) {
-            "1D" -> "HH:mm"
-            "5D" -> "dd MMM HH:mm"
-            else -> "dd MMM"
-        }).withZone(ZoneId.systemDefault())
+        val priceSeries = XYChart.Series<Number, Number>()
+        val volumeSeries = XYChart.Series<Number, Number>()
         visible.forEach { bar ->
-            val label = minuteFormatter.format(Instant.ofEpochSecond(bar.minuteEpochSeconds))
-            priceSeries.data += XYChart.Data(label, bar.close * priceMultiplier)
-            volumeSeries.data += XYChart.Data(label, bar.volume)
+            val timestamp = bar.minuteEpochSeconds.toDouble()
+            priceSeries.data += XYChart.Data(timestamp, bar.close * priceMultiplier)
+            volumeSeries.data += XYChart.Data(timestamp, bar.volume)
         }
+        configureTimeAxis(priceTimeAxis, visible)
+        configureTimeAxis(volumeTimeAxis, visible)
         chart.data.setAll(priceSeries); chart.createSymbols = visible.size < 2; chart.title = "$symbol · local minute prices · $currencySymbol"
         volumeChart.data.setAll(volumeSeries); volumeChart.title = "Trading volume · ${bars.size} collected minute bars"
         volumeChart.isVisible = true; volumeChart.isManaged = true
+    }
+
+    private fun configureTimeAxis(axis: NumberAxis, bars: List<MinuteBar>) {
+        if (bars.isEmpty()) return
+
+        val first = bars.minOf { it.minuteEpochSeconds }.toDouble()
+        val last = bars.maxOf { it.minuteEpochSeconds }.toDouble()
+        val dataSpan = (last - first).coerceAtLeast(0.0)
+        val padding = max(60.0, dataSpan * 0.02)
+        val displaySpan = max(120.0, dataSpan + padding * 2.0)
+        val formatter = DateTimeFormatter.ofPattern(
+            when {
+                displaySpan <= 2 * 86_400 -> "HH:mm"
+                displaySpan <= 14 * 86_400 -> "dd MMM HH:mm"
+                displaySpan <= 180 * 86_400 -> "dd MMM"
+                else -> "MMM yy"
+            }
+        ).withZone(ZoneId.systemDefault())
+
+        axis.isAutoRanging = false
+        axis.lowerBound = first - padding
+        axis.upperBound = last + padding
+        axis.tickUnit = max(60.0, displaySpan / 6.0)
+        axis.tickLabelFormatter = object : StringConverter<Number>() {
+            override fun toString(value: Number): String =
+                formatter.format(Instant.ofEpochSecond(value.toLong()))
+
+            override fun fromString(value: String): Number = 0
+        }
     }
 
     fun setLoading(loading: Boolean) {

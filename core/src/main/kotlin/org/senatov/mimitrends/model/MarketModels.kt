@@ -19,6 +19,16 @@ data class MinuteBar(
 
 enum class DisplayCurrency(val symbol: String) { EUR("€"), USD("$") }
 
+data class TableAppearance(
+    val fontFamily: String = "SF Pro Display",
+    val fontSize: Double = 12.0,
+    val textColor: String = "#263238",
+    val evenRowColor: String = "#FAFAFA",
+    val oddRowColor: String = "#F0F0F0",
+    val selectionColor: String = "#DCE8F6",
+    val gridColor: String = "#9CA9B5"
+)
+
 data class ScannerCriteria(
     val minRelativeVolume: Double = 0.0,
     val minChange1mPercent: Double = -0.10,
@@ -29,6 +39,7 @@ data class ScannerCriteria(
     val batchSize: Int = 50,
     val rotationSeconds: Long = 30,
     val displayCurrency: DisplayCurrency = DisplayCurrency.EUR,
+    val tableAppearance: TableAppearance = TableAppearance(),
     val symbols: List<String> = listOf(
         "AAPL", "ABBV", "ABT", "ADBE", "AMD", "AMGN", "AMZN", "AVGO", "AXP", "BA",
         "BAC", "CAT", "CMCSA", "COP", "COST", "CRM", "CSCO", "CVX", "DIS", "GOOG",
@@ -52,4 +63,13 @@ data class ScanResult(
     val sessionVolume: Double,
     val matches: Boolean,
     val updatedAtMillis: Long
+)
+
+data class CompanyProfile(
+    val symbol: String,
+    val name: String,
+    val exchange: String,
+    val logoUrl: String?,
+    val logoBytes: ByteArray? = null,
+    val updatedAtMillis: Long = System.currentTimeMillis()
 )

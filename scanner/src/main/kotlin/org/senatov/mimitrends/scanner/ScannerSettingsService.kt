@@ -3,6 +3,7 @@ package org.senatov.mimitrends.scanner
 import org.senatov.mimitrends.log.LogTag
 import org.senatov.mimitrends.model.ScannerCriteria
 import org.senatov.mimitrends.model.DisplayCurrency
+import org.senatov.mimitrends.model.TableAppearance
 import org.slf4j.LoggerFactory
 import java.nio.file.Files
 import java.nio.file.Path
@@ -26,6 +27,15 @@ class ScannerSettingsService(private val path: Path = Path.of(System.getProperty
                 batchSize = p.getProperty("batchSize", "50").toInt().coerceIn(1, 50),
                 rotationSeconds = p.getProperty("rotationSeconds", "30").toLong().coerceIn(5, 3600),
                 displayCurrency = runCatching { DisplayCurrency.valueOf(p.getProperty("displayCurrency", "EUR")) }.getOrDefault(DisplayCurrency.EUR),
+                tableAppearance = TableAppearance(
+                    fontFamily = p.getProperty("table.fontFamily", "SF Pro Display"),
+                    fontSize = p.getProperty("table.fontSize", "12.0").toDouble().coerceIn(9.0, 22.0),
+                    textColor = color(p.getProperty("table.textColor"), "#263238"),
+                    evenRowColor = color(p.getProperty("table.evenRowColor"), "#FAFAFA"),
+                    oddRowColor = color(p.getProperty("table.oddRowColor"), "#F0F0F0"),
+                    selectionColor = color(p.getProperty("table.selectionColor"), "#DCE8F6"),
+                    gridColor = color(p.getProperty("table.gridColor"), "#9CA9B5")
+                ),
                 symbols = normalizeSymbols(p.getProperty("symbols", ScannerCriteria().symbols.joinToString(",")))
             )
         }.onFailure { log.error(LogTag.IO, "scanner settings load failed", it) }.getOrDefault(ScannerCriteria())
@@ -40,6 +50,13 @@ class ScannerSettingsService(private val path: Path = Path.of(System.getProperty
             setProperty("minSessionVolume", value.minSessionVolume.toString()); setProperty("baselineSessions", value.baselineSessions.toString())
             setProperty("batchSize", value.batchSize.toString()); setProperty("rotationSeconds", value.rotationSeconds.toString())
             setProperty("displayCurrency", value.displayCurrency.name)
+            setProperty("table.fontFamily", value.tableAppearance.fontFamily)
+            setProperty("table.fontSize", value.tableAppearance.fontSize.toString())
+            setProperty("table.textColor", value.tableAppearance.textColor)
+            setProperty("table.evenRowColor", value.tableAppearance.evenRowColor)
+            setProperty("table.oddRowColor", value.tableAppearance.oddRowColor)
+            setProperty("table.selectionColor", value.tableAppearance.selectionColor)
+            setProperty("table.gridColor", value.tableAppearance.gridColor)
             setProperty("symbols", normalizeSymbols(value.symbols.joinToString(",")).joinToString(","))
         }
         Files.newOutputStream(path).use { p.store(it, "MiMiTrends scanner settings") }
@@ -49,4 +66,7 @@ class ScannerSettingsService(private val path: Path = Path.of(System.getProperty
         log.debug(LogTag.IO, "normalizeSymbols(chars={})", text.length)
         return text.split(',', ';', '\n', ' ', '\t').map(String::trim).filter(String::isNotEmpty).map(String::uppercase).distinct()
     }
+
+    private fun color(value: String?, fallback: String): String =
+        value?.takeIf { it.matches(Regex("#[0-9a-fA-F]{6}")) } ?: fallback
 }
