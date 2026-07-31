@@ -17,6 +17,9 @@ import org.senatov.mimitrends.model.MarketSnapshot
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import java.io.PrintWriter
+import java.io.StringWriter
+import java.time.ZonedDateTime
 import java.util.concurrent.CompletionException
 
 class MainController(private val apiKey: String?) {
@@ -24,6 +27,8 @@ class MainController(private val apiKey: String?) {
     private val rangeBox = ComboBox(FXCollections.observableArrayList("1M", "3M", "6M", "1Y"))
     private val refreshButton = Button("↻  Refresh")
     private val statusLabel = Label()
+    private val errorDetailsButton = Button("!")
+    private var lastErrorDetails: String? = null
     private val titleLabel = Label("AAPL")
     private val priceLabel = Label("—")
     private val changeLabel = Label("Waiting for data")
@@ -88,7 +93,14 @@ class MainController(private val apiKey: String?) {
             VBox.setVgrow(chartStack, Priority.ALWAYS)
         }
 
-        val statusBar = HBox(statusLabel).apply {
+        errorDetailsButton.apply {
+            styleClass += "error-details-button"
+            tooltip = Tooltip("Show complete error log")
+            isVisible = false
+            isManaged = false
+            setOnAction { showErrorDetails() }
+        }
+        val statusBar = HBox(8.0, statusLabel, spacer(), errorDetailsButton).apply {
             alignment = Pos.CENTER_LEFT
             styleClass += "status-bar"
         }
@@ -106,20 +118,24 @@ class MainController(private val apiKey: String?) {
 
     private fun refresh() {
         val key = apiKey ?: return
-        val symbol = symbolField.text.trim().uppercase()
-        if (symbol.isEmpty()) {
-            setStatus("Enter a market symbol", true)
+        val query = symbolField.text.trim()
+        if (query.isEmpty()) {
+            setStatus("Enter a ticker, company name, ISIN or WKN", true)
             return
         }
         setLoading(true)
-        setStatus("Loading $symbol…", false)
-        FinnhubClient(key).loadSnapshot(symbol, selectedDays())
+        setStatus("Searching for $query…", false)
+        FinnhubClient(key).resolveAndLoadSnapshot(query, selectedDays())
             .whenComplete { snapshot: MarketSnapshot?, error: Throwable? ->
                 Platform.runLater {
                     setLoading(false)
                     if (error != null) {
                         val cause = (error as? CompletionException)?.cause ?: error
-                        setStatus(cause.message ?: "Could not load market data", true)
+                        setStatus(
+                            cause.message ?: "Could not load market data",
+                            true,
+                            formatErrorLog(query, cause)
+                        )
                     } else if (snapshot != null) {
                         showSnapshot(snapshot)
                     } else {
@@ -131,7 +147,8 @@ class MainController(private val apiKey: String?) {
 
     private fun showSnapshot(snapshot: MarketSnapshot) {
         val quote = snapshot.quote
-        titleLabel.text = snapshot.symbol
+        titleLabel.text = snapshot.description?.let { "${snapshot.symbol} · $it" } ?: snapshot.symbol
+        symbolField.text = snapshot.symbol
         priceLabel.text = "\$${"%,.2f".format(quote.current)}"
         changeLabel.text = "%+.2f  (%+.2f%%)".format(quote.change, quote.percentChange)
         changeLabel.styleClass.removeAll("gain", "loss")
@@ -179,9 +196,51 @@ class MainController(private val apiKey: String?) {
     }
 
     private fun setStatus(message: String, error: Boolean) {
+        setStatus(message, error, if (error) formatErrorLog(symbolField.text, null, message) else null)
+    }
+
+    private fun setStatus(message: String, error: Boolean, details: String?) {
         statusLabel.text = message
         statusLabel.styleClass.removeAll("status-error")
         if (error) statusLabel.styleClass += "status-error"
+        lastErrorDetails = details
+        errorDetailsButton.isVisible = error && !details.isNullOrBlank()
+        errorDetailsButton.isManaged = errorDetailsButton.isVisible
+    }
+
+    private fun showErrorDetails() {
+        val details = lastErrorDetails ?: return
+        val textArea = TextArea(details).apply {
+            isEditable = false
+            isWrapText = false
+            prefColumnCount = 100
+            prefRowCount = 28
+            styleClass += "error-log-area"
+        }
+        Dialog<ButtonType>().apply {
+            errorDetailsButton.scene?.window?.let(::initOwner)
+            title = "MiMiTrends error log"
+            headerText = statusLabel.text
+            dialogPane.content = textArea
+            dialogPane.buttonTypes += ButtonType.CLOSE
+            isResizable = true
+        }.showAndWait()
+    }
+
+    private fun formatErrorLog(query: String, error: Throwable?, message: String? = null): String {
+        val stackTrace = if (error == null) {
+            message ?: "No exception stack trace is available."
+        } else {
+            StringWriter().also { writer -> error.printStackTrace(PrintWriter(writer)) }.toString()
+        }
+        return buildString {
+            appendLine("MiMiTrends error report")
+            appendLine("Time: ${ZonedDateTime.now()}")
+            appendLine("Query: $query")
+            appendLine("Range: ${rangeBox.value}")
+            appendLine()
+            append(stackTrace)
+        }
     }
 
     private fun money(value: Double) = if (value > 0) "\$${"%,.2f".format(value)}" else "—"

@@ -130,6 +130,37 @@
     -fx-text-fill: #c74552;
 }
 
+.error-details-button {
+    -fx-min-width: 25px;
+    -fx-pref-width: 25px;
+    -fx-min-height: 23px;
+    -fx-pref-height: 23px;
+    -fx-padding: 0;
+    -fx-font-size: 15px;
+    -fx-font-weight: bold;
+    -fx-text-fill: white;
+    -fx-background-color: linear-gradient(to bottom, #f17b84 0%, #d94e5a 52%, #b93340 100%);
+    -fx-background-radius: 6px;
+    -fx-border-color: #a72e39;
+    -fx-border-radius: 6px;
+    -fx-border-width: 1px;
+    -fx-effect: dropshadow(gaussian, rgba(80, 18, 24, 0.42), 3, 0.15, 0, 1);
+}
+
+.error-details-button:hover {
+    -fx-background-color: linear-gradient(to bottom, #fa9098 0%, #e65a66 52%, #c43b48 100%);
+}
+
+.error-details-button:pressed {
+    -fx-translate-y: 1px;
+    -fx-effect: innershadow(gaussian, rgba(75, 12, 20, 0.48), 4, 0.2, 0, 1);
+}
+
+.error-log-area {
+    -fx-font-family: "Menlo", "Monospaced";
+    -fx-font-size: 12px;
+}
+
 .setup-path {
     -fx-font-size: 12px;
     -fx-text-fill: #74787e;

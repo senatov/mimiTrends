@@ -2,6 +2,7 @@ package org.senatov.mimitrends.api
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import org.senatov.mimitrends.model.Candle
+import org.senatov.mimitrends.model.InstrumentMatch
 import org.senatov.mimitrends.model.MarketSnapshot
 import org.senatov.mimitrends.model.Quote
 import java.net.URI
@@ -24,7 +25,9 @@ class FinnhubClient(
 ) {
     fun loadSnapshot(symbol: String, days: Long): CompletableFuture<MarketSnapshot> {
         val normalizedSymbol = symbol.trim().uppercase()
-        require(normalizedSymbol.matches(Regex("[A-Z0-9.:-]{1,20}"))) { "Invalid market symbol" }
+        if (!isDirectSymbol(normalizedSymbol)) {
+            return CompletableFuture.failedFuture(FinnhubException("Invalid market symbol: $symbol"))
+        }
         val to = Instant.now().epochSecond
         val from = Instant.now().minus(days, ChronoUnit.DAYS).epochSecond
 
@@ -36,8 +39,52 @@ class FinnhubClient(
         }
         return quoteFuture.thenCombine(candlesFuture) { quote, candles ->
             val chartPoints = candles.ifEmpty { quoteFallback(quote, days) }
-            MarketSnapshot(normalizedSymbol, quote, chartPoints)
+            MarketSnapshot(normalizedSymbol, quote = quote, candles = chartPoints)
         }
+    }
+
+    fun resolveAndLoadSnapshot(query: String, days: Long): CompletableFuture<MarketSnapshot> {
+        val normalizedQuery = query.trim()
+        if (normalizedQuery.isEmpty()) {
+            return CompletableFuture.failedFuture(FinnhubException("Enter a ticker, company name, ISIN or WKN"))
+        }
+        if (isLikelyTicker(normalizedQuery)) return loadSnapshot(normalizedQuery, days)
+        return search(normalizedQuery).thenCompose { matches ->
+            val match = matches.firstOrNull()
+                ?: return@thenCompose CompletableFuture.failedFuture(
+                    FinnhubException("No instrument found for '$normalizedQuery'")
+                )
+            loadSnapshot(match.symbol, days).thenApply { snapshot ->
+                snapshot.copy(description = match.description)
+            }
+        }
+    }
+
+    fun search(query: String): CompletableFuture<List<InstrumentMatch>> {
+        val normalizedQuery = query.trim()
+        if (normalizedQuery.isEmpty()) return CompletableFuture.completedFuture(emptyList())
+        return get("/search?q=${encode(normalizedQuery)}").thenApply { json ->
+            parseSearchResults(json, normalizedQuery)
+        }
+    }
+
+    internal fun parseSearchResults(json: String, query: String): List<InstrumentMatch> {
+        val root = mapper.readTree(json)
+        if (root.has("error")) throw FinnhubException(root.path("error").asText())
+        return root.path("result").mapNotNull { item ->
+            val symbol = item.path("symbol").asText().trim()
+            if (symbol.isEmpty()) return@mapNotNull null
+            InstrumentMatch(
+                symbol = symbol,
+                displaySymbol = item.path("displaySymbol").asText(symbol),
+                description = item.path("description").asText(),
+                type = item.path("type").asText()
+            )
+        }.sortedWith(
+            compareByDescending<InstrumentMatch>(::isGermanInstrument)
+                .thenByDescending { it.symbol.equals(query, ignoreCase = true) }
+                .thenBy { it.description }
+        )
     }
 
     internal fun parseQuote(json: String): Quote {
@@ -103,6 +150,19 @@ class FinnhubClient(
 
     private fun encode(value: String): String =
         URLEncoder.encode(value, StandardCharsets.UTF_8)
+
+    private fun isDirectSymbol(value: String): Boolean =
+        value.matches(Regex("[A-Z0-9.:-]{1,40}"))
+
+    private fun isLikelyTicker(value: String): Boolean =
+        value == value.uppercase() &&
+            !value.equals("DAX", ignoreCase = true) &&
+            value.matches(Regex("[A-Z]{1,6}([.:-][A-Z0-9]{1,8})?"))
+
+    private fun isGermanInstrument(match: InstrumentMatch): Boolean =
+        match.symbol.endsWith(".DE", ignoreCase = true) ||
+            match.displaySymbol.endsWith(".DE", ignoreCase = true) ||
+            match.description.contains("DAX", ignoreCase = true)
 
     companion object {
         private const val BASE_URL = "https://finnhub.io/api/v1"

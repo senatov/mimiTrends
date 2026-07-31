@@ -17,6 +17,14 @@ data class Quote(
 
 data class MarketSnapshot(
     val symbol: String,
+    val description: String? = null,
     val quote: Quote,
     val candles: List<Candle>
+)
+
+data class InstrumentMatch(
+    val symbol: String,
+    val displaySymbol: String,
+    val description: String,
+    val type: String
 )

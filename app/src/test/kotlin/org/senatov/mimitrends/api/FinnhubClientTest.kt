@@ -3,6 +3,8 @@ package org.senatov.mimitrends.api
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
+import kotlin.test.assertFailsWith
+import java.util.concurrent.CompletionException
 
 class FinnhubClientTest {
     private val client = FinnhubClient("test-key")
@@ -28,5 +30,23 @@ class FinnhubClientTest {
     @Test
     fun `returns empty candles for no data`() {
         assertTrue(client.parseCandles("""{"s":"no_data"}""").isEmpty())
+    }
+
+    @Test
+    fun `invalid symbol is reported through future instead of UI thread`() {
+        val future = client.loadSnapshot("Siemens AG", 30)
+        assertFailsWith<CompletionException> { future.join() }
+    }
+
+    @Test
+    fun `German instruments are preferred in search results`() {
+        val matches = client.parseSearchResults(
+            """{"result":[
+                {"symbol":"SIEGY","displaySymbol":"SIEGY","description":"SIEMENS ADR","type":"Common Stock"},
+                {"symbol":"SIE.DE","displaySymbol":"SIE.DE","description":"SIEMENS AG","type":"Common Stock"}
+            ]}""",
+            "Siemens"
+        )
+        assertEquals("SIE.DE", matches.first().symbol)
     }
 }
