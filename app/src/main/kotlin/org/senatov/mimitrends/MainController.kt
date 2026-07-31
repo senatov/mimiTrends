@@ -7,7 +7,6 @@ import javafx.animation.ScaleTransition
 import javafx.collections.FXCollections
 import javafx.geometry.Insets
 import javafx.geometry.Pos
-import javafx.scene.Node
 import javafx.scene.Parent
 import javafx.scene.control.*
 import javafx.scene.layout.*
@@ -35,20 +34,13 @@ class MainController(private val apiKey: String?, initialSymbol: String = "AAPL"
     private val log = LoggerFactory.getLogger(MainController::class.java)
     private val repository = MarketRepository()
     private val symbolField = TextField(initialSymbol)
-    private val rangeBox = ComboBox(FXCollections.observableArrayList("1M", "3M", "6M", "1Y"))
+    private val rangeBox = ComboBox(FXCollections.observableArrayList("1D", "5D", "1M", "3M", "6M", "1Y"))
     private val refreshButton = Button("↻")
     private val settingsButton = Button("⚙")
     private val aboutButton = Button("ⓘ")
     private val statusLabel = Label()
     private val errorDetailsButton = Button("!")
     private var lastErrorDetails: String? = null
-    private val titleLabel = Label("AAPL")
-    private val priceLabel = Label("—")
-    private val changeLabel = Label("Waiting for data")
-    private val highValue = Label("—")
-    private val lowValue = Label("—")
-    private val openValue = Label("—")
-    private val previousValue = Label("—")
     private val trendChart = TrendChartView()
     private val scannerSettings = ScannerSettingsService()
     private var scannerCriteria: ScannerCriteria = scannerSettings.load()
@@ -61,12 +53,13 @@ class MainController(private val apiKey: String?, initialSymbol: String = "AAPL"
     private var rotationTask: ScheduledFuture<*>? = null
     private val exchangeRates = ExchangeRateService()
     private var currentSnapshot: MarketSnapshot? = null
-    private val initialRangeValue = initialRange.takeIf { it in setOf("1M", "3M", "6M", "1Y") } ?: "3M"
+    private val initialRangeValue = initialRange.takeIf { it in setOf("1D", "5D", "1M", "3M", "6M", "1Y") } ?: "3M"
 
     fun createView(): Parent {
         log.debug(LogTag.UI, "createView()")
         scannerPanel.setCurrency(scannerCriteria.displayCurrency, ::displayPrice)
         rangeBox.value = initialRangeValue
+        rangeBox.setOnAction { if (rangeBox.scene != null && !refreshButton.isDisable) refresh() }
         symbolField.promptText = "Ticker, e.g. AAPL"
         symbolField.prefColumnCount = 12
         symbolField.setOnAction { refresh() }
@@ -102,24 +95,9 @@ class MainController(private val apiKey: String?, initialSymbol: String = "AAPL"
         }
         val toolbar = VBox(titleBar, searchBar)
 
-        titleLabel.styleClass += "symbol-title"
-        priceLabel.styleClass += "price"
-        changeLabel.styleClass += "change"
-        val heading = VBox(3.0, titleLabel, HBox(12.0, priceLabel, changeLabel).apply {
-            alignment = Pos.BASELINE_LEFT
-        })
-
-        val metrics = HBox(
-            10.0,
-            metricCard("Open", openValue),
-            metricCard("Day high", highValue),
-            metricCard("Day low", lowValue),
-            metricCard("Prev. close", previousValue)
-        )
-
         VBox.setVgrow(trendChart, Priority.ALWAYS)
 
-        val content = VBox(14.0, scannerPanel, Separator(), heading, metrics, trendChart).apply {
+        val content = VBox(14.0, scannerPanel, Separator(), trendChart).apply {
             padding = Insets(22.0, 24.0, 16.0, 24.0)
             VBox.setVgrow(trendChart, Priority.ALWAYS)
         }
@@ -300,21 +278,10 @@ Read-only demonstration application.
     private fun showSnapshot(snapshot: MarketSnapshot) {
         log.debug(LogTag.UI, "showSnapshot(symbol={}, points={})", snapshot.symbol, snapshot.candles.size)
         currentSnapshot = snapshot
-        val quote = snapshot.quote
         val currency = scannerCriteria.displayCurrency
-        val price = displayPrice(snapshot.symbol, quote.current)
-        titleLabel.text = snapshot.description?.let { "${snapshot.symbol} · $it" } ?: snapshot.symbol
         symbolField.text = snapshot.symbol
-        priceLabel.text = "${currency.symbol}${"%,.2f".format(price)}"
-        changeLabel.text = "%+.2f  (%+.2f%%)".format(displayPrice(snapshot.symbol, quote.change), quote.percentChange)
-        changeLabel.styleClass.removeAll("gain", "loss")
-        changeLabel.styleClass += if (quote.change >= 0) "gain" else "loss"
-        openValue.text = money(snapshot.symbol, quote.open)
-        highValue.text = money(snapshot.symbol, quote.high)
-        lowValue.text = money(snapshot.symbol, quote.low)
-        previousValue.text = money(snapshot.symbol, quote.previousClose)
 
-        val minuteBars = runCatching { repository.loadMinuteBars(snapshot.symbol, java.time.Instant.now().minusSeconds(86_400).epochSecond) }
+        val minuteBars = runCatching { repository.loadMinuteBars(snapshot.symbol, java.time.Instant.now().minusSeconds(selectedDays() * 86_400).epochSecond) }
             .onFailure { log.error(LogTag.DB, "minute bars load failed symbol={}", snapshot.symbol, it) }.getOrDefault(emptyList())
         val multiplier = displayPrice(snapshot.symbol, 1.0)
         if (minuteBars.isNotEmpty()) trendChart.renderMinuteBars(snapshot.symbol, minuteBars, rangeBox.value, multiplier, currency.symbol)
@@ -329,19 +296,11 @@ Read-only demonstration application.
         )
     }
 
-    private fun metricCard(caption: String, value: Label): Node =
-        VBox(5.0, Label(caption).apply { styleClass += "metric-caption" }, value.apply {
-            styleClass += "metric-value"
-        }).apply {
-            log.debug(LogTag.UI, "metricCard(caption={})", caption)
-            styleClass += "metric-card"
-            HBox.setHgrow(this, Priority.ALWAYS)
-            maxWidth = Double.MAX_VALUE
-        }
-
     private fun selectedDays(): Long {
         log.debug(LogTag.UI, "selectedDays(range={})", rangeBox.value)
         return when (rangeBox.value) {
+        "1D" -> 1
+        "5D" -> 5
         "1M" -> 30
         "6M" -> 180
         "1Y" -> 365
@@ -407,11 +366,6 @@ Read-only demonstration application.
             appendLine()
             append(stackTrace)
         }
-    }
-
-    private fun money(symbol: String, value: Double): String {
-        log.debug(LogTag.UI, "money(symbol={}, value={})", symbol, value)
-        return if (value > 0) "${scannerCriteria.displayCurrency.symbol}${"%,.2f".format(displayPrice(symbol, value))}" else "—"
     }
 
     private fun displayPrice(symbol: String, value: Double): Double {

@@ -17,9 +17,9 @@ MiMiComparator without sharing its business logic.
 
 The demo includes:
 
-- ticker input and 1/3/6/12-month ranges;
-- current price, daily change, open, high, low, and previous close;
-- a responsive JavaFX line chart;
+- ticker input and standard 1-day, 5-day, 1/3/6/12-month ranges;
+- a focused price chart without a redundant quote-characteristics panel;
+- a responsive JavaFX price chart paired with locally collected trading volume;
 - a WebSocket momentum scanner with configurable 1/5-minute, price, volume, and relative-volume filters;
 - locally aggregated one-minute OHLCV bars and a volume chart for confirming price moves;
 - EUR price display by default, switchable to USD in scanner Settings, using the cached daily ECB reference rate;
@@ -138,7 +138,7 @@ The application calls:
 ### Momentum scanner
 
 The upper table contains only symbols that currently pass every rule configured under **Settings**. The default rules are RVOL > 3,
-1-minute change > 1%, 5-minute change > 1.2%, price > $8, and accumulated session volume > 500,000 shares. Double-click a matching
+1-minute change > 1%, 5-minute change > 1.2%, price > $8, and accumulated session volume > 500,000 shares. Click a matching
 row to open its chart. A watchlist may contain more than 50 symbols: it is divided into configurable batches of at most 50 active
 WebSocket subscriptions. After the configured interval the scanner unsubscribes the current batch and activates the next one.
 

@@ -38,7 +38,7 @@ class ScannerPanel(private val onOpen: (String) -> Unit) : VBox(7.0) {
         table.placeholder = empty
         table.columnResizePolicy = TableView.CONSTRAINED_RESIZE_POLICY_FLEX_LAST_COLUMN
         table.setRowFactory {
-            TableRow<ScanResult>().apply { setOnMouseClicked { e -> if (!isEmpty && e.button == MouseButton.PRIMARY && e.clickCount == 2) onOpen(item.symbol) } }
+            TableRow<ScanResult>().apply { setOnMouseClicked { e -> if (!isEmpty && e.button == MouseButton.PRIMARY && e.clickCount == 1) onOpen(item.symbol) } }
         }
         table.prefHeight = 190.0
         table.styleClass += "scanner-table"

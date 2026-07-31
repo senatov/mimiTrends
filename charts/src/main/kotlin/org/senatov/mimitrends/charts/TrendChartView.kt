@@ -16,6 +16,7 @@ import org.slf4j.LoggerFactory
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import kotlin.math.ceil
 
 class TrendChartView : StackPane() {
     private val log = LoggerFactory.getLogger(TrendChartView::class.java)
@@ -60,17 +61,25 @@ class TrendChartView : StackPane() {
 
     fun renderMinuteBars(symbol: String, bars: List<MinuteBar>, rangeLabel: String, priceMultiplier: Double = 1.0, currencySymbol: String = "$") {
         log.debug(LogTag.UI, "renderMinuteBars(symbol={}, bars={}, range={})", symbol, bars.size, rangeLabel)
-        val visible = bars.takeLast(180)
+        val chunkSize = ceil(bars.size / 180.0).toInt().coerceAtLeast(1)
+        val visible = bars.chunked(chunkSize).map { chunk ->
+            val first = chunk.first(); val last = chunk.last()
+            MinuteBar(first.symbol, last.minuteEpochSeconds, first.open, chunk.maxOf { it.high }, chunk.minOf { it.low }, last.close, chunk.sumOf { it.volume })
+        }
         val priceSeries = XYChart.Series<String, Number>()
         val volumeSeries = XYChart.Series<String, Number>()
-        val minuteFormatter = DateTimeFormatter.ofPattern("HH:mm").withZone(ZoneId.systemDefault())
+        val minuteFormatter = DateTimeFormatter.ofPattern(when (rangeLabel) {
+            "1D" -> "HH:mm"
+            "5D" -> "dd MMM HH:mm"
+            else -> "dd MMM"
+        }).withZone(ZoneId.systemDefault())
         visible.forEach { bar ->
             val label = minuteFormatter.format(Instant.ofEpochSecond(bar.minuteEpochSeconds))
             priceSeries.data += XYChart.Data(label, bar.close * priceMultiplier)
             volumeSeries.data += XYChart.Data(label, bar.volume)
         }
         chart.data.setAll(priceSeries); chart.createSymbols = visible.size < 2; chart.title = "$symbol · local minute prices · $currencySymbol"
-        volumeChart.data.setAll(volumeSeries); volumeChart.title = "Volume · last ${visible.size} minutes"
+        volumeChart.data.setAll(volumeSeries); volumeChart.title = "Trading volume · ${bars.size} collected minute bars"
         volumeChart.isVisible = true; volumeChart.isManaged = true
     }
 
