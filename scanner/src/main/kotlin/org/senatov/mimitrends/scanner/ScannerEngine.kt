@@ -31,6 +31,13 @@ class ScannerEngine(private val zone: ZoneId = ZoneId.systemDefault()) {
         val normalVolume = median(referenceVolumes).takeIf { it > 0 } ?: currentVolume.coerceAtLeast(1.0)
         val priceAnomaly = abs(currentReturn) / normalMove
         val volumeAnomaly = currentVolume / normalVolume
+        val selectedScore = max(priceAnomaly, volumeAnomaly)
+        // A large move earlier in an hour/session must not keep a now-idle instrument at the top.
+        // The latest five minutes act as a recency confirmation; taking the smaller score requires
+        // both the selected period and the immediate market state to remain unusual.
+        val freshScore = if (criteria.anomalyWindow == AnomalyWindow.MINUTE) selectedScore else {
+            recentActivityScore(sorted, 5 * 60)
+        }
         val sessionBars = sameSession(sorted, latest)
         val sessionVolume = sessionBars.sumOf { it.volume }
         val turnover = sessionBars.sumOf { it.close * it.volume }
@@ -38,7 +45,7 @@ class ScannerEngine(private val zone: ZoneId = ZoneId.systemDefault()) {
         return ScanResult(
             symbol = symbol,
             price = latest.close,
-            anomalyScore = max(priceAnomaly, volumeAnomaly),
+            anomalyScore = minOf(selectedScore, freshScore),
             priceAnomaly = priceAnomaly,
             volumeAnomaly = volumeAnomaly,
             windowChangePercent = currentReturn,
@@ -47,6 +54,38 @@ class ScannerEngine(private val zone: ZoneId = ZoneId.systemDefault()) {
             sessionTurnover = turnover,
             updatedAtMillis = latest.minuteEpochSeconds * 1_000
         )
+    }
+
+    private fun recentActivityScore(bars: List<MinuteBar>, seconds: Long): Double {
+        log.trace(LogTag.DB, "recentActivityScore(bars={}, seconds={})", bars.size, seconds)
+        val latest = bars.last()
+        val current = bars.filter { it.minuteEpochSeconds >= latest.minuteEpochSeconds - seconds }
+        if (current.size < 2) return 0.0
+        val currentReturn = abs(percent(current.first().open, current.last().close))
+        val currentVolume = current.sumOf(MinuteBar::volume)
+        val references = fixedReferenceWindows(bars, current.first().minuteEpochSeconds, seconds)
+        val normalMove = median(references.map { abs(percent(it.first().open, it.last().close)) })
+            .takeIf { it > 0 } ?: currentReturn.coerceAtLeast(0.01)
+        val normalVolume = median(references.map { it.sumOf(MinuteBar::volume) }.filter { it > 0 })
+            .takeIf { it > 0 } ?: currentVolume.coerceAtLeast(1.0)
+        return max(currentReturn / normalMove, currentVolume / normalVolume)
+    }
+
+    private fun fixedReferenceWindows(
+        bars: List<MinuteBar>,
+        currentStart: Long,
+        seconds: Long
+    ): List<List<MinuteBar>> {
+        val historical = bars.filter { it.minuteEpochSeconds < currentStart }
+        if (historical.isEmpty()) return emptyList()
+        val samples = mutableListOf<List<MinuteBar>>()
+        var end = historical.last().minuteEpochSeconds
+        while (samples.size < 60 && end >= historical.first().minuteEpochSeconds) {
+            val sample = historical.filter { it.minuteEpochSeconds >= end - seconds && it.minuteEpochSeconds <= end }
+            if (sample.size >= 2) samples += sample
+            end -= seconds
+        }
+        return samples
     }
 
     private fun currentWindow(bars: List<MinuteBar>, window: AnomalyWindow): List<MinuteBar> {
@@ -73,16 +112,7 @@ class ScannerEngine(private val zone: ZoneId = ZoneId.systemDefault()) {
             }.groupBy(::date).values.toList()
         }
         val seconds = requireNotNull(window.seconds)
-        val historical = bars.filter { it.minuteEpochSeconds < currentStart }
-        if (historical.isEmpty()) return emptyList()
-        val samples = mutableListOf<List<MinuteBar>>()
-        var end = historical.last().minuteEpochSeconds
-        while (samples.size < 60 && end >= historical.first().minuteEpochSeconds) {
-            val sample = historical.filter { it.minuteEpochSeconds >= end - seconds && it.minuteEpochSeconds <= end }
-            if (sample.size >= 2) samples += sample
-            end -= seconds
-        }
-        return samples
+        return fixedReferenceWindows(bars, currentStart, seconds)
     }
 
     private fun sameSession(bars: List<MinuteBar>, latest: MinuteBar): List<MinuteBar> {

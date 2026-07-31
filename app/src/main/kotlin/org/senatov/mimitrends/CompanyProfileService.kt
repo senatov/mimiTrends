@@ -3,6 +3,7 @@ package org.senatov.mimitrends
 import org.senatov.mimitrends.db.MarketRepository
 import org.senatov.mimitrends.log.LogTag
 import org.senatov.mimitrends.model.CompanyProfile
+import org.senatov.mimitrends.marketdata.CompanyLogoClient
 import org.senatov.mimitrends.ws.FinnhubProfileClient
 import org.slf4j.LoggerFactory
 import java.time.Duration
@@ -13,6 +14,7 @@ import java.util.function.BiConsumer
 class CompanyProfileService(
     private val repository: MarketRepository,
     private val remote: FinnhubProfileClient?,
+    private val logos: CompanyLogoClient,
     private val maxAge: Duration = Duration.ofDays(7)
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
@@ -27,6 +29,15 @@ class CompanyProfileService(
     private fun loadFromDatabase(symbol: String): CompletableFuture<CompanyProfile> =
         CompletableFuture.supplyAsync { repository.loadCompanyProfile(symbol) }.thenCompose { stored ->
             val freshAfter = System.currentTimeMillis() - maxAge.toMillis()
+            if (stored != null && stored.logoBytes == null && stored.name != symbol) {
+                return@thenCompose logos.load(symbol, stored.name).thenApply { logo ->
+                    if (logo == null) stored else stored.copy(
+                        logoUrl = logo.sourceUrl,
+                        logoBytes = logo.pngBytes,
+                        updatedAtMillis = System.currentTimeMillis()
+                    ).also(repository::upsertCompanyProfile)
+                }
+            }
             if (stored != null && stored.updatedAtMillis >= freshAfter) {
                 log.debug(LogTag.DB, "company profile cache hit symbol={}", symbol)
                 CompletableFuture.completedFuture(stored)
@@ -36,8 +47,12 @@ class CompanyProfileService(
                 )
                 log.debug(LogTag.API, "company profile cache miss symbol={}", symbol)
                 remote.load(symbol).thenApply { loaded ->
-                    repository.upsertCompanyProfile(loaded)
-                    loaded
+                    val merged = loaded.copy(
+                        name = stored?.name?.takeUnless { it == symbol } ?: loaded.name,
+                        exchange = stored?.exchange?.takeUnless { it == "Yahoo Finance" } ?: loaded.exchange
+                    )
+                    repository.upsertCompanyProfile(merged)
+                    merged
                 }.exceptionally { error ->
                     if (stored != null) {
                         log.warn(LogTag.API, "using stale company profile symbol={}", symbol, error)

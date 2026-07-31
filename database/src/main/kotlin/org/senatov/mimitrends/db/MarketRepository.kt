@@ -189,6 +189,11 @@ class MarketRepository(
                     logo_url TEXT, logo BLOB, updated_at INTEGER NOT NULL
                 )"""
             )
+            // Remove the temporary generated-monogram source used by an older build so genuine
+            // cached company favicons are fetched on the next visible table render.
+            statement.executeUpdate(
+                "UPDATE company_profiles SET logo_url = NULL, logo = NULL WHERE logo_url LIKE 'https://img.loadlogo.com/%'"
+            )
         }
     }
 

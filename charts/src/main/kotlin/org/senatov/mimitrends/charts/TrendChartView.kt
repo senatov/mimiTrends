@@ -6,6 +6,7 @@ import javafx.scene.input.MouseEvent
 import org.jfree.chart.JFreeChart
 import org.jfree.chart.axis.DateAxis
 import org.jfree.chart.axis.NumberAxis
+import org.jfree.chart.axis.AxisLocation
 import org.jfree.chart.fx.ChartViewer
 import org.jfree.chart.fx.interaction.ChartMouseEventFX
 import org.jfree.chart.fx.interaction.ChartMouseListenerFX
@@ -13,6 +14,7 @@ import org.jfree.chart.labels.HighLowItemLabelGenerator
 import org.jfree.chart.labels.StandardXYToolTipGenerator
 import org.jfree.chart.plot.CombinedDomainXYPlot
 import org.jfree.chart.plot.PlotOrientation
+import org.jfree.chart.plot.ValueMarker
 import org.jfree.chart.plot.XYPlot
 import org.jfree.chart.renderer.xy.CandlestickRenderer
 import org.jfree.chart.renderer.xy.XYBarRenderer
@@ -22,6 +24,10 @@ import org.jfree.data.time.TimeSeries
 import org.jfree.data.time.TimeSeriesCollection
 import org.jfree.data.xy.DefaultHighLowDataset
 import org.jfree.data.xy.XYBarDataset
+import org.jfree.chart.ui.RectangleAnchor
+import org.jfree.chart.ui.RectangleInsets
+import org.jfree.chart.ui.RectangleEdge
+import org.jfree.chart.ui.TextAnchor
 import org.senatov.mimitrends.log.LogTag
 import org.senatov.mimitrends.model.MinuteBar
 import org.slf4j.LoggerFactory
@@ -48,6 +54,12 @@ class TrendChartView : StackPane() {
     private val chart = JFreeChart("Select a scanner result", Font("SansSerif", Font.PLAIN, 14), combinedPlot, false)
     private val viewer = ChartViewer(chart)
     private val progress = ProgressIndicator()
+    private val priceCursor = ValueMarker(0.0)
+    private val priceTimeCursor = ValueMarker(0.0)
+    private val volumeTimeCursor = ValueMarker(0.0)
+    private var cursorMarkersInstalled = false
+    private var cursorDateFormat = SimpleDateFormat("dd MMM HH:mm")
+    private var cursorPriceFormat = DecimalFormat("$#,##0.00")
 
     init {
         log.debug(LogTag.UI, "init()")
@@ -96,6 +108,8 @@ class TrendChartView : StackPane() {
 
         dateAxis.dateFormatOverride = SimpleDateFormat(datePattern(rangeLabel))
         priceAxis.numberFormatOverride = DecimalFormat("$currencySymbol#,##0.00")
+        cursorDateFormat = SimpleDateFormat("dd MMM yyyy  HH:mm")
+        cursorPriceFormat = DecimalFormat("$currencySymbol#,##0.00")
         chart.title.text = "$symbol  ·  OHLC  ·  $rangeLabel  ·  ${bars.size} minute bars"
         chart.fireChartChanged()
     }
@@ -126,14 +140,22 @@ class TrendChartView : StackPane() {
 
         dateAxis.lowerMargin = 0.01
         dateAxis.upperMargin = 0.01
+        dateAxis.isTickLabelsVisible = true
+        dateAxis.isTickMarksVisible = true
+        dateAxis.isAutoTickUnitSelection = true
         dateAxis.tickLabelFont = Font("SansSerif", Font.PLAIN, 10)
         dateAxis.tickLabelPaint = Color(100, 108, 116)
         dateAxis.axisLinePaint = Color(170, 178, 186)
 
         priceAxis.autoRangeIncludesZero = false
+        priceAxis.isTickLabelsVisible = true
+        priceAxis.isTickMarksVisible = true
+        priceAxis.isAutoTickUnitSelection = true
         priceAxis.lowerMargin = 0.04
         priceAxis.upperMargin = 0.04
         volumeAxis.autoRangeIncludesZero = true
+        pricePlot.rangeAxisLocation = AxisLocation.BOTTOM_OR_RIGHT
+        volumePlot.rangeAxisLocation = AxisLocation.BOTTOM_OR_RIGHT
         listOf(priceAxis, volumeAxis).forEach { axis ->
             axis.tickLabelFont = Font("SansSerif", Font.PLAIN, 10)
             axis.tickLabelPaint = Color(100, 108, 116)
@@ -171,12 +193,8 @@ class TrendChartView : StackPane() {
             plot.rangeGridlinePaint = grid
             plot.isDomainPannable = true
             plot.isRangePannable = true
-            plot.isDomainCrosshairVisible = true
-            plot.isRangeCrosshairVisible = true
-            plot.domainCrosshairPaint = Color(242, 154, 56)
-            plot.rangeCrosshairPaint = Color(242, 154, 56)
-            plot.domainCrosshairStroke = BasicStroke(1.0f)
-            plot.rangeCrosshairStroke = BasicStroke(1.0f)
+            plot.isDomainCrosshairVisible = false
+            plot.isRangeCrosshairVisible = false
         }
         combinedPlot.gap = 4.0
         combinedPlot.orientation = PlotOrientation.VERTICAL
@@ -193,8 +211,47 @@ class TrendChartView : StackPane() {
                 val trigger: MouseEvent = event.trigger
                 log.trace(LogTag.UI, "chartMouseMoved(x={}, y={})", trigger.x, trigger.y)
                 viewer.canvas.setAnchor(Point2D.Double(trigger.x, trigger.y))
+                updateCursor(trigger.x, trigger.y)
             }
         })
+    }
+
+    private fun updateCursor(x: Double, y: Double) {
+        log.trace(LogTag.UI, "updateCursor(x={}, y={})", x, y)
+        val plotInfo = viewer.canvas.renderingInfo.plotInfo
+        if (plotInfo.subplotCount < 1) return
+        val priceArea = plotInfo.getSubplotInfo(0).dataArea
+        if (!priceArea.contains(x, y)) return
+        val timeValue = dateAxis.java2DToValue(x, priceArea, RectangleEdge.BOTTOM)
+        val priceValue = priceAxis.java2DToValue(y, priceArea, pricePlot.rangeAxisEdge)
+        if (!timeValue.isFinite() || !priceValue.isFinite()) return
+        if (!cursorMarkersInstalled) installCursorMarkers()
+        priceTimeCursor.value = timeValue
+        volumeTimeCursor.value = timeValue
+        priceCursor.value = priceValue
+        volumeTimeCursor.label = cursorDateFormat.format(Date(timeValue.toLong()))
+        priceCursor.label = cursorPriceFormat.format(priceValue)
+    }
+
+    private fun installCursorMarkers() {
+        log.debug(LogTag.UI, "installCursorMarkers()")
+        val line = Color(74, 85, 96, 185)
+        listOf(priceTimeCursor, volumeTimeCursor, priceCursor).forEach { marker ->
+            marker.paint = line
+            marker.stroke = BasicStroke(1.0f, BasicStroke.CAP_BUTT, BasicStroke.JOIN_BEVEL, 0f, floatArrayOf(3f, 3f), 0f)
+            marker.labelFont = Font("SansSerif", Font.BOLD, 10)
+            marker.labelPaint = Color.WHITE
+            marker.labelBackgroundColor = Color(51, 57, 63, 230)
+            marker.labelOffset = RectangleInsets(4.0, 6.0, 4.0, 6.0)
+        }
+        priceCursor.labelAnchor = RectangleAnchor.TOP_RIGHT
+        priceCursor.labelTextAnchor = TextAnchor.BOTTOM_RIGHT
+        volumeTimeCursor.labelAnchor = RectangleAnchor.BOTTOM
+        volumeTimeCursor.labelTextAnchor = TextAnchor.TOP_CENTER
+        pricePlot.addDomainMarker(priceTimeCursor)
+        volumePlot.addDomainMarker(volumeTimeCursor)
+        pricePlot.addRangeMarker(priceCursor)
+        cursorMarkersInstalled = true
     }
 
     private fun aggregate(bars: List<MinuteBar>): List<MinuteBar> {

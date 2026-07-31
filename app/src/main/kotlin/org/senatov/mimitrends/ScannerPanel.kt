@@ -193,6 +193,7 @@ class ScannerPanel(
                         loadProfile?.invoke(symbol)?.whenComplete(BiConsumer<CompanyProfile?, Throwable?> { profile, error ->
                             if (error == null && profile != null) Platform.runLater {
                                 if (renderedSymbol == symbol && item == symbol) {
+                                    text = profile.name
                                     graphic = logoBadge(symbol, profile.logoBytes, 22.0)
                                     tooltip = companyTooltip(symbol, profile)
                                 }
@@ -203,18 +204,19 @@ class ScannerPanel(
             }
             isResizable = true
             isReorderable = true
-            prefWidth = 125.0
-            minWidth = 75.0
+            prefWidth = 210.0
+            minWidth = 120.0
         }
     }
 
     private fun companyTooltip(symbol: String, profile: CompanyProfile?): Tooltip {
         log.debug(LogTag.UI, "companyTooltip(symbol={}, loaded={})", symbol, profile != null)
         val name = profile?.name ?: "Loading company details…"
-        val exchange = profile?.exchange ?: symbol
+        val exchange = profile?.exchange ?: "Loading exchange…"
         val details = VBox(2.0,
             Label(name).apply { styleClass += "company-tooltip-name" },
-            Label(exchange).apply { styleClass += "company-tooltip-exchange" }
+            Label("Ticker: $symbol").apply { styleClass += "company-tooltip-exchange" },
+            Label("Exchange: $exchange").apply { styleClass += "company-tooltip-exchange" }
         )
         val card = HBox(9.0, logoBadge(symbol, profile?.logoBytes, 38.0), details).apply {
             alignment = Pos.CENTER_LEFT

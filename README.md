@@ -16,6 +16,7 @@ MiMiTrends is a Kotlin/JVM + JavaFX desktop application styled after MiMiCompara
 - uses SQLite first and requests Yahoo Finance only when a market is open and local data is stale;
 - downloads five days on first use, then requests only the missing tail and upserts overlapping minutes;
 - displays candlesticks, volume, a turquoise close line, zoom/pan, tooltips, and a mouse crosshair;
+- shows cached company favicons and marketing names; ticker and exchange remain in the delayed help popup;
 - shows prices in EUR by default, with USD selectable in Settings;
 - remembers window geometry, divider position, selected instrument, columns, colors, and fonts.
 

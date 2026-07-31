@@ -71,8 +71,8 @@ class YahooFinanceClient(
         return MarketSeries(
             symbol = symbol,
             bars = bars,
-            companyName = meta.path("longName").asText().ifBlank {
-                meta.path("shortName").asText().ifBlank { symbol }
+            companyName = meta.path("shortName").asText().ifBlank {
+                meta.path("longName").asText().ifBlank { symbol }
             },
             exchange = meta.path("fullExchangeName").asText().ifBlank {
                 meta.path("exchangeName").asText().ifBlank { "Yahoo Finance" }

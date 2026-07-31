@@ -21,6 +21,7 @@ import org.senatov.mimitrends.scanner.ScannerEngine
 import org.senatov.mimitrends.scanner.ScannerSettingsService
 import org.senatov.mimitrends.ws.FinnhubProfileClient
 import org.senatov.mimitrends.marketdata.YahooFinanceClient
+import org.senatov.mimitrends.marketdata.CompanyLogoClient
 import org.slf4j.LoggerFactory
 import java.io.PrintWriter
 import java.io.StringWriter
@@ -52,7 +53,9 @@ class MainController(
     private var scannerCriteria: ScannerCriteria = scannerSettings.load()
     private val scannerEngine = ScannerEngine()
     private val yahooFinance = YahooFinanceClient()
-    private val profileService = CompanyProfileService(repository, apiKey?.let(::FinnhubProfileClient))
+    private val profileService = CompanyProfileService(
+        repository, apiKey?.let(::FinnhubProfileClient), CompanyLogoClient()
+    )
     private val scannerPanel = ScannerPanel(::openScannerSymbol, profileService::load)
     private val batchScheduler = Executors.newSingleThreadScheduledExecutor { task ->
         Thread(task, "mimitrends-scanner-rotation").apply { isDaemon = true }
