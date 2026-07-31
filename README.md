@@ -20,6 +20,9 @@ The demo includes:
 - ticker input and 1/3/6/12-month ranges;
 - current price, daily change, open, high, low, and previous close;
 - a responsive JavaFX line chart;
+- a WebSocket momentum scanner with configurable 1/5-minute, price, volume, and relative-volume filters;
+- locally aggregated one-minute OHLCV bars and a volume chart for confirming price moves;
+- EUR price display by default, switchable to USD in scanner Settings, using the cached daily ECB reference rate;
 - asynchronous network requests, loading state, and readable API errors;
 - SQLite-backed accumulation of real quote and candle history;
 - a generated MiMiTrends application icon and a macOS `jpackage` task.
@@ -102,6 +105,7 @@ core/           Domain models, realtime trade model, and shared log markers
 database/       SQLite connection policy, schema migration, quote/history repository
 finnhub-rest/    REST search, quote/candles, parsing, timeout, retry, and host failover
 finnhub-ws/      WebSocket lifecycle, subscriptions, and realtime trade decoding
+scanner/         Minute-bar aggregation, configurable momentum rules, and RVOL calculation
 charts/          Reusable JavaFX TrendChartView and market-series rendering
 app/             JavaFX lifecycle, credentials, dialogs, UI orchestration, and resources
 ```
@@ -129,6 +133,35 @@ The application calls:
 
 - `GET /api/v1/quote`
 - `GET /api/v1/stock/candle`
+- `wss://ws.finnhub.io` for realtime trades in the scanner watchlist
+
+### Momentum scanner
+
+The upper table contains only symbols that currently pass every rule configured under **Settings**. The default rules are RVOL > 3,
+1-minute change > 1%, 5-minute change > 1.2%, price > $8, and accumulated session volume > 500,000 shares. Double-click a matching
+row to open its chart. A watchlist may contain more than 50 symbols: it is divided into configurable batches of at most 50 active
+WebSocket subscriptions. After the configured interval the scanner unsubscribes the current batch and activates the next one.
+
+Minute scanning is possible without the Premium candle endpoint: MiMiTrends receives individual Finnhub WebSocket trades, aggregates
+them into real one-minute OHLCV bars, and stores those bars in SQLite. Changes are calculated from the minute closes actually observed
+while a symbol's batch was active. Consequently a multi-batch scan is best-effort rather than a guaranteed once-per-minute full-market
+scan. RVOL compares the
+current cumulative session volume with the average cumulative volume of prior sessions at the same time of day. It is shown as
+`N/A` until at least three prior local sessions exist, so a new installation cannot immediately satisfy the RVOL rule. Scanner settings
+are kept in `~/.mimi/trends/scanner.properties`; market bars remain in `~/.mimi/trends/mimitrends.db`.
+
+Price presentation defaults to EUR and can be changed to USD under **Settings**. US-market prices are converted using the official
+daily ECB EUR/USD reference rate. The rate is fetched asynchronously and cached in `~/.mimi/trends/exchange-rate.properties`; if the
+ECB is temporarily unavailable, the latest cached value remains in use. Instruments with common euro-exchange suffixes such as `.DE`,
+`.F`, `.PA`, and `.AS` are treated as EUR-native and are not converted when EUR display is selected. SQLite always retains the raw
+Finnhub values.
+
+## Restored session
+
+On a normal application close, MiMiTrends remembers the window's size, position, maximized state, selected instrument, and chart range.
+It restores them on the next launch. If a remembered position belonged to a monitor that is no longer connected, the window is moved
+back to the primary display instead of opening off-screen. UI state is stored in `~/.mimi/trends/ui-state.properties`; scanner settings,
+exchange-rate cache, and accumulated SQLite market history remain in their respective files in the same directory.
 
 Availability and history depth can depend on the Finnhub subscription. MiMiTrends never fabricates interpolated chart points. Real
 candles and live quotes are accumulated in `~/.mimi/trends/mimitrends.db`; if Finnhub is temporarily unavailable, the most recent

@@ -8,19 +8,59 @@
     -fx-background-color: #fbfbfc;
 }
 
-.main-toolbar {
+.title-toolbar {
     -fx-background-color: #f4f4f5;
     -fx-border-color: #cdced1;
     -fx-border-width: 0 0 1 0;
-    -fx-padding: 7 12;
+    -fx-padding: 6 10 6 14;
 }
 
-.main-toolbar .label {
+.app-title {
+    -fx-font-size: 16px;
+    -fx-font-weight: 500;
+    -fx-text-fill: #273f63;
+}
+
+.search-toolbar {
+    -fx-background-color: #f4f4f5;
+    -fx-border-color: #cdced1;
+    -fx-border-width: 0 0 1 0;
+    -fx-padding: 6 14;
+}
+
+.search-toolbar .label {
     -fx-text-fill: #5e6268;
 }
 
-.main-toolbar .separator {
+.search-toolbar .separator {
     -fx-padding: 0 4;
+}
+
+.toolbar-icon-button {
+    -fx-min-width: 30px; -fx-pref-width: 30px; -fx-max-width: 30px;
+    -fx-min-height: 30px; -fx-pref-height: 30px; -fx-max-height: 30px;
+    -fx-padding: 0;
+    -fx-background-radius: 15px;
+    -fx-border-radius: 15px;
+    -fx-background-color: #e6e9ee;
+    -fx-border-color: #c6ccd5;
+    -fx-text-fill: #183b69;
+    -fx-font-size: 16px;
+    -fx-font-weight: 600;
+    -fx-effect: dropshadow(gaussian, rgba(30, 48, 72, 0.16), 3, 0.12, 0, 1);
+}
+.toolbar-icon-button:hover { -fx-background-color: #dce5f0; -fx-border-color: #9eafc3; }
+.toolbar-icon-button:pressed { -fx-background-color: #cfdbea; -fx-effect: innershadow(gaussian, rgba(26, 48, 76, 0.22), 3, 0.15, 0, 1); }
+.mimi-tooltip {
+    -fx-background-color: #fff6c9;
+    -fx-background-radius: 7px;
+    -fx-border-color: #e4d99e;
+    -fx-border-radius: 7px;
+    -fx-padding: 5 8;
+    -fx-text-fill: #17365f;
+    -fx-font-size: 11px;
+    -fx-font-weight: 500;
+    -fx-effect: dropshadow(gaussian, rgba(30, 45, 65, 0.20), 5, 0.12, 0, 2);
 }
 
 .text-field, .combo-box {
@@ -91,6 +131,8 @@
     -fx-background-radius: 8px;
     -fx-padding: 8px;
 }
+.volume-chart { -fx-background-color: white; -fx-border-color: #d7d8da; -fx-border-radius: 8px; -fx-background-radius: 8px; -fx-padding: 3px; }
+.volume-chart .chart-bar { -fx-bar-fill: #7ba9d8; }
 
 .chart-title {
     -fx-font-size: 14px;
@@ -165,3 +207,9 @@
     -fx-font-size: 12px;
     -fx-text-fill: #74787e;
 }
+
+.scanner-title { -fx-font-size: 17px; -fx-font-weight: 500; -fx-text-fill: #42464c; }
+.scanner-cycle { -fx-text-fill: #777b81; -fx-font-size: 12px; }
+.scanner-table { -fx-background-color: white; -fx-border-color: #d7d8da; -fx-border-radius: 8px; -fx-background-radius: 8px; }
+.scanner-table .column-header-background { -fx-background-color: #f1f2f3; }
+.scanner-table .table-row-cell:hover { -fx-background-color: #eaf3fc; }

@@ -5,6 +5,7 @@ package org.senatov.mimitrends.db
 import org.senatov.mimitrends.log.LogTag
 import org.senatov.mimitrends.model.Candle
 import org.senatov.mimitrends.model.MarketSnapshot
+import org.senatov.mimitrends.model.MinuteBar
 import org.senatov.mimitrends.model.Quote
 import org.slf4j.LoggerFactory
 import java.nio.file.Files
@@ -66,6 +67,46 @@ class MarketRepository(
         }
     }
 
+    fun upsertMinuteBar(bar: MinuteBar) {
+        log.debug(LogTag.DB, "upsertMinuteBar(symbol={}, minute={})", bar.symbol, bar.minuteEpochSeconds)
+        connection().use { connection ->
+            connection.prepareStatement(
+                """INSERT INTO minute_bars(symbol, minute_epoch, open, high, low, close, volume)
+                   VALUES (?, ?, ?, ?, ?, ?, ?)
+                   ON CONFLICT(symbol, minute_epoch) DO UPDATE SET open=excluded.open,
+                   high=excluded.high, low=excluded.low, close=excluded.close, volume=excluded.volume"""
+            ).use { statement ->
+                statement.setString(1, bar.symbol)
+                statement.setLong(2, bar.minuteEpochSeconds)
+                statement.setDouble(3, bar.open)
+                statement.setDouble(4, bar.high)
+                statement.setDouble(5, bar.low)
+                statement.setDouble(6, bar.close)
+                statement.setDouble(7, bar.volume)
+                statement.executeUpdate()
+            }
+        }
+    }
+
+    fun loadMinuteBars(symbol: String, fromEpochSeconds: Long): List<MinuteBar> {
+        log.debug(LogTag.DB, "loadMinuteBars(symbol={}, from={})", symbol, fromEpochSeconds)
+        connection().use { connection ->
+            return connection.prepareStatement(
+                """SELECT minute_epoch, open, high, low, close, volume FROM minute_bars
+                   WHERE symbol = ? AND minute_epoch >= ? ORDER BY minute_epoch"""
+            ).use { statement ->
+                statement.setString(1, symbol.uppercase())
+                statement.setLong(2, fromEpochSeconds)
+                statement.executeQuery().use { result ->
+                    buildList {
+                        while (result.next()) add(MinuteBar(symbol.uppercase(), result.getLong(1), result.getDouble(2),
+                            result.getDouble(3), result.getDouble(4), result.getDouble(5), result.getDouble(6)))
+                    }
+                }
+            }
+        }
+    }
+
     private fun connection(): Connection {
         log.debug(LogTag.DB, "connection()")
         return DriverManager.getConnection("jdbc:sqlite:$databasePath").also { connection ->
@@ -93,6 +134,16 @@ class MarketRepository(
             )
             statement.executeUpdate(
                 "CREATE INDEX IF NOT EXISTS idx_price_symbol_time ON price_points(symbol, timestamp)"
+            )
+            statement.executeUpdate(
+                """CREATE TABLE IF NOT EXISTS minute_bars (
+                    symbol TEXT NOT NULL, minute_epoch INTEGER NOT NULL, open REAL NOT NULL,
+                    high REAL NOT NULL, low REAL NOT NULL, close REAL NOT NULL, volume REAL NOT NULL,
+                    PRIMARY KEY(symbol, minute_epoch)
+                )"""
+            )
+            statement.executeUpdate(
+                "CREATE INDEX IF NOT EXISTS idx_minute_symbol_time ON minute_bars(symbol, minute_epoch)"
             )
         }
     }

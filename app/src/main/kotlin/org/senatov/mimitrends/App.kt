@@ -28,7 +28,9 @@ class App : Application() {
 
         val apiKey = ApiKeyResolver.resolve()
             ?: FinnhubSetupDialog(stage, hostServices).showAndSave()
-        val controller = MainController(apiKey)
+        val uiStateService = UiStateService()
+        val uiState = uiStateService.load()
+        val controller = MainController(apiKey, uiState.symbol, uiState.range)
         val scene = Scene(controller.createView(), 1120.0, 720.0)
         scene.stylesheets += requireNotNull(javaClass.getResource("/org/senatov/mimitrends/MiMiTrends.css")).toExternalForm()
 
@@ -39,6 +41,11 @@ class App : Application() {
         stage.minWidth = 860.0
         stage.minHeight = 560.0
         stage.scene = scene
+        uiStateService.restore(stage, uiState)
+        stage.setOnCloseRequest {
+            uiStateService.save(stage, controller.selectedSymbol(), controller.selectedRange())
+            controller.close()
+        }
         stage.show()
         log.info(LogTag.APP, "stage shown width={} height={}", stage.width, stage.height)
     }

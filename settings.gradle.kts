@@ -3,4 +3,4 @@ plugins {
 }
 
 rootProject.name = "MiMiTrends"
-include("app", "core", "database", "finnhub-rest", "finnhub-ws", "charts")
+include("app", "core", "database", "finnhub-rest", "finnhub-ws", "scanner", "charts")
