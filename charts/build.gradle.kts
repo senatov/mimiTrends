@@ -20,4 +20,5 @@ dependencies {
     implementation("org.openjfx:javafx-base:$javafxVersion:$javafxPlatform")
     implementation("org.openjfx:javafx-graphics:$javafxVersion:$javafxPlatform")
     implementation("org.openjfx:javafx-controls:$javafxVersion:$javafxPlatform")
+    implementation("org.jfree:org.jfree.chart.fx:2.0.2")
 }

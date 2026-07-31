@@ -173,26 +173,46 @@ class MainController(
             val batches = scannerCriteria.symbols.chunked(scannerCriteria.batchSize.coerceIn(1, 50))
             var batchIndex = 0
             var active = emptyList<String>()
-            fun activateNextBatch() {
-                log.debug(LogTag.API, "activateNextBatch(index={}, total={})", batchIndex, batches.size)
+            val scanSeconds = (scannerCriteria.rotationSeconds / 3).coerceIn(5, 15)
+                .coerceAtMost(scannerCriteria.rotationSeconds)
+            val waitSeconds = (scannerCriteria.rotationSeconds - scanSeconds).coerceAtLeast(0)
+            lateinit var activateNextBatch: () -> Unit
+            fun finishBatch() {
+                log.debug(LogTag.API, "finishBatch(symbols={})", active.size)
                 active.forEach(client::unsubscribe)
+                Platform.runLater {
+                    scannerPanel.completeScan()
+                    scannerPanel.showCountdown(waitSeconds)
+                    setStatus("Finnhub batch complete · table refreshed · next scan in ${waitSeconds}s", false)
+                }
+                rotationTask = batchScheduler.schedule(
+                    { runCatching(activateNextBatch).onFailure { log.error(LogTag.API, "scanner batch activation failed", it) } },
+                    waitSeconds, TimeUnit.SECONDS
+                )
+            }
+            activateNextBatch = {
+                log.debug(LogTag.API, "activateNextBatch(index={}, total={})", batchIndex, batches.size)
                 active = batches[batchIndex]
                 active.forEach(client::subscribe)
                 val shownIndex = batchIndex + 1
                 val shownSymbols = active.toList()
                 Platform.runLater {
-                    scannerPanel.showBatch(shownIndex, batches.size, shownSymbols, scannerCriteria.rotationSeconds)
-                    setStatus("Requesting Finnhub batch $shownIndex/${batches.size}: ${shownSymbols.joinToString(", ")}", false)
+                    scannerPanel.beginScan(shownIndex, batches.size, shownSymbols)
+                    setStatus("Scanning Finnhub batch $shownIndex/${batches.size} for ${scanSeconds}s: ${shownSymbols.joinToString(", ")}", false)
                 }
                 batchIndex = (batchIndex + 1) % batches.size
+                rotationTask = batchScheduler.schedule(
+                    { runCatching(::finishBatch).onFailure { log.error(LogTag.API, "scanner batch completion failed", it) } },
+                    scanSeconds, TimeUnit.SECONDS
+                )
             }
-            activateNextBatch()
-            client.connect().thenRun { Platform.runLater { setStatus("Finnhub WebSocket connected · reading realtime trades", false) } }
+            client.connect().thenRun {
+                Platform.runLater { setStatus("Finnhub WebSocket connected · starting scan", false) }
+                batchScheduler.execute {
+                    runCatching(activateNextBatch).onFailure { log.error(LogTag.API, "initial scanner batch failed", it) }
+                }
+            }
                 .exceptionally { error -> log.error(LogTag.API, "scanner connection failed", error); null }
-            if (batches.size > 1) rotationTask = batchScheduler.scheduleAtFixedRate(
-                { runCatching(::activateNextBatch).onFailure { log.error(LogTag.API, "scanner batch rotation failed", it) } },
-                scannerCriteria.rotationSeconds, scannerCriteria.rotationSeconds, TimeUnit.SECONDS
-            )
         }
     }
 

@@ -198,6 +198,13 @@
 
 .scanner-title { -fx-font-size: 17px; -fx-font-weight: 500; -fx-text-fill: #42464c; }
 .scanner-cycle { -fx-text-fill: #777b81; -fx-font-size: 12px; }
+.scanner-timer {
+    -fx-text-fill: #17365f;
+    -fx-font-family: "Menlo", "Monospaced";
+    -fx-font-size: 12px;
+    -fx-font-weight: 500;
+    -fx-min-width: 128px;
+}
 .scanner-table {
     -mimi-table-text: #263238;
     -mimi-row-even: #fafafa;

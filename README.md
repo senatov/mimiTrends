@@ -19,7 +19,7 @@ The demo includes:
 
 - locally retained chart-range state;
 - a focused price chart without a redundant quote-characteristics panel;
-- a responsive JavaFX price chart paired with locally collected trading volume;
+- an interactive JFreeChart candlestick view paired with locally collected trading volume;
 - a WebSocket momentum scanner with configurable 1/5-minute, price, volume, and relative-volume filters;
 - locally aggregated one-minute OHLCV bars and a volume chart for confirming price moves;
 - EUR price display by default, switchable to USD in scanner Settings, using the cached daily ECB reference rate;
@@ -105,7 +105,7 @@ core/           Domain models, realtime trade model, and shared log markers
 database/       SQLite connection policy, minute-bar schema and repository
 finnhub-ws/      WebSocket lifecycle, subscriptions, and realtime trade decoding
 scanner/         Minute-bar aggregation, configurable momentum rules, and RVOL calculation
-charts/          Reusable JavaFX TrendChartView and market-series rendering
+charts/          Reusable JFreeChart-FX OHLC/volume view and market-series rendering
 app/             JavaFX lifecycle, credentials, dialogs, UI orchestration, and resources
 ```
 
@@ -131,7 +131,16 @@ Run only a module test suite:
 
 ## Finnhub usage
 
-The application uses `wss://ws.finnhub.io` for realtime trades in the scanner watchlist. It does not request REST quotes or Premium candles.
+The application uses `wss://ws.finnhub.io` for realtime trades in the scanner watchlist. It does not request REST quotes or Premium
+candles; the free `stock/profile2` endpoint is used only for company names, exchanges, and logos, which are cached in SQLite.
+
+### Financial charts
+
+The lower pane uses JFreeChart 1.5.6 through JFreeChart-FX 2.0.2. It renders locally collected OHLC bars as green/red candlesticks and
+volume as a synchronized subplot with a shared time axis, crosshairs, tooltips, zoom, and panning. Both libraries are distributed under
+the GNU Lesser General Public License (LGPL); their source and license information are available from the
+[JFreeChart project](https://github.com/jfree/jfreechart) and
+[JFreeChart-FX project](https://github.com/jfree/jfreechart-fx).
 
 ### Momentum scanner
 
