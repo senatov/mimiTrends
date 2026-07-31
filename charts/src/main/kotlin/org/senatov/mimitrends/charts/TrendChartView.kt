@@ -1,6 +1,7 @@
 package org.senatov.mimitrends.charts
 
 import javafx.scene.chart.BarChart
+import javafx.scene.chart.CategoryAxis
 import javafx.scene.chart.LineChart
 import javafx.scene.chart.NumberAxis
 import javafx.scene.chart.XYChart
@@ -22,10 +23,10 @@ class TrendChartView : StackPane() {
     private val log = LoggerFactory.getLogger(TrendChartView::class.java)
     private val priceTimeAxis = NumberAxis()
     private val priceAxis = NumberAxis()
-    private val volumeTimeAxis = NumberAxis()
+    private val volumeTimeAxis = CategoryAxis()
     private val volumeAxis = NumberAxis()
     private val chart = LineChart<Number, Number>(priceTimeAxis, priceAxis)
-    private val volumeChart = BarChart<Number, Number>(volumeTimeAxis, volumeAxis)
+    private val volumeChart = BarChart<String, Number>(volumeTimeAxis, volumeAxis)
     private val progress = ProgressIndicator()
 
     init {
@@ -64,14 +65,18 @@ class TrendChartView : StackPane() {
             MinuteBar(first.symbol, last.minuteEpochSeconds, first.open, chunk.maxOf { it.high }, chunk.minOf { it.low }, last.close, chunk.sumOf { it.volume })
         }
         val priceSeries = XYChart.Series<Number, Number>()
-        val volumeSeries = XYChart.Series<Number, Number>()
+        val volumeSeries = XYChart.Series<String, Number>()
+        val volumeTimeFormatter = DateTimeFormatter.ofPattern("dd MMM HH:mm")
+            .withZone(ZoneId.systemDefault())
         visible.forEach { bar ->
             val timestamp = bar.minuteEpochSeconds.toDouble()
             priceSeries.data += XYChart.Data(timestamp, bar.close * priceMultiplier)
-            volumeSeries.data += XYChart.Data(timestamp, bar.volume)
+            volumeSeries.data += XYChart.Data(
+                volumeTimeFormatter.format(Instant.ofEpochSecond(bar.minuteEpochSeconds)),
+                bar.volume
+            )
         }
         configureTimeAxis(priceTimeAxis, visible)
-        configureTimeAxis(volumeTimeAxis, visible)
         chart.data.setAll(priceSeries); chart.createSymbols = visible.size < 2; chart.title = "$symbol · local minute prices · $currencySymbol"
         volumeChart.data.setAll(volumeSeries); volumeChart.title = "Trading volume · ${bars.size} collected minute bars"
         volumeChart.isVisible = true; volumeChart.isManaged = true
