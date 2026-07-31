@@ -219,11 +219,33 @@ class MainController(
         val generation = scanGeneration.incrementAndGet()
         val criteria = scannerCriteria
         rotationTask?.cancel(false)
-        scannerPanel.clear()
         val symbols = selectedMarketSymbols().filter(::isMarketOpen)
         lateinit var scan: () -> Unit
         scan = scan@ {
             log.info(LogTag.API, "scan started symbols={} recentWindow={}m", symbols.size, criteria.maxSignalAgeMinutes)
+            if (symbols.isEmpty()) {
+                val persisted = analytics.loadLatestPublishedResults(criteria.resultLimit)
+                val saved = if (persisted.isNotEmpty()) persisted else closedMarketSnapshot(criteria)
+                log.info(LogTag.DB, "closed-market snapshot source={} results={}",
+                    if (persisted.isNotEmpty()) "PERSISTED" else "CLOSED_CACHE", saved.size)
+                Platform.runLater {
+                    scannerPanel.beginScan(1, 1, emptyList())
+                    saved.forEach(scannerPanel::update)
+                    scannerPanel.completeScan(criteria.resultLimit)
+                    scannerPanel.showCountdown(criteria.scanIntervalSeconds)
+                    scannerPanel.showMarketClosed(saved.size, persisted.isNotEmpty())
+                    setStatus(if (saved.isEmpty())
+                        "All selected markets are closed · no saved open-market scan yet"
+                    else if (persisted.isNotEmpty())
+                        "All selected markets are closed · showing ${saved.size} saved results"
+                    else "All selected markets are closed · showing ${saved.size} cached close results · not live")
+                }
+                rotationTask = batchScheduler.schedule(
+                    { runCatching(scan).onFailure { log.error(LogTag.API, "scheduled closed-market refresh failed", it) } },
+                    criteria.scanIntervalSeconds, TimeUnit.SECONDS
+                )
+                return@scan
+            }
             val runId = analytics.beginScan(criteria.marketRegion.name, symbols.size, criteria.scanIntervalSeconds)
             Platform.runLater {
                 scannerPanel.beginScan(1, 1, symbols)
@@ -303,6 +325,21 @@ class MainController(
             }.onFailure { error -> log.warn(LogTag.DB, "analytics backfill failed symbol={}", symbol, error) }
         }
         log.info(LogTag.DB, "analytics backfill completed symbols={}", symbols.size)
+    }
+
+    private fun closedMarketSnapshot(criteria: ScannerCriteria): List<ScanResult> {
+        val now = java.time.Instant.now().epochSecond
+        return selectedMarketSymbols().mapNotNull { symbol ->
+            runCatching {
+                val bars = repository.loadMinuteBars(symbol, now - 30 * 86_400L)
+                val result = scannerEngine.evaluate(symbol, bars, criteria)
+                    ?: scannerEngine.evaluateFallback(symbol, bars, criteria)
+                    ?: return@runCatching null
+                val wallClockAge = ((now - result.updatedAtMillis / 1_000L) / 60L).toInt().coerceAtLeast(1)
+                result.copy(signalAgeMinutes = wallClockAge, dataStatus = "CLOSED CACHE",
+                    signalWindowLabel = "${result.signalWindowLabel} saved")
+            }.getOrNull()
+        }.sortedByDescending(ScanResult::anomalyScore).take(criteria.resultLimit)
     }
 
     private fun ensureCachedInstrumentMetadata() {

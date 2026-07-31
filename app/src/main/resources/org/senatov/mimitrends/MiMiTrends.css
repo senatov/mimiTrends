@@ -232,6 +232,31 @@
 
 .scanner-title { -fx-font-size: 17px; -fx-font-weight: 500; -fx-text-fill: #42464c; }
 .scanner-cycle { -fx-text-fill: #777b81; -fx-font-size: 12px; }
+.scanner-cycle.market-closed {
+    -fx-text-fill: #a36a00;
+    -fx-font-size: 11px;
+    -fx-font-weight: 600;
+}
+.market-closed-overlay {
+    -fx-padding: 18 34 20 34;
+    -fx-background-color: linear-gradient(to bottom right, rgba(250,252,255,0.88), rgba(225,232,240,0.82));
+    -fx-background-radius: 24px;
+    -fx-border-color: rgba(120,139,160,0.36);
+    -fx-border-radius: 24px;
+    -fx-effect: dropshadow(gaussian, rgba(35,48,65,0.22), 18, 0.15, 0, 6);
+}
+.market-closed-dog { -fx-opacity: 0.92; }
+.market-closed-title {
+    -fx-font-size: 27px;
+    -fx-font-weight: 700;
+    -fx-text-fill: #34465a;
+    -fx-effect: dropshadow(gaussian, rgba(255,255,255,0.92), 1, 0.20, 0, -1);
+}
+.market-closed-subtitle {
+    -fx-font-size: 13px;
+    -fx-font-weight: 400;
+    -fx-text-fill: #7b5b22;
+}
 .scanner-timer {
     -fx-text-fill: #17365f;
     -fx-font-family: "Menlo", "Monospaced";

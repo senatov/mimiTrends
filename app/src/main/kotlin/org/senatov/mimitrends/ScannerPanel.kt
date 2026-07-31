@@ -45,6 +45,23 @@ class ScannerPanel(
     private val rows = FXCollections.observableArrayList<ScanResult>()
     private val sortedRows = SortedList(rows)
     private val table = TableView(sortedRows)
+    private val tableContainer = StackPane()
+    private val closedMarketOverlay = VBox(
+        12.0,
+        ImageView(Image(requireNotNull(javaClass.getResourceAsStream("/images/sleeping-dog-market-closed.png")))).apply {
+            fitWidth = 180.0; fitHeight = 180.0; isPreserveRatio = true
+            styleClass += "market-closed-dog"
+        },
+        Label("ALL SELECTED MARKETS ARE CLOSED").apply { styleClass += "market-closed-title" },
+        Label("Saved closing snapshot · not live").apply { styleClass += "market-closed-subtitle" }
+    ).apply {
+        alignment = Pos.CENTER
+        maxWidth = 680.0
+        isMouseTransparent = true
+        isVisible = false
+        isManaged = false
+        styleClass += "market-closed-overlay"
+    }
     private val empty = Label("Waiting for the first local/Yahoo scan…")
     private val cycleStatus = Label()
     private val scanIndicator = Label()
@@ -103,8 +120,10 @@ class ScannerPanel(
         table.minHeight = 0.0
         table.maxHeight = Double.MAX_VALUE
         table.styleClass += "scanner-table"
-        children += listOf(header, table)
-        VBox.setVgrow(table, Priority.ALWAYS)
+        tableContainer.children.setAll(table, closedMarketOverlay)
+        StackPane.setAlignment(closedMarketOverlay, Pos.CENTER)
+        children += listOf(header, tableContainer)
+        VBox.setVgrow(tableContainer, Priority.ALWAYS)
         minHeight = 0.0
         maxHeight = Double.MAX_VALUE
     }
@@ -118,11 +137,14 @@ class ScannerPanel(
         log.debug(LogTag.UI, "clear()")
         rows.clear(); stagedRows.clear(); scanning = false
         countdown?.stop(); hourglass?.stop(); scanIndicator.text = ""
+        closedMarketOverlay.isVisible = false; closedMarketOverlay.isManaged = false
     }
 
     fun beginScan(number: Int, total: Int, symbols: List<String>) {
         log.debug(LogTag.UI, "beginScan(number={}, total={}, symbols={})", number, total, symbols.size)
         countdown?.stop(); stagedRows.clear(); scanning = true
+        closedMarketOverlay.isVisible = false; closedMarketOverlay.isManaged = false
+        cycleStatus.styleClass.remove("market-closed")
         cycleStatus.text = "Batch $number/$total · ${symbols.size} symbols"
         cycleStatus.tooltip = Tooltip(symbols.joinToString(", "))
         scanIndicator.text = "⏳ Scanning…"
@@ -160,6 +182,19 @@ class ScannerPanel(
                 cycleCount = 2; isAutoReverse = true; play()
             }
         })).apply { cycleCount = seconds.coerceAtMost(Int.MAX_VALUE.toLong()).toInt(); play() }
+    }
+
+    fun showMarketClosed(snapshotSize: Int, persisted: Boolean) {
+        cycleStatus.styleClass.remove("market-closed")
+        cycleStatus.styleClass += "market-closed"
+        cycleStatus.text = "ALL SELECTED MARKETS ARE CLOSED · " + when {
+            snapshotSize == 0 -> "no saved results"
+            persisted -> "$snapshotSize saved results · NOT LIVE"
+            else -> "$snapshotSize cached close results · NOT LIVE"
+        }
+        cycleStatus.tooltip = Tooltip("The scanner is not presenting cached closing bars as current market signals.")
+        closedMarketOverlay.isVisible = true
+        closedMarketOverlay.isManaged = true
     }
 
     fun setCurrency(value: DisplayCurrency, converter: (String, Double) -> Double) {

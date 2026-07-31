@@ -35,6 +35,17 @@ foreign keys, and independent tests.
 5. Later bars backfill `signal_outcomes` at 5, 10 and 30 minutes. These records are the basis for
    empirical threshold tuning and future precision/continuation reports.
 
+When every selected market is closed, the scanner does not clear the table or reinterpret old closing
+bars as fresh signals. It restores the most recent published snapshot from `scan_candidates`; rows are
+marked `SAVED SNAPSHOT`, their age is calculated from wall-clock time, and the status bar states that the
+markets are closed.
+On the first upgraded launch, when no published snapshot exists yet, MiMiTrends may build the table once
+from the last locally cached close. This fallback performs no provider request and is explicitly labelled
+`CLOSED CACHE` / `not live`; wall-clock age prevents cached closing bars from appearing current.
+The table also displays a mouse-transparent closed-market overlay with the bundled sleeping-dog
+illustration, a large closed-market heading, and a `not live` subtitle. It disappears as soon as a real
+open-market scan begins.
+
 ## Retention and performance
 
 - raw minute bars: 90 days;

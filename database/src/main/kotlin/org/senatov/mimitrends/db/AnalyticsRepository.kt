@@ -162,6 +162,32 @@ class AnalyticsRepository(
         }
     }
 
+    fun loadLatestPublishedResults(limit: Int): List<ScanResult> = locked {
+        connection.prepareStatement("""SELECT symbol, price, score, jump_z, range_z, volume_z, rvol,
+            change_10m, turnover, signal, evaluated_at
+            FROM scan_candidates
+            WHERE run_id=(SELECT MAX(run_id) FROM scan_candidates WHERE published=1) AND published=1
+            ORDER BY score DESC LIMIT ?""").use { s ->
+            s.setInt(1, limit.coerceAtLeast(1))
+            s.executeQuery().use { result -> buildList {
+                fun nullableMetric(index: Int): Double = result.getDouble(index).let { if (result.wasNull()) Double.NaN else it }
+                while (result.next()) {
+                    val evaluatedAt = result.getLong(11)
+                    add(ScanResult(
+                        symbol = result.getString(1), price = result.getDouble(2), anomalyScore = result.getDouble(3),
+                        priceAnomaly = nullableMetric(4), rangeAnomaly = nullableMetric(5), volumeAnomaly = nullableMetric(6),
+                        relativeVolume = nullableMetric(7), candleBodyRatio = Double.NaN,
+                        windowChangePercent = result.getDouble(8), windowVolume = 0.0, sessionVolume = 0.0,
+                        sessionTurnover = result.getDouble(9),
+                        signalAgeMinutes = ((Instant.now().epochSecond - evaluatedAt) / 60L).toInt().coerceAtLeast(1),
+                        signalSource = result.getString(10), updatedAtMillis = evaluatedAt * 1_000,
+                        dataStatus = "SAVED SNAPSHOT", signalWindowLabel = "10m saved"
+                    ))
+                }
+            } }
+        }
+    }
+
     fun applyRetention(nowEpoch: Long = Instant.now().epochSecond) = locked {
         connection.prepareStatement("DELETE FROM minute_bars WHERE minute_epoch < ?").use { it.setLong(1, nowEpoch - RAW_RETENTION_DAYS * 86_400L); it.executeUpdate() }
         connection.prepareStatement("DELETE FROM aggregate_bars WHERE bucket_epoch < ?").use { it.setLong(1, nowEpoch - AGGREGATE_RETENTION_DAYS * 86_400L); it.executeUpdate() }
