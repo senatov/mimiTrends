@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import org.senatov.mimitrends.log.LogTag
 import org.senatov.mimitrends.model.MarketSeries
 import org.senatov.mimitrends.model.MinuteBar
+import org.senatov.mimitrends.model.MarketEvent
 import org.slf4j.LoggerFactory
 import java.net.URI
 import java.net.URLEncoder
@@ -69,6 +70,18 @@ class YahooFinanceClient(
             }
         }
         check(bars.isNotEmpty()) { "Yahoo Finance returned empty OHLCV data for $symbol" }
+        val events = buildList {
+            result.path("events").path("splits").properties().forEach { (_, event) ->
+                val numerator = event.path("numerator").asDouble(Double.NaN)
+                val denominator = event.path("denominator").asDouble(Double.NaN)
+                val ratio = if (numerator.isFinite() && denominator.isFinite() && denominator != 0.0) numerator / denominator else null
+                add(MarketEvent("SPLIT", event.path("date").asLong(), ratio = ratio))
+            }
+            result.path("events").path("dividends").properties().forEach { (_, event) ->
+                add(MarketEvent("DIVIDEND", event.path("date").asLong(), amount = event.path("amount").asDouble(),
+                    currency = meta.path("currency").asText().ifBlank { null }))
+            }
+        }
         return MarketSeries(
             symbol = symbol,
             bars = bars,
@@ -78,7 +91,8 @@ class YahooFinanceClient(
             exchange = meta.path("fullExchangeName").asText().ifBlank {
                 meta.path("exchangeName").asText().ifBlank { "Yahoo Finance" }
             },
-            currency = meta.path("currency").asText()
+            currency = meta.path("currency").asText(),
+            events = events
         )
     }
 

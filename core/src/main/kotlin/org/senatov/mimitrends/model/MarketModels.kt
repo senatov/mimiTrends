@@ -22,7 +22,16 @@ data class MarketSeries(
     val bars: List<MinuteBar>,
     val companyName: String,
     val exchange: String,
-    val currency: String
+    val currency: String,
+    val events: List<MarketEvent> = emptyList()
+)
+
+data class MarketEvent(
+    val type: String,
+    val epochSeconds: Long,
+    val ratio: Double? = null,
+    val amount: Double? = null,
+    val currency: String? = null
 )
 
 enum class DisplayCurrency(val symbol: String) { EUR("€"), USD("$") }

@@ -77,6 +77,17 @@ class MarketRepository(
         }
     }
 
+    fun listSymbols(): List<String> {
+        flushPending()
+        return lock.withLock {
+            connection.createStatement().use { statement ->
+                statement.executeQuery("SELECT DISTINCT symbol FROM minute_bars ORDER BY symbol").use { result ->
+                    buildList { while (result.next()) add(result.getString(1)) }
+                }
+            }
+        }
+    }
+
     fun loadCompanyProfile(symbol: String): CompanyProfile? {
         log.debug(LogTag.DB, "loadCompanyProfile(symbol={})", symbol)
         return lock.withLock {
@@ -168,6 +179,8 @@ class MarketRepository(
             statement.execute("PRAGMA synchronous = NORMAL")
             statement.execute("PRAGMA busy_timeout = 5000")
             statement.execute("PRAGMA temp_store = MEMORY")
+            statement.execute("PRAGMA cache_size = -20000")
+            statement.execute("PRAGMA mmap_size = 268435456")
             statement.execute("PRAGMA foreign_keys = ON")
         }
     }

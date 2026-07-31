@@ -14,6 +14,7 @@ class MarketRepositoryTest {
         repository.upsertMinuteBar(MinuteBar("SAP.DE", 60, 100.0, 103.0, 99.0, 102.0, 750.0))
         val bars = repository.loadMinuteBars("SAP.DE", 0)
         assertEquals(1, bars.size); assertEquals(102.0, bars.single().close); assertEquals(750.0, bars.single().volume)
+        assertEquals(listOf("SAP.DE"), repository.listSymbols())
         repository.close()
     }
 

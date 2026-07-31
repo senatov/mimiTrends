@@ -69,7 +69,7 @@ To create a macOS bundle with a JDK containing `jpackage`:
 
 ```text
 core/         Domain models and shared log markers
-database/     SQLite WAL connection, schema, profiles, and minute-bar repository
+database/     SQLite WAL cache plus versioned analytical repository and migrations
 market-data/  Yahoo Finance HTTP client and response mapping
 scanner/      Configurable anomaly scoring and settings persistence
 charts/       Reusable JFreeChart-FX candlestick/volume component
@@ -78,6 +78,11 @@ app/          JavaFX lifecycle, dialogs, state, and orchestration
 ```
 
 The UI composes these modules; database, provider, scanner, and chart code do not depend on JavaFX application classes.
+
+The database module separates the operational minute cache from the analytical repository. It stores
+instrument/exchange metadata, corporate actions, observed sessions, ECB FX rates, feed quality,
+5/15/60-minute aggregates, robust time-of-day baselines, every accepted/rejected scan candidate and
+realized 5/10/30-minute outcomes for published signals. See [Analytics storage](Doc/AnalyticsStorage.md).
 
 Market history is stored in:
 

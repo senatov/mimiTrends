@@ -13,6 +13,9 @@ import javafx.scene.image.Image
 import javafx.scene.image.ImageView
 import org.senatov.mimitrends.charts.TrendChartView
 import org.senatov.mimitrends.db.MarketRepository
+import org.senatov.mimitrends.db.AnalyticsRepository
+import org.senatov.mimitrends.db.InstrumentMetadata
+import org.senatov.mimitrends.db.CorporateAction
 import org.senatov.mimitrends.log.LogTag
 import org.senatov.mimitrends.model.MinuteBar
 import org.senatov.mimitrends.model.CompanyProfile
@@ -45,6 +48,7 @@ class MainController(
 ) {
     private val log = LoggerFactory.getLogger(MainController::class.java)
     private val repository = MarketRepository()
+    private val analytics = AnalyticsRepository()
     private var currentSymbol = initialSymbol
     private var currentSignal: ScanResult? = null
     private var selectedRangeValue = initialRange.takeIf { it in setOf("1D", "5D", "1M", "3M", "6M", "1Y") } ?: "3M"
@@ -137,11 +141,17 @@ class MainController(
         root.styleClass += "app-root"
 
         apiKey?.takeIf(String::isNotBlank)?.let(::restartFinnhubLive)
+        analytics.applyRetention()
+        batchScheduler.execute {
+            ensureCachedInstrumentMetadata()
+            if (analytics.stats().aggregateBars == 0L) backfillCachedAnalytics()
+        }
         startScanner()
         Platform.runLater { loadLocalChart(currentSymbol) }
         setStatus("Requesting ECB EUR/USD reference rate")
         exchangeRates.refresh().whenComplete(BiConsumer<Double?, Throwable?> { rate, error ->
             if (error != null) log.warn(LogTag.API, "ECB exchange-rate refresh failed; cached rate remains active", error)
+            if (error == null && rate != null) analytics.recordFxRate("EUR", "USD", rate, "ECB")
             Platform.runLater {
                 scannerPanel.setCurrency(scannerCriteria.displayCurrency, ::displayPrice)
                 loadLocalChart(currentSymbol)
@@ -184,7 +194,9 @@ class MainController(
         rotationTask?.cancel(false)
         finnhubClient?.close()
         batchScheduler.shutdownNow()
+        runCatching { batchScheduler.awaitTermination(3, TimeUnit.SECONDS) }
         repository.close()
+        analytics.close()
     }
 
     fun selectedSymbol(): String {
@@ -212,6 +224,7 @@ class MainController(
         lateinit var scan: () -> Unit
         scan = scan@ {
             log.info(LogTag.API, "scan started symbols={} recentWindow={}m", symbols.size, criteria.maxSignalAgeMinutes)
+            val runId = analytics.beginScan(criteria.marketRegion.name, symbols.size, criteria.scanIntervalSeconds)
             Platform.runLater {
                 scannerPanel.beginScan(1, 1, symbols)
                 setStatus("Finnhub live + Yahoo/SQLite: scanning ${symbols.size} symbols · fresh impulses only")
@@ -223,11 +236,18 @@ class MainController(
                 if (generation != scanGeneration.get()) return@forEachIndexed
                 runCatching { loadAndEvaluate(symbol, criteria) }
                     .onSuccess { (primary, fallback) ->
-                        primary?.let { results += it.copy(dataStatus = dataStatus(symbol)) }
-                        fallback?.let { fallbackResults += it.copy(dataStatus = dataStatus(symbol)) }
+                        val status = dataStatus(symbol)
+                        val primaryResult = primary?.copy(dataStatus = status)
+                        val fallbackResult = fallback?.copy(dataStatus = status)
+                        primaryResult?.let(results::add)
+                        fallbackResult?.let(fallbackResults::add)
+                        analytics.recordScanCandidate(runId, symbol, primaryResult ?: fallbackResult,
+                            if (primaryResult == null && fallbackResult == null) "NO_CURRENT_SIGNAL" else null, status)
                     }
                     .onFailure { error ->
                         errors += "$symbol: ${error.message ?: error.javaClass.simpleName}"
+                        analytics.recordScanCandidate(runId, symbol, null,
+                            "ERROR: ${error.message ?: error.javaClass.simpleName}", "UNAVAILABLE")
                         log.debug(LogTag.API, "scan failed symbol={} cause={}", symbol, error.toString())
                     }
                 Platform.runLater { setStatus("Yahoo Finance: analyzed ${index + 1}/${symbols.size} · $symbol") }
@@ -236,12 +256,13 @@ class MainController(
             if (errors.isNotEmpty()) {
                 log.warn(LogTag.API, "scan completed with failures count={} sample={}", errors.size, errors.take(3).joinToString("; "))
             }
+            val target = criteria.minimumTableResults.coerceAtMost(criteria.resultLimit)
+            val supplements = fallbackResults.sortedByDescending(ScanResult::anomalyScore)
+                .take((target - results.size).coerceAtLeast(0))
+            val published = results + supplements
+            analytics.completeScan(runId, published.map(ScanResult::symbol), errors.size)
             Platform.runLater {
                 if (generation != scanGeneration.get()) return@runLater
-                val target = criteria.minimumTableResults.coerceAtMost(criteria.resultLimit)
-                val supplements = fallbackResults.sortedByDescending(ScanResult::anomalyScore)
-                    .take((target - results.size).coerceAtLeast(0))
-                val published = results + supplements
                 if (published.isEmpty() && errors.size == symbols.size && symbols.isNotEmpty()) {
                     scannerPanel.abortScan()
                     setStatus("Yahoo scan produced no data; previous table retained", true, errors.joinToString("\n"))
@@ -264,6 +285,40 @@ class MainController(
         batchScheduler.execute { runCatching(scan).onFailure { log.error(LogTag.API, "initial Yahoo scan failed", it) } }
     }
 
+    private fun backfillCachedAnalytics() {
+        val from = java.time.Instant.now().epochSecond - 90 * 86_400L
+        val symbols = repository.listSymbols()
+        log.info(LogTag.DB, "analytics backfill started symbols={}", symbols.size)
+        symbols.forEach { symbol ->
+            runCatching {
+                val bars = repository.loadMinuteBars(symbol, from)
+                if (bars.isNotEmpty()) {
+                    repository.loadCompanyProfile(symbol)?.let { profile -> analytics.upsertInstrument(InstrumentMetadata(
+                        symbol, profile.name, profile.exchange, if (symbol.contains('.')) "EUR" else "USD",
+                        if (symbol.contains('.')) "Europe/Berlin" else "America/New_York"
+                    )) }
+                    analytics.refreshDerived(symbol, bars, "SQLITE_BACKFILL")
+                    analytics.recordDataQuality(symbol, "SQLITE_BACKFILL", "CACHE", bars.last().minuteEpochSeconds, bars.size)
+                }
+            }.onFailure { error -> log.warn(LogTag.DB, "analytics backfill failed symbol={}", symbol, error) }
+        }
+        log.info(LogTag.DB, "analytics backfill completed symbols={}", symbols.size)
+    }
+
+    private fun ensureCachedInstrumentMetadata() {
+        repository.listSymbols().forEach { symbol ->
+            val profile = repository.loadCompanyProfile(symbol)
+            analytics.upsertInstrument(InstrumentMetadata(
+                symbol = symbol,
+                name = profile?.name ?: symbol,
+                exchange = profile?.exchange ?: if (symbol.contains('.')) "EUROPE" else "US",
+                currency = if (symbol.contains('.')) "EUR" else "USD",
+                timezone = if (symbol.contains('.')) "Europe/Berlin" else "America/New_York",
+                aliases = symbol.substringBefore('.').takeIf { it != symbol }
+            ))
+        }
+    }
+
     private fun loadAndEvaluate(symbol: String, criteria: ScannerCriteria): Pair<ScanResult?, ScanResult?> {
         log.debug(LogTag.API, "loadAndEvaluate(symbol={})", symbol)
         val now = java.time.Instant.now().epochSecond
@@ -273,10 +328,12 @@ class MainController(
         val cachedSessions = cached.map { it.minuteEpochSeconds / 86_400L }.distinct().size
         val needsBootstrap = cachedSessions < 2
         val localFresh = !needsBootstrap && latestLocal != null && latestLocal >= freshAfter
+        var source = "SQLITE"
         val bars = if (localFresh) {
             log.debug(LogTag.DB, "using fresh SQLite bars symbol={}", symbol)
             cached
         } else {
+            source = "YAHOO"
             // Yahoo permits one-minute history only for a short recent window. An old cache is
             // refreshed with the normal five-day bootstrap instead of an invalid long request.
             val incrementalAfter = if (needsBootstrap) null else latestLocal?.takeIf { it >= now - 7 * 86_400 }
@@ -288,10 +345,30 @@ class MainController(
                 symbol, series.companyName, series.exchange, oldProfile?.logoUrl,
                 oldProfile?.logoBytes, System.currentTimeMillis()
             ))
+            analytics.upsertInstrument(InstrumentMetadata(
+                symbol = symbol, name = series.companyName, exchange = series.exchange,
+                currency = series.currency.ifBlank { if (symbol.contains('.')) "EUR" else "USD" },
+                timezone = if (symbol.contains('.')) "Europe/Berlin" else "America/New_York"
+            ))
+            series.events.forEach { event -> analytics.upsertCorporateAction(CorporateAction(
+                symbol = symbol, actionType = event.type, effectiveEpochSeconds = event.epochSeconds,
+                ratio = event.ratio, amount = event.amount, currency = event.currency, source = "YAHOO"
+            )) }
             repository.loadMinuteBars(symbol, now - 30 * 86_400)
         }
         val lastCompletedMinute = now / 60L * 60L - 60L
         val completed = bars.filter { it.minuteEpochSeconds <= lastCompletedMinute }
+        if (source == "SQLITE") repository.loadCompanyProfile(symbol)?.let { profile ->
+            analytics.upsertInstrument(InstrumentMetadata(
+                symbol = symbol, name = profile.name, exchange = profile.exchange,
+                currency = if (symbol.contains('.')) "EUR" else "USD",
+                timezone = if (symbol.contains('.')) "Europe/Berlin" else "America/New_York"
+            ))
+        }
+        if (dataStatus(symbol) == "LIVE") source = "FINNHUB"
+        analytics.recordDataQuality(symbol, source, dataStatus(symbol), completed.lastOrNull()?.minuteEpochSeconds, completed.size)
+        analytics.refreshDerived(symbol, completed, source)
+        completed.lastOrNull()?.let { analytics.recordSignalOutcomes(symbol, it.close, it.minuteEpochSeconds) }
         val primary = scannerEngine.evaluate(symbol, completed, criteria)
         val fallback = if (primary == null) scannerEngine.evaluateFallback(symbol, completed, criteria) else null
         return primary to fallback

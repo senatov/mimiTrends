@@ -16,4 +16,14 @@ class YahooFinanceClientTest {
         assertEquals(102.0, series.bars.last().close)
         assertEquals(750.0, series.bars.last().volume)
     }
+
+    @Test fun `parses split and dividend events`() {
+        val json = """{"chart":{"result":[{"meta":{"currency":"USD","longName":"Example","exchangeName":"NYSE"},
+            "timestamp":[60],"events":{"splits":{"100":{"date":100,"numerator":2.0,"denominator":1.0}},
+            "dividends":{"120":{"date":120,"amount":0.25}}},"indicators":{"quote":[{"open":[10.0],
+            "high":[10.2],"low":[9.9],"close":[10.1],"volume":[100]}]}}],"error":null}}"""
+        val events = YahooFinanceClient().parse("TEST", json).events
+        assertEquals(2.0, events.first { it.type == "SPLIT" }.ratio)
+        assertEquals(0.25, events.first { it.type == "DIVIDEND" }.amount)
+    }
 }
