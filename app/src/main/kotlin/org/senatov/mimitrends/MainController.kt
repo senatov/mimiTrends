@@ -89,21 +89,22 @@ class MainController(
         configureIconButton(aboutButton, "About MiMiTrends", rotateOnHover = false)
         aboutButton.setOnAction { showAbout() }
 
-        val titleBar = HBox(
-            8.0,
-            HBox(
+        val titleIdentity = HBox(
                 6.0,
                 Label("MiMiTrends").apply { styleClass += "app-title" },
                 Label("v${BuildInfo.version}").apply { styleClass += "app-version" }
-            ).apply { alignment = Pos.BASELINE_LEFT },
-            spacer(),
-            buildBadge(),
+            ).apply { alignment = Pos.BASELINE_LEFT }
+        val titleActions = HBox(
+            8.0,
             refreshButton,
             settingsButton,
             aboutButton
-        ).apply {
-            alignment = Pos.CENTER_LEFT
+        ).apply { alignment = Pos.CENTER_RIGHT }
+        val titleBar = StackPane(titleIdentity, buildBadge(), titleActions).apply {
             styleClass += "title-toolbar"
+            StackPane.setAlignment(titleIdentity, Pos.CENTER_LEFT)
+            StackPane.setAlignment(children[1], Pos.CENTER)
+            StackPane.setAlignment(titleActions, Pos.CENTER_RIGHT)
         }
 
         contentSplitPane.apply {
