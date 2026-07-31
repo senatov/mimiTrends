@@ -2,69 +2,40 @@
 
 <img src="./Doc/AppIcon-1024.png" alt="MiMiTrends application icon" width="128">
 
-### A compact Finnhub market-trends demo for macOS
+### A local-first market anomaly scanner for macOS
 
-[![Kotlin 2.4](https://img.shields.io/badge/Kotlin-2.4.0-7F52FF?logo=kotlin&logoColor=white)](#build-and-run)
-[![JavaFX 26](https://img.shields.io/badge/JavaFX-26-0A66C2)](#about)
-[![JDK 25](https://img.shields.io/badge/JDK-25-007396?logo=openjdk&logoColor=white)](#build-and-run)
-[![Finnhub](https://img.shields.io/badge/Data-Finnhub-1f9d76)](https://finnhub.io/)
+MiMiTrends is a Kotlin/JVM + JavaFX desktop application styled after MiMiComparator. It ranks 50 liquid US and European shares by unusual price or turnover activity and stores downloaded minute OHLCV history in SQLite.
 
-## About
+## What it does
 
-MiMiTrends is a small Kotlin/JVM + JavaFX application that scans realtime Finnhub trades and builds local minute price/volume history. Its compact
-Cupertino-style toolbar, SF Pro typography, light surfaces, borders, buttons, and status bar follow the visual language of
-MiMiComparator without sharing its business logic.
+- scans a configurable US, European, or combined universe;
+- compares the latest minute, hour, or session with historical local baselines;
+- ranks price and volume anomalies instead of requiring every instrument to pass fixed thresholds;
+- keeps the visible table unchanged while scanning and publishes the completed ranking atomically;
+- scans every three minutes by default and shows a countdown or animated hourglass;
+- uses SQLite first and requests Yahoo Finance only when a market is open and local data is stale;
+- downloads five days on first use, then requests only the missing tail and upserts overlapping minutes;
+- displays candlesticks, volume, a turquoise close line, zoom/pan, tooltips, and a mouse crosshair;
+- shows prices in EUR by default, with USD selectable in Settings;
+- remembers window geometry, divider position, selected instrument, columns, colors, and fonts.
 
-The demo includes:
+The scanner is informational and does not place orders.
 
-- locally retained chart-range state;
-- a focused price chart without a redundant quote-characteristics panel;
-- an interactive JFreeChart candlestick view paired with locally collected trading volume;
-- a WebSocket momentum scanner with configurable 1/5-minute, price, volume, and relative-volume filters;
-- locally aggregated one-minute OHLCV bars and a volume chart for confirming price moves;
-- EUR price display by default, switchable to USD in scanner Settings, using the cached daily ECB reference rate;
-- a live request/read status line with readable API errors;
-- SQLite-backed accumulation of real minute price and volume history;
-- a generated MiMiTrends application icon and a macOS `jpackage` task.
+## Data providers
 
-## API key
+Yahoo Finance is the default OHLCV/profile source and needs no API key. Its public chart endpoint is not a contracted market-data API, so availability and fields can change; this project is intended for personal/demo use. For redistribution or a commercial product, replace it with a licensed provider behind the isolated `market-data` module.
 
-The Finnhub API key is intentionally not stored in this repository. Webhook secrets, account email, 2FA status, and passkey settings
-are not needed by this read-only demo.
+Finnhub is optional and is currently used only as a cached company-profile/logo fallback when `FINNHUB_API_KEY` is configured. Missing Finnhub credentials never block startup.
 
-Choose one of these local setup methods:
-
-```zsh
-# Option 1: environment variable for the current terminal
-export FINNHUB_API_KEY="your_key_here"
-./gradlew run
-```
-
-```zsh
-# Option 2: ignored local file
-cp .env.example .env
-# edit .env and replace the placeholder
-./gradlew run
-```
-
-The `.env` file is excluded by `.gitignore`. It may also contain `FINNHUB_WEBHOOK_SECRET` for future webhook handling; the current
-read-only UI does not use that value. If a key has ever been committed or shared publicly, revoke it in the Finnhub dashboard and
-create a replacement.
-
-If no API key is available on the first launch, MiMiTrends opens a setup dialog with a Finnhub registration link and fields for the
-API key and optional webhook secret. Values saved by the dialog are stored outside the repository:
+Credential lookup order is environment variable, ignored project `.env`, then:
 
 ```text
 ~/.mimi/trends/finnhub.properties
 ```
 
-On POSIX-compatible systems, the application restricts this file to the current user (`0600`). Resolution priority is environment
-variables, project-local `.env`, then the user settings file.
+Never commit credentials. Revoke any key that has been shared publicly.
 
 ## Build and run
-
-Requirements: macOS, Linux, or Windows with a JDK available to Gradle. The checked-in Foojay resolver can provision the JDK 25
-compilation toolchain.
 
 ```zsh
 ./gradlew run
@@ -72,136 +43,62 @@ compilation toolchain.
 ./gradlew build
 ```
 
-### IntelliJ IDEA
+In IntelliJ IDEA, import the root as a Gradle project and use the shared `MiMiTrends [run]` configuration. The packaged entry point is `org.senatov.mimitrends.LauncherKt`. If Run/Debug is disabled, reload the Gradle project and remove an obsolete configuration pointing directly at `App`.
 
-Import the project as a **Gradle project** and allow Gradle synchronization to finish. Select the shared
-`MiMiTrends [run]` configuration in the toolbar for reliable Run and Debug support. Like MiMiComparator, the packaged entry point is
-the separate `org.senatov.mimitrends.LauncherKt` class.
-
-Alternatively, create a Gradle run configuration with:
-
-```text
-Task: :app:run
-```
-
-If an older `App` run configuration already exists, delete it and reload the Gradle project.
-
-To create a macOS application bundle (requires a full JDK 26 with `jpackage`):
+To create a macOS bundle with a JDK containing `jpackage`:
 
 ```zsh
 ./gradlew packageMacApp
 ```
 
-Output:
+## Architecture
 
 ```text
-app/build/jpackage/output/MiMiTrends.app
+core/         Domain models and shared log markers
+database/     SQLite WAL connection, schema, profiles, and minute-bar repository
+market-data/  Yahoo Finance HTTP client and response mapping
+scanner/      Configurable anomaly scoring and settings persistence
+charts/       Reusable JFreeChart-FX candlestick/volume component
+finnhub-ws/   Optional Finnhub profile and legacy realtime adapter
+app/          JavaFX lifecycle, dialogs, state, and orchestration
 ```
 
-## Project structure
+The UI composes these modules; database, provider, scanner, and chart code do not depend on JavaFX application classes.
+
+Market history is stored in:
 
 ```text
-core/           Domain models, realtime trade model, and shared log markers
-database/       SQLite connection policy, minute-bar schema and repository
-finnhub-ws/      WebSocket lifecycle, subscriptions, and realtime trade decoding
-scanner/         Minute-bar aggregation, configurable momentum rules, and RVOL calculation
-charts/          Reusable JFreeChart-FX OHLC/volume view and market-series rendering
-app/             JavaFX lifecycle, credentials, dialogs, UI orchestration, and resources
+~/.mimi/trends/mimitrends.db
 ```
 
-The dependency direction is one-way: infrastructure and presentation modules depend on `core`; `app` composes them. Database,
-WebSocket, database, scanner, and chart code do not depend on the UI, so each can be tested or replaced independently.
+SQLite runs in WAL mode with `synchronous=NORMAL`. Minute rows use an upsert key, so a repeated or incomplete provider bar is updated rather than duplicated. Settings and UI state are stored beside the database.
 
-SQLite uses one managed WAL connection with `synchronous=NORMAL`. Repeated updates of the same symbol/minute are coalesced in memory
-and written by a daemon worker as one transaction per batch. Scanner calculations use an in-memory history window after the initial
-database read, while explicit chart reads flush pending bars first. Application shutdown performs a final flush and closes the connection.
+## Anomaly score
 
-Run every module test from the root:
+For the selected period, the scanner calculates:
 
-```zsh
-./gradlew test
-```
+- absolute price return divided by the median historical absolute return;
+- current period volume divided by the median historical period volume;
+- overall score as the larger of those two ratios.
 
-Run only a module test suite:
+The table is sorted by score and limited to 50 rows by default. A cold database receives a neutral baseline until enough comparable periods exist, avoiding artificial extreme scores. Minimum source price and session turnover remain configurable quality/liquidity guards.
 
-```zsh
-./gradlew :database:test
-./gradlew :finnhub-ws:test
-```
+The default watchlist contains 25 liquid US listings and 25 liquid European listings. Yahoo suffixes such as `.DE`, `.PA`, `.AS`, and `.MI` identify European exchanges. The universe, region, period, interval, result count, liquidity guards, and baseline length are editable under Settings.
 
-## Finnhub usage
+## Chart
 
-The application uses `wss://ws.finnhub.io` for realtime trades in the scanner watchlist. It does not request REST quotes or Premium
-candles; the free `stock/profile2` endpoint is used only for company names, exchanges, and logos, which are cached in SQLite.
+The lower pane uses JFreeChart through JFreeChart-FX. It renders locally stored OHLC candles and volume with a shared time axis. A close-price line makes sparse movement readable; moving the mouse over the graph shows synchronized crosshair lines and value tooltips. Selecting a table row loads that instrument from SQLite immediately.
 
-### Financial charts
+## Logging and errors
 
-The lower pane uses JFreeChart 1.5.6 through JFreeChart-FX 2.0.2. It renders locally collected OHLC bars as green/red candlesticks and
-volume as a synchronized subplot with a shared time axis, crosshairs, tooltips, zoom, and panning. Both libraries are distributed under
-the GNU Lesser General Public License (LGPL); their source and license information are available from the
-[JFreeChart project](https://github.com/jfree/jfreechart) and
-[JFreeChart-FX project](https://github.com/jfree/jfreechart-fx).
-
-### Momentum scanner
-
-The upper table contains only symbols that currently pass every rule configured under **Settings**. The empirical first-run profile
-uses 50 liquid US stocks plus 50 liquid euro-area listings from Xetra, Amsterdam, Paris, and Milan; disables RVOL until a baseline exists (`0`), and applies change 1m > -0.10%, change 5m > -0.25%, source-market price > 8,
-and locally accumulated session volume > 20,000 shares. It is deliberately broad enough to populate the table during an active session;
-positive RVOL values can be enabled after at least three local sessions have accumulated. Click a matching
-row to open its chart. A watchlist may contain more than 50 symbols: it is divided into configurable batches of at most 50 active
-WebSocket subscriptions. After the configured interval the scanner unsubscribes the current batch and activates the next one.
-International realtime availability depends on the Finnhub market-data entitlement; unavailable European subscriptions remain silent,
-while supported delayed or realtime trades are accumulated normally.
-
-Minute scanning is possible without the Premium candle endpoint: MiMiTrends receives individual Finnhub WebSocket trades, aggregates
-them into real one-minute OHLCV bars, and stores those bars in SQLite. Changes are calculated from the minute closes actually observed
-while a symbol's batch was active. Consequently a multi-batch scan is best-effort rather than a guaranteed once-per-minute full-market
-scan. RVOL compares the
-current cumulative session volume with the average cumulative volume of prior sessions at the same time of day. It is shown as
-`N/A` until at least three prior local sessions exist, so a new installation cannot immediately satisfy the RVOL rule. Scanner settings
-are kept in `~/.mimi/trends/scanner.properties`; market bars remain in `~/.mimi/trends/mimitrends.db`.
-
-Price presentation defaults to EUR and can be changed to USD under **Settings**. US-market prices are converted using the official
-daily ECB EUR/USD reference rate. The rate is fetched asynchronously and cached in `~/.mimi/trends/exchange-rate.properties`; if the
-ECB is temporarily unavailable, the latest cached value remains in use. Instruments with common euro-exchange suffixes such as `.DE`,
-`.F`, `.PA`, and `.AS` are treated as EUR-native and are not converted when EUR display is selected. SQLite always retains the raw
-Finnhub values.
-
-## Restored session
-
-On a normal application close, MiMiTrends remembers the window's size, position, maximized state, selected instrument, and chart range.
-It restores them on the next launch. If a remembered position belonged to a monitor that is no longer connected, the window is moved
-back to the primary display instead of opening off-screen. UI state is stored in `~/.mimi/trends/ui-state.properties`; scanner settings,
-exchange-rate cache, and accumulated SQLite market history remain in their respective files in the same directory.
-
-Availability and local history depth depend on how long symbols have been actively scanned. MiMiTrends never fabricates or interpolates
-chart points. The status line directly below the title reports current Finnhub subscription requests, realtime trades read from the
-WebSocket, SQLite chart reads, and ECB exchange-rate requests.
-
-## Logging
-
-MiMiTrends uses the same SLF4J + Log4j2 approach as MiMiComparator. Application, UI, API, state, I/O, and database operations are
-tagged with markers and written at DEBUG level to both the run console and a rolling log file:
+Application, UI, API, state, I/O, and database operations use SLF4J + Log4j2 and appear in the run console and rolling file:
 
 ```text
 /tmp/MiMiTrends.log
 ```
 
-The active file rolls at 10 MB and keeps four compressed archives at `/tmp/MiMiTrends.N.log.gz`. API keys and webhook secrets are
-never written to the log. A complete asynchronous exception stack trace is also available through the red details button in the
-application status bar. A complete Finnhub operation is limited to 15 seconds so a stalled service request cannot leave the UI in a
-permanent loading state.
+The active log rolls at 10 MB and retains four compressed archives. The status line reports the symbol currently being read or analyzed. A red details button opens the complete error report. Credentials are never logged.
 
-## Security notes
+## Icon and licenses
 
-- Only `FINNHUB_API_KEY` is used by the current market-data client.
-- The key is sent only to Finnhub's official API hosts: `https://finnhub.io/api/v1` and, during temporary endpoint failure,
-  `https://api.finnhub.io/api/v1`.
-- An optional webhook secret can be read from local configuration but is not sent or used yet.
-- No account password, email address, 2FA setting, or passkey information is read or stored.
-- This demo is read-only and does not place orders.
-
-## Icon
-
-The application icon was generated specifically for MiMiTrends with OpenAI image generation. The project keeps the 1024 px source in
-`Doc/` and runtime sizes in `app/src/main/resources/icons/`.
+The generated 1024 px icon is in `Doc/`; runtime sizes are under `app/src/main/resources/icons/`. JFreeChart and JFreeChart-FX are LGPL libraries; consult their upstream projects when distributing the application.

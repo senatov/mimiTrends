@@ -13,11 +13,14 @@ import org.senatov.mimitrends.charts.TrendChartView
 import org.senatov.mimitrends.db.MarketRepository
 import org.senatov.mimitrends.log.LogTag
 import org.senatov.mimitrends.model.MinuteBar
+import org.senatov.mimitrends.model.CompanyProfile
+import org.senatov.mimitrends.model.MarketRegion
 import org.senatov.mimitrends.model.ScannerCriteria
+import org.senatov.mimitrends.model.ScanResult
 import org.senatov.mimitrends.scanner.ScannerEngine
 import org.senatov.mimitrends.scanner.ScannerSettingsService
-import org.senatov.mimitrends.ws.FinnhubWebSocketClient
 import org.senatov.mimitrends.ws.FinnhubProfileClient
+import org.senatov.mimitrends.marketdata.YahooFinanceClient
 import org.slf4j.LoggerFactory
 import java.io.PrintWriter
 import java.io.StringWriter
@@ -28,6 +31,7 @@ import java.util.concurrent.Executors
 import java.util.concurrent.ScheduledFuture
 import java.util.concurrent.TimeUnit
 import java.util.function.BiConsumer
+import java.util.concurrent.atomic.AtomicLong
 
 class MainController(
     private val apiKey: String?, initialSymbol: String = "AAPL", initialRange: String = "3M",
@@ -46,14 +50,15 @@ class MainController(
     private val trendChart = TrendChartView()
     private val scannerSettings = ScannerSettingsService()
     private var scannerCriteria: ScannerCriteria = scannerSettings.load()
-    private val scannerEngine = ScannerEngine(repository)
-    private val profileService = apiKey?.let { CompanyProfileService(repository, FinnhubProfileClient(it)) }
-    private val scannerPanel = ScannerPanel(::openScannerSymbol, profileService?.let { service -> service::load })
-    private var webSocket: FinnhubWebSocketClient? = null
+    private val scannerEngine = ScannerEngine()
+    private val yahooFinance = YahooFinanceClient()
+    private val profileService = CompanyProfileService(repository, apiKey?.let(::FinnhubProfileClient))
+    private val scannerPanel = ScannerPanel(::openScannerSymbol, profileService::load)
     private val batchScheduler = Executors.newSingleThreadScheduledExecutor { task ->
         Thread(task, "mimitrends-scanner-rotation").apply { isDaemon = true }
     }
     private var rotationTask: ScheduledFuture<*>? = null
+    private val scanGeneration = AtomicLong()
     private val exchangeRates = ExchangeRateService()
     private val initialDivider = initialDividerPosition.coerceIn(0.15, 0.75)
     private val contentSplitPane = SplitPane()
@@ -110,29 +115,23 @@ class MainController(
         val root = BorderPane(content, toolbar, null, null, null)
         root.styleClass += "app-root"
 
-        if (apiKey == null) {
-            setStatus("Add FINNHUB_API_KEY to the environment or a local .env file", true)
-            refreshButton.isDisable = true
-        } else {
-            startScanner()
-            Platform.runLater { loadLocalChart(currentSymbol) }
-            setStatus("Requesting ECB EUR/USD reference rate", false)
-            exchangeRates.refresh().whenComplete(BiConsumer<Double?, Throwable?> { rate, error ->
-                if (error != null) log.warn(LogTag.API, "ECB exchange-rate refresh failed; cached rate remains active", error)
-                Platform.runLater {
-                    scannerPanel.setCurrency(scannerCriteria.displayCurrency, ::displayPrice)
-                    loadLocalChart(currentSymbol)
-                    if (error == null && rate != null) setStatus("Read ECB EUR/USD reference rate: $rate", false)
-                }
-            })
-        }
+        startScanner()
+        Platform.runLater { loadLocalChart(currentSymbol) }
+        setStatus("Requesting ECB EUR/USD reference rate")
+        exchangeRates.refresh().whenComplete(BiConsumer<Double?, Throwable?> { rate, error ->
+            if (error != null) log.warn(LogTag.API, "ECB exchange-rate refresh failed; cached rate remains active", error)
+            Platform.runLater {
+                scannerPanel.setCurrency(scannerCriteria.displayCurrency, ::displayPrice)
+                loadLocalChart(currentSymbol)
+                if (error == null && rate != null) setStatus("Read ECB EUR/USD reference rate: $rate")
+            }
+        })
         return root
     }
 
     fun close() {
         log.debug(LogTag.UI, "close()")
         rotationTask?.cancel(false)
-        webSocket?.close()
         batchScheduler.shutdownNow()
         repository.close()
     }
@@ -154,65 +153,100 @@ class MainController(
 
     private fun startScanner() {
         log.debug(LogTag.API, "startScanner(symbols={})", scannerCriteria.symbols.size)
-        val key = apiKey ?: return
+        val generation = scanGeneration.incrementAndGet()
+        val criteria = scannerCriteria
         rotationTask?.cancel(false)
-        webSocket?.close(); scannerPanel.clear()
-        webSocket = FinnhubWebSocketClient(key, { tick ->
-            runCatching { scannerEngine.accept(tick, scannerCriteria) }
-                .onSuccess { result -> result?.let {
-                    Platform.runLater {
-                        scannerPanel.update(it)
-                        setStatus("Read ${it.symbol}: price ${"%.2f".format(it.price)}, session volume ${"%,.0f".format(it.sessionVolume)}", false)
+        scannerPanel.clear()
+        val symbols = selectedMarketSymbols()
+        lateinit var scan: () -> Unit
+        scan = scan@ {
+            log.debug(LogTag.API, "scanYahoo(symbols={}, window={})", symbols.size, scannerCriteria.anomalyWindow)
+            Platform.runLater {
+                scannerPanel.beginScan(1, 1, symbols)
+                setStatus("Yahoo Finance: scanning ${symbols.size} symbols · ${scannerCriteria.anomalyWindow}")
+            }
+            val results = mutableListOf<ScanResult>()
+            val errors = mutableListOf<String>()
+            symbols.forEachIndexed { index, symbol ->
+                if (generation != scanGeneration.get()) return@forEachIndexed
+                runCatching { loadAndEvaluate(symbol, criteria) }
+                    .onSuccess { result -> result?.let(results::add) }
+                    .onFailure { error ->
+                        errors += "$symbol: ${error.message ?: error.javaClass.simpleName}"
+                        log.warn(LogTag.API, "Yahoo scan failed symbol={}", symbol, error)
                     }
-                } }
-                .onFailure { error -> log.error(LogTag.DB, "scanner evaluation failed symbol={}", tick.symbol, error) }
-        }, { error ->
-            log.error(LogTag.API, "scanner websocket failed", error)
-            Platform.runLater { setStatus("Scanner WebSocket: ${error.message ?: "connection error"}", true, formatErrorLog("scanner", error)) }
-        }).also { client ->
-            val batches = scannerCriteria.symbols.chunked(scannerCriteria.batchSize.coerceIn(1, 50))
-            var batchIndex = 0
-            var active = emptyList<String>()
-            val scanSeconds = (scannerCriteria.rotationSeconds / 3).coerceIn(5, 15)
-                .coerceAtMost(scannerCriteria.rotationSeconds)
-            val waitSeconds = (scannerCriteria.rotationSeconds - scanSeconds).coerceAtLeast(0)
-            lateinit var activateNextBatch: () -> Unit
-            fun finishBatch() {
-                log.debug(LogTag.API, "finishBatch(symbols={})", active.size)
-                active.forEach(client::unsubscribe)
-                Platform.runLater {
-                    scannerPanel.completeScan()
-                    scannerPanel.showCountdown(waitSeconds)
-                    setStatus("Finnhub batch complete · table refreshed · next scan in ${waitSeconds}s", false)
-                }
-                rotationTask = batchScheduler.schedule(
-                    { runCatching(activateNextBatch).onFailure { log.error(LogTag.API, "scanner batch activation failed", it) } },
-                    waitSeconds, TimeUnit.SECONDS
-                )
+                Platform.runLater { setStatus("Yahoo Finance: analyzed ${index + 1}/${symbols.size} · $symbol") }
             }
-            activateNextBatch = {
-                log.debug(LogTag.API, "activateNextBatch(index={}, total={})", batchIndex, batches.size)
-                active = batches[batchIndex]
-                active.forEach(client::subscribe)
-                val shownIndex = batchIndex + 1
-                val shownSymbols = active.toList()
-                Platform.runLater {
-                    scannerPanel.beginScan(shownIndex, batches.size, shownSymbols)
-                    setStatus("Scanning Finnhub batch $shownIndex/${batches.size} for ${scanSeconds}s: ${shownSymbols.joinToString(", ")}", false)
-                }
-                batchIndex = (batchIndex + 1) % batches.size
-                rotationTask = batchScheduler.schedule(
-                    { runCatching(::finishBatch).onFailure { log.error(LogTag.API, "scanner batch completion failed", it) } },
-                    scanSeconds, TimeUnit.SECONDS
-                )
-            }
-            client.connect().thenRun {
-                Platform.runLater { setStatus("Finnhub WebSocket connected · starting scan", false) }
-                batchScheduler.execute {
-                    runCatching(activateNextBatch).onFailure { log.error(LogTag.API, "initial scanner batch failed", it) }
+            repository.flushPending()
+            Platform.runLater {
+                if (generation != scanGeneration.get()) return@runLater
+                if (results.isEmpty()) {
+                    scannerPanel.abortScan()
+                    setStatus("Yahoo scan produced no data; previous table retained", true, errors.joinToString("\n"))
+                } else {
+                    results.forEach(scannerPanel::update)
+                    scannerPanel.completeScan(criteria.resultLimit)
+                    scannerPanel.showCountdown(criteria.scanIntervalSeconds)
+                    setStatus("Yahoo/SQLite scan complete · ${results.size} ranked · next in ${criteria.scanIntervalSeconds}s")
                 }
             }
-                .exceptionally { error -> log.error(LogTag.API, "scanner connection failed", error); null }
+            if (generation != scanGeneration.get()) return@scan
+            rotationTask = batchScheduler.schedule(
+                { runCatching(scan).onFailure { log.error(LogTag.API, "scheduled Yahoo scan failed", it) } },
+                criteria.scanIntervalSeconds, TimeUnit.SECONDS
+            )
+        }
+        batchScheduler.execute { runCatching(scan).onFailure { log.error(LogTag.API, "initial Yahoo scan failed", it) } }
+    }
+
+    private fun loadAndEvaluate(symbol: String, criteria: ScannerCriteria): ScanResult? {
+        log.debug(LogTag.API, "loadAndEvaluate(symbol={})", symbol)
+        val now = java.time.Instant.now().epochSecond
+        val freshAfter = now - criteria.scanIntervalSeconds
+        val latestLocal = repository.latestMinuteEpoch(symbol)
+        val localFresh = latestLocal != null && (!isMarketOpen(symbol) || latestLocal >= freshAfter)
+        val bars = if (localFresh) {
+            log.debug(LogTag.DB, "using fresh SQLite bars symbol={}", symbol)
+            repository.loadMinuteBars(symbol, now - 7 * 86_400)
+        } else {
+            // Yahoo permits one-minute history only for a short recent window. An old cache is
+            // refreshed with the normal five-day bootstrap instead of an invalid long request.
+            val incrementalAfter = latestLocal?.takeIf { it >= now - 7 * 86_400 }
+            val series = yahooFinance.loadIntraday(symbol, incrementalAfter)
+            series.bars.forEach(repository::upsertMinuteBar)
+            val oldProfile = repository.loadCompanyProfile(symbol)
+            repository.upsertCompanyProfile(CompanyProfile(
+                symbol, series.companyName, series.exchange, oldProfile?.logoUrl,
+                oldProfile?.logoBytes, System.currentTimeMillis()
+            ))
+            repository.loadMinuteBars(symbol, now - 30 * 86_400)
+        }
+        return scannerEngine.evaluate(symbol, bars, criteria)
+    }
+
+    private fun isMarketOpen(symbol: String, instant: java.time.Instant = java.time.Instant.now()): Boolean {
+        log.trace(LogTag.STATE, "isMarketOpen(symbol={})", symbol)
+        val european = symbol.contains('.')
+        val zone = java.time.ZoneId.of(if (european) "Europe/Berlin" else "America/New_York")
+        val local = instant.atZone(zone)
+        if (local.dayOfWeek.value > 5) return false
+        val time = local.toLocalTime()
+        return if (european) {
+            time >= java.time.LocalTime.of(8, 50) && time <= java.time.LocalTime.of(17, 40)
+        } else {
+            time >= java.time.LocalTime.of(9, 25) && time <= java.time.LocalTime.of(16, 10)
+        }
+    }
+
+    private fun selectedMarketSymbols(): List<String> {
+        log.debug(LogTag.STATE, "selectedMarketSymbols(region={})", scannerCriteria.marketRegion)
+        return scannerCriteria.symbols.filter { symbol ->
+            val european = symbol.contains('.')
+            when (scannerCriteria.marketRegion) {
+                MarketRegion.BOTH -> true
+                MarketRegion.US -> !european
+                MarketRegion.EUROPE -> european
+            }
         }
     }
 
@@ -241,7 +275,7 @@ class MainController(
             headerText = "MiMiTrends 1.0"
             contentText = """Kotlin · JavaFX market momentum scanner
 
-Market data: Finnhub
+Market data: Yahoo Finance (default), Finnhub (optional)
 Currency reference rates: European Central Bank
 Local storage: ~/.mimi/trends/
 
@@ -257,7 +291,7 @@ Read-only demonstration application.
         if (symbol.isBlank()) return
         setLoading(true)
         val days = selectedDays()
-        setStatus("Requesting SQLite: $symbol · $selectedRangeValue", false)
+        setStatus("Requesting SQLite: $symbol · $selectedRangeValue")
         CompletableFuture.supplyAsync {
             repository.loadMinuteBars(symbol, java.time.Instant.now().minusSeconds(days * 86_400).epochSecond)
         }.whenComplete(BiConsumer<List<MinuteBar>?, Throwable?> { bars, error ->
@@ -269,10 +303,10 @@ Read-only demonstration application.
                     } else if (!bars.isNullOrEmpty()) {
                         val currency = scannerCriteria.displayCurrency
                         trendChart.renderMinuteBars(symbol, bars, selectedRangeValue, displayPrice(symbol, 1.0), currency.symbol)
-                        setStatus("Read SQLite: $symbol · ${bars.size} minute bars · $selectedRangeValue", false)
+                        setStatus("Read SQLite: $symbol · ${bars.size} minute bars · $selectedRangeValue")
                     } else {
                         trendChart.clear()
-                        setStatus("Read SQLite: no collected minute bars for $symbol · $selectedRangeValue", false)
+                        setStatus("Read SQLite: no collected minute bars for $symbol · $selectedRangeValue")
                     }
                 }
             })
@@ -296,9 +330,9 @@ Read-only demonstration application.
         refreshButton.isDisable = value
     }
 
-    private fun setStatus(message: String, error: Boolean) {
-        log.debug(LogTag.UI, "setStatus(message={}, error={})", message, error)
-        setStatus(message, error, if (error) formatErrorLog(currentSymbol, null, message) else null)
+    private fun setStatus(message: String) {
+        log.debug(LogTag.UI, "setStatus(message={})", message)
+        setStatus(message, false, null)
     }
 
     private fun setStatus(message: String, error: Boolean, details: String?) {

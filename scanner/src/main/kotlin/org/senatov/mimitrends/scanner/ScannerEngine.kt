@@ -1,62 +1,105 @@
 package org.senatov.mimitrends.scanner
 
-import org.senatov.mimitrends.db.MarketRepository
 import org.senatov.mimitrends.log.LogTag
-import org.senatov.mimitrends.model.*
+import org.senatov.mimitrends.model.AnomalyWindow
+import org.senatov.mimitrends.model.MinuteBar
+import org.senatov.mimitrends.model.ScanResult
+import org.senatov.mimitrends.model.ScannerCriteria
 import org.slf4j.LoggerFactory
-import java.time.*
+import java.time.Instant
+import java.time.ZoneId
+import kotlin.math.abs
+import kotlin.math.max
 
-class ScannerEngine(private val repository: MarketRepository, private val zone: ZoneId = ZoneId.systemDefault()) {
+class ScannerEngine(private val zone: ZoneId = ZoneId.systemDefault()) {
     private val log = LoggerFactory.getLogger(javaClass)
-    private val current = mutableMapOf<String, MinuteBar>()
-    private val lastEvaluationMillis = mutableMapOf<String, Long>()
-    private val histories = mutableMapOf<String, MutableList<MinuteBar>>()
 
-    @Synchronized fun accept(tick: TradeTick, criteria: ScannerCriteria): ScanResult? {
-        log.trace(LogTag.DB, "accept(symbol={}, price={}, volume={})", tick.symbol, tick.price, tick.volume)
-        val minute = tick.timestampMillis / 60_000 * 60
-        val history = histories.getOrPut(tick.symbol) { loadHistory(tick.symbol, tick.timestampMillis, criteria).toMutableList() }
-        val old = current[tick.symbol] ?: history.lastOrNull()?.takeIf { it.minuteEpochSeconds == minute }
-        val bar = if (old?.minuteEpochSeconds == minute) old.copy(high = maxOf(old.high, tick.price), low = minOf(old.low, tick.price), close = tick.price, volume = old.volume + tick.volume)
-        else MinuteBar(tick.symbol, minute, tick.price, tick.price, tick.price, tick.price, tick.volume)
-        current[tick.symbol] = bar
-        if (history.lastOrNull()?.minuteEpochSeconds == minute) history[history.lastIndex] = bar else history += bar
-        repository.upsertMinuteBar(bar)
-        if (tick.timestampMillis - (lastEvaluationMillis[tick.symbol] ?: 0) < 1_000) return null
-        lastEvaluationMillis[tick.symbol] = tick.timestampMillis
-        return evaluateBars(tick.symbol, tick.timestampMillis, criteria, history)
+    fun evaluate(symbol: String, bars: List<MinuteBar>, criteria: ScannerCriteria): ScanResult? {
+        log.debug(LogTag.DB, "evaluate(symbol={}, bars={}, window={})", symbol, bars.size, criteria.anomalyWindow)
+        val sorted = bars.sortedBy { it.minuteEpochSeconds }
+        val latest = sorted.lastOrNull() ?: return null
+        val current = currentWindow(sorted, criteria.anomalyWindow)
+        if (current.size < 2) return null
+        val currentReturn = percent(current.first().open, current.last().close)
+        val currentVolume = current.sumOf { it.volume }
+        val references = referenceWindows(sorted, current, criteria.anomalyWindow)
+        val referenceReturns = references.mapNotNull { sample ->
+            sample.takeIf { it.size >= 2 }?.let { abs(percent(it.first().open, it.last().close)) }
+        }
+        val referenceVolumes = references.map { it.sumOf(MinuteBar::volume) }.filter { it > 0 }
+        val normalMove = median(referenceReturns).takeIf { it > 0 } ?: abs(currentReturn).coerceAtLeast(0.01)
+        val normalVolume = median(referenceVolumes).takeIf { it > 0 } ?: currentVolume.coerceAtLeast(1.0)
+        val priceAnomaly = abs(currentReturn) / normalMove
+        val volumeAnomaly = currentVolume / normalVolume
+        val sessionBars = sameSession(sorted, latest)
+        val sessionVolume = sessionBars.sumOf { it.volume }
+        val turnover = sessionBars.sumOf { it.close * it.volume }
+        if (latest.close < criteria.minPrice || turnover < criteria.minSessionTurnover) return null
+        return ScanResult(
+            symbol = symbol,
+            price = latest.close,
+            anomalyScore = max(priceAnomaly, volumeAnomaly),
+            priceAnomaly = priceAnomaly,
+            volumeAnomaly = volumeAnomaly,
+            windowChangePercent = currentReturn,
+            windowVolume = currentVolume,
+            sessionVolume = sessionVolume,
+            sessionTurnover = turnover,
+            updatedAtMillis = latest.minuteEpochSeconds * 1_000
+        )
     }
 
-    fun evaluate(symbol: String, nowMillis: Long, criteria: ScannerCriteria): ScanResult {
-        log.debug(LogTag.DB, "evaluate(symbol={})", symbol)
-        return evaluateBars(symbol, nowMillis, criteria, loadHistory(symbol, nowMillis, criteria))
+    private fun currentWindow(bars: List<MinuteBar>, window: AnomalyWindow): List<MinuteBar> {
+        log.trace(LogTag.DB, "currentWindow(bars={}, window={})", bars.size, window)
+        val latest = bars.last()
+        return if (window == AnomalyWindow.SESSION) sameSession(bars, latest) else {
+            val from = latest.minuteEpochSeconds - requireNotNull(window.seconds)
+            bars.filter { it.minuteEpochSeconds >= from }
+        }
     }
 
-    private fun loadHistory(symbol: String, nowMillis: Long, criteria: ScannerCriteria): List<MinuteBar> {
-        log.debug(LogTag.DB, "loadHistory(symbol={})", symbol)
-        val from = Instant.ofEpochMilli(nowMillis).minus(Duration.ofDays((criteria.baselineSessions * 3L).coerceAtLeast(30))).epochSecond
-        return repository.loadMinuteBars(symbol, from)
+    private fun referenceWindows(
+        bars: List<MinuteBar>,
+        current: List<MinuteBar>,
+        window: AnomalyWindow
+    ): List<List<MinuteBar>> {
+        log.trace(LogTag.DB, "referenceWindows(bars={}, current={}, window={})", bars.size, current.size, window)
+        val currentStart = current.first().minuteEpochSeconds
+        if (window == AnomalyWindow.SESSION) {
+            val currentDate = date(current.last())
+            val elapsedTime = Instant.ofEpochSecond(current.last().minuteEpochSeconds).atZone(zone).toLocalTime()
+            return bars.filter { bar ->
+                date(bar) < currentDate && Instant.ofEpochSecond(bar.minuteEpochSeconds).atZone(zone).toLocalTime() <= elapsedTime
+            }.groupBy(::date).values.toList()
+        }
+        val seconds = requireNotNull(window.seconds)
+        val historical = bars.filter { it.minuteEpochSeconds < currentStart }
+        if (historical.isEmpty()) return emptyList()
+        val samples = mutableListOf<List<MinuteBar>>()
+        var end = historical.last().minuteEpochSeconds
+        while (samples.size < 60 && end >= historical.first().minuteEpochSeconds) {
+            val sample = historical.filter { it.minuteEpochSeconds >= end - seconds && it.minuteEpochSeconds <= end }
+            if (sample.size >= 2) samples += sample
+            end -= seconds
+        }
+        return samples
     }
 
-    private fun evaluateBars(symbol: String, nowMillis: Long, criteria: ScannerCriteria, bars: List<MinuteBar>): ScanResult {
-        log.trace(LogTag.DB, "evaluateBars(symbol={}, bars={})", symbol, bars.size)
-        val now = Instant.ofEpochMilli(nowMillis)
-        val latest = bars.lastOrNull() ?: return ScanResult(symbol, 0.0, null, null, null, 0.0, false, nowMillis)
-        val oneClose = bars.lastOrNull { it.minuteEpochSeconds < latest.minuteEpochSeconds }?.close
-        val fiveClose = bars.lastOrNull { it.minuteEpochSeconds <= latest.minuteEpochSeconds - 300 }?.close
-        val change1 = oneClose?.takeIf { it > 0 }?.let { (latest.close / it - 1) * 100 }
-        val change5 = fiveClose?.takeIf { it > 0 }?.let { (latest.close / it - 1) * 100 }
-        val today = LocalDateTime.ofInstant(now, zone).toLocalDate()
-        val grouped = bars.groupBy { Instant.ofEpochSecond(it.minuteEpochSeconds).atZone(zone).toLocalDate() }
-        val sessionVolume = grouped[today].orEmpty().sumOf { it.volume }
-        val currentMinuteOfDay = Instant.ofEpochSecond(latest.minuteEpochSeconds).atZone(zone).toLocalTime().toSecondOfDay() / 60
-        val baselines = grouped.entries.asSequence().filter { it.key < today }.sortedByDescending { it.key }.take(criteria.baselineSessions).map { (_, dayBars) ->
-            dayBars.filter { Instant.ofEpochSecond(it.minuteEpochSeconds).atZone(zone).toLocalTime().toSecondOfDay() / 60 <= currentMinuteOfDay }.sumOf { it.volume }
-        }.filter { it > 0 }.toList()
-        val relative = baselines.takeIf { it.size >= minOf(3, criteria.baselineSessions) }?.let { sessionVolume / it.average() }
-        val relativeVolumePasses = criteria.minRelativeVolume <= 0 || relative != null && relative > criteria.minRelativeVolume
-        val matches = relativeVolumePasses && change1 != null && change5 != null &&
-            change1 > criteria.minChange1mPercent && change5 > criteria.minChange5mPercent && latest.close > criteria.minPrice && sessionVolume > criteria.minSessionVolume
-        return ScanResult(symbol, latest.close, relative, change1, change5, sessionVolume, matches, nowMillis)
+    private fun sameSession(bars: List<MinuteBar>, latest: MinuteBar): List<MinuteBar> {
+        log.trace(LogTag.DB, "sameSession(bars={}, symbol={})", bars.size, latest.symbol)
+        val target = date(latest)
+        return bars.filter { date(it) == target }
+    }
+
+    private fun date(bar: MinuteBar) = Instant.ofEpochSecond(bar.minuteEpochSeconds).atZone(zone).toLocalDate()
+
+    private fun percent(open: Double, close: Double): Double = if (open > 0) (close / open - 1.0) * 100.0 else 0.0
+
+    private fun median(values: List<Double>): Double {
+        log.trace(LogTag.DB, "median(values={})", values.size)
+        if (values.isEmpty()) return 0.0
+        val sorted = values.sorted()
+        val middle = sorted.size / 2
+        return if (sorted.size % 2 == 0) (sorted[middle - 1] + sorted[middle]) / 2.0 else sorted[middle]
     }
 }

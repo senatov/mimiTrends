@@ -4,6 +4,8 @@ import org.senatov.mimitrends.log.LogTag
 import org.senatov.mimitrends.model.ScannerCriteria
 import org.senatov.mimitrends.model.DisplayCurrency
 import org.senatov.mimitrends.model.TableAppearance
+import org.senatov.mimitrends.model.AnomalyWindow
+import org.senatov.mimitrends.model.MarketRegion
 import org.slf4j.LoggerFactory
 import java.nio.file.Files
 import java.nio.file.Path
@@ -18,14 +20,13 @@ class ScannerSettingsService(private val path: Path = Path.of(System.getProperty
         return runCatching {
             val p = Properties().also { Files.newInputStream(path).use(it::load) }
             ScannerCriteria(
-                minRelativeVolume = p.getProperty("minRelativeVolume", "0.0").toDouble(),
-                minChange1mPercent = p.getProperty("minChange1mPercent", "-0.10").toDouble(),
-                minChange5mPercent = p.getProperty("minChange5mPercent", "-0.25").toDouble(),
-                minPrice = p.getProperty("minPrice", "8.0").toDouble(),
-                minSessionVolume = p.getProperty("minSessionVolume", "20000").toDouble(),
-                baselineSessions = p.getProperty("baselineSessions", "20").toInt(),
-                batchSize = p.getProperty("batchSize", "50").toInt().coerceIn(1, 50),
-                rotationSeconds = p.getProperty("rotationSeconds", "30").toLong().coerceIn(5, 3600),
+                anomalyWindow = enumValue(p.getProperty("anomalyWindow"), AnomalyWindow.HOUR),
+                marketRegion = enumValue(p.getProperty("marketRegion"), MarketRegion.BOTH),
+                scanIntervalSeconds = p.getProperty("scanIntervalSeconds", "180").toLong().coerceIn(60, 3_600),
+                resultLimit = p.getProperty("resultLimit", "50").toInt().coerceIn(1, 50),
+                minPrice = p.getProperty("minPrice", "5.0").toDouble(),
+                minSessionTurnover = p.getProperty("minSessionTurnover", "0").toDouble(),
+                baselineSessions = p.getProperty("baselineSessions", "5").toInt().coerceIn(3, 20),
                 displayCurrency = runCatching { DisplayCurrency.valueOf(p.getProperty("displayCurrency", "EUR")) }.getOrDefault(DisplayCurrency.EUR),
                 tableAppearance = TableAppearance(
                     fontFamily = p.getProperty("table.fontFamily", "SF Pro Display"),
@@ -45,10 +46,10 @@ class ScannerSettingsService(private val path: Path = Path.of(System.getProperty
         log.debug(LogTag.IO, "save(symbols={})", value.symbols.size)
         Files.createDirectories(path.parent)
         val p = Properties().apply {
-            setProperty("minRelativeVolume", value.minRelativeVolume.toString()); setProperty("minChange1mPercent", value.minChange1mPercent.toString())
-            setProperty("minChange5mPercent", value.minChange5mPercent.toString()); setProperty("minPrice", value.minPrice.toString())
-            setProperty("minSessionVolume", value.minSessionVolume.toString()); setProperty("baselineSessions", value.baselineSessions.toString())
-            setProperty("batchSize", value.batchSize.toString()); setProperty("rotationSeconds", value.rotationSeconds.toString())
+            setProperty("anomalyWindow", value.anomalyWindow.name); setProperty("marketRegion", value.marketRegion.name)
+            setProperty("scanIntervalSeconds", value.scanIntervalSeconds.toString()); setProperty("resultLimit", value.resultLimit.toString())
+            setProperty("minPrice", value.minPrice.toString()); setProperty("minSessionTurnover", value.minSessionTurnover.toString())
+            setProperty("baselineSessions", value.baselineSessions.toString())
             setProperty("displayCurrency", value.displayCurrency.name)
             setProperty("table.fontFamily", value.tableAppearance.fontFamily)
             setProperty("table.fontSize", value.tableAppearance.fontSize.toString())
@@ -69,4 +70,7 @@ class ScannerSettingsService(private val path: Path = Path.of(System.getProperty
 
     private fun color(value: String?, fallback: String): String =
         value?.takeIf { it.matches(Regex("#[0-9a-fA-F]{6}")) } ?: fallback
+
+    private inline fun <reified T : Enum<T>> enumValue(value: String?, fallback: T): T =
+        runCatching { enumValueOf<T>(value ?: fallback.name) }.getOrDefault(fallback)
 }

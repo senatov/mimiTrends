@@ -64,6 +64,19 @@ class MarketRepository(
         }
     }
 
+    fun latestMinuteEpoch(symbol: String): Long? {
+        log.debug(LogTag.DB, "latestMinuteEpoch(symbol={})", symbol)
+        flushPending()
+        return lock.withLock {
+            connection.prepareStatement("SELECT MAX(minute_epoch) FROM minute_bars WHERE symbol = ?").use { statement ->
+                statement.setString(1, symbol.trim().uppercase())
+                statement.executeQuery().use { result ->
+                    if (result.next()) result.getLong(1).takeUnless { result.wasNull() } else null
+                }
+            }
+        }
+    }
+
     fun loadCompanyProfile(symbol: String): CompanyProfile? {
         log.debug(LogTag.DB, "loadCompanyProfile(symbol={})", symbol)
         return lock.withLock {

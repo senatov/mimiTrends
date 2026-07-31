@@ -27,6 +27,7 @@ dependencies {
     implementation(project(":core"))
     implementation(project(":database"))
     implementation(project(":finnhub-ws"))
+    implementation(project(":market-data"))
     implementation(project(":scanner"))
     implementation(project(":charts"))
     implementation("org.openjfx:javafx-base:$javafxVersion:$javafxPlatform")

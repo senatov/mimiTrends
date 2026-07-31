@@ -27,7 +27,6 @@ class App : Application() {
         loadFont("/fonts/SF-Pro-Display-Medium.otf")
 
         val apiKey = ApiKeyResolver.resolve()
-            ?: FinnhubSetupDialog(stage, hostServices).showAndSave()
         val uiStateService = UiStateService()
         val uiState = uiStateService.load()
         val controller = MainController(apiKey, uiState.symbol, uiState.range, uiState.dividerPosition)

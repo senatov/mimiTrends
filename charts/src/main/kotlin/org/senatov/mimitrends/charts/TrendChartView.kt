@@ -2,10 +2,13 @@ package org.senatov.mimitrends.charts
 
 import javafx.scene.control.ProgressIndicator
 import javafx.scene.layout.StackPane
+import javafx.scene.input.MouseEvent
 import org.jfree.chart.JFreeChart
 import org.jfree.chart.axis.DateAxis
 import org.jfree.chart.axis.NumberAxis
 import org.jfree.chart.fx.ChartViewer
+import org.jfree.chart.fx.interaction.ChartMouseEventFX
+import org.jfree.chart.fx.interaction.ChartMouseListenerFX
 import org.jfree.chart.labels.HighLowItemLabelGenerator
 import org.jfree.chart.labels.StandardXYToolTipGenerator
 import org.jfree.chart.plot.CombinedDomainXYPlot
@@ -13,6 +16,7 @@ import org.jfree.chart.plot.PlotOrientation
 import org.jfree.chart.plot.XYPlot
 import org.jfree.chart.renderer.xy.CandlestickRenderer
 import org.jfree.chart.renderer.xy.XYBarRenderer
+import org.jfree.chart.renderer.xy.XYLineAndShapeRenderer
 import org.jfree.data.time.Millisecond
 import org.jfree.data.time.TimeSeries
 import org.jfree.data.time.TimeSeriesCollection
@@ -24,6 +28,7 @@ import org.slf4j.LoggerFactory
 import java.awt.BasicStroke
 import java.awt.Color
 import java.awt.Font
+import java.awt.geom.Point2D
 import java.text.DecimalFormat
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -36,6 +41,7 @@ class TrendChartView : StackPane() {
     private val volumeAxis = NumberAxis("Volume")
     private val candleRenderer = CandlestickRenderer()
     private val volumeRenderer = XYBarRenderer()
+    private val closeLineRenderer = XYLineAndShapeRenderer(true, false)
     private val pricePlot = XYPlot(null, null, priceAxis, candleRenderer)
     private val volumePlot = XYPlot(null, null, volumeAxis, volumeRenderer)
     private val combinedPlot = CombinedDomainXYPlot(dateAxis)
@@ -81,6 +87,9 @@ class TrendChartView : StackPane() {
         pricePlot.dataset = DefaultHighLowDataset(symbol, dates, highs, lows, opens, closes, volumes)
 
         val volumeSeries = TimeSeries("Volume")
+        val closeSeries = TimeSeries("Close")
+        visible.forEach { bar -> closeSeries.addOrUpdate(Millisecond(Date(bar.minuteEpochSeconds * 1_000)), bar.close * priceMultiplier) }
+        pricePlot.setDataset(1, TimeSeriesCollection(closeSeries))
         visible.forEach { bar -> volumeSeries.addOrUpdate(Millisecond(Date(bar.minuteEpochSeconds * 1_000)), bar.volume) }
         val barWidthMillis = inferBarWidth(visible)
         volumePlot.dataset = XYBarDataset(TimeSeriesCollection(volumeSeries), barWidthMillis)
@@ -99,6 +108,7 @@ class TrendChartView : StackPane() {
     fun clear() {
         log.debug(LogTag.UI, "clear()")
         pricePlot.dataset = null
+        pricePlot.setDataset(1, null)
         volumePlot.dataset = null
         chart.title.text = "No collected market data"
         chart.fireChartChanged()
@@ -141,6 +151,13 @@ class TrendChartView : StackPane() {
         candleRenderer.autoWidthMethod = CandlestickRenderer.WIDTHMETHOD_SMALLEST
         candleRenderer.autoWidthFactor = 0.72
 
+        closeLineRenderer.defaultPaint = Color(23, 178, 161)
+        closeLineRenderer.defaultStroke = BasicStroke(2.0f)
+        closeLineRenderer.defaultToolTipGenerator = StandardXYToolTipGenerator(
+            "{0}: {1}  {2}", SimpleDateFormat("dd MMM HH:mm"), DecimalFormat("#,##0.00")
+        )
+        pricePlot.setRenderer(1, closeLineRenderer)
+
         volumeRenderer.setShadowVisible(false)
         volumeRenderer.margin = 0.12
         volumeRenderer.defaultPaint = Color(104, 155, 207)
@@ -166,6 +183,18 @@ class TrendChartView : StackPane() {
         combinedPlot.add(pricePlot, 4)
         combinedPlot.add(volumePlot, 1)
         combinedPlot.backgroundPaint = background
+        viewer.addChartMouseListener(object : ChartMouseListenerFX {
+            override fun chartMouseClicked(event: ChartMouseEventFX) {
+                val trigger: MouseEvent = event.trigger
+                log.trace(LogTag.UI, "chartMouseClicked(x={}, y={})", trigger.x, trigger.y)
+            }
+
+            override fun chartMouseMoved(event: ChartMouseEventFX) {
+                val trigger: MouseEvent = event.trigger
+                log.trace(LogTag.UI, "chartMouseMoved(x={}, y={})", trigger.x, trigger.y)
+                viewer.canvas.setAnchor(Point2D.Double(trigger.x, trigger.y))
+            }
+        })
     }
 
     private fun aggregate(bars: List<MinuteBar>): List<MinuteBar> {

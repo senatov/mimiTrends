@@ -38,7 +38,7 @@ class ScannerPanel(
     private val log = LoggerFactory.getLogger(javaClass)
     private val rows = FXCollections.observableArrayList<ScanResult>()
     private val table = TableView(rows)
-    private val empty = Label("Waiting for matching WebSocket trades…")
+    private val empty = Label("Waiting for the first local/Yahoo scan…")
     private val cycleStatus = Label()
     private val scanIndicator = Label()
     private val stagedRows = linkedMapOf<String, ScanResult>()
@@ -52,15 +52,16 @@ class ScannerPanel(
 
     init {
         log.debug(LogTag.UI, "init()")
-        val header = javafx.scene.layout.HBox(8.0, Label("Momentum scanner").apply { styleClass += "scanner-title" },
+        val header = javafx.scene.layout.HBox(8.0, Label("Anomaly scanner").apply { styleClass += "scanner-title" },
             scanIndicator.apply { styleClass += "scanner-timer" }, cycleStatus.apply { styleClass += "scanner-cycle" },
             javafx.scene.layout.Region().also { javafx.scene.layout.HBox.setHgrow(it, Priority.ALWAYS) })
         symbolColumn()
         column("Price") { "${currency.symbol}%,.2f".format(convertPrice(it.symbol, it.price)) }
-        column("RVOL") { it.relativeVolume?.let { v -> "%.2f×".format(v) } ?: "N/A" }
-        column("Δ 1m") { percent(it.change1mPercent) }
-        column("Δ 5m") { percent(it.change5mPercent) }
-        column("Volume") { "%,.0f".format(it.sessionVolume) }
+        column("Score") { "%.2f×".format(it.anomalyScore) }
+        column("Price anomaly") { "%.2f×".format(it.priceAnomaly) }
+        column("Volume anomaly") { "%.2f×".format(it.volumeAnomaly) }
+        column("Δ period") { percent(it.windowChangePercent) }
+        column("Turnover") { compactMoney(convertPrice(it.symbol, it.sessionTurnover)) }
         column("Updated") { time.format(Instant.ofEpochMilli(it.updatedAtMillis)) }
         table.placeholder = empty
         table.columnResizePolicy = TableView.UNCONSTRAINED_RESIZE_POLICY
@@ -78,7 +79,7 @@ class ScannerPanel(
     }
 
     fun update(result: ScanResult) {
-        log.debug(LogTag.UI, "update(symbol={}, matches={})", result.symbol, result.matches)
+        log.debug(LogTag.UI, "update(symbol={}, score={})", result.symbol, result.anomalyScore)
         if (scanning) stagedRows[result.symbol] = result
     }
 
@@ -104,13 +105,14 @@ class ScannerPanel(
         }
     }
 
-    fun completeScan() {
+    fun completeScan(resultLimit: Int = 50) {
         log.debug(LogTag.UI, "completeScan(results={})", stagedRows.size)
-        stagedRows.values.forEach { result ->
-            rows.removeIf { it.symbol == result.symbol }
-            if (result.matches) rows += result
-        }
-        rows.sortByDescending { it.relativeVolume ?: 0.0 }
+        rows.setAll(stagedRows.values.sortedByDescending(ScanResult::anomalyScore).take(resultLimit))
+        stagedRows.clear(); scanning = false; hourglass?.stop()
+    }
+
+    fun abortScan() {
+        log.debug(LogTag.UI, "abortScan()")
         stagedRows.clear(); scanning = false; hourglass?.stop()
     }
 
@@ -127,12 +129,6 @@ class ScannerPanel(
                 cycleCount = 2; isAutoReverse = true; play()
             }
         })).apply { cycleCount = seconds.coerceAtMost(Int.MAX_VALUE.toLong()).toInt(); play() }
-    }
-
-    fun showBatch(number: Int, total: Int, symbols: List<String>, seconds: Long) {
-        log.debug(LogTag.UI, "showBatch(number={}, total={}, symbols={})", number, total, symbols.size)
-        cycleStatus.text = "Batch $number/$total · ${symbols.size} symbols · ${seconds}s"
-        cycleStatus.tooltip = Tooltip(symbols.joinToString(", "))
     }
 
     fun setCurrency(value: DisplayCurrency, converter: (String, Double) -> Double) {
@@ -253,4 +249,10 @@ class ScannerPanel(
     }
 
     private fun percent(value: Double?) = value?.let { "%+.2f%%".format(it) } ?: "N/A"
+    private fun compactMoney(value: Double): String = when {
+        value >= 1_000_000_000 -> "${currency.symbol}%.1fB".format(value / 1_000_000_000)
+        value >= 1_000_000 -> "${currency.symbol}%.1fM".format(value / 1_000_000)
+        value >= 1_000 -> "${currency.symbol}%.1fK".format(value / 1_000)
+        else -> "${currency.symbol}%,.0f".format(value)
+    }
 }
