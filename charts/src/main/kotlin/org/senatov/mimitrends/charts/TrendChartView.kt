@@ -25,6 +25,8 @@ class TrendChartView : StackPane() {
 
     init {
         log.debug(LogTag.UI, "init()")
+        minHeight = 0.0
+        maxHeight = Double.MAX_VALUE
         chart.setAnimated(false)
         chart.createSymbols = false
         chart.legendVisibleProperty().set(false)
@@ -39,7 +41,12 @@ class TrendChartView : StackPane() {
         progress.maxWidth = 32.0
         progress.maxHeight = 32.0
         progress.isVisible = false
-        val plots = VBox(4.0, chart, volumeChart).also { VBox.setVgrow(chart, Priority.ALWAYS) }
+        val plots = VBox(4.0, chart, volumeChart).also {
+            it.minHeight = 0.0
+            it.maxHeight = Double.MAX_VALUE
+            chart.minHeight = 0.0
+            VBox.setVgrow(chart, Priority.ALWAYS)
+        }
         children += listOf(plots, progress)
     }
 

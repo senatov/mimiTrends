@@ -36,13 +36,17 @@ class ScannerPanel(private val onOpen: (String) -> Unit) : VBox(7.0) {
         column("Volume") { "%,.0f".format(it.sessionVolume) }
         column("Updated") { time.format(Instant.ofEpochMilli(it.updatedAtMillis)) }
         table.placeholder = empty
-        table.columnResizePolicy = TableView.CONSTRAINED_RESIZE_POLICY_FLEX_LAST_COLUMN
+        table.columnResizePolicy = TableView.UNCONSTRAINED_RESIZE_POLICY
         table.setRowFactory {
             TableRow<ScanResult>().apply { setOnMouseClicked { e -> if (!isEmpty && e.button == MouseButton.PRIMARY && e.clickCount == 1) onOpen(item.symbol) } }
         }
-        table.prefHeight = 190.0
+        table.minHeight = 0.0
+        table.maxHeight = Double.MAX_VALUE
         table.styleClass += "scanner-table"
         children += listOf(header, table)
+        VBox.setVgrow(table, Priority.ALWAYS)
+        minHeight = 0.0
+        maxHeight = Double.MAX_VALUE
     }
 
     fun update(result: ScanResult) {
@@ -67,7 +71,18 @@ class ScannerPanel(private val onOpen: (String) -> Unit) : VBox(7.0) {
 
     private fun column(title: String, value: (ScanResult) -> String) {
         log.debug(LogTag.UI, "column(title={})", title)
-        table.columns += TableColumn<ScanResult, String>(title).apply { setCellValueFactory { ReadOnlyObjectWrapper(value(it.value)) } }
+        table.columns += TableColumn<ScanResult, String>(title).apply {
+            setCellValueFactory { ReadOnlyObjectWrapper(value(it.value)) }
+            isResizable = true
+            isReorderable = true
+            prefWidth = when (title) {
+                "Symbol" -> 105.0
+                "Volume" -> 125.0
+                "Updated" -> 105.0
+                else -> 115.0
+            }
+            minWidth = 55.0
+        }
     }
 
     private fun percent(value: Double?) = value?.let { "%+.2f%%".format(it) } ?: "N/A"

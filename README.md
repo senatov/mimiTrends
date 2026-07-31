@@ -112,6 +112,10 @@ app/             JavaFX lifecycle, credentials, dialogs, UI orchestration, and r
 The dependency direction is one-way: infrastructure and presentation modules depend on `core`; `app` composes them. Database,
 WebSocket, database, scanner, and chart code do not depend on the UI, so each can be tested or replaced independently.
 
+SQLite uses one managed WAL connection with `synchronous=NORMAL`. Repeated updates of the same symbol/minute are coalesced in memory
+and written by a daemon worker as one transaction per batch. Scanner calculations use an in-memory history window after the initial
+database read, while explicit chart reads flush pending bars first. Application shutdown performs a final flush and closes the connection.
+
 Run every module test from the root:
 
 ```zsh

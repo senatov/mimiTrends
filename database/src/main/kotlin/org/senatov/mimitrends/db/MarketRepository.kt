@@ -9,45 +9,53 @@ import java.nio.file.Files
 import java.nio.file.Path
 import java.sql.Connection
 import java.sql.DriverManager
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.locks.ReentrantLock
+import kotlin.concurrent.withLock
 
 class MarketRepository(
     private val databasePath: Path = Path.of(System.getProperty("user.home"), ".mimi", "trends", "mimitrends.db")
-) {
+) : AutoCloseable {
     private val log = LoggerFactory.getLogger(javaClass)
+    private val lock = ReentrantLock()
+    private val pendingLock = Any()
+    private val pending = linkedMapOf<Pair<String, Long>, MinuteBar>()
+    private val closed = AtomicBoolean(false)
+    private val writer = Executors.newSingleThreadScheduledExecutor { task ->
+        Thread(task, "mimitrends-sqlite-writer").apply { isDaemon = true }
+    }
+    private val connection: Connection
 
     init {
         log.debug(LogTag.DB, "init(databasePath={})", databasePath)
         Files.createDirectories(databasePath.parent)
-        connection().use(::migrate)
+        connection = DriverManager.getConnection("jdbc:sqlite:$databasePath")
+        configure(connection)
+        migrate(connection)
+        writer.scheduleWithFixedDelay(::flushSafely, 1, 1, TimeUnit.SECONDS)
     }
 
     fun upsertMinuteBar(bar: MinuteBar) {
-        log.debug(LogTag.DB, "upsertMinuteBar(symbol={}, minute={})", bar.symbol, bar.minuteEpochSeconds)
-        connection().use { connection ->
-            connection.prepareStatement(
-                """INSERT INTO minute_bars(symbol, minute_epoch, open, high, low, close, volume)
-                   VALUES (?, ?, ?, ?, ?, ?, ?)
-                   ON CONFLICT(symbol, minute_epoch) DO UPDATE SET open=excluded.open,
-                   high=excluded.high, low=excluded.low, close=excluded.close, volume=excluded.volume"""
-            ).use { statement ->
-                statement.setString(1, bar.symbol); statement.setLong(2, bar.minuteEpochSeconds)
-                statement.setDouble(3, bar.open); statement.setDouble(4, bar.high); statement.setDouble(5, bar.low)
-                statement.setDouble(6, bar.close); statement.setDouble(7, bar.volume); statement.executeUpdate()
-            }
-        }
+        log.trace(LogTag.DB, "upsertMinuteBar(symbol={}, minute={})", bar.symbol, bar.minuteEpochSeconds)
+        check(!closed.get()) { "MarketRepository is closed" }
+        synchronized(pendingLock) { pending[bar.symbol to bar.minuteEpochSeconds] = bar }
     }
 
     fun loadMinuteBars(symbol: String, fromEpochSeconds: Long): List<MinuteBar> {
         log.debug(LogTag.DB, "loadMinuteBars(symbol={}, from={})", symbol, fromEpochSeconds)
-        connection().use { connection ->
-            return connection.prepareStatement(
+        flushPending()
+        return lock.withLock {
+            connection.prepareStatement(
                 """SELECT minute_epoch, open, high, low, close, volume FROM minute_bars
                    WHERE symbol = ? AND minute_epoch >= ? ORDER BY minute_epoch"""
             ).use { statement ->
-                statement.setString(1, symbol.uppercase()); statement.setLong(2, fromEpochSeconds)
+                val normalized = symbol.uppercase()
+                statement.setString(1, normalized); statement.setLong(2, fromEpochSeconds)
                 statement.executeQuery().use { result ->
                     buildList {
-                        while (result.next()) add(MinuteBar(symbol.uppercase(), result.getLong(1), result.getDouble(2),
+                        while (result.next()) add(MinuteBar(normalized, result.getLong(1), result.getDouble(2),
                             result.getDouble(3), result.getDouble(4), result.getDouble(5), result.getDouble(6)))
                     }
                 }
@@ -55,11 +63,60 @@ class MarketRepository(
         }
     }
 
-    private fun connection(): Connection {
-        log.debug(LogTag.DB, "connection()")
-        return DriverManager.getConnection("jdbc:sqlite:$databasePath").also { connection ->
-            connection.createStatement().use { it.execute("PRAGMA journal_mode = WAL") }
-            connection.createStatement().use { it.execute("PRAGMA busy_timeout = 3000") }
+    fun flushPending(): Int {
+        log.trace(LogTag.DB, "flushPending()")
+        val batch = synchronized(pendingLock) {
+            if (pending.isEmpty()) return 0
+            pending.values.toList().also { pending.clear() }
+        }
+        return try {
+            lock.withLock {
+                connection.autoCommit = false
+                try {
+                    connection.prepareStatement(UPSERT_SQL).use { statement ->
+                        batch.forEach { bar ->
+                            statement.setString(1, bar.symbol); statement.setLong(2, bar.minuteEpochSeconds)
+                            statement.setDouble(3, bar.open); statement.setDouble(4, bar.high); statement.setDouble(5, bar.low)
+                            statement.setDouble(6, bar.close); statement.setDouble(7, bar.volume); statement.addBatch()
+                        }
+                        statement.executeBatch()
+                    }
+                    connection.commit()
+                } catch (error: Exception) {
+                    connection.rollback(); throw error
+                } finally {
+                    connection.autoCommit = true
+                }
+            }
+            log.debug(LogTag.DB, "minute-bar batch stored size={}", batch.size)
+            batch.size
+        } catch (error: Exception) {
+            synchronized(pendingLock) { batch.forEach { pending.putIfAbsent(it.symbol to it.minuteEpochSeconds, it) } }
+            throw error
+        }
+    }
+
+    override fun close() {
+        log.debug(LogTag.DB, "close()")
+        if (!closed.compareAndSet(false, true)) return
+        writer.shutdown()
+        runCatching { flushPending() }.onFailure { log.error(LogTag.DB, "final database flush failed", it) }
+        lock.withLock { connection.close() }
+    }
+
+    private fun flushSafely() {
+        log.trace(LogTag.DB, "flushSafely()")
+        if (!closed.get()) runCatching(::flushPending).onFailure { log.error(LogTag.DB, "background database flush failed", it) }
+    }
+
+    private fun configure(connection: Connection) {
+        log.debug(LogTag.DB, "configure()")
+        connection.createStatement().use { statement ->
+            statement.execute("PRAGMA journal_mode = WAL")
+            statement.execute("PRAGMA synchronous = NORMAL")
+            statement.execute("PRAGMA busy_timeout = 5000")
+            statement.execute("PRAGMA temp_store = MEMORY")
+            statement.execute("PRAGMA foreign_keys = ON")
         }
     }
 
@@ -75,5 +132,11 @@ class MarketRepository(
             )
             statement.executeUpdate("CREATE INDEX IF NOT EXISTS idx_minute_symbol_time ON minute_bars(symbol, minute_epoch)")
         }
+    }
+
+    private companion object {
+        const val UPSERT_SQL = """INSERT INTO minute_bars(symbol, minute_epoch, open, high, low, close, volume)
+            VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT(symbol, minute_epoch) DO UPDATE SET
+            open=excluded.open, high=excluded.high, low=excluded.low, close=excluded.close, volume=excluded.volume"""
     }
 }

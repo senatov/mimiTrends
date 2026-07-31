@@ -81,6 +81,8 @@ class MainController(
         contentSplitPane.apply {
             orientation = javafx.geometry.Orientation.VERTICAL
             items.setAll(scannerPanel, trendChart)
+            SplitPane.setResizableWithParent(scannerPanel, true)
+            SplitPane.setResizableWithParent(trendChart, true)
             styleClass += "content-split-pane"
         }
         Platform.runLater { contentSplitPane.setDividerPosition(0, initialDivider) }
@@ -129,6 +131,7 @@ class MainController(
         rotationTask?.cancel(false)
         webSocket?.close()
         batchScheduler.shutdownNow()
+        repository.close()
     }
 
     fun selectedSymbol(): String {
