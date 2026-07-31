@@ -66,7 +66,7 @@ class ScannerPanel(
         sortedRows.comparatorProperty().bind(table.comparatorProperty())
         symbolColumn()
         signalColumn("Trend", ScanResult::signalSource)
-        numberColumn("Δ 10m", ScanResult::windowChangePercent, ::percent)
+        numberColumn("Δ 10m, %", ScanResult::windowChangePercent, ::percent)
         numberColumn("Price", { convertPrice(it.symbol, it.price) }) { "${currency.symbol}%,.2f".format(it) }
         val scoreColumn = numberColumn("Score", ScanResult::anomalyScore) { "%.2f×".format(it) }
         signalColumn("Window", ScanResult::signalWindowLabel)
@@ -240,6 +240,8 @@ class ScannerPanel(
         log.debug(LogTag.UI, "numberColumn(title={})", title)
         return TableColumn<ScanResult, Number>(title).apply {
             setCellValueFactory { ReadOnlyDoubleWrapper(value(it.value)) }
+            comparator = Comparator { left, right -> left.toDouble().compareTo(right.toDouble()) }
+            isSortable = true
             setCellFactory { object : TableCell<ScanResult, Number>() {
                 override fun updateItem(item: Number?, empty: Boolean) {
                     super.updateItem(item, empty)
