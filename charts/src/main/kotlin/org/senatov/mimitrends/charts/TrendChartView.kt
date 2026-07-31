@@ -54,14 +54,7 @@ class TrendChartView : StackPane() {
     private val priceAxis = NumberAxis()
     private val volumeAxis = NumberAxis("Volume")
     private val candleRenderer = CandlestickRenderer()
-    private var volumeDirections = emptyList<Int>()
-    private val volumeRenderer = object : XYBarRenderer() {
-        override fun getItemPaint(row: Int, column: Int): Paint = when (volumeDirections.getOrNull(column)) {
-            1 -> Color(38, 148, 92, 150)
-            -1 -> Color(211, 70, 82, 150)
-            else -> Color(132, 141, 151, 120)
-        }
-    }
+    private val volumeRenderer = DirectionalVolumeRenderer()
     private val closeLineRenderer = XYLineAndShapeRenderer(true, false)
     private val pricePlot = XYPlot(null, null, priceAxis, candleRenderer)
     private val volumePlot = XYPlot(null, null, volumeAxis, volumeRenderer)
@@ -126,7 +119,7 @@ class TrendChartView : StackPane() {
         val opens = DoubleArray(visible.size) { visible[it].open * priceMultiplier }
         val closes = DoubleArray(visible.size) { visible[it].close * priceMultiplier }
         val volumes = DoubleArray(visible.size) { visible[it].volume }
-        volumeDirections = visible.map { bar ->
+        volumeRenderer.directions = visible.map { bar ->
             when {
                 bar.close > bar.open -> 1
                 bar.close < bar.open -> -1
@@ -393,5 +386,19 @@ class TrendChartView : StackPane() {
 
     private companion object {
         const val MAX_CANDLES = 360
+    }
+
+    private class DirectionalVolumeRenderer : XYBarRenderer() {
+        var directions: List<Int> = emptyList()
+
+        override fun getItemPaint(row: Int, column: Int): Paint = when (directions.getOrNull(column)) {
+            1 -> Color(38, 148, 92, 150)
+            -1 -> Color(211, 70, 82, 150)
+            else -> Color(132, 141, 151, 120)
+        }
+
+        private companion object {
+            const val serialVersionUID = 1L
+        }
     }
 }

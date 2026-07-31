@@ -9,7 +9,7 @@ import kotlin.test.assertTrue
 
 class ScannerEngineTest {
     @Test fun `detects a fresh upward impulse`() {
-        val bars = normalBars(80).toMutableList()
+        val bars = normalBars().toMutableList()
         bars += candle(80, 100.0, 103.0, 2_000.0)
         val result = requireNotNull(engine().evaluate("TEST", bars, criteria()))
         assertEquals("Impulse ↑", result.signalSource)
@@ -19,7 +19,7 @@ class ScannerEngineTest {
     }
 
     @Test fun `detects a fresh downward impulse`() {
-        val bars = normalBars(80).toMutableList()
+        val bars = normalBars().toMutableList()
         bars += candle(80, 100.0, 96.0, 2_000.0)
         val result = requireNotNull(engine().evaluate("TEST", bars, criteria()))
         assertEquals("Impulse ↓", result.signalSource)
@@ -27,13 +27,13 @@ class ScannerEngineTest {
     }
 
     @Test fun `does not rank volume without an exceptional price candle`() {
-        val bars = normalBars(80).toMutableList()
+        val bars = normalBars().toMutableList()
         bars += candle(80, 100.0, 100.01, 50_000.0)
         assertNull(engine().evaluate("TEST", bars, criteria()))
     }
 
     @Test fun `drops an impulse older than configured freshness horizon`() {
-        val bars = normalBars(80).toMutableList()
+        val bars = normalBars().toMutableList()
         bars += candle(80, 100.0, 104.0, 5_000.0)
         bars += candle(81, 104.0, 104.01, 100.0)
         bars += candle(82, 104.01, 104.02, 100.0)
@@ -41,7 +41,7 @@ class ScannerEngineTest {
         assertNull(engine().evaluate("TEST", bars, criteria(maxSignalAgeMinutes = 2)))
     }
 
-    private fun normalBars(count: Int) = (0 until count).map { minute ->
+    private fun normalBars() = (0 until 80).map { minute ->
         candle(minute, 100.0, 100.01, 100.0)
     }
 

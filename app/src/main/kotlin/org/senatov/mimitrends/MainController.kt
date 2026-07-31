@@ -310,12 +310,12 @@ class MainController(
         )
         selectedMarketSymbols().filterNot { it.contains('.') }.forEach(client::subscribe)
         finnhubClient = client
-        client.connect().whenComplete { _, error ->
+        client.connect().whenComplete(java.util.function.BiConsumer<java.net.http.WebSocket?, Throwable?> { _, error ->
             Platform.runLater {
                 if (error == null) setStatus("Finnhub live connected · Yahoo/SQLite history ready")
                 else setStatus("Finnhub connection failed · Yahoo/SQLite fallback active")
             }
-        }
+        })
     }
 
     private fun dataStatus(symbol: String): String {
