@@ -68,10 +68,8 @@ class ScannerPanel(
         numberColumn("Price", { convertPrice(it.symbol, it.price) }) { "${currency.symbol}%,.2f".format(it) }
         val scoreColumn = numberColumn("Score", ScanResult::anomalyScore) { "%.2f×".format(it) }
         signalColumn(value = ScanResult::signalSource)
-        numberColumn("When", { it.signalAgeMinutes.toDouble() }) {
-            when (it.toInt()) { 0 -> "latest"; 1 -> "1m ago"; else -> "${it.toInt()}m ago" }
-        }
-        numberColumn("Δ 1m", ScanResult::windowChangePercent, ::percent)
+        signalColumn("Window", ScanResult::signalWindowLabel)
+        numberColumn("Δ signal", ScanResult::windowChangePercent, ::percent)
         numberColumn("Jump Z", ScanResult::priceAnomaly) { "%.2fσ".format(it) }
         numberColumn("Range Z", ScanResult::rangeAnomaly) { "%.2fσ".format(it) }
         numberColumn("Volume Z", ScanResult::volumeAnomaly) { "%.2fσ".format(it) }
@@ -206,7 +204,9 @@ class ScannerPanel(
             setCellValueFactory { ReadOnlyDoubleWrapper(value(it.value)) }
             setCellFactory { object : TableCell<ScanResult, Number>() {
                 override fun updateItem(item: Number?, empty: Boolean) {
-                    super.updateItem(item, empty); text = if (empty || item == null) null else format(item.toDouble())
+                    super.updateItem(item, empty)
+                    val value = item?.toDouble()
+                    text = if (empty || value == null) null else if (value.isFinite()) format(value) else "—"
                 }
             } }
             isResizable = true; isReorderable = true; prefWidth = 115.0; minWidth = 55.0

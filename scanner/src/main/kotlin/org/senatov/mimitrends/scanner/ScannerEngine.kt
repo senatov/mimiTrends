@@ -18,10 +18,7 @@ class ScannerEngine(private val zone: ZoneId = ZoneId.systemDefault()) {
 
     fun evaluate(symbol: String, bars: List<MinuteBar>, criteria: ScannerCriteria): ScanResult? {
         log.debug(LogTag.DB, "evaluate(symbol={}, bars={}, maxAge={}m)", symbol, bars.size, criteria.maxSignalAgeMinutes)
-        val sorted = bars.asSequence()
-            .filter { it.minuteEpochSeconds % 60L == 0L && it.volume > 0.0 }
-            .sortedBy(MinuteBar::minuteEpochSeconds)
-            .toList()
+        val sorted = cleanBars(bars)
         val latest = sorted.lastOrNull() ?: return null
         val features = features(sorted)
         if (features.size < MIN_FEATURES) return null
@@ -51,7 +48,74 @@ class ScannerEngine(private val zone: ZoneId = ZoneId.systemDefault()) {
             sessionTurnover = turnover,
             signalAgeMinutes = signal.ageMinutes,
             signalSource = if (signal.feature.returnPercent >= 0) "Impulse ↑" else "Impulse ↓",
-            updatedAtMillis = latest.minuteEpochSeconds * 1_000
+            updatedAtMillis = latest.minuteEpochSeconds * 1_000,
+            signalWindowLabel = when (signal.ageMinutes) {
+                0 -> "latest"
+                1 -> "1m ago"
+                else -> "${signal.ageMinutes}m ago"
+            }
+        )
+    }
+
+    fun evaluateFallback(symbol: String, bars: List<MinuteBar>, criteria: ScannerCriteria): ScanResult? {
+        log.debug(LogTag.DB, "evaluateFallback(symbol={}, bars={})", symbol, bars.size)
+        val relaxed = criteria.copy(
+            minJumpZ = criteria.minJumpZ * 0.80,
+            minRangeZ = criteria.minRangeZ * 0.80,
+            minVolumeZ = criteria.minVolumeZ * 0.75,
+            minRelativeVolume = criteria.minRelativeVolume * 0.85,
+            minBodyRatio = criteria.minBodyRatio * 0.90,
+            minAbsoluteMovePercent = criteria.minAbsoluteMovePercent * 0.70
+        )
+        evaluate(symbol, bars, relaxed)?.let { impulse ->
+            return impulse.copy(signalSource = "${impulse.signalSource} · relaxed", anomalyScore = impulse.anomalyScore * 0.85)
+        }
+        return evaluateTrend(symbol, bars, criteria)
+    }
+
+    private fun evaluateTrend(symbol: String, bars: List<MinuteBar>, criteria: ScannerCriteria): ScanResult? {
+        val sorted = cleanBars(bars)
+        val latest = sorted.lastOrNull() ?: return null
+        val allDates = sorted.map { local(it).toLocalDate() }.distinct()
+        if (allDates.size < MIN_SESSIONS) return null
+        val session = sameSession(sorted, latest)
+        val window = session.takeLast(criteria.trendWindowMinutes)
+        if (window.size < MIN_TREND_BARS) return null
+        val first = window.first().close
+        val last = window.last().close
+        val totalReturn = percent(first, last)
+        if (totalReturn < criteria.minTrendReturnPercent) return null
+        val path = window.zipWithNext().sumOf { (a, b) -> abs(percent(a.close, b.close)) }
+        val efficiency = if (path > 0.0) totalReturn / path else 0.0
+        if (efficiency < criteria.minTrendEfficiency) return null
+        val regression = regression(window.map(MinuteBar::close))
+        if (regression.slope <= 0.0 || regression.rSquared < MIN_TREND_R_SQUARED) return null
+        val recentBars = window.takeLast(15)
+        val recentReturn = percent(recentBars.first().close, recentBars.last().close)
+        if (recentReturn < -MAX_RECENT_PULLBACK_PERCENT) return null
+        val turnover = session.sumOf { it.close * it.volume }
+        if (latest.close < criteria.minPrice || turnover < criteria.minSessionTurnover) return null
+        val score = totalReturn * (0.5 + regression.rSquared * 0.5) * (0.5 + efficiency.coerceAtMost(1.0) * 0.5)
+        log.debug(LogTag.DB,
+            "trend accepted symbol={} bars={} return={} efficiency={} rSquared={} recentReturn={}",
+            symbol, window.size, totalReturn, efficiency, regression.rSquared, recentReturn)
+        return ScanResult(
+            symbol = symbol,
+            price = latest.close,
+            anomalyScore = score,
+            priceAnomaly = Double.NaN,
+            volumeAnomaly = Double.NaN,
+            rangeAnomaly = Double.NaN,
+            relativeVolume = Double.NaN,
+            candleBodyRatio = Double.NaN,
+            windowChangePercent = totalReturn,
+            windowVolume = window.sumOf(MinuteBar::volume),
+            sessionVolume = session.sumOf(MinuteBar::volume),
+            sessionTurnover = turnover,
+            signalAgeMinutes = 0,
+            signalSource = "Trend ↑",
+            updatedAtMillis = latest.minuteEpochSeconds * 1_000,
+            signalWindowLabel = "${window.size}m"
         )
     }
 
@@ -106,6 +170,11 @@ class ScannerEngine(private val zone: ZoneId = ZoneId.systemDefault()) {
         else all.filter { it.bar.minuteEpochSeconds < cutoff }.takeLast(max(120, sessions * 100))
     }
 
+    private fun cleanBars(bars: List<MinuteBar>): List<MinuteBar> = bars.asSequence()
+        .filter { it.minuteEpochSeconds % 60L == 0L && it.volume > 0.0 }
+        .sortedBy(MinuteBar::minuteEpochSeconds)
+        .toList()
+
     private fun features(bars: List<MinuteBar>): List<Feature> = bars.zipWithNext().mapIndexedNotNull { index, (previous, bar) ->
         val seconds = bar.minuteEpochSeconds - previous.minuteEpochSeconds
         if (seconds !in 1..180 || previous.close <= 0.0) return@mapIndexedNotNull null
@@ -124,6 +193,25 @@ class ScannerEngine(private val zone: ZoneId = ZoneId.systemDefault()) {
         val center = median(values)
         val mad = median(values.map { abs(it - center) })
         return max(1.4826 * mad, max(abs(center) * 0.20, floor))
+    }
+
+    private fun regression(values: List<Double>): Regression {
+        val count = values.size.toDouble()
+        val meanX = values.indices.sumOf { it.toDouble() } / count
+        val meanY = values.average()
+        var covariance = 0.0
+        var varianceX = 0.0
+        var varianceY = 0.0
+        values.forEachIndexed { index, value ->
+            val dx = index - meanX
+            val dy = value - meanY
+            covariance += dx * dy
+            varianceX += dx * dx
+            varianceY += dy * dy
+        }
+        val slope = if (varianceX > 0.0) covariance / varianceX else 0.0
+        val rSquared = if (varianceX > 0.0 && varianceY > 0.0) covariance * covariance / (varianceX * varianceY) else 0.0
+        return Regression(slope, rSquared.coerceIn(0.0, 1.0))
     }
 
     private fun median(values: List<Double>): Double {
@@ -160,6 +248,8 @@ class ScannerEngine(private val zone: ZoneId = ZoneId.systemDefault()) {
         val score: Double
     )
 
+    private data class Regression(val slope: Double, val rSquared: Double)
+
     private companion object {
         const val MIN_FEATURES = 20
         const val MIN_SESSIONS = 2
@@ -168,5 +258,8 @@ class ScannerEngine(private val zone: ZoneId = ZoneId.systemDefault()) {
         const val RANGE_FLOOR = 0.01
         const val LOG_VOLUME_FLOOR = 0.15
         const val FRESHNESS_HALF_LIFE = 1.8
+        const val MIN_TREND_BARS = 60
+        const val MIN_TREND_R_SQUARED = 0.25
+        const val MAX_RECENT_PULLBACK_PERCENT = 0.35
     }
 }

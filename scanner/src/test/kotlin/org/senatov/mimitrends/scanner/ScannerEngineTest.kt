@@ -42,6 +42,23 @@ class ScannerEngineTest {
         assertNull(engine().evaluate("TEST", bars, criteria(maxSignalAgeMinutes = 2)))
     }
 
+    @Test fun `uses a persistent half-session rise as fallback`() {
+        val bars = mutableListOf<MinuteBar>()
+        (0 until 2).forEach { day ->
+            (0 until 180).forEach { minute -> bars += candle(day * 1_440 + minute, 100.0, 100.01, 100.0) }
+        }
+        var previous = 100.0
+        (0 until 180).forEach { minute ->
+            val close = 100.0 + minute * 0.008 + kotlin.math.sin(minute / 7.0) * 0.08
+            bars += candle(2 * 1_440 + minute, previous, close, 150.0)
+            previous = close
+        }
+        assertNull(engine().evaluate("TEST", bars, criteria()))
+        val result = requireNotNull(engine().evaluateFallback("TEST", bars, criteria()))
+        assertEquals("Trend ↑", result.signalSource)
+        assertTrue(result.windowChangePercent >= 0.60)
+    }
+
     private fun normalBars() = (0 until 3).flatMap { day ->
         (0 until 30).map { minute -> candle(day * 1_440 + minute, 100.0, 100.01, 100.0) }
     }

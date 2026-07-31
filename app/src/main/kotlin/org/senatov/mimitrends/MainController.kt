@@ -183,11 +183,15 @@ class MainController(
                 setStatus("Finnhub live + Yahoo/SQLite: scanning ${symbols.size} symbols · fresh impulses only")
             }
             val results = mutableListOf<ScanResult>()
+            val fallbackResults = mutableListOf<ScanResult>()
             val errors = mutableListOf<String>()
             symbols.forEachIndexed { index, symbol ->
                 if (generation != scanGeneration.get()) return@forEachIndexed
                 runCatching { loadAndEvaluate(symbol, criteria) }
-                    .onSuccess { result -> result?.let { results += it.copy(dataStatus = dataStatus(symbol)) } }
+                    .onSuccess { (primary, fallback) ->
+                        primary?.let { results += it.copy(dataStatus = dataStatus(symbol)) }
+                        fallback?.let { fallbackResults += it.copy(dataStatus = dataStatus(symbol)) }
+                    }
                     .onFailure { error ->
                         errors += "$symbol: ${error.message ?: error.javaClass.simpleName}"
                         log.warn(LogTag.API, "Yahoo scan failed symbol={}", symbol, error)
@@ -197,14 +201,19 @@ class MainController(
             repository.flushPending()
             Platform.runLater {
                 if (generation != scanGeneration.get()) return@runLater
-                if (results.isEmpty() && errors.size == symbols.size && symbols.isNotEmpty()) {
+                val target = criteria.minimumTableResults.coerceAtMost(criteria.resultLimit)
+                val supplements = fallbackResults.sortedByDescending(ScanResult::anomalyScore)
+                    .take((target - results.size).coerceAtLeast(0))
+                val published = results + supplements
+                if (published.isEmpty() && errors.size == symbols.size && symbols.isNotEmpty()) {
                     scannerPanel.abortScan()
                     setStatus("Yahoo scan produced no data; previous table retained", true, errors.joinToString("\n"))
                 } else {
-                    results.forEach(scannerPanel::update)
+                    published.forEach(scannerPanel::update)
                     scannerPanel.completeScan(criteria.resultLimit)
                     scannerPanel.showCountdown(criteria.scanIntervalSeconds)
-                    val marketState = if (symbols.isEmpty()) "all selected markets closed" else "${results.size} fresh impulses"
+                    val marketState = if (symbols.isEmpty()) "all selected markets closed"
+                        else "${results.size} strict impulses + ${supplements.size} trend/relaxed"
                     setStatus("Hybrid scan complete · $marketState · next in ${criteria.scanIntervalSeconds}s")
                 }
             }
@@ -217,7 +226,7 @@ class MainController(
         batchScheduler.execute { runCatching(scan).onFailure { log.error(LogTag.API, "initial Yahoo scan failed", it) } }
     }
 
-    private fun loadAndEvaluate(symbol: String, criteria: ScannerCriteria): ScanResult? {
+    private fun loadAndEvaluate(symbol: String, criteria: ScannerCriteria): Pair<ScanResult?, ScanResult?> {
         log.debug(LogTag.API, "loadAndEvaluate(symbol={})", symbol)
         val now = java.time.Instant.now().epochSecond
         val freshAfter = now - criteria.scanIntervalSeconds
@@ -244,7 +253,10 @@ class MainController(
             repository.loadMinuteBars(symbol, now - 30 * 86_400)
         }
         val lastCompletedMinute = now / 60L * 60L - 60L
-        return scannerEngine.evaluate(symbol, bars.filter { it.minuteEpochSeconds <= lastCompletedMinute }, criteria)
+        val completed = bars.filter { it.minuteEpochSeconds <= lastCompletedMinute }
+        val primary = scannerEngine.evaluate(symbol, completed, criteria)
+        val fallback = if (primary == null) scannerEngine.evaluateFallback(symbol, completed, criteria) else null
+        return primary to fallback
     }
 
     private fun isMarketOpen(symbol: String, instant: java.time.Instant = java.time.Instant.now()): Boolean {
@@ -420,7 +432,7 @@ class MainController(
                         val currency = scannerCriteria.displayCurrency
                         trendChart.renderMinuteBars(
                             symbol, bars, selectedRangeValue, displayPrice(symbol, 1.0), currency.symbol,
-                            currentSignal?.takeIf { it.symbol == symbol }?.signalAgeMinutes
+                            currentSignal?.takeIf { it.symbol == symbol && it.signalSource.startsWith("Impulse") }?.signalAgeMinutes
                         )
                         setStatus("Read SQLite: $symbol · ${bars.size} minute bars · $selectedRangeValue")
                     } else {
