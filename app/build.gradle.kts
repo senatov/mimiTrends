@@ -45,7 +45,23 @@ application {
     // A separate launcher prevents the JDK launcher from treating App as a modular
     // JavaFX entry point while the JavaFX libraries are supplied on the classpath.
     mainClass = "org.senatov.mimitrends.LauncherKt"
-    applicationDefaultJvmArgs = listOf("--enable-native-access=ALL-UNNAMED")
+    applicationDefaultJvmArgs = listOf("--enable-native-access=javafx.graphics,ALL-UNNAMED")
+}
+
+// Keep JavaFX itself on the module path even though the Kotlin application is
+// intentionally non-modular. This is the supported JavaFX launch layout and
+// avoids PlatformImpl's "classes were loaded from unnamed module" warning.
+tasks.named<JavaExec>("run") {
+    doFirst {
+        val javafxJars = classpath.filter { file ->
+            file.extension == "jar" && file.name.startsWith("javafx-")
+        }
+        classpath = classpath.filter { file -> file !in javafxJars }
+        jvmArgs(
+            "--module-path", javafxJars.asPath,
+            "--add-modules", "javafx.controls,javafx.graphics"
+        )
+    }
 }
 
 tasks.test {
