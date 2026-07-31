@@ -42,7 +42,8 @@ class ScannerEngine(private val repository: MarketRepository, private val zone: 
             dayBars.filter { Instant.ofEpochSecond(it.minuteEpochSeconds).atZone(zone).toLocalTime().toSecondOfDay() / 60 <= currentMinuteOfDay }.sumOf { it.volume }
         }.filter { it > 0 }.toList()
         val relative = baselines.takeIf { it.size >= minOf(3, criteria.baselineSessions) }?.let { sessionVolume / it.average() }
-        val matches = relative != null && change1 != null && change5 != null && relative > criteria.minRelativeVolume &&
+        val relativeVolumePasses = criteria.minRelativeVolume <= 0 || relative != null && relative > criteria.minRelativeVolume
+        val matches = relativeVolumePasses && change1 != null && change5 != null &&
             change1 > criteria.minChange1mPercent && change5 > criteria.minChange5mPercent && latest.close > criteria.minPrice && sessionVolume > criteria.minSessionVolume
         return ScanResult(symbol, latest.close, relative, change1, change5, sessionVolume, matches, nowMillis)
     }

@@ -131,10 +131,14 @@ The application uses `wss://ws.finnhub.io` for realtime trades in the scanner wa
 
 ### Momentum scanner
 
-The upper table contains only symbols that currently pass every rule configured under **Settings**. The default rules are RVOL > 3,
-1-minute change > 1%, 5-minute change > 1.2%, price > $8, and accumulated session volume > 500,000 shares. Click a matching
+The upper table contains only symbols that currently pass every rule configured under **Settings**. The empirical first-run profile
+uses 50 liquid US stocks plus 50 liquid euro-area listings from Xetra, Amsterdam, Paris, and Milan; disables RVOL until a baseline exists (`0`), and applies change 1m > -0.10%, change 5m > -0.25%, source-market price > 8,
+and locally accumulated session volume > 20,000 shares. It is deliberately broad enough to populate the table during an active session;
+positive RVOL values can be enabled after at least three local sessions have accumulated. Click a matching
 row to open its chart. A watchlist may contain more than 50 symbols: it is divided into configurable batches of at most 50 active
 WebSocket subscriptions. After the configured interval the scanner unsubscribes the current batch and activates the next one.
+International realtime availability depends on the Finnhub market-data entitlement; unavailable European subscriptions remain silent,
+while supported delayed or realtime trades are accumulated normally.
 
 Minute scanning is possible without the Premium candle endpoint: MiMiTrends receives individual Finnhub WebSocket trades, aggregates
 them into real one-minute OHLCV bars, and stores those bars in SQLite. Changes are calculated from the minute closes actually observed

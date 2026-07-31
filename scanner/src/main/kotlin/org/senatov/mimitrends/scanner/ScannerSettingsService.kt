@@ -17,11 +17,11 @@ class ScannerSettingsService(private val path: Path = Path.of(System.getProperty
         return runCatching {
             val p = Properties().also { Files.newInputStream(path).use(it::load) }
             ScannerCriteria(
-                minRelativeVolume = p.getProperty("minRelativeVolume", "3.0").toDouble(),
-                minChange1mPercent = p.getProperty("minChange1mPercent", "1.0").toDouble(),
-                minChange5mPercent = p.getProperty("minChange5mPercent", "1.2").toDouble(),
+                minRelativeVolume = p.getProperty("minRelativeVolume", "0.0").toDouble(),
+                minChange1mPercent = p.getProperty("minChange1mPercent", "-0.10").toDouble(),
+                minChange5mPercent = p.getProperty("minChange5mPercent", "-0.25").toDouble(),
                 minPrice = p.getProperty("minPrice", "8.0").toDouble(),
-                minSessionVolume = p.getProperty("minSessionVolume", "500000").toDouble(),
+                minSessionVolume = p.getProperty("minSessionVolume", "20000").toDouble(),
                 baselineSessions = p.getProperty("baselineSessions", "20").toInt(),
                 batchSize = p.getProperty("batchSize", "50").toInt().coerceIn(1, 50),
                 rotationSeconds = p.getProperty("rotationSeconds", "30").toLong().coerceIn(5, 3600),
