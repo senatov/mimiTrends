@@ -140,9 +140,10 @@ class FinnhubClient(
     }
 
     private fun get(path: String, attempt: Int = 0): CompletableFuture<String> {
-        log.debug(LogTag.API, "get(path={}, attempt={})", path, attempt + 1)
+        val baseUrl = BASE_URLS[attempt % BASE_URLS.size]
+        log.debug(LogTag.API, "get(host={}, path={}, attempt={})", baseUrl, path, attempt + 1)
         val request = HttpRequest.newBuilder()
-            .uri(URI.create("$BASE_URL$path"))
+            .uri(URI.create("$baseUrl$path"))
             .timeout(Duration.ofSeconds(SINGLE_REQUEST_TIMEOUT_SECONDS))
             .header("Accept", "application/json")
             .header("X-Finnhub-Token", apiKey)
@@ -150,15 +151,16 @@ class FinnhubClient(
             .build()
         return httpClient.sendAsync(request, HttpResponse.BodyHandlers.ofString()).handle { response, error ->
             when {
-                error != null && attempt < NETWORK_ERROR_RETRY_COUNT -> retry(path, attempt, error.message ?: "network error")
+                error != null && attempt < NETWORK_ERROR_RETRY_COUNT ->
+                    retry(path, attempt, "${error.message ?: "network error"} from $baseUrl")
                 error != null -> CompletableFuture.failedFuture(error)
                 response.statusCode() in RETRYABLE_STATUS && attempt < RETRY_DELAYS_MS.size ->
-                    retry(path, attempt, "HTTP ${response.statusCode()}")
+                    retry(path, attempt, "HTTP ${response.statusCode()} from $baseUrl")
                 response.statusCode() !in 200..299 -> CompletableFuture.failedFuture(
                     FinnhubException("Finnhub request failed (HTTP ${response.statusCode()})")
                 )
                 else -> {
-                    log.debug(LogTag.API, "response path={} status={} chars={}", path, response.statusCode(), response.body().length)
+                    log.debug(LogTag.API, "response host={} path={} status={} chars={}", baseUrl, path, response.statusCode(), response.body().length)
                     CompletableFuture.completedFuture(response.body())
                 }
             }
@@ -220,7 +222,10 @@ class FinnhubClient(
     }
 
     companion object {
-        private const val BASE_URL = "https://api.finnhub.io/api/v1"
+        private val BASE_URLS = listOf(
+            "https://finnhub.io/api/v1",
+            "https://api.finnhub.io/api/v1"
+        )
         private const val SINGLE_REQUEST_TIMEOUT_SECONDS = 10L
         private const val REQUEST_CHAIN_TIMEOUT_SECONDS = 25L
         private const val NETWORK_ERROR_RETRY_COUNT = 1

@@ -150,7 +150,8 @@ permanent loading state.
 ## Security notes
 
 - Only `FINNHUB_API_KEY` is used by the current market-data client.
-- The key is sent only to the official SDK endpoint `https://api.finnhub.io/api/v1`.
+- The key is sent only to Finnhub's official API hosts: `https://finnhub.io/api/v1` and, during temporary endpoint failure,
+  `https://api.finnhub.io/api/v1`.
 - An optional webhook secret can be read from local configuration but is not sent or used yet.
 - No account password, email address, 2FA setting, or passkey information is read or stored.
 - This demo is read-only and does not place orders.
