@@ -6,20 +6,14 @@ import javafx.geometry.Insets
 import javafx.geometry.Pos
 import javafx.scene.Node
 import javafx.scene.Parent
-import javafx.scene.chart.CategoryAxis
-import javafx.scene.chart.LineChart
-import javafx.scene.chart.NumberAxis
-import javafx.scene.chart.XYChart
 import javafx.scene.control.*
 import javafx.scene.layout.*
+import org.senatov.mimitrends.charts.TrendChartView
 import org.senatov.mimitrends.api.FinnhubClient
 import org.senatov.mimitrends.db.MarketRepository
 import org.senatov.mimitrends.model.MarketSnapshot
 import org.senatov.mimitrends.log.LogTag
 import org.slf4j.LoggerFactory
-import java.time.Instant
-import java.time.ZoneId
-import java.time.format.DateTimeFormatter
 import java.io.PrintWriter
 import java.io.StringWriter
 import java.time.ZonedDateTime
@@ -41,9 +35,7 @@ class MainController(private val apiKey: String?) {
     private val lowValue = Label("—")
     private val openValue = Label("—")
     private val previousValue = Label("—")
-    private val progress = ProgressIndicator()
-    private val chart = LineChart<String, Number>(CategoryAxis(), NumberAxis())
-    private val chartStack = StackPane(chart, progress)
+    private val trendChart = TrendChartView()
 
     fun createView(): Parent {
         log.debug(LogTag.UI, "createView()")
@@ -53,9 +45,6 @@ class MainController(private val apiKey: String?) {
         symbolField.setOnAction { refresh() }
         refreshButton.styleClass += "primary-button"
         refreshButton.setOnAction { refresh() }
-        progress.maxWidth = 32.0
-        progress.maxHeight = 32.0
-        progress.isVisible = false
 
         val toolbar = HBox(
             8.0,
@@ -87,16 +76,11 @@ class MainController(private val apiKey: String?) {
             metricCard("Prev. close", previousValue)
         )
 
-        chart.setAnimated(false)
-        chart.createSymbols = false
-        chart.legendVisibleProperty().set(false)
-        chart.verticalGridLinesVisibleProperty().set(false)
-        chart.styleClass += "trend-chart"
-        VBox.setVgrow(chartStack, Priority.ALWAYS)
+        VBox.setVgrow(trendChart, Priority.ALWAYS)
 
-        val content = VBox(18.0, heading, metrics, chartStack).apply {
+        val content = VBox(18.0, heading, metrics, trendChart).apply {
             padding = Insets(22.0, 24.0, 16.0, 24.0)
-            VBox.setVgrow(chartStack, Priority.ALWAYS)
+            VBox.setVgrow(trendChart, Priority.ALWAYS)
         }
 
         errorDetailsButton.apply {
@@ -191,14 +175,7 @@ class MainController(private val apiKey: String?) {
         lowValue.text = money(quote.low)
         previousValue.text = money(quote.previousClose)
 
-        val formatter = DateTimeFormatter.ofPattern("dd MMM").withZone(ZoneId.systemDefault())
-        val series = XYChart.Series<String, Number>()
-        series.data += snapshot.candles.map {
-            XYChart.Data(formatter.format(Instant.ofEpochSecond(it.timestampSeconds)), it.close)
-        }
-        chart.createSymbols = snapshot.candles.size < 2
-        chart.data.setAll(series)
-        chart.title = "${snapshot.symbol} · ${rangeBox.value}"
+        trendChart.render(snapshot, rangeBox.value)
         setStatus(
             when {
                 snapshot.fromCache -> "Showing ${snapshot.candles.size} cached real price points"
@@ -231,7 +208,7 @@ class MainController(private val apiKey: String?) {
 
     private fun setLoading(value: Boolean) {
         log.debug(LogTag.UI, "setLoading(value={})", value)
-        progress.isVisible = value
+        trendChart.setLoading(value)
         refreshButton.isDisable = value
         symbolField.isDisable = value
         rangeBox.isDisable = value

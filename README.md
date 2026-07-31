@@ -98,17 +98,29 @@ app/build/jpackage/output/MiMiTrends.app
 ## Project structure
 
 ```text
-app/src/main/
-├── kotlin/org/senatov/mimitrends/
-│   ├── App.kt                 # JavaFX stage, theme, fonts, and icon
-│   ├── MainController.kt      # interface and chart workflow
-│   ├── ApiKeyResolver.kt      # environment/.env lookup
-│   ├── api/FinnhubClient.kt   # asynchronous REST client and JSON parsing
-│   └── model/MarketModels.kt  # quote and candle models
-└── resources/
-    ├── fonts/                 # UI fonts matching MiMiComparator
-    ├── icons/                 # generated app icon sizes
-    └── org/senatov/mimitrends/MiMiTrends.css
+core/           Domain models, realtime trade model, and shared log markers
+database/       SQLite connection policy, schema migration, quote/history repository
+finnhub-rest/    REST search, quote/candles, parsing, timeout, retry, and host failover
+finnhub-ws/      WebSocket lifecycle, subscriptions, and realtime trade decoding
+charts/          Reusable JavaFX TrendChartView and market-series rendering
+app/             JavaFX lifecycle, credentials, dialogs, UI orchestration, and resources
+```
+
+The dependency direction is one-way: infrastructure and presentation modules depend on `core`; `app` composes them. Database,
+REST, WebSocket, and chart code do not depend on each other, so each can be tested or replaced independently.
+
+Run every module test from the root:
+
+```zsh
+./gradlew test
+```
+
+Run only a module test suite:
+
+```zsh
+./gradlew :database:test
+./gradlew :finnhub-rest:test
+./gradlew :finnhub-ws:test
 ```
 
 ## Finnhub usage

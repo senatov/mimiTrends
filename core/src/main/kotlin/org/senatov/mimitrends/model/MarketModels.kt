@@ -29,3 +29,10 @@ data class InstrumentMatch(
     val description: String,
     val type: String
 )
+
+data class TradeTick(
+    val symbol: String,
+    val price: Double,
+    val timestampMillis: Long,
+    val volume: Double
+)

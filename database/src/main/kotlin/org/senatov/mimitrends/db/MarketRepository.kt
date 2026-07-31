@@ -1,3 +1,5 @@
+@file:Suppress("SqlNoDataSourceInspection")
+
 package org.senatov.mimitrends.db
 
 import org.senatov.mimitrends.log.LogTag
