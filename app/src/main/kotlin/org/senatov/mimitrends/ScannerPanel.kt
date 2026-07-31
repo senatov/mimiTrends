@@ -63,7 +63,7 @@ class ScannerPanel(
         symbolColumn()
         numberColumn("Price", { convertPrice(it.symbol, it.price) }) { "${currency.symbol}%,.2f".format(it) }
         val scoreColumn = numberColumn("Score", ScanResult::anomalyScore) { "%.2f×".format(it) }
-        textColumn("Signal", ScanResult::signalSource)
+        signalColumn(ScanResult::signalSource)
         numberColumn("When", { it.signalAgeMinutes.toDouble() }) {
             when (it.toInt()) { 0 -> "now–5m"; 5 -> "5–10m ago"; else -> "10–15m ago" }
         }
@@ -71,7 +71,7 @@ class ScannerPanel(
         numberColumn("Price ×", ScanResult::priceAnomaly) { "%.2f×".format(it) }
         numberColumn("Volume ×", ScanResult::volumeAnomaly) { "%.2f×".format(it) }
         numberColumn("Turnover", { convertPrice(it.symbol, it.sessionTurnover) }, ::compactMoney)
-        longColumn("Updated", ScanResult::updatedAtMillis) { time.format(Instant.ofEpochMilli(it)) }
+        updatedColumn(ScanResult::updatedAtMillis) { time.format(Instant.ofEpochMilli(it)) }
         scoreColumn.sortType = TableColumn.SortType.DESCENDING
         table.sortOrder += scoreColumn
         table.setOnSort {
@@ -165,9 +165,9 @@ class ScannerPanel(
         table.refresh()
     }
 
-    private fun textColumn(title: String, value: (ScanResult) -> String): TableColumn<ScanResult, String> {
-        log.debug(LogTag.UI, "textColumn(title={})", title)
-        return TableColumn<ScanResult, String>(title).apply {
+    private fun signalColumn(value: (ScanResult) -> String): TableColumn<ScanResult, String> {
+        log.debug(LogTag.UI, "signalColumn()")
+        return TableColumn<ScanResult, String>("Signal").apply {
             setCellValueFactory { ReadOnlyObjectWrapper(value(it.value)) }
             isResizable = true
             isReorderable = true
@@ -195,11 +195,10 @@ class ScannerPanel(
         }
     }
 
-    private fun longColumn(
-        title: String,
+    private fun updatedColumn(
         value: (ScanResult) -> Long,
         format: (Long) -> String
-    ): TableColumn<ScanResult, Number> = TableColumn<ScanResult, Number>(title).apply {
+    ): TableColumn<ScanResult, Number> = TableColumn<ScanResult, Number>("Updated").apply {
         setCellValueFactory { ReadOnlyLongWrapper(value(it.value)) }
         setCellFactory { object : TableCell<ScanResult, Number>() {
             override fun updateItem(item: Number?, empty: Boolean) {

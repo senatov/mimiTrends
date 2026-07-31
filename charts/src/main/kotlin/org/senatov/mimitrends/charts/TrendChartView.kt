@@ -41,6 +41,7 @@ import org.slf4j.LoggerFactory
 import java.awt.BasicStroke
 import java.awt.Color
 import java.awt.Font
+import java.awt.Paint
 import java.awt.geom.Point2D
 import java.text.DecimalFormat
 import java.text.SimpleDateFormat
@@ -53,7 +54,14 @@ class TrendChartView : StackPane() {
     private val priceAxis = NumberAxis()
     private val volumeAxis = NumberAxis("Volume")
     private val candleRenderer = CandlestickRenderer()
-    private val volumeRenderer = XYBarRenderer()
+    private var volumeDirections = emptyList<Int>()
+    private val volumeRenderer = object : XYBarRenderer() {
+        override fun getItemPaint(row: Int, column: Int): Paint = when (volumeDirections.getOrNull(column)) {
+            1 -> Color(38, 148, 92, 150)
+            -1 -> Color(211, 70, 82, 150)
+            else -> Color(132, 141, 151, 120)
+        }
+    }
     private val closeLineRenderer = XYLineAndShapeRenderer(true, false)
     private val pricePlot = XYPlot(null, null, priceAxis, candleRenderer)
     private val volumePlot = XYPlot(null, null, volumeAxis, volumeRenderer)
@@ -118,6 +126,13 @@ class TrendChartView : StackPane() {
         val opens = DoubleArray(visible.size) { visible[it].open * priceMultiplier }
         val closes = DoubleArray(visible.size) { visible[it].close * priceMultiplier }
         val volumes = DoubleArray(visible.size) { visible[it].volume }
+        volumeDirections = visible.map { bar ->
+            when {
+                bar.close > bar.open -> 1
+                bar.close < bar.open -> -1
+                else -> 0
+            }
+        }
         pricePlot.dataset = DefaultHighLowDataset(symbol, dates, highs, lows, opens, closes, volumes)
 
         val volumeSeries = TimeSeries("Volume")
@@ -257,7 +272,6 @@ class TrendChartView : StackPane() {
 
         volumeRenderer.setShadowVisible(false)
         volumeRenderer.margin = 0.12
-        volumeRenderer.setSeriesPaint(0, Color(104, 155, 207, 155))
         volumeRenderer.defaultToolTipGenerator = StandardXYToolTipGenerator(
             "{0}: {1}  {2}", SimpleDateFormat("dd MMM HH:mm"), DecimalFormat("#,##0")
         )
