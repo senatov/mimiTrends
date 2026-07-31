@@ -6,7 +6,10 @@ import javafx.animation.KeyFrame
 import javafx.animation.ScaleTransition
 import javafx.animation.Timeline
 import javafx.beans.property.ReadOnlyObjectWrapper
+import javafx.beans.property.ReadOnlyDoubleWrapper
+import javafx.beans.property.ReadOnlyLongWrapper
 import javafx.collections.FXCollections
+import javafx.collections.transformation.SortedList
 import javafx.geometry.Pos
 import javafx.scene.image.Image
 import javafx.scene.image.ImageView
@@ -37,7 +40,8 @@ class ScannerPanel(
 ) : VBox(7.0) {
     private val log = LoggerFactory.getLogger(javaClass)
     private val rows = FXCollections.observableArrayList<ScanResult>()
-    private val table = TableView(rows)
+    private val sortedRows = SortedList(rows)
+    private val table = TableView(sortedRows)
     private val empty = Label("Waiting for the first local/Yahoo scan…")
     private val cycleStatus = Label()
     private val scanIndicator = Label()
@@ -55,16 +59,24 @@ class ScannerPanel(
         val header = javafx.scene.layout.HBox(8.0, Label("Anomaly scanner").apply { styleClass += "scanner-title" },
             scanIndicator.apply { styleClass += "scanner-timer" }, cycleStatus.apply { styleClass += "scanner-cycle" },
             javafx.scene.layout.Region().also { javafx.scene.layout.HBox.setHgrow(it, Priority.ALWAYS) })
+        sortedRows.comparatorProperty().bind(table.comparatorProperty())
         symbolColumn()
-        column("Price") { "${currency.symbol}%,.2f".format(convertPrice(it.symbol, it.price)) }
-        column("Score") { "%.2f×".format(it.anomalyScore) }
-        column("Signal") { it.signalSource }
-        column("When") { when (it.signalAgeMinutes) { 0 -> "now–5m"; 5 -> "5–10m ago"; else -> "10–15m ago" } }
-        column("Δ 5m") { percent(it.windowChangePercent) }
-        column("Price ×") { "%.2f×".format(it.priceAnomaly) }
-        column("Volume ×") { "%.2f×".format(it.volumeAnomaly) }
-        column("Turnover") { compactMoney(convertPrice(it.symbol, it.sessionTurnover)) }
-        column("Updated") { time.format(Instant.ofEpochMilli(it.updatedAtMillis)) }
+        numberColumn("Price", { convertPrice(it.symbol, it.price) }) { "${currency.symbol}%,.2f".format(it) }
+        val scoreColumn = numberColumn("Score", ScanResult::anomalyScore) { "%.2f×".format(it) }
+        textColumn("Signal", ScanResult::signalSource)
+        numberColumn("When", { it.signalAgeMinutes.toDouble() }) {
+            when (it.toInt()) { 0 -> "now–5m"; 5 -> "5–10m ago"; else -> "10–15m ago" }
+        }
+        numberColumn("Δ 5m", ScanResult::windowChangePercent, ::percent)
+        numberColumn("Price ×", ScanResult::priceAnomaly) { "%.2f×".format(it) }
+        numberColumn("Volume ×", ScanResult::volumeAnomaly) { "%.2f×".format(it) }
+        numberColumn("Turnover", { convertPrice(it.symbol, it.sessionTurnover) }, ::compactMoney)
+        longColumn("Updated", ScanResult::updatedAtMillis) { time.format(Instant.ofEpochMilli(it)) }
+        scoreColumn.sortType = TableColumn.SortType.DESCENDING
+        table.sortOrder += scoreColumn
+        table.setOnSort {
+            log.debug(LogTag.UI, "tableSort(columns={})", table.sortOrder.joinToString { "${it.text}:${it.sortType}" })
+        }
         table.placeholder = empty
         table.columnResizePolicy = TableView.UNCONSTRAINED_RESIZE_POLICY
         table.fixedCellSize = 30.0
@@ -153,20 +165,49 @@ class ScannerPanel(
         table.refresh()
     }
 
-    private fun column(title: String, value: (ScanResult) -> String) {
-        log.debug(LogTag.UI, "column(title={})", title)
-        table.columns += TableColumn<ScanResult, String>(title).apply {
+    private fun textColumn(title: String, value: (ScanResult) -> String): TableColumn<ScanResult, String> {
+        log.debug(LogTag.UI, "textColumn(title={})", title)
+        return TableColumn<ScanResult, String>(title).apply {
             setCellValueFactory { ReadOnlyObjectWrapper(value(it.value)) }
             isResizable = true
             isReorderable = true
-            prefWidth = when (title) {
-                "Symbol" -> 105.0
-                "Volume" -> 125.0
-                "Updated" -> 105.0
-                else -> 115.0
-            }
+            prefWidth = 115.0
             minWidth = 55.0
+            table.columns += this
         }
+    }
+
+    private fun numberColumn(
+        title: String,
+        value: (ScanResult) -> Double,
+        format: (Double) -> String
+    ): TableColumn<ScanResult, Number> {
+        log.debug(LogTag.UI, "numberColumn(title={})", title)
+        return TableColumn<ScanResult, Number>(title).apply {
+            setCellValueFactory { ReadOnlyDoubleWrapper(value(it.value)) }
+            setCellFactory { object : TableCell<ScanResult, Number>() {
+                override fun updateItem(item: Number?, empty: Boolean) {
+                    super.updateItem(item, empty); text = if (empty || item == null) null else format(item.toDouble())
+                }
+            } }
+            isResizable = true; isReorderable = true; prefWidth = 115.0; minWidth = 55.0
+            table.columns += this
+        }
+    }
+
+    private fun longColumn(
+        title: String,
+        value: (ScanResult) -> Long,
+        format: (Long) -> String
+    ): TableColumn<ScanResult, Number> = TableColumn<ScanResult, Number>(title).apply {
+        setCellValueFactory { ReadOnlyLongWrapper(value(it.value)) }
+        setCellFactory { object : TableCell<ScanResult, Number>() {
+            override fun updateItem(item: Number?, empty: Boolean) {
+                super.updateItem(item, empty); text = if (empty || item == null) null else format(item.toLong())
+            }
+        } }
+        isResizable = true; isReorderable = true; prefWidth = 105.0; minWidth = 75.0
+        table.columns += this
     }
 
     private fun symbolColumn() {

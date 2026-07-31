@@ -1,7 +1,12 @@
 package org.senatov.mimitrends.charts
 
 import javafx.scene.control.ProgressIndicator
+import javafx.scene.control.Label
 import javafx.scene.layout.StackPane
+import javafx.scene.layout.VBox
+import javafx.scene.layout.HBox
+import javafx.scene.layout.Priority
+import javafx.geometry.Insets
 import javafx.scene.input.MouseEvent
 import org.jfree.chart.JFreeChart
 import org.jfree.chart.axis.DateAxis
@@ -53,9 +58,11 @@ class TrendChartView : StackPane() {
     private val pricePlot = XYPlot(null, null, priceAxis, candleRenderer)
     private val volumePlot = XYPlot(null, null, volumeAxis, volumeRenderer)
     private val combinedPlot = CombinedDomainXYPlot(dateAxis)
-    private val chart = JFreeChart("Select a scanner result", Font("SansSerif", Font.PLAIN, 14), combinedPlot, false)
+    private val chart = JFreeChart("", Font("SansSerif", Font.PLAIN, 14), combinedPlot, false)
     private val viewer = ChartViewer(chart)
     private val progress = ProgressIndicator()
+    private val instrumentLabel = Label("Select a scanner result")
+    private val chartDetailsLabel = Label("Price and volume history")
     private val priceCursor = ValueMarker(0.0)
     private val priceTimeCursor = ValueMarker(0.0)
     private val volumeTimeCursor = ValueMarker(0.0)
@@ -64,6 +71,8 @@ class TrendChartView : StackPane() {
     private var cursorPriceFormat = DecimalFormat("$#,##0.00")
     private var priceSignalMarker: IntervalMarker? = null
     private var volumeSignalMarker: IntervalMarker? = null
+    private val latestPriceMarker = ValueMarker(0.0)
+    private var latestPriceMarkerInstalled = false
 
     init {
         log.debug(LogTag.UI, "init()")
@@ -77,7 +86,15 @@ class TrendChartView : StackPane() {
         progress.maxWidth = 32.0
         progress.maxHeight = 32.0
         progress.isVisible = false
-        children += listOf(viewer, progress)
+        val header = HBox(12.0, instrumentLabel, chartDetailsLabel).apply {
+            padding = Insets(7.0, 14.0, 7.0, 14.0)
+            style = "-fx-background-color: rgba(248,250,253,0.96); -fx-border-color: transparent transparent #d7dde4 transparent;"
+            instrumentLabel.style = "-fx-font-family: 'SF Pro Display'; -fx-font-size: 15px; -fx-font-weight: 400; -fx-text-fill: #1f3c59;"
+            chartDetailsLabel.style = "-fx-font-family: 'SF Pro Display'; -fx-font-size: 12px; -fx-font-weight: 300; -fx-text-fill: #667789;"
+        }
+        val content = VBox(header, viewer)
+        VBox.setVgrow(viewer, Priority.ALWAYS)
+        children += listOf(content, progress)
     }
 
     fun renderMinuteBars(
@@ -111,11 +128,15 @@ class TrendChartView : StackPane() {
         val barWidthMillis = inferBarWidth(visible)
         volumePlot.dataset = XYBarDataset(TimeSeriesCollection(volumeSeries), barWidthMillis)
 
-        dateAxis.dateFormatOverride = SimpleDateFormat(datePattern(rangeLabel))
+        dateAxis.dateFormatOverride = SimpleDateFormat(datePattern(visible))
         priceAxis.numberFormatOverride = DecimalFormat("$currencySymbol#,##0.00")
         cursorDateFormat = SimpleDateFormat("dd MMM yyyy  HH:mm")
         cursorPriceFormat = DecimalFormat("$currencySymbol#,##0.00")
-        chart.title.text = "$symbol  ·  OHLC  ·  $rangeLabel  ·  ${bars.size} minute bars"
+        instrumentLabel.text = "$symbol   $currencySymbol${"%,.2f".format(closes.last())}"
+        chartDetailsLabel.text = "$rangeLabel · ${bars.size} minute bars" + signalAgeMinutes?.let {
+            " · anomaly ${if (it == 0) "now–5m" else "$it–${it + 5}m ago"}"
+        }.orEmpty()
+        showLatestPrice(closes.last(), currencySymbol)
         showSignalWindow(visible.last().minuteEpochSeconds, signalAgeMinutes)
         chart.fireChartChanged()
     }
@@ -130,8 +151,13 @@ class TrendChartView : StackPane() {
         pricePlot.dataset = null
         pricePlot.setDataset(1, null)
         volumePlot.dataset = null
+        if (latestPriceMarkerInstalled) {
+            pricePlot.removeRangeMarker(latestPriceMarker)
+            latestPriceMarkerInstalled = false
+        }
         showSignalWindow(0, null)
-        chart.title.text = "No collected market data"
+        instrumentLabel.text = "No collected market data"
+        chartDetailsLabel.text = ""
         chart.fireChartChanged()
     }
 
@@ -151,13 +177,31 @@ class TrendChartView : StackPane() {
             this.label = label
             labelFont = Font("SansSerif", Font.PLAIN, 10)
             labelPaint = Color(126, 69, 20)
-            labelAnchor = RectangleAnchor.TOP_LEFT
-            labelTextAnchor = TextAnchor.TOP_LEFT
+            labelAnchor = if (ageMinutes == 0) RectangleAnchor.TOP_RIGHT else RectangleAnchor.TOP_LEFT
+            labelTextAnchor = if (ageMinutes == 0) TextAnchor.TOP_RIGHT else TextAnchor.TOP_LEFT
         }
         priceSignalMarker = marker("Anomaly ${if (ageMinutes == 0) "now–5m" else "$ageMinutes–${ageMinutes + 5}m ago"}")
         volumeSignalMarker = marker(null)
         pricePlot.addDomainMarker(priceSignalMarker, Layer.BACKGROUND)
         volumePlot.addDomainMarker(volumeSignalMarker, Layer.BACKGROUND)
+    }
+
+    private fun showLatestPrice(value: Double, currencySymbol: String) {
+        log.debug(LogTag.UI, "showLatestPrice(value={})", value)
+        latestPriceMarker.value = value
+        latestPriceMarker.label = "Last  ${DecimalFormat("$currencySymbol#,##0.00").format(value)}"
+        latestPriceMarker.paint = Color(20, 151, 137, 190)
+        latestPriceMarker.stroke = BasicStroke(1.2f)
+        latestPriceMarker.labelFont = Font("SansSerif", Font.BOLD, 11)
+        latestPriceMarker.labelPaint = Color.WHITE
+        latestPriceMarker.labelBackgroundColor = Color(20, 120, 111, 225)
+        latestPriceMarker.labelAnchor = RectangleAnchor.TOP_RIGHT
+        latestPriceMarker.labelTextAnchor = TextAnchor.BOTTOM_RIGHT
+        latestPriceMarker.labelOffset = RectangleInsets(4.0, 7.0, 4.0, 7.0)
+        if (!latestPriceMarkerInstalled) {
+            pricePlot.addRangeMarker(latestPriceMarker)
+            latestPriceMarkerInstalled = true
+        }
     }
 
     private fun configureChart() {
@@ -167,16 +211,15 @@ class TrendChartView : StackPane() {
         val grid = Color(225, 229, 234)
         chart.backgroundPaint = background
         chart.setAntiAlias(true)
-        chart.title.font = Font("SansSerif", Font.PLAIN, 14)
-        chart.title.paint = Color(66, 70, 76)
+        chart.title.isVisible = false
 
         dateAxis.lowerMargin = 0.01
         dateAxis.upperMargin = 0.01
         dateAxis.isTickLabelsVisible = true
         dateAxis.isTickMarksVisible = true
         dateAxis.isAutoTickUnitSelection = true
-        dateAxis.tickLabelFont = Font("SansSerif", Font.PLAIN, 10)
-        dateAxis.tickLabelPaint = Color(100, 108, 116)
+        dateAxis.tickLabelFont = Font("SansSerif", Font.PLAIN, 11)
+        dateAxis.tickLabelPaint = Color(54, 65, 76)
         dateAxis.axisLinePaint = Color(170, 178, 186)
 
         priceAxis.autoRangeIncludesZero = false
@@ -189,8 +232,8 @@ class TrendChartView : StackPane() {
         pricePlot.rangeAxisLocation = AxisLocation.BOTTOM_OR_RIGHT
         volumePlot.rangeAxisLocation = AxisLocation.BOTTOM_OR_RIGHT
         listOf(priceAxis, volumeAxis).forEach { axis ->
-            axis.tickLabelFont = Font("SansSerif", Font.PLAIN, 10)
-            axis.tickLabelPaint = Color(100, 108, 116)
+            axis.tickLabelFont = Font("SansSerif", Font.PLAIN, 11)
+            axis.tickLabelPaint = Color(54, 65, 76)
             axis.axisLinePaint = Color(170, 178, 186)
         }
 
@@ -205,8 +248,8 @@ class TrendChartView : StackPane() {
         candleRenderer.autoWidthMethod = CandlestickRenderer.WIDTHMETHOD_SMALLEST
         candleRenderer.autoWidthFactor = 0.72
 
-        closeLineRenderer.defaultPaint = Color(23, 178, 161)
-        closeLineRenderer.defaultStroke = BasicStroke(2.0f)
+        closeLineRenderer.setSeriesPaint(0, Color(23, 178, 161))
+        closeLineRenderer.setSeriesStroke(0, BasicStroke(1.8f))
         closeLineRenderer.defaultToolTipGenerator = StandardXYToolTipGenerator(
             "{0}: {1}  {2}", SimpleDateFormat("dd MMM HH:mm"), DecimalFormat("#,##0.00")
         )
@@ -214,7 +257,7 @@ class TrendChartView : StackPane() {
 
         volumeRenderer.setShadowVisible(false)
         volumeRenderer.margin = 0.12
-        volumeRenderer.defaultPaint = Color(104, 155, 207)
+        volumeRenderer.setSeriesPaint(0, Color(104, 155, 207, 155))
         volumeRenderer.defaultToolTipGenerator = StandardXYToolTipGenerator(
             "{0}: {1}  {2}", SimpleDateFormat("dd MMM HH:mm"), DecimalFormat("#,##0")
         )
@@ -285,10 +328,10 @@ class TrendChartView : StackPane() {
         listOf(priceTimeCursor, volumeTimeCursor, priceCursor).forEach { marker ->
             marker.paint = line
             marker.stroke = BasicStroke(1.0f, BasicStroke.CAP_BUTT, BasicStroke.JOIN_BEVEL, 0f, floatArrayOf(3f, 3f), 0f)
-            marker.labelFont = Font("SansSerif", Font.BOLD, 10)
+            marker.labelFont = Font("SansSerif", Font.BOLD, 12)
             marker.labelPaint = Color.WHITE
             marker.labelBackgroundColor = Color(51, 57, 63, 230)
-            marker.labelOffset = RectangleInsets(4.0, 6.0, 4.0, 6.0)
+            marker.labelOffset = RectangleInsets(5.0, 8.0, 5.0, 8.0)
         }
         priceCursor.labelAnchor = RectangleAnchor.TOP_RIGHT
         priceCursor.labelTextAnchor = TextAnchor.BOTTOM_RIGHT
@@ -323,12 +366,13 @@ class TrendChartView : StackPane() {
         return intervals[intervals.size / 2] * 0.82
     }
 
-    private fun datePattern(rangeLabel: String): String {
-        log.debug(LogTag.UI, "datePattern(range={})", rangeLabel)
-        return when (rangeLabel) {
-            "1D" -> "HH:mm"
-            "5D" -> "dd MMM HH:mm"
-            "1M", "3M", "6M" -> "dd MMM"
+    private fun datePattern(bars: List<MinuteBar>): String {
+        val span = bars.last().minuteEpochSeconds - bars.first().minuteEpochSeconds
+        log.debug(LogTag.UI, "datePattern(spanSeconds={})", span)
+        return when {
+            span <= 86_400 -> "HH:mm"
+            span <= 7 * 86_400 -> "dd MMM  HH:mm"
+            span <= 180 * 86_400 -> "dd MMM"
             else -> "MMM yy"
         }
     }

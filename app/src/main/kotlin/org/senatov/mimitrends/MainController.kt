@@ -276,14 +276,16 @@ class MainController(
 
     private fun showAbout() {
         log.debug(LogTag.UI, "showAbout()")
-        Dialog<Unit>().apply {
+        Dialog<ButtonType>().apply {
             aboutButton.scene?.window?.let(::initOwner)
             title = "About MiMiTrends"
             dialogPane.buttonTypes.setAll(ButtonType.OK)
             dialogPane.headerText = "MiMiTrends ${BuildInfo.displayVersion}"
-            dialogPane.graphic = ImageView(Image(
-                requireNotNull(javaClass.getResourceAsStream("/icons/icon_128x128.png"))
-            )).apply { fitWidth = 72.0; fitHeight = 72.0; isPreserveRatio = true }
+            javaClass.getResourceAsStream("/icons/icon_128x128.png")?.use { stream ->
+                dialogPane.graphic = ImageView(Image(stream)).apply {
+                    fitWidth = 72.0; fitHeight = 72.0; isPreserveRatio = true
+                }
+            }
             dialogPane.content = TabPane(
                 aboutTab("Overview", """
                     Local-first market anomaly scanner for macOS, Linux, and Windows.
@@ -324,6 +326,7 @@ class MainController(
             dialogPane.prefWidth = 680.0
             dialogPane.prefHeight = 520.0
             isResizable = true
+            setResultConverter { it }
         }.showAndWait()
     }
 
