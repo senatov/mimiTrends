@@ -18,6 +18,7 @@ import javafx.scene.input.MouseButton
 import javafx.scene.input.Clipboard
 import javafx.scene.input.ClipboardContent
 import javafx.scene.input.KeyCode
+import javafx.scene.input.KeyEvent
 import javafx.scene.layout.HBox
 import javafx.scene.layout.Priority
 import javafx.scene.layout.StackPane
@@ -46,18 +47,22 @@ class ScannerPanel(
     private val sortedRows = SortedList(rows)
     private val table = TableView(sortedRows)
     private val tableContainer = StackPane()
+    private val closeMarketOverlayButton = Button("Close").apply {
+        styleClass += "market-closed-close"
+        setOnAction { hideMarketClosedOverlay() }
+    }
     private val closedMarketOverlay = VBox(
         12.0,
         ImageView(Image(requireNotNull(javaClass.getResourceAsStream("/images/sleeping-dog-market-closed.png")))).apply {
-            fitWidth = 180.0; fitHeight = 180.0; isPreserveRatio = true
+            fitWidth = 210.0; fitHeight = 210.0; isPreserveRatio = true
             styleClass += "market-closed-dog"
         },
         Label("ALL SELECTED MARKETS ARE CLOSED").apply { styleClass += "market-closed-title" },
-        Label("Saved closing snapshot · not live").apply { styleClass += "market-closed-subtitle" }
+        Label("Saved closing snapshot · not live").apply { styleClass += "market-closed-subtitle" },
+        closeMarketOverlayButton
     ).apply {
         alignment = Pos.CENTER
         maxWidth = 680.0
-        isMouseTransparent = true
         isVisible = false
         isManaged = false
         styleClass += "market-closed-overlay"
@@ -122,6 +127,12 @@ class ScannerPanel(
         table.styleClass += "scanner-table"
         tableContainer.children.setAll(table, closedMarketOverlay)
         StackPane.setAlignment(closedMarketOverlay, Pos.CENTER)
+        addEventFilter(KeyEvent.KEY_PRESSED) { event ->
+            if (event.code == KeyCode.ESCAPE && closedMarketOverlay.isVisible) {
+                hideMarketClosedOverlay()
+                event.consume()
+            }
+        }
         children += listOf(header, tableContainer)
         VBox.setVgrow(tableContainer, Priority.ALWAYS)
         minHeight = 0.0
@@ -195,6 +206,13 @@ class ScannerPanel(
         cycleStatus.tooltip = Tooltip("The scanner is not presenting cached closing bars as current market signals.")
         closedMarketOverlay.isVisible = true
         closedMarketOverlay.isManaged = true
+        Platform.runLater { closeMarketOverlayButton.requestFocus() }
+    }
+
+    private fun hideMarketClosedOverlay() {
+        closedMarketOverlay.isVisible = false
+        closedMarketOverlay.isManaged = false
+        table.requestFocus()
     }
 
     fun setCurrency(value: DisplayCurrency, converter: (String, Double) -> Double) {
