@@ -437,9 +437,9 @@ The status bar reports the current operation. A red details button opens the com
 
 | Platform | Packaging | Current validation status |
 | --- | --- | --- |
-| macOS | `.app`, signed/notarized DMG | Implemented and tested. |
-| Windows | Self-contained EXE installer | Implemented, not yet tested. |
-| Linux | Portable archive and Debian package | Implemented, not yet tested. |
+| macOS | `.app`, signed/notarized DMG | Implemented and tested (because i've Mac). |
+| Windows | Self-contained EXE installer | Implemented, not yet tested (because i've Mac only) . |
+| Linux | Portable archive and Debian package | Implemented, not yet tested (because i've Mac only). |
 
 The codebase and dependency selection are cross-platform, but platform-specific testing is still required before claiming production support outside macOS.
 
