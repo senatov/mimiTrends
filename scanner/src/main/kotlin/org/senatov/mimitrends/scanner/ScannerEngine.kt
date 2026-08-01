@@ -2,6 +2,8 @@ package org.senatov.mimitrends.scanner
 
 import org.senatov.mimitrends.log.LogTag
 import org.senatov.mimitrends.model.MinuteBar
+import org.senatov.mimitrends.model.MarketTimeZone
+import org.senatov.mimitrends.model.isValidMinuteBar
 import org.senatov.mimitrends.model.ScanResult
 import org.senatov.mimitrends.model.ScannerCriteria
 import org.slf4j.LoggerFactory
@@ -13,7 +15,7 @@ import kotlin.math.ln1p
 import kotlin.math.max
 
 /** Detects only directional impulses in the latest completed minute bars. */
-class ScannerEngine(private val zone: ZoneId = ZoneId.systemDefault()) {
+class ScannerEngine(private val zoneOverride: ZoneId? = null) {
     private val log = LoggerFactory.getLogger(javaClass)
 
     fun evaluate(symbol: String, bars: List<MinuteBar>, criteria: ScannerCriteria): ScanResult? {
@@ -53,7 +55,9 @@ class ScannerEngine(private val zone: ZoneId = ZoneId.systemDefault()) {
                 0 -> "latest"
                 1 -> "1m ago"
                 else -> "${signal.ageMinutes}m ago"
-            }
+            },
+            signalPrice = signal.feature.bar.close,
+            signalEpochMillis = signal.feature.bar.minuteEpochSeconds * 1_000
         )
     }
 
@@ -123,7 +127,9 @@ class ScannerEngine(private val zone: ZoneId = ZoneId.systemDefault()) {
             signalAgeMinutes = 0,
             signalSource = "Trend ↑",
             updatedAtMillis = latest.minuteEpochSeconds * 1_000,
-            signalWindowLabel = "${RECENT_TREND_MINUTES}m"
+            signalWindowLabel = "${RECENT_TREND_MINUTES}m",
+            signalPrice = latest.close,
+            signalEpochMillis = latest.minuteEpochSeconds * 1_000
         )
     }
 
@@ -179,7 +185,7 @@ class ScannerEngine(private val zone: ZoneId = ZoneId.systemDefault()) {
     }
 
     private fun cleanBars(bars: List<MinuteBar>): List<MinuteBar> = bars.asSequence()
-        .filter { it.minuteEpochSeconds % 60L == 0L && it.volume > 0.0 }
+        .filter(MinuteBar::isValidMinuteBar)
         .sortedBy(MinuteBar::minuteEpochSeconds)
         .toList()
 
@@ -240,7 +246,8 @@ class ScannerEngine(private val zone: ZoneId = ZoneId.systemDefault()) {
         return percent(first.close, latest.close)
     }
 
-    private fun local(bar: MinuteBar) = Instant.ofEpochSecond(bar.minuteEpochSeconds).atZone(zone)
+    private fun local(bar: MinuteBar) = Instant.ofEpochSecond(bar.minuteEpochSeconds)
+        .atZone(zoneOverride ?: MarketTimeZone.forSymbol(bar.symbol))
     private fun percent(open: Double, close: Double) = if (open > 0.0) (close / open - 1.0) * 100.0 else 0.0
 
     private data class Feature(

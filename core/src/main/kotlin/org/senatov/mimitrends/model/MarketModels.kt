@@ -108,7 +108,9 @@ data class ScanResult(
     val signalSource: String,
     val updatedAtMillis: Long,
     val dataStatus: String = "CACHE",
-    val signalWindowLabel: String = "1m"
+    val signalWindowLabel: String = "1m",
+    val signalPrice: Double = price,
+    val signalEpochMillis: Long = updatedAtMillis
 )
 
 data class CompanyProfile(

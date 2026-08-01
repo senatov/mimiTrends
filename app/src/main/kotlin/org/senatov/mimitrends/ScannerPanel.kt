@@ -98,9 +98,9 @@ class ScannerPanel(
         signalColumn("Signal", ScanResult::signalSource)
         numberColumn("Move 10m", ScanResult::windowChangePercent, ::percent)
         numberColumn("Price", { convertPrice(it.symbol, it.price) }) { "${currency.symbol}%,.2f".format(it) }
-        val scoreColumn = readableMetricColumn("Strength", ScanResult::anomalyScore, ::strengthMetric)
-        readableMetricColumn("Price action", { maxOfFinite(it.priceAnomaly, it.rangeAnomaly) }, ::priceActionMetric)
-        readableMetricColumn("Volume", { maxOfFinite(it.volumeAnomaly, it.relativeVolume) }, ::volumeMetric)
+        val scoreColumn = readableMetricColumn("Strength", ScanResult::anomalyScore, SignalMetricPresentation::strength)
+        readableMetricColumn("Price action", SignalMetricPresentation::priceActionSeverity, SignalMetricPresentation::priceAction)
+        readableMetricColumn("Volume", SignalMetricPresentation::volumeSeverity, SignalMetricPresentation::volume)
         signalColumn("Age", ScanResult::signalWindowLabel)
         signalColumn("Feed", ScanResult::dataStatus)
         numberColumn("Turnover", { convertPrice(it.symbol, it.sessionTurnover) }, ::compactMoney)
@@ -295,7 +295,7 @@ class ScannerPanel(
     private fun readableMetricColumn(
         title: String,
         sortValue: (ScanResult) -> Double,
-        metric: (ScanResult) -> ReadableMetric
+        metric: (ScanResult) -> SignalMetric
     ): TableColumn<ScanResult, ScanResult> = TableColumn<ScanResult, ScanResult>(title).apply {
         setCellValueFactory { ReadOnlyObjectWrapper(it.value) }
         comparator = Comparator { left, right -> sortValue(left).compareTo(sortValue(right)) }
@@ -318,75 +318,6 @@ class ScannerPanel(
         isResizable = true; isReorderable = true; prefWidth = 125.0; minWidth = 82.0
         table.columns += this
     }
-
-    private fun strengthMetric(result: ScanResult): ReadableMetric {
-        val score = result.anomalyScore
-        val label = when {
-            score >= 6.0 -> "Extreme"
-            score >= 4.0 -> "Strong"
-            score >= 2.5 -> "Notable"
-            else -> "Watch"
-        }
-        val color = when (label) {
-            "Extreme" -> "#a92f3d"
-            "Strong" -> "#b26012"
-            "Notable" -> "#526f8a"
-            else -> "#707981"
-        }
-        return ReadableMetric(label, color, if (score >= 4.0) 600 else 500,
-            "Composite signal strength: %.2f×\nIncludes price anomaly, volume confirmation, candle quality and freshness.".format(score))
-    }
-
-    private fun priceActionMetric(result: ScanResult): ReadableMetric {
-        if (!result.priceAnomaly.isFinite() && !result.rangeAnomaly.isFinite()) {
-            val arrow = if (result.windowChangePercent < 0) "↓" else "↑"
-            return ReadableMetric("Steady trend $arrow", "#3f6682", 500,
-                "Persistent price trend over ${result.signalWindowLabel}; no single exceptional candle.")
-        }
-        val jump = result.priceAnomaly.takeIf(Double::isFinite) ?: 0.0
-        val range = result.rangeAnomaly.takeIf(Double::isFinite) ?: 0.0
-        val arrow = if (result.windowChangePercent < 0) "↓" else "↑"
-        val (label, color) = when {
-            jump >= 6.0 && range >= 6.0 -> "Extreme impulse $arrow" to "#a92f3d"
-            range >= jump * 1.5 && range >= 3.5 -> "Volatile / unstable" to "#9a6717"
-            jump >= 4.0 -> "Strong impulse $arrow" to if (arrow == "↑") "#137b50" else "#b23b48"
-            else -> "Elevated move $arrow" to "#526f8a"
-        }
-        return ReadableMetric(label, color, if (jump >= 4.0 || range >= 5.0) 600 else 500,
-            "Price jump: %.2fσ\nFull candle range: %.2fσ\n10-minute move: %+.2f%%".format(jump, range, result.windowChangePercent))
-    }
-
-    private fun volumeMetric(result: ScanResult): ReadableMetric {
-        val rvol = result.relativeVolume.takeIf(Double::isFinite)
-        val z = result.volumeAnomaly.takeIf(Double::isFinite)
-        if (rvol == null && z == null) return ReadableMetric("Price-led", "#707981", 400,
-            "Trend signal without a single-candle volume anomaly.")
-        val level = when {
-            (rvol ?: 0.0) >= 5.0 || (z ?: 0.0) >= 5.0 -> "Extreme"
-            (rvol ?: 0.0) >= 3.0 || (z ?: 0.0) >= 3.0 -> "Strong"
-            (rvol ?: 0.0) >= 1.8 || (z ?: 0.0) >= 2.0 -> "Elevated"
-            else -> "Normal"
-        }
-        val label = rvol?.let { "$level %.1f×".format(it) } ?: level
-        val color = when (level) {
-            "Extreme" -> "#a92f3d"
-            "Strong" -> "#b26012"
-            "Elevated" -> "#526f8a"
-            else -> "#707981"
-        }
-        return ReadableMetric(label, color, if (level in setOf("Extreme", "Strong")) 600 else 500,
-            "Relative volume: ${rvol?.let { "%.2f×".format(it) } ?: "—"}\nVolume anomaly: ${z?.let { "%.2fσ".format(it) } ?: "—"}")
-    }
-
-    private fun maxOfFinite(first: Double, second: Double): Double =
-        listOf(first, second).filter(Double::isFinite).maxOrNull() ?: Double.NEGATIVE_INFINITY
-
-    private data class ReadableMetric(
-        val label: String,
-        val color: String,
-        val weight: Int,
-        val details: String
-    )
 
     private fun numberColumn(
         title: String,

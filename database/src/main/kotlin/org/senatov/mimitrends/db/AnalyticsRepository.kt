@@ -4,6 +4,8 @@ package org.senatov.mimitrends.db
 
 import org.senatov.mimitrends.log.LogTag
 import org.senatov.mimitrends.model.MinuteBar
+import org.senatov.mimitrends.model.MarketTimeZone
+import org.senatov.mimitrends.model.isValidMinuteBar
 import org.senatov.mimitrends.model.ScanResult
 import org.slf4j.LoggerFactory
 import java.nio.file.Files
@@ -13,7 +15,6 @@ import java.sql.DriverManager
 import java.sql.Statement
 import java.sql.Types
 import java.time.Instant
-import java.time.ZoneId
 import java.util.concurrent.locks.ReentrantLock
 import kotlin.concurrent.withLock
 import kotlin.math.abs
@@ -80,18 +81,13 @@ class AnalyticsRepository(
     fun refreshDerived(symbol: String, bars: List<MinuteBar>, source: String) {
         if (bars.isEmpty()) return
         val normalized = symbol.uppercase()
-        val clean = bars.filter { it.volume >= 0.0 }.sortedBy(MinuteBar::minuteEpochSeconds)
+        val clean = bars.filter(MinuteBar::isValidMinuteBar).sortedBy(MinuteBar::minuteEpochSeconds)
+        if (clean.isEmpty()) return
         locked {
-            connection.autoCommit = false
-            try {
+            transaction {
                 upsertSessions(normalized, clean, source)
                 upsertAggregates(normalized, clean)
                 upsertBaselines(normalized, clean)
-                connection.commit()
-            } catch (error: Exception) {
-                connection.rollback(); throw error
-            } finally {
-                connection.autoCommit = true
             }
         }
     }
@@ -106,50 +102,57 @@ class AnalyticsRepository(
 
     fun recordScanCandidate(runId: Long, symbol: String, result: ScanResult?, rejectionReason: String?, source: String) = locked {
         connection.prepareStatement("""INSERT INTO scan_candidates
-            (run_id, symbol, evaluated_at, accepted, published, rejection_reason, signal, score, change_10m,
-             jump_z, range_z, volume_z, rvol, price, turnover, source)
-            VALUES (?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ON CONFLICT(run_id, symbol) DO UPDATE SET accepted=excluded.accepted, rejection_reason=excluded.rejection_reason,
+            (run_id, symbol, evaluated_at, signal_epoch, accepted, published, rejection_reason, signal, score, change_10m,
+             jump_z, range_z, volume_z, rvol, price, entry_price, turnover, source)
+            VALUES (?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(run_id, symbol) DO UPDATE SET signal_epoch=excluded.signal_epoch,
+            accepted=excluded.accepted, rejection_reason=excluded.rejection_reason,
             signal=excluded.signal, score=excluded.score, change_10m=excluded.change_10m, jump_z=excluded.jump_z,
             range_z=excluded.range_z, volume_z=excluded.volume_z, rvol=excluded.rvol, price=excluded.price,
-            turnover=excluded.turnover, source=excluded.source""").use { s ->
+            entry_price=excluded.entry_price, turnover=excluded.turnover, source=excluded.source""").use { s ->
             s.setLong(1, runId); s.setString(2, symbol.uppercase()); s.setLong(3, Instant.now().epochSecond)
             fun metric(index: Int, value: Double?) {
                 if (value != null && value.isFinite()) s.setDouble(index, value) else s.setNull(index, Types.REAL)
             }
-            s.setInt(4, if (result != null) 1 else 0); s.setString(5, rejectionReason); s.setString(6, result?.signalSource)
-            metric(7, result?.anomalyScore); metric(8, result?.windowChangePercent); metric(9, result?.priceAnomaly)
-            metric(10, result?.rangeAnomaly); metric(11, result?.volumeAnomaly); metric(12, result?.relativeVolume)
-            metric(13, result?.price); metric(14, result?.sessionTurnover); s.setString(15, source); s.executeUpdate()
+            if (result != null) s.setLong(4, result.signalEpochMillis / 1_000L) else s.setNull(4, Types.INTEGER)
+            s.setInt(5, if (result != null) 1 else 0); s.setString(6, rejectionReason); s.setString(7, result?.signalSource)
+            metric(8, result?.anomalyScore); metric(9, result?.windowChangePercent); metric(10, result?.priceAnomaly)
+            metric(11, result?.rangeAnomaly); metric(12, result?.volumeAnomaly); metric(13, result?.relativeVolume)
+            metric(14, result?.price); metric(15, result?.signalPrice); metric(16, result?.sessionTurnover)
+            s.setString(17, source); s.executeUpdate()
         }
     }
 
     fun recordSignalOutcomes(symbol: String, currentPrice: Double, observedEpoch: Long) = locked {
         if (!currentPrice.isFinite() || currentPrice <= 0.0) return@locked
         connection.prepareStatement("""INSERT OR IGNORE INTO signal_outcomes
-            (run_id, symbol, horizon_minutes, entry_price, observed_price, return_percent, observed_at)
-            SELECT c.run_id, c.symbol, ?, c.price, ?, (? / c.price - 1.0) * 100.0, ?
+            (run_id, symbol, horizon_minutes, entry_price, observed_price, return_percent, observed_at, elapsed_minutes)
+            SELECT c.run_id, c.symbol, ?, c.entry_price, ?, (? / c.entry_price - 1.0) * 100.0, ?,
+                   (? - c.signal_epoch) / 60.0
             FROM scan_candidates c JOIN scan_runs r ON r.id=c.run_id
-            WHERE c.symbol=? AND c.published=1 AND c.price>0 AND c.evaluated_at<=?
-              AND c.evaluated_at>=?""").use { s ->
+            WHERE c.symbol=? AND c.published=1 AND c.entry_price>0 AND c.signal_epoch<=?
+              AND c.signal_epoch>=?""").use { s ->
             for (horizon in listOf(5, 10, 30)) {
-                s.setInt(1, horizon); s.setDouble(2, currentPrice); s.setDouble(3, currentPrice); s.setLong(4, observedEpoch)
-                s.setString(5, symbol.uppercase()); s.setLong(6, observedEpoch - horizon * 60L)
-                s.setLong(7, observedEpoch - (horizon + 10) * 60L); s.addBatch()
+                s.setInt(1, horizon); s.setDouble(2, currentPrice); s.setDouble(3, currentPrice)
+                s.setLong(4, observedEpoch); s.setLong(5, observedEpoch); s.setString(6, symbol.uppercase())
+                s.setLong(7, observedEpoch - horizon * 60L)
+                s.setLong(8, observedEpoch - (horizon + OUTCOME_MAX_LAG_MINUTES) * 60L); s.addBatch()
             }
             s.executeBatch()
         }
     }
 
     fun completeScan(runId: Long, publishedSymbols: Collection<String>, failures: Int) = locked {
-        if (publishedSymbols.isNotEmpty()) connection.prepareStatement(
-            "UPDATE scan_candidates SET published=1 WHERE run_id=? AND symbol=?"
-        ).use { s -> publishedSymbols.forEach { s.setLong(1, runId); s.setString(2, it.uppercase()); s.addBatch() }; s.executeBatch() }
-        connection.prepareStatement("""UPDATE scan_runs SET completed_at=?, evaluated_symbols=(SELECT COUNT(*) FROM scan_candidates WHERE run_id=?),
-            accepted_symbols=(SELECT COUNT(*) FROM scan_candidates WHERE run_id=? AND accepted=1), published_symbols=?, failures=?, status='COMPLETE'
-            WHERE id=?""").use { s ->
-            s.setLong(1, Instant.now().epochSecond); s.setLong(2, runId); s.setLong(3, runId)
-            s.setInt(4, publishedSymbols.size); s.setInt(5, failures); s.setLong(6, runId); s.executeUpdate()
+        transaction {
+            if (publishedSymbols.isNotEmpty()) connection.prepareStatement(
+                "UPDATE scan_candidates SET published=1 WHERE run_id=? AND symbol=?"
+            ).use { s -> publishedSymbols.forEach { s.setLong(1, runId); s.setString(2, it.uppercase()); s.addBatch() }; s.executeBatch() }
+            connection.prepareStatement("""UPDATE scan_runs SET completed_at=?, evaluated_symbols=(SELECT COUNT(*) FROM scan_candidates WHERE run_id=?),
+                accepted_symbols=(SELECT COUNT(*) FROM scan_candidates WHERE run_id=? AND accepted=1), published_symbols=?, failures=?, status='COMPLETE'
+                WHERE id=?""").use { s ->
+                s.setLong(1, Instant.now().epochSecond); s.setLong(2, runId); s.setLong(3, runId)
+                s.setInt(4, publishedSymbols.size); s.setInt(5, failures); s.setLong(6, runId); s.executeUpdate()
+            }
         }
     }
 
@@ -163,8 +166,8 @@ class AnalyticsRepository(
     }
 
     fun loadLatestPublishedResults(limit: Int): List<ScanResult> = locked {
-        connection.prepareStatement("""SELECT symbol, price, score, jump_z, range_z, volume_z, rvol,
-            change_10m, turnover, signal, evaluated_at
+        connection.prepareStatement("""SELECT symbol, price, entry_price, score, jump_z, range_z, volume_z, rvol,
+            change_10m, turnover, signal, evaluated_at, signal_epoch
             FROM scan_candidates
             WHERE run_id=(SELECT MAX(run_id) FROM scan_candidates WHERE published=1) AND published=1
             ORDER BY score DESC LIMIT ?""").use { s ->
@@ -172,16 +175,18 @@ class AnalyticsRepository(
             s.executeQuery().use { result -> buildList {
                 fun nullableMetric(index: Int): Double = result.getDouble(index).let { if (result.wasNull()) Double.NaN else it }
                 while (result.next()) {
-                    val evaluatedAt = result.getLong(11)
+                    val evaluatedAt = result.getLong(12)
+                    val signalEpoch = result.getLong(13)
                     add(ScanResult(
-                        symbol = result.getString(1), price = result.getDouble(2), anomalyScore = result.getDouble(3),
-                        priceAnomaly = nullableMetric(4), rangeAnomaly = nullableMetric(5), volumeAnomaly = nullableMetric(6),
-                        relativeVolume = nullableMetric(7), candleBodyRatio = Double.NaN,
-                        windowChangePercent = result.getDouble(8), windowVolume = 0.0, sessionVolume = 0.0,
-                        sessionTurnover = result.getDouble(9),
-                        signalAgeMinutes = ((Instant.now().epochSecond - evaluatedAt) / 60L).toInt().coerceAtLeast(1),
-                        signalSource = result.getString(10), updatedAtMillis = evaluatedAt * 1_000,
-                        dataStatus = "SAVED SNAPSHOT", signalWindowLabel = "10m saved"
+                        symbol = result.getString(1), price = result.getDouble(2), anomalyScore = result.getDouble(4),
+                        priceAnomaly = nullableMetric(5), rangeAnomaly = nullableMetric(6), volumeAnomaly = nullableMetric(7),
+                        relativeVolume = nullableMetric(8), candleBodyRatio = Double.NaN,
+                        windowChangePercent = result.getDouble(9), windowVolume = 0.0, sessionVolume = 0.0,
+                        sessionTurnover = result.getDouble(10),
+                        signalAgeMinutes = ((Instant.now().epochSecond - signalEpoch) / 60L).toInt().coerceAtLeast(1),
+                        signalSource = result.getString(11), updatedAtMillis = evaluatedAt * 1_000,
+                        dataStatus = "SAVED SNAPSHOT", signalWindowLabel = "10m saved",
+                        signalPrice = result.getDouble(3), signalEpochMillis = signalEpoch * 1_000
                     ))
                 }
             } }
@@ -297,13 +302,26 @@ class AnalyticsRepository(
         return if (sorted.size % 2 == 0) (sorted[middle - 1] + sorted[middle]) / 2 else sorted[middle]
     }
 
-    private fun zoneFor(symbol: String) = ZoneId.of(if (symbol.contains('.')) "Europe/Berlin" else "America/New_York")
+    private fun zoneFor(symbol: String) = MarketTimeZone.forSymbol(symbol)
+    private fun <T> transaction(block: () -> T): T {
+        val previousAutoCommit = connection.autoCommit
+        connection.autoCommit = false
+        return try {
+            block().also { connection.commit() }
+        } catch (error: Exception) {
+            connection.rollback()
+            throw error
+        } finally {
+            connection.autoCommit = previousAutoCommit
+        }
+    }
     private inline fun <T> locked(block: () -> T): T = lock.withLock(block)
 
     private companion object {
         const val RAW_RETENTION_DAYS = 90
         const val AGGREGATE_RETENTION_DAYS = 730
         const val SCAN_RETENTION_DAYS = 180
+        const val OUTCOME_MAX_LAG_MINUTES = 4
         val SCHEMA_V1 = listOf(
             """CREATE TABLE IF NOT EXISTS instrument_metadata(symbol TEXT PRIMARY KEY, name TEXT NOT NULL, exchange TEXT NOT NULL, currency TEXT NOT NULL, timezone TEXT NOT NULL, isin TEXT, wkn TEXT, aliases TEXT, tradable INTEGER NOT NULL, updated_at INTEGER NOT NULL)""",
             """CREATE TABLE IF NOT EXISTS corporate_actions(symbol TEXT NOT NULL, action_type TEXT NOT NULL, effective_epoch INTEGER NOT NULL, ratio REAL, amount REAL, currency TEXT, source TEXT NOT NULL, PRIMARY KEY(symbol, action_type, effective_epoch))""",
@@ -325,7 +343,20 @@ class AnalyticsRepository(
             """INSERT OR IGNORE INTO market_calendar_rules(market, timezone, weekdays, open_local, close_local, updated_at) VALUES ('US', 'America/New_York', '1,2,3,4,5', '09:30', '16:00', CAST(strftime('%s','now') AS INTEGER))""",
             """INSERT OR IGNORE INTO market_calendar_rules(market, timezone, weekdays, open_local, close_local, updated_at) VALUES ('EUROPE', 'Europe/Berlin', '1,2,3,4,5', '09:00', '17:30', CAST(strftime('%s','now') AS INTEGER))"""
         )
-        val MIGRATIONS = listOf(1 to SCHEMA_V1, 2 to SCHEMA_V2)
+        val SCHEMA_V3 = listOf(
+            "ALTER TABLE scan_candidates ADD COLUMN signal_epoch INTEGER",
+            "ALTER TABLE scan_candidates ADD COLUMN entry_price REAL",
+            "ALTER TABLE signal_outcomes ADD COLUMN elapsed_minutes REAL",
+            "UPDATE scan_candidates SET signal_epoch=evaluated_at WHERE signal_epoch IS NULL",
+            "UPDATE scan_candidates SET entry_price=price WHERE entry_price IS NULL",
+            "UPDATE signal_outcomes SET elapsed_minutes=horizon_minutes WHERE elapsed_minutes IS NULL",
+            "DELETE FROM market_calendar_rules WHERE market='EUROPE'",
+            "INSERT OR REPLACE INTO market_calendar_rules(market, timezone, weekdays, open_local, close_local, updated_at) VALUES ('US', 'America/New_York', '1,2,3,4,5', '09:30', '16:00', CAST(strftime('%s','now') AS INTEGER))",
+            "INSERT OR REPLACE INTO market_calendar_rules(market, timezone, weekdays, open_local, close_local, updated_at) VALUES ('XETRA', 'Europe/Berlin', '1,2,3,4,5', '09:00', '17:30', CAST(strftime('%s','now') AS INTEGER))",
+            "INSERT OR REPLACE INTO market_calendar_rules(market, timezone, weekdays, open_local, close_local, updated_at) VALUES ('EURONEXT', 'Europe/Berlin', '1,2,3,4,5', '09:00', '17:30', CAST(strftime('%s','now') AS INTEGER))",
+            "INSERT OR REPLACE INTO market_calendar_rules(market, timezone, weekdays, open_local, close_local, updated_at) VALUES ('HELSINKI', 'Europe/Helsinki', '1,2,3,4,5', '10:00', '18:30', CAST(strftime('%s','now') AS INTEGER))"
+        )
+        val MIGRATIONS = listOf(1 to SCHEMA_V1, 2 to SCHEMA_V2, 3 to SCHEMA_V3)
         const val UPSERT_INSTRUMENT = """INSERT INTO instrument_metadata(symbol, name, exchange, currency, timezone, isin, wkn, aliases, tradable, updated_at)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(symbol) DO UPDATE SET name=excluded.name, exchange=excluded.exchange,
             currency=excluded.currency, timezone=excluded.timezone, isin=COALESCE(excluded.isin, instrument_metadata.isin),

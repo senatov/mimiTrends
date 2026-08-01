@@ -22,6 +22,7 @@ import org.senatov.mimitrends.model.CompanyProfile
 import org.senatov.mimitrends.model.MarketRegion
 import org.senatov.mimitrends.model.ScannerCriteria
 import org.senatov.mimitrends.model.ScanResult
+import org.senatov.mimitrends.model.MarketTimeZone
 import org.senatov.mimitrends.scanner.ScannerEngine
 import org.senatov.mimitrends.scanner.ScannerSettingsService
 import org.senatov.mimitrends.scanner.MarketCalendar
@@ -333,7 +334,7 @@ class MainController(
                 if (bars.isNotEmpty()) {
                     repository.loadCompanyProfile(symbol)?.let { profile -> analytics.upsertInstrument(InstrumentMetadata(
                         symbol, profile.name, profile.exchange, if (symbol.contains('.')) "EUR" else "USD",
-                        if (symbol.contains('.')) "Europe/Berlin" else "America/New_York"
+                        MarketTimeZone.forSymbol(symbol).id
                     )) }
                     analytics.refreshDerived(symbol, bars, "SQLITE_BACKFILL")
                     analytics.recordDataQuality(symbol, "SQLITE_BACKFILL", "CACHE", bars.last().minuteEpochSeconds, bars.size)
@@ -366,7 +367,7 @@ class MainController(
                 name = profile?.name ?: symbol,
                 exchange = profile?.exchange ?: if (symbol.contains('.')) "EUROPE" else "US",
                 currency = if (symbol.contains('.')) "EUR" else "USD",
-                timezone = if (symbol.contains('.')) "Europe/Berlin" else "America/New_York",
+                timezone = MarketTimeZone.forSymbol(symbol).id,
                 aliases = symbol.substringBefore('.').takeIf { it != symbol }
             ))
         }
@@ -401,7 +402,7 @@ class MainController(
             analytics.upsertInstrument(InstrumentMetadata(
                 symbol = symbol, name = series.companyName, exchange = series.exchange,
                 currency = series.currency.ifBlank { if (symbol.contains('.')) "EUR" else "USD" },
-                timezone = if (symbol.contains('.')) "Europe/Berlin" else "America/New_York"
+                timezone = MarketTimeZone.forSymbol(symbol).id
             ))
             series.events.forEach { event -> analytics.upsertCorporateAction(CorporateAction(
                 symbol = symbol, actionType = event.type, effectiveEpochSeconds = event.epochSeconds,
@@ -415,7 +416,7 @@ class MainController(
             analytics.upsertInstrument(InstrumentMetadata(
                 symbol = symbol, name = profile.name, exchange = profile.exchange,
                 currency = if (symbol.contains('.')) "EUR" else "USD",
-                timezone = if (symbol.contains('.')) "Europe/Berlin" else "America/New_York"
+                timezone = MarketTimeZone.forSymbol(symbol).id
             ))
         }
         if (dataStatus(symbol) == "LIVE") source = "FINNHUB"

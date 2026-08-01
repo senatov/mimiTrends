@@ -28,13 +28,14 @@ class AnalyticsRepositoryTest {
         analytics.recordDataQuality("TEST", "TEST", "REALTIME", bars.last().minuteEpochSeconds, bars.size)
         assertTrue(analytics.loadAggregatedBars("TEST", 5, 0).isNotEmpty())
 
+        val signalEpoch = Instant.now().epochSecond - 5 * 60L
         val run = analytics.beginScan("US", 1, 180)
-        analytics.recordScanCandidate(run, "TEST", result(), null, "TEST")
+        analytics.recordScanCandidate(run, "TEST", result(signalEpoch), null, "TEST")
         analytics.completeScan(run, listOf("TEST"), 0)
         val saved = analytics.loadLatestPublishedResults(10).single()
         assertEquals("TEST", saved.symbol)
         assertEquals("SAVED SNAPSHOT", saved.dataStatus)
-        analytics.recordSignalOutcomes("TEST", 102.0, Instant.now().epochSecond + 301)
+        analytics.recordSignalOutcomes("TEST", 102.0, signalEpoch + 5 * 60L)
         val stats = analytics.stats()
         assertEquals(1, stats.instruments)
         assertEquals(1, stats.scanRuns)
@@ -48,19 +49,28 @@ class AnalyticsRepositoryTest {
             connection.createStatement().use { statement ->
                 statement.executeQuery("SELECT COUNT(*) FROM corporate_actions").use { it.next(); assertEquals(1, it.getInt(1)) }
                 statement.executeQuery("SELECT COUNT(*) FROM trading_sessions").use { it.next(); assertTrue(it.getInt(1) > 0) }
-                statement.executeQuery("SELECT COUNT(*) FROM market_calendar_rules").use { it.next(); assertEquals(2, it.getInt(1)) }
+                statement.executeQuery("SELECT COUNT(*) FROM market_calendar_rules").use { it.next(); assertEquals(4, it.getInt(1)) }
                 statement.executeQuery("SELECT published FROM scan_candidates").use { it.next(); assertEquals(1, it.getInt(1)) }
+                statement.executeQuery("SELECT signal_epoch, entry_price FROM scan_candidates").use {
+                    it.next(); assertEquals(signalEpoch, it.getLong(1)); assertEquals(100.0, it.getDouble(2))
+                }
+                statement.executeQuery("SELECT entry_price, observed_price, return_percent, elapsed_minutes FROM signal_outcomes").use {
+                    it.next(); assertEquals(100.0, it.getDouble(1)); assertEquals(102.0, it.getDouble(2))
+                    assertEquals(2.0, it.getDouble(3), 0.000_001)
+                    assertEquals(5.0, it.getDouble(4), 0.000_001)
+                }
             }
         }
         AnalyticsRepository(path).close()
     }
 
-    private fun result() = ScanResult(
+    private fun result(signalEpoch: Long) = ScanResult(
         symbol = "TEST", price = 101.0, anomalyScore = 3.0, priceAnomaly = 4.0,
         volumeAnomaly = 2.0, rangeAnomaly = 3.0, relativeVolume = 2.0,
         candleBodyRatio = 0.8, windowChangePercent = 1.2, windowVolume = 1_000.0,
         sessionVolume = 100_000.0, sessionTurnover = 10_000_000.0,
         signalAgeMinutes = 0, signalSource = "Impulse ↑", updatedAtMillis = 1_000,
-        dataStatus = "TEST", signalWindowLabel = "latest"
+        dataStatus = "TEST", signalWindowLabel = "latest",
+        signalPrice = 100.0, signalEpochMillis = signalEpoch * 1_000L
     )
 }

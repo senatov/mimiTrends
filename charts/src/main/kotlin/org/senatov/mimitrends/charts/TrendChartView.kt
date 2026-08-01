@@ -163,7 +163,7 @@ class TrendChartView : StackPane() {
                 else -> 0
             }
         }
-        val signalEpoch = request.signal?.let { request.bars.last().minuteEpochSeconds - it.signalAgeMinutes * 60L }
+        val signalEpoch = request.signal?.signalEpochMillis?.div(1_000L)
         volumeRenderer.signalColumn = signalEpoch?.let { epoch -> visible.indices.minByOrNull { kotlin.math.abs(visible[it].minuteEpochSeconds - epoch) } }
         pricePlot.dataset = DefaultHighLowDataset(request.symbol, dates, highs, lows, opens, closes, volumes)
 
@@ -190,13 +190,13 @@ class TrendChartView : StackPane() {
 
     private fun nearestSignalBar(bars: List<MinuteBar>, signal: ScanResult): MinuteBar? {
         if (bars.isEmpty()) return null
-        val epoch = bars.last().minuteEpochSeconds - signal.signalAgeMinutes * 60L
+        val epoch = signal.signalEpochMillis / 1_000L
         return bars.minByOrNull { kotlin.math.abs(it.minuteEpochSeconds - epoch) }
     }
 
     private fun focusOnSignal(bars: List<MinuteBar>, signal: ScanResult): List<MinuteBar> {
         if (bars.isEmpty()) return bars
-        val signalEpoch = bars.last().minuteEpochSeconds - signal.signalAgeMinutes * 60L
+        val signalEpoch = signal.signalEpochMillis / 1_000L
         val signalIndex = bars.indices.minByOrNull { kotlin.math.abs(bars[it].minuteEpochSeconds - signalEpoch) } ?: bars.lastIndex
         val start = (signalIndex - SIGNAL_CONTEXT_MINUTES).coerceAtLeast(0)
         return bars.subList(start, bars.lastIndex + 1).takeLast(MAX_FOCUS_BARS)
@@ -205,7 +205,7 @@ class TrendChartView : StackPane() {
     private fun signalSummary(signal: ScanResult, signalBar: MinuteBar?, currentPrice: Double, request: RenderRequest): String {
         val age = if (signal.signalAgeMinutes == 0) "now" else "${signal.signalAgeMinutes}m ago"
         val date = signalBar?.let { SimpleDateFormat("dd MMM HH:mm").format(Date(it.minuteEpochSeconds * 1_000)) } ?: "—"
-        val entry = signalBar?.close?.times(request.priceMultiplier)
+        val entry = signal.signalPrice.takeIf { it.isFinite() && it > 0.0 }?.times(request.priceMultiplier)
         val move = entry?.takeIf { it != 0.0 }?.let { (currentPrice - it) / it * 100.0 }
         val volume = if (signal.relativeVolume.isFinite()) " · RVOL %.1f×".format(signal.relativeVolume) else ""
         val prices = entry?.let {
@@ -249,7 +249,7 @@ class TrendChartView : StackPane() {
         val isTrend = signal.signalSource.startsWith("Trend")
         val ageMinutes = signal.signalAgeMinutes
         val windowMinutes = if (isTrend) signal.signalWindowLabel.filter(Char::isDigit).toIntOrNull() ?: 180 else 1
-        val end = (latestEpoch - ageMinutes * 60L) * 1_000.0
+        val end = signal.signalEpochMillis.toDouble()
         val start = end - windowMinutes * 60_000.0
         fun marker(label: String?): IntervalMarker = IntervalMarker(start, end).apply {
             paint = Color(242, 154, 56, 48)
@@ -263,7 +263,7 @@ class TrendChartView : StackPane() {
         }
         val signalBar = lastRequest?.let { nearestSignalBar(it.bars, signal) }
         val signalDate = signalBar?.let { SimpleDateFormat("dd MMM HH:mm").format(Date(it.minuteEpochSeconds * 1_000)) }
-        val entry = signalBar?.let { bar -> lastRequest?.let { bar.close * it.priceMultiplier } }
+        val entry = lastRequest?.let { signal.signalPrice * it.priceMultiplier }
         val label = if (isTrend) "Trend ${signal.signalWindowLabel}" else "Signal"
         val numericLabel = listOfNotNull(label, signalDate, entry?.let { "Entry ${lastRequest?.currencySymbol}${"%,.2f".format(it)}" }).joinToString(" · ")
         priceSignalMarker = marker(numericLabel)

@@ -14,6 +14,8 @@ class ScannerEngineTest {
         val result = requireNotNull(engine().evaluate("TEST", bars, criteria()))
         assertEquals("Impulse ↑", result.signalSource)
         assertEquals(0, result.signalAgeMinutes)
+        assertEquals(103.0, result.signalPrice)
+        assertEquals(bars.last().minuteEpochSeconds * 1_000L, result.signalEpochMillis)
         assertTrue(result.priceAnomaly >= 3.0)
         assertTrue(result.candleBodyRatio >= 0.55)
     }

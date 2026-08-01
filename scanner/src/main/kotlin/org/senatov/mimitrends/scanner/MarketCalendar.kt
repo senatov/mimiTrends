@@ -8,6 +8,7 @@ import java.time.Month
 import java.time.ZoneId
 import java.time.ZonedDateTime
 import java.time.temporal.TemporalAdjusters
+import org.senatov.mimitrends.model.MarketTimeZone
 
 object MarketCalendar {
     data class Opening(val symbol: String, val instant: Instant)
@@ -78,10 +79,10 @@ object MarketCalendar {
     }
 
     private fun marketFor(symbol: String): Market = when {
-        symbol.endsWith(".DE", true) -> Market(Kind.XETRA, ZoneId.of("Europe/Berlin"), LocalTime.of(9, 0), LocalTime.of(17, 30))
-        symbol.endsWith(".HE", true) -> Market(Kind.HELSINKI, ZoneId.of("Europe/Helsinki"), LocalTime.of(10, 0), LocalTime.of(18, 30))
-        symbol.contains('.') -> Market(Kind.EURONEXT, ZoneId.of("Europe/Paris"), LocalTime.of(9, 0), LocalTime.of(17, 30))
-        else -> Market(Kind.US, ZoneId.of("America/New_York"), LocalTime.of(9, 30), LocalTime.of(16, 0))
+        symbol.endsWith(".DE", true) -> Market(Kind.XETRA, MarketTimeZone.forSymbol(symbol), LocalTime.of(9, 0), LocalTime.of(17, 30))
+        symbol.endsWith(".HE", true) -> Market(Kind.HELSINKI, MarketTimeZone.forSymbol(symbol), LocalTime.of(10, 0), LocalTime.of(18, 30))
+        symbol.contains('.') -> Market(Kind.EURONEXT, MarketTimeZone.forSymbol(symbol), LocalTime.of(9, 0), LocalTime.of(17, 30))
+        else -> Market(Kind.US, MarketTimeZone.forSymbol(symbol), LocalTime.of(9, 30), LocalTime.of(16, 0))
     }
 
     private fun observed(date: LocalDate): LocalDate = when (date.dayOfWeek) {

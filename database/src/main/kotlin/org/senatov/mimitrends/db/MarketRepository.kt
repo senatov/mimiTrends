@@ -41,7 +41,8 @@ class MarketRepository(
     fun upsertMinuteBar(bar: MinuteBar) {
         log.trace(LogTag.DB, "upsertMinuteBar(symbol={}, minute={})", bar.symbol, bar.minuteEpochSeconds)
         check(!closed.get()) { "MarketRepository is closed" }
-        synchronized(pendingLock) { pending[bar.symbol to bar.minuteEpochSeconds] = bar }
+        val normalized = bar.copy(symbol = bar.symbol.trim().uppercase())
+        synchronized(pendingLock) { pending[normalized.symbol to normalized.minuteEpochSeconds] = normalized }
     }
 
     fun loadMinuteBars(symbol: String, fromEpochSeconds: Long): List<MinuteBar> {
