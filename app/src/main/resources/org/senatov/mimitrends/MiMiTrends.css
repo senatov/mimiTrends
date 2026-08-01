@@ -165,20 +165,20 @@
     -fx-padding: 8px;
 }
 .chart-signal-summary {
-    -fx-font-size: 10px;
-    -fx-font-weight: 500;
-    -fx-text-fill: #9a5a14;
+    -fx-font-size: 11.5px;
+    -fx-font-weight: 600;
+    -fx-text-fill: #805018;
 }
 .chart-current-price {
-    -fx-font-size: 12px;
+    -fx-font-size: 12.5px;
     -fx-font-weight: 600;
     -fx-text-fill: #167b70;
 }
 .chart-cursor-details {
-    -fx-font-family: "Menlo", "Monospaced";
-    -fx-font-size: 9px;
-    -fx-font-weight: 400;
-    -fx-text-fill: #52606c;
+    -fx-font-family: "SF Pro Display", "SansSerif";
+    -fx-font-size: 11px;
+    -fx-font-weight: 500;
+    -fx-text-fill: #344655;
 }
 .chart-mode-switch {
     -fx-background-color: rgba(218,224,230,0.72);
@@ -187,8 +187,8 @@
 }
 .chart-mode-button {
     -fx-padding: 3 9 3 9;
-    -fx-font-size: 10px;
-    -fx-text-fill: #5a6570;
+    -fx-font-size: 11px;
+    -fx-text-fill: #46535f;
     -fx-background-color: transparent;
     -fx-background-radius: 5px;
     -fx-border-width: 0;
