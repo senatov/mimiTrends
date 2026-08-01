@@ -48,7 +48,7 @@ MAC_SIGNING_KEY_USER_NAME="Iakov Senatov (G2V9T9AD95)" \
 Store the notarization credentials once in the login keychain. Use an app-specific password, not the Apple ID password:
 
 ```zsh
-xcrun notarytool store-credentials "MiMiTrends-notary" \
+xcrun notarytool store-credentials "MiMiNotary" \
   --apple-id "YOUR_APPLE_ID" \
   --team-id "YOUR_TEAM_ID" \
   --password "YOUR_APP_SPECIFIC_PASSWORD"
@@ -57,7 +57,7 @@ xcrun notarytool store-credentials "MiMiTrends-notary" \
 Then build, sign, submit to Apple, wait for acceptance, staple the ticket, and validate it:
 
 ```zsh
-APPLE_NOTARY_PROFILE="MiMiTrends-notary" \
+APPLE_NOTARY_PROFILE="MiMiNotary" \
 MAC_SIGNING_KEY_USER_NAME="Iakov Senatov (G2V9T9AD95)" \
   ./gradlew :app:packageNotarizedMacDmg
 ```
@@ -65,7 +65,7 @@ MAC_SIGNING_KEY_USER_NAME="Iakov Senatov (G2V9T9AD95)" \
 The equivalent shorter command is:
 
 ```zsh
-./Scripts/build-macos-dmg.zsh --notarize --profile MiMiTrends-notary
+./Scripts/build-macos-dmg.zsh --notarize
 ```
 
 CI may use App Store Connect API credentials instead of a keychain profile by setting all of `APPLE_NOTARY_KEY_FILE`, `APPLE_NOTARY_KEY_ID`, and `APPLE_NOTARY_ISSUER_ID`.
@@ -83,7 +83,7 @@ The package task deliberately fails when `MAC_SIGNING_KEY_USER_NAME` is absent. 
 Requirements: Windows, JDK 26, and WiX Toolset 3.x available on `PATH`.
 
 ```bat
-gradlew.bat :app:packageWindowsExe
+Scripts\build-windows-exe.bat
 ```
 
 The result is a self-contained per-user EXE installer with Start menu and desktop shortcuts under:
@@ -99,8 +99,10 @@ The task creates the installer but does not Authenticode-sign it. A Windows code
 Requirements: Linux and JDK 26. Building the Debian package also needs `fakeroot`.
 
 ```bash
-./gradlew :app:packageLinuxPortable :app:packageLinuxDeb
+./Scripts/build-linux-packages.sh
 ```
+
+Use `--portable-only` or `--deb-only` when only one Linux format is needed.
 
 This creates:
 

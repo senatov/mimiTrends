@@ -355,13 +355,17 @@ Native packages contain a private runtime, so end users do not need to install a
 ./Scripts/build-macos-dmg.zsh --notarize
 ```
 
+The script automatically selects the first `Developer ID Application` certificate from the macOS
+Keychain. The notarized form uses the `MiMiNotary` keychain profile by default; both values can be
+overridden with `--identity` and `--profile`.
+
 The signed pipeline also signs Mach-O libraries embedded inside JavaFX and SQLite dependency JARs,
 then verifies the complete DMG before it is allowed to reach Apple Notary Service.
 
 ### Windows
 
 ```bat
-gradlew.bat :app:packageWindowsExe
+Scripts\build-windows-exe.bat
 ```
 
 Windows packaging requires WiX Toolset 3.x on `PATH`.
@@ -369,7 +373,9 @@ Windows packaging requires WiX Toolset 3.x on `PATH`.
 ### Linux
 
 ```bash
-./gradlew :app:packageLinuxPortable :app:packageLinuxDeb
+./Scripts/build-linux-packages.sh
+./Scripts/build-linux-packages.sh --portable-only
+./Scripts/build-linux-packages.sh --deb-only
 ```
 
 Building the Debian package also requires `fakeroot`.

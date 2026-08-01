@@ -9,7 +9,7 @@ readonly GRADLEW="${PROJECT_DIR}/gradlew"
 readonly OUTPUT_DIR="${PROJECT_DIR}/app/build/distributions/native/macos"
 
 notarize=false
-notary_profile="${APPLE_NOTARY_PROFILE:-MiMiTrends-notary}"
+notary_profile="${APPLE_NOTARY_PROFILE:-MiMiNotary}"
 signing_identity="${MAC_SIGNING_KEY_USER_NAME:-}"
 
 usage() {
@@ -21,7 +21,7 @@ usage() {
   print "Options:"
   print "  --notarize       Run the complete Apple notarization workflow"
   print "  --identity NAME  Developer ID Application identity"
-  print "  --profile NAME   notarytool keychain profile (default: MiMiTrends-notary)"
+  print "  --profile NAME   notarytool keychain profile (default: MiMiNotary)"
   print "  -h, --help       Show this help"
 }
 
