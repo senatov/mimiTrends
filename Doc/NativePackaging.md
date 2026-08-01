@@ -32,6 +32,19 @@ MAC_SIGNING_KEY_USER_NAME="Iakov Senatov (G2V9T9AD95)" \
   ./gradlew :app:packageMacDmg
 ```
 
+Before `jpackage` runs, the Gradle pipeline extracts dependency JARs containing macOS native
+libraries, signs every Mach-O binary with the Developer ID identity, hardened runtime, and a secure
+timestamp, then rebuilds the JAR. After creating the DMG, `verifySignedMacDmg` mounts it and verifies
+the separately signed DMG container, the application signature tree, and every embedded `.dylib` or `.jnilib`. Apple submission
+is blocked if this preflight fails.
+
+Run the preflight explicitly when diagnosing signing:
+
+```zsh
+MAC_SIGNING_KEY_USER_NAME="Iakov Senatov (G2V9T9AD95)" \
+  ./gradlew :app:verifySignedMacDmg
+```
+
 Store the notarization credentials once in the login keychain. Use an app-specific password, not the Apple ID password:
 
 ```zsh

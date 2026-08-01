@@ -355,6 +355,9 @@ Native packages contain a private runtime, so end users do not need to install a
 ./Scripts/build-macos-dmg.zsh --notarize
 ```
 
+The signed pipeline also signs Mach-O libraries embedded inside JavaFX and SQLite dependency JARs,
+then verifies the complete DMG before it is allowed to reach Apple Notary Service.
+
 ### Windows
 
 ```bat

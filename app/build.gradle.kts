@@ -157,6 +157,24 @@ val cleanMacDmg = tasks.register<Delete>("cleanMacDmgPackage") { delete(fileTree
 val cleanWindowsExe = tasks.register<Delete>("cleanWindowsExePackage") { delete(fileTree(windowsOut) { include("*.exe") }) }
 val cleanLinuxApp = tasks.register<Delete>("cleanLinuxAppPackage") { delete(linuxAppImage) }
 val cleanLinuxDeb = tasks.register<Delete>("cleanLinuxDebPackage") { delete(fileTree(linuxOut) { include("*.deb") }) }
+val signMacNativeJars = tasks.register<Exec>("signMacNativeJars") {
+    group = "distribution"
+    description = "Signs Mach-O libraries embedded in runtime JARs before jpackage runs."
+    dependsOn(prepareJpackageInput)
+    onlyIf("signMacNativeJars requires macOS") { System.getProperty("os.name").lowercase().contains("mac") }
+    val signingIdentity = providers.environmentVariable("MAC_SIGNING_KEY_USER_NAME").orNull
+    doFirst {
+        check(!signingIdentity.isNullOrBlank()) {
+            "Set MAC_SIGNING_KEY_USER_NAME to a Developer ID Application identity from: security find-identity -v -p codesigning"
+        }
+    }
+    commandLine(
+        "zsh",
+        rootProject.file("Scripts/sign-macos-native-jars.zsh").absolutePath,
+        jpackageInputDir.get().asFile.absolutePath,
+        signingIdentity.orEmpty()
+    )
+}
 
 tasks.register<Exec>("packageMacApp") {
     group = "distribution"
@@ -173,7 +191,7 @@ tasks.register<Exec>("packageMacApp") {
 tasks.register<Exec>("packageMacDmg") {
     group = "distribution"
     description = "Builds a Developer ID signed macOS DMG. Requires MAC_SIGNING_KEY_USER_NAME."
-    dependsOn(prepareJpackageInput, cleanMacDmg)
+    dependsOn(signMacNativeJars, cleanMacDmg)
     onlyIf("packageMacDmg requires macOS") { System.getProperty("os.name").lowercase().contains("mac") }
     val signingIdentity = providers.environmentVariable("MAC_SIGNING_KEY_USER_NAME").orNull
     val macDmgArgs = commonJpackageArgs("dmg", macOut).toMutableList().apply {
@@ -198,10 +216,38 @@ tasks.register<Exec>("packageMacDmg") {
     commandLine(macDmgArgs)
 }
 
+val signMacDmgContainer = tasks.register<Exec>("signMacDmgContainer") {
+    group = "distribution"
+    description = "Signs the completed DMG container with a secure timestamp."
+    dependsOn("packageMacDmg")
+    onlyIf("signMacDmgContainer requires macOS") { System.getProperty("os.name").lowercase().contains("mac") }
+    val signingIdentity = providers.environmentVariable("MAC_SIGNING_KEY_USER_NAME").orNull
+    doFirst {
+        check(!signingIdentity.isNullOrBlank()) { "Set MAC_SIGNING_KEY_USER_NAME to a Developer ID Application identity" }
+    }
+    commandLine(
+        "codesign", "--force", "--timestamp", "--sign",
+        signingIdentity?.let { if (it.startsWith("Developer ID Application:")) it else "Developer ID Application: $it" }.orEmpty(),
+        macDmgFile.get().asFile.absolutePath
+    )
+}
+
+val verifySignedMacDmg = tasks.register<Exec>("verifySignedMacDmg") {
+    group = "verification"
+    description = "Verifies the DMG, app, and every Mach-O library embedded in dependency JARs."
+    dependsOn(signMacDmgContainer)
+    onlyIf("verifySignedMacDmg requires macOS") { System.getProperty("os.name").lowercase().contains("mac") }
+    commandLine(
+        "zsh",
+        rootProject.file("Scripts/verify-macos-dmg.zsh").absolutePath,
+        macDmgFile.get().asFile.absolutePath
+    )
+}
+
 val submitMacNotarization = tasks.register<Exec>("submitMacNotarization") {
     group = "distribution"
     description = "Submits the signed DMG to Apple Notary Service and waits for acceptance."
-    dependsOn("packageMacDmg")
+    dependsOn(verifySignedMacDmg)
     onlyIf("submitMacNotarization requires macOS") { System.getProperty("os.name").lowercase().contains("mac") }
     val dmg = macDmgFile.get().asFile
     val profile = providers.environmentVariable("APPLE_NOTARY_PROFILE").orNull
