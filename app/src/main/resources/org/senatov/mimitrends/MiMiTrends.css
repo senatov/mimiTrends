@@ -249,7 +249,13 @@
     -fx-border-width: 1px;
     -fx-effect: dropshadow(gaussian, rgba(28,38,47,0.24), 28, 0.12, 0, 10);
 }
-.market-closed-dog { -fx-opacity: 0.84; }
+.market-closed-dog {
+    -fx-opacity: 0.13;
+    -fx-smooth: true;
+}
+.market-closed-content {
+    -fx-padding: 155 0 0 0;
+}
 .market-closed-title {
     -fx-font-size: 24px;
     -fx-font-weight: 600;

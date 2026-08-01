@@ -51,15 +51,20 @@ class ScannerPanel(
         styleClass += "market-closed-close"
         setOnAction { hideMarketClosedOverlay() }
     }
-    private val closedMarketOverlay = VBox(
-        12.0,
+    private val closedMarketOverlay = StackPane(
         ImageView(Image(requireNotNull(javaClass.getResourceAsStream("/images/sleeping-dog-market-closed.png")))).apply {
-            fitWidth = 210.0; fitHeight = 210.0; isPreserveRatio = true
+            fitWidth = 560.0; fitHeight = 520.0; isPreserveRatio = true
             styleClass += "market-closed-dog"
         },
-        Label("ALL SELECTED MARKETS ARE CLOSED").apply { styleClass += "market-closed-title" },
-        Label("Saved closing snapshot · not live").apply { styleClass += "market-closed-subtitle" },
-        closeMarketOverlayButton
+        VBox(
+            12.0,
+            Label("ALL SELECTED MARKETS ARE CLOSED").apply { styleClass += "market-closed-title" },
+            Label("Saved closing snapshot · not live").apply { styleClass += "market-closed-subtitle" },
+            closeMarketOverlayButton
+        ).apply {
+            alignment = Pos.CENTER
+            styleClass += "market-closed-content"
+        }
     ).apply {
         alignment = Pos.CENTER
         maxWidth = 680.0
