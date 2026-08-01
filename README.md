@@ -2,153 +2,420 @@
 
 <img src="./Doc/AppIcon-1024.png" alt="MiMiTrends application icon" width="128">
 
-### A local-first market anomaly scanner for macOS
+**A local-first desktop scanner for fresh market anomalies and actionable price signals.**
 
-MiMiTrends is a Kotlin/JVM + JavaFX desktop application styled after MiMiComparator. It detects sudden directional one-minute price impulses in a liquid US and European universe and stores historical Yahoo and optional live Finnhub OHLCV data in SQLite.
+MiMiTrends watches a configurable universe of liquid US and European equities, detects unusual recent price activity, ranks the results, and explains why each instrument was selected. It is intended for signal discovery rather than exhaustive historical chart analysis.
+
+The application is written in Kotlin/JVM and JavaFX. It is designed as a cross-platform desktop application for macOS, Windows, and Linux. **The current builds and user interface have so far been tested only on macOS.** Windows and Linux packaging is implemented, but those distributions should be treated as unverified until they receive platform-specific testing.
+
+MiMiTrends is informational software. It does not place orders, provide investment advice, or guarantee that a detected anomaly will continue.
 
 ## Main window
 
-<img src="./Doc/MainWindow.png" alt="MiMiTrends main window with anomaly scanner and market chart" width="900">
+<img src="./Doc/MainWindow.png" alt="MiMiTrends scanner and signal-focused chart" width="900">
 
-## What it does
+The upper pane contains the ranked scanner results. The lower pane opens a signal-focused price and volume chart for the selected instrument.
 
-- scans a configurable US, European, or combined universe;
-- examines only the latest minute candle and the immediately preceding configurable freshness horizon;
-- detects `Impulse ↑` and `Impulse ↓` using robust return/range Z-scores, candle shape, and volume confirmation;
-- never promotes a symbol for volume alone when its price is quiet;
-- requires at least two cached sessions and a configurable absolute move floor (0.20% by default);
-- fills a sparse strict-impulse list to 12 rows by default with relaxed fresh impulses and statistically persistent rising trends;
-- excludes closed exchanges from the fresh ranking instead of recycling their final cached candle;
-- keeps the visible table unchanged while scanning and publishes the completed ranking atomically;
-- scans every three minutes by default and shows a countdown or animated hourglass;
-- uses SQLite first, Yahoo Finance for history/fallback, and optional Finnhub WebSocket trades for live US candles;
-- downloads five days on first use, then requests only the missing tail and upserts overlapping minutes;
-- displays candlesticks, volume, a turquoise close line, zoom/pan, tooltips, and a mouse crosshair;
-- shows cached company favicons and marketing names; ticker and exchange remain in the delayed help popup;
-- copies the selected company name with `⌘C`/`Ctrl+C`; the row menu can copy either name or ticker;
-- shows prices in EUR by default, with USD selectable in Settings;
-- remembers window geometry, divider position, selected instrument, columns, colors, and fonts.
+## Why it exists
 
-The scanner is informational and does not place orders.
+Traditional charts are useful for studying price history, but they often require the user to inspect many instruments manually. MiMiTrends reverses that workflow:
 
-## Data providers
+1. collect and normalize recent market data;
+2. compare the latest completed candles with the instrument's own historical behavior;
+3. reject ordinary movement and unconfirmed volume spikes;
+4. rank only fresh, statistically unusual candidates;
+5. show the signal, its strength, entry context, volume confirmation, and subsequent movement.
 
-Yahoo Finance is the default OHLCV/profile source and needs no API key. Its public chart endpoint is not a contracted market-data API, so availability and fields can change; this project is intended for personal/demo use. Yahoo documents US Nasdaq quotes as real-time, but common European feeds are delayed: Xetra, Paris, and Amsterdam by 15 minutes and Milan by 20 minutes. The scanner labels every result as `YAHOO RT`, `DELAYED 15m`, `DELAYED 20m`, `LIVE`, or `CACHE` instead of presenting delayed data as current.
+The primary question is not “What did this stock do over the last year?” but “What unusual event is happening now, how strong is it, and is the move being confirmed?”
 
-Finnhub is optional. When configured, one WebSocket connection subscribes to the selected US symbols, aggregates trade ticks into updatable minute OHLCV bars, and writes them to SQLite. It also remains a company-profile/logo fallback. A WebSocket failure automatically leaves Yahoo/SQLite active; missing credentials never block startup. European real-time availability depends on the user's Finnhub plan and exchange licensing, so Yahoo European results remain explicitly delayed in the default configuration.
+## What the application does
 
-Users can enter or replace their own Finnhub API key under **Settings → Finnhub live feed**. Leaving the field blank preserves the current local key. Credentials can also be supplied through `FINNHUB_API_KEY` or an ignored project `.env` file.
+- scans US, European, or combined watchlists;
+- detects fresh upward and downward one-minute impulses;
+- requires an exceptional price move or candle range, not volume alone;
+- confirms candidates using candle structure, relative volume, log-volume anomaly, or immediate continuation;
+- applies a configurable minimum absolute move so tiny changes in quiet stocks do not become misleading signals;
+- supplements a sparse strict result set with relaxed impulses and persistent rising trends;
+- ranks completed results atomically instead of changing the visible table while a scan is running;
+- stores minute OHLCV history, company profiles, derived statistics, scan runs, and signal outcomes in SQLite;
+- uses exchange-local time zones and market calendars for US, Xetra, Euronext, and Helsinki instruments;
+- pauses scanning while every selected market is closed and resumes after the earliest next opening;
+- identifies cached, delayed, and live data instead of presenting every quote as real-time;
+- provides a signal-focused chart with a full-history fallback;
+- remembers window geometry, divider position, table appearance, columns, and the selected instrument.
 
-Credential lookup order is environment variable, ignored project `.env`, then:
+## Reading the scanner table
+
+The primary table intentionally uses plain-language categories instead of exposing every raw statistical value.
+
+| Column | Meaning |
+| --- | --- |
+| Company / Symbol | Instrument identity and cached company profile. |
+| Signal | Fresh impulse, relaxed impulse, or persistent trend. |
+| Move 10m | Signed price change over the latest ten-minute display window. |
+| Price | Latest completed locally available price in the selected display currency. |
+| Strength | Composite ranking: `Watch`, `Notable`, `Strong`, or `Extreme`. |
+| Price action | Human-readable interpretation such as `Strong impulse ↑`, `Steady trend ↑`, or `Volatile / unstable`. |
+| Volume | `Normal`, `Elevated`, `Strong`, `Extreme`, or `Price-led`, with relative volume when available. |
+| Age | Whether the signal is latest, several minutes old, or a trend window. |
+| Feed | Live, delayed, Yahoo, SQLite cache, or saved closed-market snapshot. |
+| Turnover | Approximate current-session traded value. |
+
+Hovering the derived columns reveals the exact jump, range, volume Z-scores, RVOL, composite score, and an explanation of the classification. This keeps the normal workflow readable without discarding analytical detail.
+
+## Statistical model
+
+MiMiTrends evaluates completed, minute-aligned OHLCV bars. Bars with non-finite values, impossible OHLC relationships, negative volume, invalid prices, or malformed timestamps are excluded. A valid zero-volume bar may remain in the price series; positive historical volume is still required when constructing a relative-volume reference.
+
+### Comparable baseline
+
+For a candidate candle, the scanner prefers historical candles from prior sessions within approximately ±15 minutes of the same exchange-local time. This matters because volatility and volume near an opening auction are not comparable with quiet midday trading.
+
+The default baseline uses five sessions and requires enough samples to avoid unstable estimates. If comparable time-of-day history is still too short, the scanner falls back to a larger recent sample.
+
+Sessions are calculated in the instrument's exchange time zone:
+
+- US listings: `America/New_York`;
+- Xetra and most continental European listings: Central European time;
+- Helsinki listings: `Europe/Helsinki`.
+
+### Robust Z-scores
+
+Ordinary mean and standard deviation are easily distorted by the same outliers the scanner is trying to detect. MiMiTrends therefore uses the median and median absolute deviation (MAD).
+
+For observations `x`:
+
+```text
+center = median(x)
+robust scale = 1.4826 × median(|x - center|)
+```
+
+A small floor prevents near-zero historical variation from producing infinite or absurd scores.
+
+The impulse model calculates:
+
+- **Jump Z** — absolute close-to-close return deviation from the robust baseline;
+- **Range Z** — excess high–low range relative to the normal candle range;
+- **Volume Z** — positive anomaly in `log(1 + volume)`;
+- **RVOL** — candidate volume divided by the median positive baseline volume;
+- **body ratio** — absolute candle body divided by its high–low range;
+- **close location** — where the close lies inside the candle range.
+
+These technical values are persisted and remain available in tooltips, while the table converts them into plain-language price-action and volume labels.
+
+### Impulse qualification
+
+A candle is eligible only when all of the following are true:
+
+1. the signal is inside the configured freshness horizon;
+2. Jump Z or Range Z crosses its threshold;
+3. the absolute price move crosses the economic minimum;
+4. the close is directional rather than buried in a long opposing wick;
+5. the move is confirmed by volume, body quality, or same-direction continuation.
+
+Volume cannot independently promote a quiet instrument.
+
+The default strict thresholds are:
+
+```text
+Jump Z             3.0
+Range Z            3.5
+Volume Z           2.0
+Relative volume    1.8×
+Body ratio          0.55
+Absolute move       0.20%
+Maximum age         2 minutes
+```
+
+All user-facing thresholds can be adjusted in Settings.
+
+### Composite score
+
+The raw impulse score gives most of its weight to the stronger price anomaly, then adds volume confirmation and immediate continuation:
+
+```text
+raw = 0.65 × max(Jump Z, 0.8 × Range Z)
+    + 0.25 × Volume Z
+    + 0.10 × continuation
+```
+
+The result is multiplied by candle quality and exponential freshness decay. Consequently, a structurally clean current impulse ranks above an old or wick-heavy event with similar raw Z-scores.
+
+### Relaxed impulses and trend fallback
+
+If strict impulses do not fill the configured minimum result count, MiMiTrends may add:
+
+- **relaxed impulses**, using moderately lower statistical confirmation thresholds while retaining freshness and the absolute-move floor;
+- **persistent trends**, which do not depend on one exceptional candle.
+
+The trend fallback evaluates up to 180 minutes of the current session. It requires positive net return, a positive least-squares slope, sufficient R², an efficiency ratio above the configured minimum, and continued growth over the latest ten and five minutes.
+
+Trend efficiency is:
+
+```text
+net progress / total travelled price path
+```
+
+This allows reasonable pullbacks while rejecting a noisy sideways chart that merely ends slightly above its starting point.
+
+## Signal outcomes
+
+Published signals are evaluated later at target horizons of 5, 10, and 30 minutes. Outcome returns use the exact signal candle price and timestamp rather than the later scan-completion price.
+
+The database stores both the target horizon and the actual elapsed time. This avoids silently treating a delayed observation as an exact five-minute result. Outcome collection accepts only a small scheduling delay and records:
+
+- signal entry price;
+- observed price;
+- target horizon;
+- actual elapsed minutes;
+- realized percentage return;
+- observation timestamp.
+
+This apparatus is intended for later empirical work: measuring continuation rates, evaluating thresholds, comparing signal classes, and detecting whether an apparently strong score has predictive value. The application does not yet present these records as a backtest or claim a validated trading edge.
+
+## Market data
+
+### Yahoo Finance
+
+Yahoo Finance is the default history and fallback provider and does not require an API key. The application bootstraps recent minute history, then requests and upserts the missing tail. Yahoo's public chart endpoint is not a contracted API and may change without notice.
+
+European quotes may be delayed. MiMiTrends labels data as live, delayed, Yahoo, or cached rather than assuming that every last bar is current.
+
+### Finnhub
+
+Finnhub is optional. With a user-provided API key, one WebSocket connection subscribes to selected US symbols and aggregates trades into minute OHLCV bars. Finnhub also acts as a company-profile and logo fallback.
+
+Configure the key in **Settings → Finnhub live feed**, through `FINNHUB_API_KEY`, or through an ignored project `.env` file. The final local fallback is:
 
 ```text
 ~/.mimi/trends/finnhub.properties
 ```
 
-Never commit credentials. Revoke any key that has been shared publicly.
+Never commit credentials. Provider availability and exchange coverage depend on the user's account and licensing.
 
-## Build and run
+## Market calendar and closed-market behavior
 
-```zsh
-./gradlew run
-./gradlew test
-./gradlew build
-```
+The scheduler uses exchange-local clocks, weekdays, daylight-saving rules, and local holiday calendars. It distinguishes regular US, Xetra, Euronext, and Helsinki sessions.
 
-In IntelliJ IDEA, import the root as a Gradle project and use the shared `MiMiTrends [run]` configuration. The packaged entry point is `org.senatov.mimitrends.LauncherKt`. If Run/Debug is disabled, reload the Gradle project and remove an obsolete configuration pointing directly at `App`.
+If none of the selected instruments is currently tradable, MiMiTrends:
 
-The application version starts at `0.0.0.1`. Gradle generates `build-info.properties` for every build with a unique build ID, build type, timestamp, and host; the same metadata is embedded in the JAR manifest and displayed in the title bar and About dialog. Override it when needed with `-PappVersion=… -PbuildNumber=… -PbuildType=…`.
+1. stops issuing provider scans;
+2. restores the most recent published snapshot when available;
+3. clearly marks the rows as saved or cached, not live;
+4. calculates the earliest next opening among the selected markets;
+5. displays the resume time in the user's local time zone;
+6. schedules one wake-up shortly after that opening.
 
-## Native distributions
+The calendar is local and deterministic, so ordinary closed-market behavior does not depend on an external calendar service. Future or exceptional exchange closures can still require a software calendar update.
 
-Gradle builds self-contained packages with a private Java runtime, so users do not need to install a JDK. Native installers must be built on their target OS: DMG on macOS, EXE on Windows, and `tar.gz`/DEB on Linux.
+## Signal-focused chart
 
-The simplest macOS build uses the project script. It automatically finds the first available `Developer ID Application` certificate:
+Selecting a scanner row opens its locally stored candles and volume.
 
-```zsh
-./Scripts/build-macos-dmg.zsh
-./Scripts/build-macos-dmg.zsh --notarize
-```
+`Signal focus` is the default mode. It shows a limited context before the signal instead of compressing several days of history into hundreds of unreadable candles. The chart includes:
 
-```zsh
-# Local unsigned macOS application
-./gradlew :app:packageMacApp
+- full company name and ticker;
+- current locally available price;
+- signal type, time, entry price, current/exit reference, score, and RVOL;
+- a highlighted signal interval and signal-volume bar;
+- real OHLC, candle return, and volume for the candle nearest the cursor;
+- stronger background grid lines for accurate visual comparison;
+- a `Full history` switch for broader context;
+- pan, zoom, synchronized time/price cursors, and tooltips.
 
-# Developer ID signed macOS DMG
-MAC_SIGNING_KEY_USER_NAME="Iakov Senatov (G2V9T9AD95)" \
-  ./gradlew :app:packageMacDmg
+The chart deliberately does not connect separate trading sessions with a continuous close-price line, because such diagonals can suggest price movement during periods when no trading occurred.
 
-# Signed + Apple-notarized + stapled DMG
-APPLE_NOTARY_PROFILE="MiMiTrends-notary" \
-MAC_SIGNING_KEY_USER_NAME="Iakov Senatov (G2V9T9AD95)" \
-  ./gradlew :app:packageNotarizedMacDmg
-```
+## SQLite database and analytics
 
-On Windows run `gradlew.bat :app:packageWindowsExe`; on Linux run `./gradlew :app:packageLinuxPortable :app:packageLinuxDeb`. Outputs are written below `app/build/distributions/native/`. See [Native packaging](Doc/NativePackaging.md) for prerequisites, Apple credential setup, output names, and verification.
-
-The displayed application version remains `0.0.0.1`. Native package metadata uses `1.0.1`, because `jpackage` requires one to three numeric components and macOS rejects a zero major package version.
-
-## Architecture
-
-```text
-core/         Domain models and shared log markers
-database/     SQLite WAL cache plus versioned analytical repository and migrations
-market-data/  Yahoo Finance HTTP client and response mapping
-scanner/      Configurable anomaly scoring and settings persistence
-charts/       Reusable JFreeChart-FX candlestick/volume component
-finnhub-ws/   Optional Finnhub profiles, WebSocket client, and minute aggregator
-app/          JavaFX lifecycle, dialogs, state, and orchestration
-```
-
-The UI composes these modules; database, provider, scanner, and chart code do not depend on JavaFX application classes.
-
-The database module separates the operational minute cache from the analytical repository. It stores
-instrument/exchange metadata, corporate actions, observed sessions, ECB FX rates, feed quality,
-5/15/60-minute aggregates, robust time-of-day baselines, every accepted/rejected scan candidate and
-realized 5/10/30-minute outcomes for published signals. See [Analytics storage](Doc/AnalyticsStorage.md).
-
-Market history is stored in:
+All durable state is stored locally in:
 
 ```text
 ~/.mimi/trends/mimitrends.db
 ```
 
-SQLite runs in WAL mode with `synchronous=NORMAL`. Minute rows use an upsert key, so a repeated or incomplete provider bar is updated rather than duplicated. Settings and UI state are stored beside the database.
+SQLite runs in WAL mode with foreign keys enabled, a busy timeout, batched prepared statements, and transactional schema migrations. It is a good fit for the application's local, append/upsert-heavy workload and avoids the lifecycle overhead of an ORM.
 
-## Fresh impulse score
+`MarketRepository` owns operational minute bars and company profiles. `AnalyticsRepository` owns derived and historical analytics. Both use the same database but keep their responsibilities explicit.
 
-For the latest eligible one-minute candles, the scanner calculates:
+### Operational tables
 
-- a robust return jump Z-score using median absolute deviation (MAD);
-- a robust high–low range Z-score;
-- log-volume Z-score and relative volume against a local median;
-- candle body/range ratio and closing location, rejecting weak wicks and random ticks;
-- same-direction continuation and exponential freshness decay.
+| Table | Purpose |
+| --- | --- |
+| `minute_bars` | Unique minute OHLCV rows keyed by symbol and timestamp. |
+| `company_profiles` | Company name, exchange, logo URL, and cached image. |
 
-A signal requires an exceptional price return or range plus confirmation from candle shape, relative/log volume, or immediate continuation. Volume by itself cannot qualify a symbol. The default maximum age is two minutes and the score decays exponentially, so a completed move disappears unless fresh bars continue it. Trend fallback uses up to three hours only to establish context; publication additionally requires at least +0.60% over the latest ten minutes and +0.15% over the latest five minutes. The first table columns are Company, color-coded Trend, and sortable signed `Δ 10m, %`; this percentage always describes the same current ten-minute interval for impulses and trends. Baselines prefer prior sessions at comparable times of day and fall back to recent cached bars when history is still short. Thresholds, freshness, liquidity guards, universe, region, and scan interval are editable under Settings.
+Minute bars use UPSERT semantics, allowing an incomplete or repeated provider candle to be corrected without creating duplicates.
 
-At least two historical sessions are required before a symbol can generate a signal. A cold or incomplete cache is bootstrapped from Yahoo before evaluation. Only completed, minute-aligned bars with positive volume participate in statistics; malformed zero-volume quote snapshots are removed during database migration. The 0.20% default absolute-move floor prevents a mathematically large Z-score on economically insignificant movements such as 0.02–0.10% in an unusually quiet stock. Such a symbol can still qualify as `Trend ↑` when its multi-hour path shows meaningful persistent growth.
+### Analytical tables
 
-If fewer than the configured minimum number of strict impulses are available, the scanner adds two lower-priority fallback classes. A relaxed impulse reduces the strict thresholds moderately while retaining recency and the absolute-move guard. `Trend ↑` examines up to 180 minutes of the current session and requires at least 0.45% net growth by default, a positive least-squares slope, R² of at least 0.18, and an efficiency ratio of at least 0.08 (net progress divided by total travelled price path). This permits pullbacks without treating a noisy sideways chart as sustained growth. Strict results are never removed to make room for fallbacks.
+| Table | Purpose |
+| --- | --- |
+| `schema_migrations` | Transactionally applied schema versions. |
+| `instrument_metadata` | Name, exchange, currency, time zone, aliases, and tradability. |
+| `corporate_actions` | Splits and dividends available for validation and future normalization. |
+| `market_calendar_rules` | Regular exchange hours and time zones. |
+| `trading_sessions` | Observed session boundaries, bar coverage, volume, and turnover. |
+| `fx_rates` | Dated currency conversion rates. |
+| `data_quality` | Feed source, freshness, bar count, status, and diagnostics. |
+| `aggregate_bars` | Locally produced 5-, 15-, and 60-minute OHLCV. |
+| `baseline_stats` | Median/MAD return and log-volume by instrument and local time of day. |
+| `scan_runs` | One durable record for every scanner pass. |
+| `scan_candidates` | Accepted/rejected symbols, raw metrics, exact signal time and entry price, source, and publication state. |
+| `signal_outcomes` | Target and actual horizons, observed price, and realized return. |
 
-The expanded default watchlist contains 100 liquid US and European listings. Yahoo suffixes such as `.DE`, `.PA`, `.AS`, and `.MI` identify European exchanges. The universe, region, interval, result count, liquidity guards, and baseline length are editable under Settings.
+Candidate publication and scan completion occur in one transaction. This prevents a partially completed scan from appearing published. Foreign keys and cascading retention protect referential consistency.
 
-Signal colors follow trading conventions: saturated green/red indicates a strong current upward/downward move, muted green/red marks a weak trend, amber marks a relaxed or statistically questionable result, and gray marks an aging signal. Hovering the Signal cell explains its classification.
+### Retention
 
-## Chart
+- raw minute bars: 90 days;
+- 5/15/60-minute aggregates: 730 days;
+- scan runs, candidates, and quality records: 180 days;
+- instrument metadata, corporate actions, observed sessions, FX rates, baselines, and outcomes: retained.
 
-The lower pane uses JFreeChart through JFreeChart-FX. It renders locally stored OHLC candles and volume with a shared time axis. A close-price line makes sparse movement readable; moving the mouse over the graph shows synchronized crosshair lines and value tooltips. Selecting a table row loads that instrument from SQLite immediately.
+More detail is available in [Analytics storage](Doc/AnalyticsStorage.md).
 
-## Logging and errors
+## Project structure
 
-Application, UI, API, state, I/O, and database operations use SLF4J + Log4j2 and appear in the run console and rolling file:
+```text
+core/         Domain models, market time-zone resolution, OHLCV validation, logging tags
+database/     SQLite cache, analytics repository, migrations, aggregation, outcome storage
+market-data/  Yahoo Finance HTTP client and response mapping
+scanner/      Impulse/trend statistics, market calendar, scanner settings
+charts/       Reusable JFreeChart-FX candlestick and volume component
+finnhub-ws/   Optional Finnhub WebSocket client, profiles, and minute aggregation
+app/          JavaFX lifecycle, dialogs, presentation, state, and orchestration
+Doc/          Architecture notes, packaging instructions, and documentation assets
+Scripts/      Native packaging helpers
+```
+
+The dependency direction keeps UI code out of the data, scanner, and chart modules. Statistical and persistence behavior can therefore be tested without starting JavaFX.
+
+## Requirements
+
+- Git;
+- a JDK compatible with the configured Gradle toolchain, or permission for Gradle/Foojay to resolve it;
+- network access for first-time dependency resolution and provider requests.
+
+The Gradle wrapper is included.
+
+## Build and run
+
+macOS or Linux:
+
+```bash
+./gradlew run
+./gradlew test
+./gradlew check
+./gradlew build
+```
+
+Windows:
+
+```bat
+gradlew.bat run
+gradlew.bat test
+gradlew.bat check
+gradlew.bat build
+```
+
+In IntelliJ IDEA, import the repository root as a Gradle project and use the shared `MiMiTrends [run]` configuration. The application entry point is:
+
+```text
+org.senatov.mimitrends.LauncherKt
+```
+
+## Using the application
+
+1. Start MiMiTrends.
+2. Open Settings and select the US, European, or combined region.
+3. Adjust the watchlist, scan interval, freshness, liquidity, and statistical thresholds if needed.
+4. Optionally configure a Finnhub API key.
+5. Wait for the initial historical bootstrap and completed scan.
+6. Sort the result table by Strength, Price action, Volume, or Move 10m.
+7. Hover derived cells to inspect the exact statistical values.
+8. Select a row to open its signal-focused chart.
+9. Move the cursor across the chart to inspect candle OHLCV values.
+10. Switch to `Full history` only when broader context is needed.
+
+Settings and UI state are stored beside the database under:
+
+```text
+~/.mimi/trends/
+```
+
+## Native desktop packages
+
+Native packages contain a private runtime, so end users do not need to install a JDK. `jpackage` must run on the target operating system; the project does not cross-build native formats.
+
+### macOS
+
+```bash
+./gradlew :app:packageMacApp
+./Scripts/build-macos-dmg.zsh
+./Scripts/build-macos-dmg.zsh --notarize
+```
+
+### Windows
+
+```bat
+gradlew.bat :app:packageWindowsExe
+```
+
+Windows packaging requires WiX Toolset 3.x on `PATH`.
+
+### Linux
+
+```bash
+./gradlew :app:packageLinuxPortable :app:packageLinuxDeb
+```
+
+Building the Debian package also requires `fakeroot`.
+
+Outputs are written below:
+
+```text
+app/build/distributions/native/
+```
+
+See [Native packaging](Doc/NativePackaging.md) for signing, notarization, prerequisites, and output details.
+
+## Logging and diagnostics
+
+MiMiTrends uses SLF4J and Log4j2. Logs are written to the run console and the rolling file:
 
 ```text
 /tmp/MiMiTrends.log
 ```
 
-The default `INFO` level records lifecycle events, scan summaries, warnings, and errors without per-tick, per-row, or per-query noise. For temporary diagnostics, start with `-Dmimitrends.logLevel=DEBUG`. The active log rolls at 10 MB and retains four compressed archives. The status line reports the symbol currently being read or analyzed. A red details button opens the complete error report. Credentials are never logged.
+The default `INFO` level records lifecycle events, scan summaries, warnings, and failures without per-tick noise. Enable temporary detail with:
 
-## Icon and licenses
+```bash
+JAVA_TOOL_OPTIONS="-Dmimitrends.logLevel=DEBUG" ./gradlew run
+```
 
-The generated 1024 px icon is in `Doc/`; runtime sizes are under `app/src/main/resources/icons/`. JFreeChart and JFreeChart-FX are LGPL libraries; consult their upstream projects when distributing the application.
+The status bar reports the current operation. A red details button opens the complete error report. Credentials are not intentionally logged.
+
+## Technology
+
+- Kotlin/JVM;
+- JavaFX 26;
+- JFreeChart and JFreeChart-FX;
+- SQLite JDBC;
+- Gradle Kotlin DSL;
+- SLF4J and Log4j2;
+- JUnit 5 and Kotlin Test;
+- `jpackage` for native desktop distributions.
+
+## Platform status
+
+| Platform | Packaging | Current validation status |
+| --- | --- | --- |
+| macOS | `.app`, signed/notarized DMG | Implemented and tested. |
+| Windows | Self-contained EXE installer | Implemented, not yet tested. |
+| Linux | Portable archive and Debian package | Implemented, not yet tested. |
+
+The codebase and dependency selection are cross-platform, but platform-specific testing is still required before claiming production support outside macOS.
+
+## License and third-party components
+
+JFreeChart and JFreeChart-FX are LGPL libraries. Review their upstream license terms when redistributing the application. Provider data remains subject to the respective provider and exchange terms.
