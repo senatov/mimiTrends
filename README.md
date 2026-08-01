@@ -14,7 +14,25 @@ MiMiTrends is informational software. It does not place orders, provide investme
 
 <img src="./Doc/MainWindow.png" alt="MiMiTrends scanner and signal-focused chart" width="900">
 
-The upper pane contains the ranked scanner results. The lower pane opens a signal-focused price and volume chart for the selected instrument.
+*The scanner ranks current anomalies in the upper pane. Selecting an instrument opens a compact
+signal-focused price and volume chart below it, including entry and exit prices, signal age,
+classification, score, relative volume, and exact OHLCV values.*
+
+### Closed-market state
+
+<img src="./Doc/MarketsClosed.png" alt="MiMiTrends closed-market notification over the scanner" width="900">
+
+*When every selected exchange is closed, scanning pauses until the earliest scheduled reopening.
+The dismissible liquid-glass notice keeps the latest cached snapshot visible and states when the
+scanner will resume; cached results are explicitly marked as not live.*
+
+### Scanner settings
+
+<img src="./Doc/ScannerSettings.png" alt="MiMiTrends anomaly scanner settings" width="900">
+
+*The settings window exposes the statistical detection thresholds in plain language. Signal age,
+jump and range deviation, volume confirmation, relative volume, candle structure, minimum move,
+trend behavior, market universe, and result count can all be adjusted without editing code.*
 
 ## Why it exists
 
