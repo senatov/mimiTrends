@@ -164,6 +164,29 @@
     -fx-background-radius: 8px;
     -fx-padding: 8px;
 }
+.chart-signal-summary {
+    -fx-font-size: 11px;
+    -fx-font-weight: 600;
+    -fx-text-fill: #9a5a14;
+}
+.chart-mode-switch {
+    -fx-background-color: rgba(218,224,230,0.72);
+    -fx-background-radius: 7px;
+    -fx-padding: 2px;
+}
+.chart-mode-button {
+    -fx-padding: 3 9 3 9;
+    -fx-font-size: 10px;
+    -fx-text-fill: #5a6570;
+    -fx-background-color: transparent;
+    -fx-background-radius: 5px;
+    -fx-border-width: 0;
+}
+.chart-mode-button:selected {
+    -fx-text-fill: #253b4f;
+    -fx-background-color: rgba(255,255,255,0.96);
+    -fx-effect: dropshadow(gaussian, rgba(35,47,58,0.18), 4, 0.10, 0, 1);
+}
 .volume-chart { -fx-background-color: white; -fx-border-color: #d7d8da; -fx-border-radius: 8px; -fx-background-radius: 8px; -fx-padding: 3px; }
 .volume-chart .chart-bar { -fx-bar-fill: #7ba9d8; }
 

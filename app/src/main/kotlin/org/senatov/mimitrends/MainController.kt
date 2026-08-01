@@ -587,7 +587,7 @@ class MainController(
                         val currency = scannerCriteria.displayCurrency
                         trendChart.renderMinuteBars(
                             symbol, bars, selectedRangeValue, displayPrice(symbol, 1.0), currency.symbol,
-                            currentSignal?.takeIf { it.symbol == symbol && it.signalSource.startsWith("Impulse") }?.signalAgeMinutes
+                            currentSignal?.takeIf { it.symbol == symbol }
                         )
                         setStatus("Read SQLite: $symbol · ${bars.size} minute bars · $selectedRangeValue")
                     } else {
