@@ -165,9 +165,20 @@
     -fx-padding: 8px;
 }
 .chart-signal-summary {
-    -fx-font-size: 11px;
-    -fx-font-weight: 600;
+    -fx-font-size: 10px;
+    -fx-font-weight: 500;
     -fx-text-fill: #9a5a14;
+}
+.chart-current-price {
+    -fx-font-size: 12px;
+    -fx-font-weight: 600;
+    -fx-text-fill: #167b70;
+}
+.chart-cursor-details {
+    -fx-font-family: "Menlo", "Monospaced";
+    -fx-font-size: 9px;
+    -fx-font-weight: 400;
+    -fx-text-fill: #52606c;
 }
 .chart-mode-switch {
     -fx-background-color: rgba(218,224,230,0.72);

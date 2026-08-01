@@ -24,6 +24,7 @@ import org.senatov.mimitrends.model.ScannerCriteria
 import org.senatov.mimitrends.model.ScanResult
 import org.senatov.mimitrends.scanner.ScannerEngine
 import org.senatov.mimitrends.scanner.ScannerSettingsService
+import org.senatov.mimitrends.scanner.MarketCalendar
 import org.senatov.mimitrends.ws.FinnhubProfileClient
 import org.senatov.mimitrends.ws.FinnhubWebSocketClient
 import org.senatov.mimitrends.ws.FinnhubMinuteAggregator
@@ -46,6 +47,11 @@ class MainController(
     private val apiKey: String?, initialSymbol: String = "AAPL", initialRange: String = "3M",
     initialDividerPosition: Double = 0.34
 ) {
+    private companion object {
+        const val MARKET_OPEN_GRACE_SECONDS = 5L
+        val MARKET_OPEN_FORMAT: java.time.format.DateTimeFormatter =
+            java.time.format.DateTimeFormatter.ofPattern("EEE dd MMM HH:mm z")
+    }
     private val log = LoggerFactory.getLogger(MainController::class.java)
     private val repository = MarketRepository()
     private val analytics = AnalyticsRepository()
@@ -219,11 +225,21 @@ class MainController(
         val generation = scanGeneration.incrementAndGet()
         val criteria = scannerCriteria
         rotationTask?.cancel(false)
-        val symbols = selectedMarketSymbols().filter(::isMarketOpen)
         lateinit var scan: () -> Unit
         scan = scan@ {
+            val selectedSymbols = selectedMarketSymbols()
+            val symbols = selectedSymbols.filter { MarketCalendar.isOpen(it) }
             log.info(LogTag.API, "scan started symbols={} recentWindow={}m", symbols.size, criteria.maxSignalAgeMinutes)
             if (symbols.isEmpty()) {
+                val now = java.time.Instant.now()
+                val nextOpening = MarketCalendar.nextOpening(selectedSymbols, now)
+                val resumeDelaySeconds = nextOpening?.let {
+                    java.time.Duration.between(now, it.instant).seconds.coerceAtLeast(1) + MARKET_OPEN_GRACE_SECONDS
+                } ?: criteria.scanIntervalSeconds
+                val resumeText = nextOpening?.let {
+                    val local = it.instant.atZone(java.time.ZoneId.systemDefault())
+                    "${it.symbol} · ${MARKET_OPEN_FORMAT.format(local)}"
+                } ?: "market schedule unavailable"
                 val persisted = analytics.loadLatestPublishedResults(criteria.resultLimit)
                 val saved = if (persisted.isNotEmpty()) persisted else closedMarketSnapshot(criteria)
                 log.info(LogTag.DB, "closed-market snapshot source={} results={}",
@@ -232,17 +248,17 @@ class MainController(
                     scannerPanel.beginScan(1, 1, emptyList())
                     saved.forEach(scannerPanel::update)
                     scannerPanel.completeScan(criteria.resultLimit)
-                    scannerPanel.showCountdown(criteria.scanIntervalSeconds)
-                    scannerPanel.showMarketClosed(saved.size, persisted.isNotEmpty())
+                    scannerPanel.showCountdown(resumeDelaySeconds)
+                    scannerPanel.showMarketClosed(saved.size, persisted.isNotEmpty(), resumeText)
                     setStatus(if (saved.isEmpty())
-                        "All selected markets are closed · no saved open-market scan yet"
+                        "All selected markets are closed · scanner paused until $resumeText"
                     else if (persisted.isNotEmpty())
-                        "All selected markets are closed · showing ${saved.size} saved results"
-                    else "All selected markets are closed · showing ${saved.size} cached close results · not live")
+                        "Markets closed · showing ${saved.size} saved results · resumes $resumeText"
+                    else "Markets closed · showing ${saved.size} cached results · resumes $resumeText")
                 }
                 rotationTask = batchScheduler.schedule(
-                    { runCatching(scan).onFailure { log.error(LogTag.API, "scheduled closed-market refresh failed", it) } },
-                    criteria.scanIntervalSeconds, TimeUnit.SECONDS
+                    { runCatching(scan).onFailure { log.error(LogTag.API, "scheduled market-open resume failed", it) } },
+                    resumeDelaySeconds, TimeUnit.SECONDS
                 )
                 return@scan
             }
@@ -413,16 +429,7 @@ class MainController(
 
     private fun isMarketOpen(symbol: String, instant: java.time.Instant = java.time.Instant.now()): Boolean {
         log.trace(LogTag.STATE, "isMarketOpen(symbol={})", symbol)
-        val european = symbol.contains('.')
-        val zone = java.time.ZoneId.of(if (european) "Europe/Berlin" else "America/New_York")
-        val local = instant.atZone(zone)
-        if (local.dayOfWeek.value > 5) return false
-        val time = local.toLocalTime()
-        return if (european) {
-            time >= java.time.LocalTime.of(8, 50) && time <= java.time.LocalTime.of(17, 40)
-        } else {
-            time >= java.time.LocalTime.of(9, 25) && time <= java.time.LocalTime.of(16, 10)
-        }
+        return MarketCalendar.isOpen(symbol, instant)
     }
 
     private fun selectedMarketSymbols(): List<String> {
@@ -576,18 +583,20 @@ class MainController(
         val days = selectedDays()
         setStatus("Requesting SQLite: $symbol · $selectedRangeValue")
         CompletableFuture.supplyAsync {
-            repository.loadMinuteBars(symbol, java.time.Instant.now().minusSeconds(days * 86_400).epochSecond)
-        }.whenComplete(BiConsumer<List<MinuteBar>?, Throwable?> { bars, error ->
+            repository.loadMinuteBars(symbol, java.time.Instant.now().minusSeconds(days * 86_400).epochSecond) to
+                (repository.loadCompanyProfile(symbol)?.name ?: symbol)
+        }.whenComplete(BiConsumer<Pair<List<MinuteBar>, String>?, Throwable?> { chartData, error ->
                 Platform.runLater {
                     setLoading(false)
                     if (error != null) {
                         log.error(LogTag.DB, "local chart load failed symbol={}", symbol, error)
                         setStatus("SQLite read failed: ${error.message ?: "unknown error"}", true, formatErrorLog(symbol, error))
-                    } else if (!bars.isNullOrEmpty()) {
+                    } else if (chartData != null && chartData.first.isNotEmpty()) {
+                        val bars = chartData.first
                         val currency = scannerCriteria.displayCurrency
                         trendChart.renderMinuteBars(
                             symbol, bars, selectedRangeValue, displayPrice(symbol, 1.0), currency.symbol,
-                            currentSignal?.takeIf { it.symbol == symbol }
+                            currentSignal?.takeIf { it.symbol == symbol }, chartData.second
                         )
                         setStatus("Read SQLite: $symbol · ${bars.size} minute bars · $selectedRangeValue")
                     } else {

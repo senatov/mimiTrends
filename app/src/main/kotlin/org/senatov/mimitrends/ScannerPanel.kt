@@ -51,6 +51,9 @@ class ScannerPanel(
         styleClass += "market-closed-close"
         setOnAction { hideMarketClosedOverlay() }
     }
+    private val marketClosedSubtitle = Label("Saved closing snapshot · not live").apply {
+        styleClass += "market-closed-subtitle"
+    }
     private val closedMarketOverlay = StackPane(
         ImageView(Image(requireNotNull(javaClass.getResourceAsStream("/images/sleeping-dog-market-closed.png")))).apply {
             fitWidth = 560.0; fitHeight = 520.0; isPreserveRatio = true
@@ -59,7 +62,7 @@ class ScannerPanel(
         VBox(
             12.0,
             Label("ALL SELECTED MARKETS ARE CLOSED").apply { styleClass += "market-closed-title" },
-            Label("Saved closing snapshot · not live").apply { styleClass += "market-closed-subtitle" },
+            marketClosedSubtitle,
             closeMarketOverlayButton
         ).apply {
             alignment = Pos.CENTER
@@ -200,7 +203,7 @@ class ScannerPanel(
         })).apply { cycleCount = seconds.coerceAtMost(Int.MAX_VALUE.toLong()).toInt(); play() }
     }
 
-    fun showMarketClosed(snapshotSize: Int, persisted: Boolean) {
+    fun showMarketClosed(snapshotSize: Int, persisted: Boolean, nextOpening: String) {
         cycleStatus.styleClass.remove("market-closed")
         cycleStatus.styleClass += "market-closed"
         cycleStatus.text = "ALL SELECTED MARKETS ARE CLOSED · " + when {
@@ -209,6 +212,7 @@ class ScannerPanel(
             else -> "$snapshotSize cached close results · NOT LIVE"
         }
         cycleStatus.tooltip = Tooltip("The scanner is not presenting cached closing bars as current market signals.")
+        marketClosedSubtitle.text = "Saved closing snapshot · scanner resumes $nextOpening"
         closedMarketOverlay.isVisible = true
         closedMarketOverlay.isManaged = true
         Platform.runLater { closeMarketOverlayButton.requestFocus() }
