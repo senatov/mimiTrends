@@ -24,6 +24,8 @@ val buildHost = providers.environmentVariable("HOSTNAME")
 val generatedBuildInfoDir = layout.buildDirectory.dir("generated/build-info")
 
 val generateBuildInfo = tasks.register<WriteProperties>("generateBuildInfo") {
+    group = "build"
+    description = "Generates build metadata embedded in the application resources."
     destinationFile = generatedBuildInfoDir.map { it.file("build-info.properties") }
     property("version", appVersion)
     property("build", buildNumber)
@@ -70,10 +72,6 @@ dependencies {
     implementation("org.apache.logging.log4j:log4j-api")
     implementation("org.apache.logging.log4j:log4j-core")
     implementation("org.apache.logging.log4j:log4j-slf4j2-impl")
-    testImplementation(platform("org.junit:junit-bom:5.14.4"))
-    testImplementation("org.junit.jupiter:junit-jupiter")
-    testImplementation("org.jetbrains.kotlin:kotlin-test-junit5")
-    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
 
 application {
@@ -97,11 +95,6 @@ tasks.named<JavaExec>("run") {
             "--add-modules", "javafx.controls,javafx.graphics"
         )
     }
-}
-
-tasks.test {
-    useJUnitPlatform()
-    jvmArgs("--enable-native-access=ALL-UNNAMED")
 }
 
 tasks.named<Jar>("jar") {
@@ -140,6 +133,8 @@ val macDmgFile = macOutputDir.map { it.file("MiMiTrends-$nativePackageVersion.dm
 val linuxAppImage = linuxOutputDir.map { it.dir("MiMiTrends") }
 
 val prepareJpackageInput = tasks.register<Sync>("prepareJpackageInput") {
+    group = "distribution"
+    description = "Collects the application JAR and runtime dependencies for jpackage."
     dependsOn(tasks.named("jar"))
     into(jpackageInputDir)
     from(tasks.named<Jar>("jar"))
@@ -152,11 +147,31 @@ val linuxOut = linuxOutputDir.get().asFile
 val macIcon = file("src/main/resources/icons/MiMiTrends.icns")
 val windowsIcon = file("src/main/resources/icons/MiMiTrends.ico")
 val linuxIcon = file("src/main/resources/icons/icon_512x512.png")
-val cleanMacApp = tasks.register<Delete>("cleanMacAppPackage") { delete(macOut.resolve("MiMiTrends.app")) }
-val cleanMacDmg = tasks.register<Delete>("cleanMacDmgPackage") { delete(fileTree(macOut) { include("*.dmg") }) }
-val cleanWindowsExe = tasks.register<Delete>("cleanWindowsExePackage") { delete(fileTree(windowsOut) { include("*.exe") }) }
-val cleanLinuxApp = tasks.register<Delete>("cleanLinuxAppPackage") { delete(linuxAppImage) }
-val cleanLinuxDeb = tasks.register<Delete>("cleanLinuxDebPackage") { delete(fileTree(linuxOut) { include("*.deb") }) }
+val cleanMacApp = tasks.register<Delete>("cleanMacAppPackage") {
+    group = "distribution"
+    description = "Removes the previously packaged macOS application image."
+    delete(macOut.resolve("MiMiTrends.app"))
+}
+val cleanMacDmg = tasks.register<Delete>("cleanMacDmgPackage") {
+    group = "distribution"
+    description = "Removes previously packaged macOS disk images."
+    delete(fileTree(macOut) { include("*.dmg") })
+}
+val cleanWindowsExe = tasks.register<Delete>("cleanWindowsExePackage") {
+    group = "distribution"
+    description = "Removes previously packaged Windows installers."
+    delete(fileTree(windowsOut) { include("*.exe") })
+}
+val cleanLinuxApp = tasks.register<Delete>("cleanLinuxAppPackage") {
+    group = "distribution"
+    description = "Removes the previously packaged Linux application image."
+    delete(linuxAppImage)
+}
+val cleanLinuxDeb = tasks.register<Delete>("cleanLinuxDebPackage") {
+    group = "distribution"
+    description = "Removes previously packaged Debian archives."
+    delete(fileTree(linuxOut) { include("*.deb") })
+}
 val signMacNativeJars = tasks.register<Exec>("signMacNativeJars") {
     group = "distribution"
     description = "Signs Mach-O libraries embedded in runtime JARs before jpackage runs."

@@ -10,19 +10,20 @@ foreign keys, and independent tests.
 
 `schema_migrations` records each transactional migration. The analytical schema contains:
 
-| Table | Purpose |
-| --- | --- |
-| `instrument_metadata` | Exchange, currency, timezone, ISIN/WKN placeholders, aliases and tradability. |
-| `corporate_actions` | Yahoo splits and dividends, available for spike validation/normalization. |
-| `market_calendar_rules` | Exchange timezone and regular trading hours. |
-| `trading_sessions` | Observed session boundaries, coverage, volume and turnover. |
-| `fx_rates` | Dated ECB reference rates. |
-| `data_quality` | Source, freshness, bar count, realtime/delayed/cache status and diagnostics. |
-| `aggregate_bars` | Locally generated 5, 15 and 60 minute OHLCV bars. |
-| `baseline_stats` | Median/MAD return and log-volume by instrument and minute of trading day. |
-| `scan_runs` | One durable record for every complete scanner pass. |
-| `scan_candidates` | Accepted and rejected symbols, rejection reason, metrics, source and publication state. |
-| `signal_outcomes` | Realized 5/10/30 minute return after each published signal. |
+| Table                   | Purpose                                                                                 |
+| ----------------------- | --------------------------------------------------------------------------------------- |
+| `instrument_metadata`   | Exchange, currency, timezone, ISIN/WKN placeholders, aliases and tradability.           |
+| `corporate_actions`     | Yahoo splits and dividends, available for spike validation/normalization.               |
+| `market_calendar_rules` | Exchange timezone and regular trading hours.                                            |
+| `trading_sessions`      | Observed session boundaries, coverage, volume and turnover.                             |
+| `fx_rates`              | Dated ECB reference rates.                                                              |
+| `data_quality`          | Source, freshness, bar count, realtime/delayed/cache status and diagnostics.            |
+| `aggregate_bars`        | Locally generated 5, 15 and 60 minute OHLCV bars.                                       |
+| `baseline_stats`        | Median/MAD return and log-volume by instrument and minute of trading day.               |
+| `scan_runs`             | One durable record for every complete scanner pass.                                     |
+| `scan_candidates`       | Accepted and rejected symbols, rejection reason, metrics, source and publication state. |
+| `signal_outcomes`       | Realized 5/10/30 minute return after each published signal.                             |
+| `broker_transactions`   | Deduplicated Scalable operations with optional links to saved scanner signals.           |
 
 ## Data flow
 

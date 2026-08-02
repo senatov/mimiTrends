@@ -26,6 +26,7 @@ class AnalyticsRepository(
     private val log = LoggerFactory.getLogger(javaClass)
     private val lock = ReentrantLock()
     private val connection: Connection
+    private val brokerTransactions: BrokerTransactionStore
 
     init {
         Files.createDirectories(databasePath.parent)
@@ -40,6 +41,7 @@ class AnalyticsRepository(
             it.execute("PRAGMA mmap_size=268435456")
         }
         migrate()
+        brokerTransactions = BrokerTransactionStore(connection)
     }
 
     fun upsertInstrument(value: InstrumentMetadata) = locked {
@@ -208,12 +210,19 @@ class AnalyticsRepository(
                 (SELECT COUNT(*) FROM scan_runs),
                 (SELECT COUNT(*) FROM scan_candidates),
                 (SELECT COUNT(*) FROM baseline_stats),
-                (SELECT COUNT(*) FROM signal_outcomes)""").use { result ->
+                (SELECT COUNT(*) FROM signal_outcomes),
+                (SELECT COUNT(*) FROM broker_transactions),
+                (SELECT COUNT(*) FROM broker_transactions WHERE linked_run_id IS NOT NULL)""").use { result ->
                 check(result.next())
                 AnalyticsStats(result.getLong(1), result.getLong(2), result.getLong(3),
-                    result.getLong(4), result.getLong(5), result.getLong(6))
+                    result.getLong(4), result.getLong(5), result.getLong(6), result.getLong(7), result.getLong(8))
             }
         }
+    }
+
+    fun importScalableTransactions(path: Path): BrokerImportResult {
+        val parsed = ScalableCsvImporter.parse(path)
+        return locked { transaction { brokerTransactions.import(parsed) } }
     }
 
     override fun close() = lock.withLock {
@@ -356,7 +365,19 @@ class AnalyticsRepository(
             "INSERT OR REPLACE INTO market_calendar_rules(market, timezone, weekdays, open_local, close_local, updated_at) VALUES ('EURONEXT', 'Europe/Berlin', '1,2,3,4,5', '09:00', '17:30', CAST(strftime('%s','now') AS INTEGER))",
             "INSERT OR REPLACE INTO market_calendar_rules(market, timezone, weekdays, open_local, close_local, updated_at) VALUES ('HELSINKI', 'Europe/Helsinki', '1,2,3,4,5', '10:00', '18:30', CAST(strftime('%s','now') AS INTEGER))"
         )
-        val MIGRATIONS = listOf(1 to SCHEMA_V1, 2 to SCHEMA_V2, 3 to SCHEMA_V3)
+        val SCHEMA_V4 = listOf(
+            """CREATE TABLE IF NOT EXISTS broker_transactions(
+                id INTEGER PRIMARY KEY AUTOINCREMENT, source TEXT NOT NULL, reference TEXT, fingerprint TEXT NOT NULL UNIQUE,
+                occurred_at INTEGER NOT NULL, status TEXT NOT NULL, description TEXT NOT NULL, asset_type TEXT NOT NULL,
+                transaction_type TEXT NOT NULL, isin TEXT, shares REAL NOT NULL, price REAL NOT NULL, amount REAL NOT NULL,
+                fee REAL NOT NULL, tax REAL NOT NULL, currency TEXT NOT NULL, imported_at INTEGER NOT NULL,
+                linked_run_id INTEGER, linked_symbol TEXT,
+                FOREIGN KEY(linked_run_id, linked_symbol) REFERENCES scan_candidates(run_id, symbol) ON DELETE SET NULL)""",
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_broker_source_reference ON broker_transactions(source, reference) WHERE reference IS NOT NULL",
+            "CREATE INDEX IF NOT EXISTS idx_broker_isin_time ON broker_transactions(isin, occurred_at DESC)",
+            "CREATE INDEX IF NOT EXISTS idx_broker_signal ON broker_transactions(linked_run_id, linked_symbol)"
+        )
+        val MIGRATIONS = listOf(1 to SCHEMA_V1, 2 to SCHEMA_V2, 3 to SCHEMA_V3, 4 to SCHEMA_V4)
         const val UPSERT_INSTRUMENT = """INSERT INTO instrument_metadata(symbol, name, exchange, currency, timezone, isin, wkn, aliases, tradable, updated_at)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(symbol) DO UPDATE SET name=excluded.name, exchange=excluded.exchange,
             currency=excluded.currency, timezone=excluded.timezone, isin=COALESCE(excluded.isin, instrument_metadata.isin),

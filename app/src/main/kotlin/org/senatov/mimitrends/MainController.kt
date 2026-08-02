@@ -1,9 +1,6 @@
 package org.senatov.mimitrends
 
 import javafx.application.Platform
-import javafx.animation.Interpolator
-import javafx.animation.RotateTransition
-import javafx.animation.ScaleTransition
 import javafx.geometry.Insets
 import javafx.geometry.Pos
 import javafx.scene.Parent
@@ -62,6 +59,7 @@ class MainController(
     private val refreshButton = Button("↻")
     private val settingsButton = Button("⚙")
     private val aboutButton = Button("ⓘ")
+    private val importTradesButton = Button("⇩")
     private val statusLabel = Label()
     private val errorDetailsButton = Button("!")
     private var lastErrorDetails: String? = null
@@ -77,6 +75,7 @@ class MainController(
     private val batchScheduler = Executors.newSingleThreadScheduledExecutor { task ->
         Thread(task, "mimitrends-scanner-rotation").apply { isDaemon = true }
     }
+    private val scalableImport = ScalableImportAction(analytics, batchScheduler)
     private var rotationTask: ScheduledFuture<*>? = null
     private val scanGeneration = AtomicLong()
     private val exchangeRates = ExchangeRateService()
@@ -93,12 +92,14 @@ class MainController(
         log.debug(LogTag.UI, "createView()")
         scannerPanel.setCurrency(scannerCriteria.displayCurrency, ::displayPrice)
         scannerPanel.setAppearance(scannerCriteria.tableAppearance)
-        configureIconButton(refreshButton, "Refresh local chart", rotateOnHover = true)
+        ToolbarIconButton.configure(refreshButton, "Refresh local chart", rotateOnHover = true)
         refreshButton.setOnAction { loadLocalChart(currentSymbol) }
-        configureIconButton(settingsButton, "Scanner and currency settings", rotateOnHover = false)
+        ToolbarIconButton.configure(settingsButton, "Scanner and currency settings")
         settingsButton.setOnAction { showScannerSettings() }
-        configureIconButton(aboutButton, "About MiMiTrends", rotateOnHover = false)
+        ToolbarIconButton.configure(aboutButton, "About MiMiTrends")
         aboutButton.setOnAction { showAbout() }
+        ToolbarIconButton.configure(importTradesButton, "Import Scalable transactions CSV")
+        importTradesButton.setOnAction { scalableImport.chooseAndImport(importTradesButton.scene?.window, ::handleScalableImport) }
 
         val titleIdentity = HBox(
                 6.0,
@@ -109,6 +110,7 @@ class MainController(
             8.0,
             refreshButton,
             settingsButton,
+            importTradesButton,
             aboutButton
         ).apply { alignment = Pos.CENTER_RIGHT }
         val titleBar = StackPane(titleIdentity, buildBadge(), titleActions).apply {
@@ -146,6 +148,10 @@ class MainController(
         val toolbar = VBox(titleBar, requestStatusBar)
         val root = BorderPane(content, toolbar, null, null, null)
         root.styleClass += "app-root"
+        val appLayers = StackPane(root, scannerPanel.marketClosedOverlay).apply {
+            styleClass += "app-layers"
+            StackPane.setAlignment(scannerPanel.marketClosedOverlay, Pos.CENTER)
+        }
 
         apiKey?.takeIf(String::isNotBlank)?.let(::restartFinnhubLive)
         analytics.applyRetention()
@@ -165,7 +171,27 @@ class MainController(
                 if (error == null && rate != null) setStatus("Read ECB EUR/USD reference rate: $rate")
             }
         })
-        return root
+        return appLayers
+    }
+
+    private fun handleScalableImport(event: ScalableImportEvent) {
+        when (event) {
+            is ScalableImportEvent.Started -> {
+                importTradesButton.isDisable = true
+                setStatus("Importing Scalable transactions from ${event.fileName}")
+            }
+            is ScalableImportEvent.Completed -> {
+                importTradesButton.isDisable = false
+                val result = event.result
+                setStatus("Scalable import: ${result.imported} new · ${result.duplicates} duplicates skipped · ${result.linkedToSignals} linked to saved signals")
+            }
+            is ScalableImportEvent.Failed -> {
+                importTradesButton.isDisable = false
+                log.warn(LogTag.DB, "Scalable CSV import failed path={}", event.path, event.error)
+                setStatus("Scalable import failed: ${event.error.message}", true,
+                    formatErrorLog("Import ${event.path}", event.error))
+            }
+        }
     }
 
     private fun buildBadge(): HBox {
@@ -692,23 +718,4 @@ class MainController(
         return Region().also { HBox.setHgrow(it, Priority.ALWAYS) }
     }
 
-    private fun configureIconButton(button: Button, tooltipText: String, rotateOnHover: Boolean) {
-        log.debug(LogTag.UI, "configureIconButton(tooltip={}, rotate={})", tooltipText, rotateOnHover)
-        button.styleClass += "toolbar-icon-button"
-        button.tooltip = Tooltip(tooltipText).apply {
-            showDelay = Duration.millis(350.0); hideDelay = Duration.millis(120.0)
-            styleClass += "mimi-tooltip"
-        }
-        val scale = ScaleTransition(Duration.millis(150.0), button).apply { interpolator = Interpolator.EASE_BOTH }
-        button.setOnMouseEntered {
-            scale.stop(); scale.toX = 1.08; scale.toY = 1.08; scale.playFromStart()
-            if (rotateOnHover) RotateTransition(Duration.millis(240.0), button).apply { byAngle = 24.0; interpolator = Interpolator.EASE_BOTH }.play()
-        }
-        button.setOnMouseExited {
-            scale.stop(); scale.toX = 1.0; scale.toY = 1.0; scale.playFromStart()
-            if (rotateOnHover) RotateTransition(Duration.millis(180.0), button).apply { toAngle = 0.0; interpolator = Interpolator.EASE_BOTH }.play()
-        }
-        button.setOnMousePressed { button.scaleX = 0.94; button.scaleY = 0.94 }
-        button.setOnMouseReleased { button.scaleX = 1.08; button.scaleY = 1.08 }
-    }
 }

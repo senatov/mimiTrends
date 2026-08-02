@@ -66,18 +66,18 @@ The primary question is not “What did this stock do over the last year?” but
 
 The primary table intentionally uses plain-language categories instead of exposing every raw statistical value.
 
-| Column | Meaning |
-| --- | --- |
-| Company / Symbol | Instrument identity and cached company profile. |
-| Signal | Fresh impulse, relaxed impulse, or persistent trend. |
-| Move 10m | Signed price change over the latest ten-minute display window. |
-| Price | Latest completed locally available price in the selected display currency. |
-| Strength | Composite ranking: `Watch`, `Notable`, `Strong`, or `Extreme`. |
-| Price action | Human-readable interpretation such as `Strong impulse ↑`, `Steady trend ↑`, or `Volatile / unstable`. |
-| Volume | `Normal`, `Elevated`, `Strong`, `Extreme`, or `Price-led`, with relative volume when available. |
-| Age | Whether the signal is latest, several minutes old, or a trend window. |
-| Feed | Live, delayed, Yahoo, SQLite cache, or saved closed-market snapshot. |
-| Turnover | Approximate current-session traded value. |
+| Column           | Meaning                                                                                               |
+| ---------------- | ----------------------------------------------------------------------------------------------------- |
+| Company / Symbol | Instrument identity and cached company profile.                                                       |
+| Signal           | Fresh impulse, relaxed impulse, or persistent trend.                                                  |
+| Move 10m         | Signed price change over the latest ten-minute display window.                                        |
+| Price            | Latest completed locally available price in the selected display currency.                            |
+| Strength         | Composite ranking: `Watch`, `Notable`, `Strong`, or `Extreme`.                                        |
+| Price action     | Human-readable interpretation such as `Strong impulse ↑`, `Steady trend ↑`, or `Volatile / unstable`. |
+| Volume           | `Normal`, `Elevated`, `Strong`, `Extreme`, or `Price-led`, with relative volume when available.       |
+| Age              | Whether the signal is latest, several minutes old, or a trend window.                                 |
+| Feed             | Live, delayed, Yahoo, SQLite cache, or saved closed-market snapshot.                                  |
+| Turnover         | Approximate current-session traded value.                                                             |
 
 Hovering the derived columns reveals the exact jump, range, volume Z-scores, RVOL, composite score, and an explanation of the classification. This keeps the normal workflow readable without discarding analytical detail.
 
@@ -257,29 +257,30 @@ SQLite runs in WAL mode with foreign keys enabled, a busy timeout, batched prepa
 
 ### Operational tables
 
-| Table | Purpose |
-| --- | --- |
-| `minute_bars` | Unique minute OHLCV rows keyed by symbol and timestamp. |
-| `company_profiles` | Company name, exchange, logo URL, and cached image. |
+| Table              | Purpose                                                 |
+| ------------------ | ------------------------------------------------------- |
+| `minute_bars`      | Unique minute OHLCV rows keyed by symbol and timestamp. |
+| `company_profiles` | Company name, exchange, logo URL, and cached image.     |
 
 Minute bars use UPSERT semantics, allowing an incomplete or repeated provider candle to be corrected without creating duplicates.
 
 ### Analytical tables
 
-| Table | Purpose |
-| --- | --- |
-| `schema_migrations` | Transactionally applied schema versions. |
-| `instrument_metadata` | Name, exchange, currency, time zone, aliases, and tradability. |
-| `corporate_actions` | Splits and dividends available for validation and future normalization. |
-| `market_calendar_rules` | Regular exchange hours and time zones. |
-| `trading_sessions` | Observed session boundaries, bar coverage, volume, and turnover. |
-| `fx_rates` | Dated currency conversion rates. |
-| `data_quality` | Feed source, freshness, bar count, status, and diagnostics. |
-| `aggregate_bars` | Locally produced 5-, 15-, and 60-minute OHLCV. |
-| `baseline_stats` | Median/MAD return and log-volume by instrument and local time of day. |
-| `scan_runs` | One durable record for every scanner pass. |
-| `scan_candidates` | Accepted/rejected symbols, raw metrics, exact signal time and entry price, source, and publication state. |
-| `signal_outcomes` | Target and actual horizons, observed price, and realized return. |
+| Table                   | Purpose                                                                                                   |
+| ----------------------- | --------------------------------------------------------------------------------------------------------- |
+| `schema_migrations`     | Transactionally applied schema versions.                                                                  |
+| `instrument_metadata`   | Name, exchange, currency, time zone, aliases, and tradability.                                            |
+| `corporate_actions`     | Splits and dividends available for validation and future normalization.                                   |
+| `market_calendar_rules` | Regular exchange hours and time zones.                                                                    |
+| `trading_sessions`      | Observed session boundaries, bar coverage, volume, and turnover.                                          |
+| `fx_rates`              | Dated currency conversion rates.                                                                          |
+| `data_quality`          | Feed source, freshness, bar count, status, and diagnostics.                                               |
+| `aggregate_bars`        | Locally produced 5-, 15-, and 60-minute OHLCV.                                                            |
+| `baseline_stats`        | Median/MAD return and log-volume by instrument and local time of day.                                     |
+| `scan_runs`             | One durable record for every scanner pass.                                                                |
+| `scan_candidates`       | Accepted/rejected symbols, raw metrics, exact signal time and entry price, source, and publication state. |
+| `signal_outcomes`       | Target and actual horizons, observed price, and realized return.                                          |
+| `broker_transactions`   | Deduplicated Scalable transactions and their optional links to saved scanner signals.                     |
 
 Candidate publication and scan completion occur in one transaction. This prevents a partially completed scan from appearing published. Foreign keys and cascading retention protect referential consistency.
 
@@ -435,11 +436,11 @@ The status bar reports the current operation. A red details button opens the com
 
 ## Platform status
 
-| Platform | Packaging | Current validation status |
-| --- | --- | --- |
-| macOS | `.app`, signed/notarized DMG | Implemented and tested. |
-| Windows | Self-contained EXE installer | Implemented, not yet tested. |
-| Linux | Portable archive and Debian package | Implemented, not yet tested. |
+| Platform | Packaging                           | Current validation status    |
+| -------- | ----------------------------------- | ---------------------------- |
+| macOS    | `.app`, signed/notarized DMG        | Implemented and tested.      |
+| Windows  | Self-contained EXE installer        | Implemented, not yet tested. |
+| Linux    | Portable archive and Debian package | Implemented, not yet tested. |
 
 The codebase and dependency selection are cross-platform, but platform-specific testing is still required before claiming production support outside macOS.
 

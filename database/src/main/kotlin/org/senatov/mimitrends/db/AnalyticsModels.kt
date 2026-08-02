@@ -40,5 +40,32 @@ data class AnalyticsStats(
     val scanRuns: Long,
     val scanCandidates: Long,
     val baselines: Long,
-    val outcomes: Long
+    val outcomes: Long,
+    val brokerTransactions: Long,
+    val linkedBrokerTransactions: Long
+)
+
+data class BrokerTransaction(
+    val source: String,
+    val reference: String?,
+    val fingerprint: String,
+    val occurredAtEpochSeconds: Long,
+    val status: String,
+    val description: String,
+    val assetType: String,
+    val type: String,
+    val isin: String?,
+    val shares: Double,
+    val price: Double,
+    val amount: Double,
+    val fee: Double,
+    val tax: Double,
+    val currency: String
+)
+
+data class BrokerImportResult(
+    val parsed: Int,
+    val imported: Int,
+    val duplicates: Int,
+    val linkedToSignals: Int
 )

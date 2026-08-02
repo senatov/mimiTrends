@@ -54,26 +54,30 @@ class ScannerPanel(
     private val marketClosedSubtitle = Label("Saved closing snapshot · not live").apply {
         styleClass += "market-closed-subtitle"
     }
-    private val closedMarketOverlay = StackPane(
+    val marketClosedOverlay = StackPane(
         ImageView(Image(requireNotNull(javaClass.getResourceAsStream("/images/sleeping-dog-market-closed.png")))).apply {
-            fitWidth = 560.0; fitHeight = 520.0; isPreserveRatio = true
+            fitWidth = 590.0; fitHeight = 500.0; isPreserveRatio = true
             styleClass += "market-closed-dog"
         },
         VBox(
-            12.0,
+            7.0,
             Label("ALL SELECTED MARKETS ARE CLOSED").apply { styleClass += "market-closed-title" },
-            marketClosedSubtitle,
-            closeMarketOverlayButton
+            marketClosedSubtitle
         ).apply {
-            alignment = Pos.CENTER
+            alignment = Pos.TOP_CENTER
             styleClass += "market-closed-content"
-        }
+        },
+        closeMarketOverlayButton
     ).apply {
         alignment = Pos.CENTER
         maxWidth = 680.0
+        maxHeight = 570.0
+        prefWidth = 680.0
+        prefHeight = 570.0
         isVisible = false
         isManaged = false
         styleClass += "market-closed-overlay"
+        StackPane.setAlignment(closeMarketOverlayButton, Pos.TOP_RIGHT)
     }
     private val empty = Label("Waiting for the first local/Yahoo scan…")
     private val cycleStatus = Label()
@@ -131,10 +135,9 @@ class ScannerPanel(
         table.minHeight = 0.0
         table.maxHeight = Double.MAX_VALUE
         table.styleClass += "scanner-table"
-        tableContainer.children.setAll(table, closedMarketOverlay)
-        StackPane.setAlignment(closedMarketOverlay, Pos.CENTER)
-        addEventFilter(KeyEvent.KEY_PRESSED) { event ->
-            if (event.code == KeyCode.ESCAPE && closedMarketOverlay.isVisible) {
+        tableContainer.children.setAll(table)
+        marketClosedOverlay.addEventFilter(KeyEvent.KEY_PRESSED) { event ->
+            if (event.code == KeyCode.ESCAPE) {
                 hideMarketClosedOverlay()
                 event.consume()
             }
@@ -154,13 +157,13 @@ class ScannerPanel(
         log.debug(LogTag.UI, "clear()")
         rows.clear(); stagedRows.clear(); scanning = false
         countdown?.stop(); hourglass?.stop(); scanIndicator.text = ""
-        closedMarketOverlay.isVisible = false; closedMarketOverlay.isManaged = false
+        marketClosedOverlay.isVisible = false; marketClosedOverlay.isManaged = false
     }
 
     fun beginScan(number: Int, total: Int, symbols: List<String>) {
         log.debug(LogTag.UI, "beginScan(number={}, total={}, symbols={})", number, total, symbols.size)
         countdown?.stop(); stagedRows.clear(); scanning = true
-        closedMarketOverlay.isVisible = false; closedMarketOverlay.isManaged = false
+        marketClosedOverlay.isVisible = false; marketClosedOverlay.isManaged = false
         cycleStatus.styleClass.remove("market-closed")
         cycleStatus.text = "Batch $number/$total · ${symbols.size} symbols"
         cycleStatus.tooltip = Tooltip(symbols.joinToString(", "))
@@ -211,14 +214,15 @@ class ScannerPanel(
         }
         cycleStatus.tooltip = Tooltip("The scanner is not presenting cached closing bars as current market signals.")
         marketClosedSubtitle.text = "Saved closing snapshot · scanner resumes $nextOpening"
-        closedMarketOverlay.isVisible = true
-        closedMarketOverlay.isManaged = true
+        marketClosedOverlay.isVisible = true
+        marketClosedOverlay.isManaged = true
+        marketClosedOverlay.toFront()
         Platform.runLater { closeMarketOverlayButton.requestFocus() }
     }
 
     private fun hideMarketClosedOverlay() {
-        closedMarketOverlay.isVisible = false
-        closedMarketOverlay.isManaged = false
+        marketClosedOverlay.isVisible = false
+        marketClosedOverlay.isManaged = false
         table.requestFocus()
     }
 
