@@ -4,6 +4,7 @@ package org.senatov.mimitrends.db
 
 import java.sql.Connection
 import java.time.Instant
+import org.senatov.mimitrends.model.BrokerTrade
 
 internal class BrokerTransactionStore(private val connection: Connection) {
     fun import(transactions: List<BrokerTransaction>): BrokerImportResult {
@@ -48,6 +49,44 @@ internal class BrokerTransactionStore(private val connection: Connection) {
             it.getInt(1)
         }
     }
+
+    fun loadTrades(symbol: String, companyName: String): List<BrokerTrade> {
+        val normalizedSymbol = symbol.uppercase()
+        val metadataIsin = connection.prepareStatement("SELECT isin FROM instrument_metadata WHERE symbol=?").use { statement ->
+            statement.setString(1, normalizedSymbol)
+            statement.executeQuery().use { result ->
+                if (result.next()) result.getString(1)?.takeIf(::isValidIsin) else null
+            }
+        }
+        val executions = connection.prepareStatement("""SELECT id, occurred_at, description, transaction_type,
+            isin, shares, price, amount, fee, tax, currency FROM broker_transactions
+            WHERE status='Executed' AND transaction_type IN ('Buy','Sell') ORDER BY occurred_at, id""").use { statement ->
+            statement.executeQuery().use { result -> buildList {
+                while (result.next()) {
+                    val execution = BrokerExecution(result.getLong(1), result.getLong(2), result.getString(3),
+                        result.getString(4), result.getString(5), result.getDouble(6), result.getDouble(7),
+                        result.getDouble(8), result.getDouble(9), result.getDouble(10), result.getString(11))
+                    if ((metadataIsin != null && execution.isin == metadataIsin) ||
+                        BrokerTradeMatcher.matches(execution.description, companyName)) add(execution)
+                }
+            } }
+        }
+        val resolvedIsin = metadataIsin ?: executions.mapNotNull(BrokerExecution::isin).distinct().singleOrNull()
+        if (resolvedIsin != null) persistMapping(normalizedSymbol, resolvedIsin)
+        return BrokerTradeMatcher.pair(normalizedSymbol, executions)
+    }
+
+    private fun persistMapping(symbol: String, isin: String) {
+        connection.prepareStatement("""UPDATE instrument_metadata SET isin=? WHERE symbol=?
+            AND (isin IS NULL OR length(isin) != 12)""").use {
+            it.setString(1, isin); it.setString(2, symbol); it.executeUpdate()
+        }
+        connection.prepareStatement("UPDATE broker_transactions SET linked_symbol=? WHERE isin=?").use {
+            it.setString(1, symbol); it.setString(2, isin); it.executeUpdate()
+        }
+    }
+
+    private fun isValidIsin(value: String): Boolean = value.matches(Regex("[A-Z]{2}[A-Z0-9]{9}[0-9]"))
 
     private companion object {
         const val INSERT_TRANSACTION = """INSERT OR IGNORE INTO broker_transactions

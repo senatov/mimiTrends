@@ -31,6 +31,7 @@ import org.jfree.chart.ui.TextAnchor
 import org.jfree.chart.ui.Layer
 import org.senatov.mimitrends.log.LogTag
 import org.senatov.mimitrends.model.MinuteBar
+import org.senatov.mimitrends.model.BrokerTrade
 import org.senatov.mimitrends.model.ScanResult
 import org.slf4j.LoggerFactory
 import java.awt.BasicStroke
@@ -60,6 +61,7 @@ class TrendChartView : StackPane() {
     private val cursorDetailsLabel = Label("Move the cursor over a candle to inspect OHLC and volume")
     private val focusButton = ToggleButton("Signal focus")
     private val historyButton = ToggleButton("Full history")
+    private val tradesButton = ToggleButton("Trades").apply { isSelected = true }
     private val priceCursor = ValueMarker(0.0)
     private val priceTimeCursor = ValueMarker(0.0)
     private val volumeTimeCursor = ValueMarker(0.0)
@@ -74,6 +76,7 @@ class TrendChartView : StackPane() {
     private var renderedBars: List<MinuteBar> = emptyList()
     private var renderedPriceMultiplier = 1.0
     private var renderedCurrencySymbol = "$"
+    private val tradeAnnotations = BrokerTradeAnnotations(pricePlot)
 
     init {
         log.debug(LogTag.UI, "init()")
@@ -92,10 +95,11 @@ class TrendChartView : StackPane() {
             historyButton.toggleGroup = this
             selectToggle(focusButton)
         }
-        listOf(focusButton, historyButton).forEach { it.styleClass += "chart-mode-button" }
+        listOf(focusButton, historyButton, tradesButton).forEach { it.styleClass += "chart-mode-button" }
         focusButton.setOnAction { lastRequest?.let(::renderRequest) }
         historyButton.setOnAction { lastRequest?.let(::renderRequest) }
-        val modeSwitch = HBox(focusButton, historyButton).apply { styleClass += "chart-mode-switch" }
+        tradesButton.setOnAction { lastRequest?.let(::renderRequest) }
+        val modeSwitch = HBox(focusButton, historyButton, tradesButton).apply { styleClass += "chart-mode-switch" }
         signalSummaryLabel.styleClass += "chart-signal-summary"
         cursorDetailsLabel.styleClass += "chart-cursor-details"
         currentPriceLabel.styleClass += "chart-current-price"
@@ -121,10 +125,12 @@ class TrendChartView : StackPane() {
         priceMultiplier: Double = 1.0,
         currencySymbol: String = "$",
         signal: ScanResult? = null,
-        companyName: String = symbol
+        companyName: String = symbol,
+        trades: List<BrokerTrade> = emptyList()
     ) {
         log.debug(LogTag.UI, "renderMinuteBars(symbol={}, bars={}, range={})", symbol, bars.size, rangeLabel)
-        lastRequest = RenderRequest(symbol, companyName, bars.sortedBy { it.minuteEpochSeconds }, rangeLabel, priceMultiplier, currencySymbol, signal)
+        lastRequest = RenderRequest(symbol, companyName, bars.sortedBy { it.minuteEpochSeconds }, rangeLabel,
+            priceMultiplier, currencySymbol, signal, trades)
         renderRequest(requireNotNull(lastRequest))
     }
 
@@ -175,6 +181,8 @@ class TrendChartView : StackPane() {
         signalSummaryLabel.isManaged = request.signal != null
         showLatestPrice(closes.last(), request.currencySymbol)
         showSignalWindow(request.bars.last().minuteEpochSeconds, request.signal)
+        if (tradesButton.isSelected) tradeAnnotations.render(request.trades, visible, request.priceMultiplier)
+        else tradeAnnotations.clear()
         chart.fireChartChanged()
     }
 
@@ -226,6 +234,7 @@ class TrendChartView : StackPane() {
         signalSummaryLabel.isManaged = false
         cursorDetailsLabel.text = "Move the cursor over a candle to inspect OHLC and volume"
         renderedBars = emptyList()
+        tradeAnnotations.clear()
         chart.fireChartChanged()
     }
 
@@ -350,7 +359,8 @@ class TrendChartView : StackPane() {
         val rangeLabel: String,
         val priceMultiplier: Double,
         val currencySymbol: String,
-        val signal: ScanResult?
+        val signal: ScanResult?,
+        val trades: List<BrokerTrade>
     )
 
     private companion object {

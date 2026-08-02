@@ -1,0 +1,116 @@
+package org.senatov.mimitrends.charts
+
+import org.jfree.chart.annotations.XYBoxAnnotation
+import org.jfree.chart.annotations.XYShapeAnnotation
+import org.jfree.chart.annotations.XYTextAnnotation
+import org.jfree.chart.plot.XYPlot
+import org.jfree.chart.ui.TextAnchor
+import org.senatov.mimitrends.model.BrokerTrade
+import org.senatov.mimitrends.model.MinuteBar
+import java.awt.BasicStroke
+import java.awt.Color
+import java.awt.Font
+import java.awt.geom.Ellipse2D
+import java.awt.geom.Path2D
+import java.text.DecimalFormat
+
+internal class BrokerTradeAnnotations(private val plot: XYPlot) {
+    fun render(trades: List<BrokerTrade>, bars: List<MinuteBar>, barPriceMultiplier: Double) {
+        plot.clearAnnotations()
+        if (bars.isEmpty()) return
+        val firstEpoch = bars.first().minuteEpochSeconds
+        val lastEpoch = bars.last().minuteEpochSeconds
+        val visible = trades.filter { trade ->
+            trade.entryEpochSeconds <= lastEpoch && (trade.exitEpochSeconds ?: lastEpoch) >= firstEpoch
+        }
+        val priceSpan = (bars.maxOf { it.high } - bars.minOf { it.low })
+            .coerceAtLeast(bars.last().close * 0.02) * barPriceMultiplier
+        val timeStep = medianBarSeconds(bars) * 1_000.0
+        visible.forEachIndexed { index, trade ->
+            val entryX = trade.entryEpochSeconds * 1_000.0
+            val exitX = (trade.exitEpochSeconds ?: lastEpoch) * 1_000.0
+            val entryY = trade.entryPrice
+            val exitY = trade.exitPrice ?: trade.entryPrice
+            val level = index % MAX_LEVELS
+            val lift = priceSpan * (0.10 + level * 0.075)
+            val controlX = (entryX + exitX) / 2.0
+            val controlY = maxOf(entryY, exitY) + lift
+            val path = Path2D.Double().apply {
+                moveTo(entryX, entryY)
+                quadTo(controlX, controlY, exitX, exitY)
+            }
+            plot.addAnnotation(XYShapeAnnotation(path, MARKER_STROKE, ORANGE))
+            addPoint(entryX, entryY, timeStep, priceSpan, ORANGE)
+            addPoint(exitX, exitY, timeStep, priceSpan, if (trade.isOpen) ORANGE else pnlColor(trade))
+            addCard(trade, controlX, controlY + priceSpan * 0.025, timeStep, priceSpan)
+        }
+    }
+
+    fun clear() = plot.clearAnnotations()
+
+    private fun addPoint(x: Double, y: Double, timeStep: Double, priceSpan: Double, color: Color) {
+        val dot = Ellipse2D.Double(x - timeStep * 0.22, y - priceSpan * 0.007,
+            timeStep * 0.44, priceSpan * 0.014)
+        plot.addAnnotation(XYShapeAnnotation(dot, BasicStroke(1.1f), color.darker(), color))
+    }
+
+    private fun addCard(
+        trade: BrokerTrade,
+        x: Double,
+        y: Double,
+        timeStep: Double,
+        priceSpan: Double
+    ) {
+        val formatter = DecimalFormat("#,##0.00")
+        val symbol = currencySymbol(trade.currency)
+        val entry = formatter.format(trade.entryPrice)
+        val exit = trade.exitPrice?.let(formatter::format)
+        val title = if (exit == null) "BUY $symbol$entry · OPEN"
+        else "BUY $symbol$entry → SELL $symbol$exit"
+        val pnl = trade.profitAmount?.let { amount ->
+            val sign = if (amount >= 0.0) "+" else "−"
+            val absolute = formatter.format(kotlin.math.abs(amount))
+            val percent = trade.profitPercent?.let { " · $sign${formatter.format(kotlin.math.abs(it))}%" }.orEmpty()
+            "$sign$symbol$absolute$percent"
+        } ?: "Open position · ${formatter.format(trade.quantity)} shares"
+        val width = timeStep * 7.5
+        val height = priceSpan * 0.105
+        plot.addAnnotation(XYBoxAnnotation(x - width / 2, y, x + width / 2, y + height,
+            BasicStroke(0.8f), Color(255, 255, 255, 215), Color(247, 249, 251, 225)))
+        plot.addAnnotation(text(title, x, y + height * 0.68, Color(48, 55, 63), Font.PLAIN))
+        plot.addAnnotation(text(pnl, x, y + height * 0.30, pnlColor(trade), Font.BOLD))
+    }
+
+    private fun text(value: String, x: Double, y: Double, color: Color, style: Int) =
+        XYTextAnnotation(value, x, y).apply {
+            font = Font("SansSerif", style, 10)
+            paint = color
+            textAnchor = TextAnchor.CENTER
+        }
+
+    private fun pnlColor(trade: BrokerTrade): Color = when {
+        trade.profitAmount == null -> ORANGE
+        requireNotNull(trade.profitAmount) >= 0.0 -> Color(22, 137, 76)
+        else -> Color(194, 48, 62)
+    }
+
+    private fun medianBarSeconds(bars: List<MinuteBar>): Double {
+        if (bars.size < 2) return 60.0
+        val intervals = bars.zipWithNext { first, second ->
+            (second.minuteEpochSeconds - first.minuteEpochSeconds).coerceAtLeast(1).toDouble()
+        }.sorted()
+        return intervals[intervals.size / 2]
+    }
+
+    private fun currencySymbol(currency: String) = when (currency.uppercase()) {
+        "EUR" -> "€"
+        "GBP" -> "£"
+        else -> "$"
+    }
+
+    private companion object {
+        val ORANGE = Color(235, 133, 35, 225)
+        val MARKER_STROKE = BasicStroke(3.2f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND)
+        const val MAX_LEVELS = 4
+    }
+}

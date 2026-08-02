@@ -66,6 +66,7 @@ class MainController(
     private var rotationTask: ScheduledFuture<*>? = null
     private val scanGeneration = AtomicLong()
     private val exchangeRates = ExchangeRateService()
+    private val chartDataLoader = ChartDataLoader(repository, analytics, exchangeRates)
     private val initialDivider = initialDividerPosition.coerceIn(0.15, 0.75)
     private val contentSplitPane = SplitPane()
     private var finnhubClient: FinnhubWebSocketClient? = null
@@ -353,20 +354,19 @@ class MainController(
         val days = ChartRange.days(selectedRangeValue)
         setStatus("Requesting SQLite: $symbol · $selectedRangeValue")
         CompletableFuture.supplyAsync {
-            repository.loadMinuteBars(symbol, java.time.Instant.now().minusSeconds(days * 86_400).epochSecond) to
-                (repository.loadCompanyProfile(symbol)?.name ?: symbol)
-        }.whenComplete(BiConsumer<Pair<List<MinuteBar>, String>?, Throwable?> { chartData, error ->
+            chartDataLoader.load(symbol, days, scannerCriteria.displayCurrency)
+        }.whenComplete(BiConsumer<ChartData?, Throwable?> { chartData, error ->
                 Platform.runLater {
                     setLoading(false)
                     if (error != null) {
                         log.error(LogTag.DB, "local chart load failed symbol={}", symbol, error)
                         setStatus("SQLite read failed: ${error.message ?: "unknown error"}", true, requestStatus.formatError(symbol, error))
-                    } else if (chartData != null && chartData.first.isNotEmpty()) {
-                        val bars = chartData.first
+                    } else if (chartData != null && chartData.bars.isNotEmpty()) {
+                        val bars = chartData.bars
                         val currency = scannerCriteria.displayCurrency
                         trendChart.renderMinuteBars(
                             symbol, bars, selectedRangeValue, displayPrice(symbol, 1.0), currency.symbol,
-                            currentSignal?.takeIf { it.symbol == symbol }, chartData.second
+                            currentSignal?.takeIf { it.symbol == symbol }, chartData.companyName, chartData.trades
                         )
                         setStatus("Read SQLite: $symbol · ${bars.size} minute bars · $selectedRangeValue")
                     } else {
@@ -393,8 +393,8 @@ class MainController(
         requestStatus.update(message, error, details)
     }
 
-    private fun displayPrice(symbol: String, value: Double): Double {
-        return exchangeRates.convert(symbol, value, scannerCriteria.displayCurrency)
-    }
+    private fun displayPrice(symbol: String, value: Double): Double =
+        exchangeRates.convert(symbol, value, scannerCriteria.displayCurrency)
+
 
 }

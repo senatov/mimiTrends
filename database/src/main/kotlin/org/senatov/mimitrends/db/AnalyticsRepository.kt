@@ -7,6 +7,7 @@ import org.senatov.mimitrends.model.MinuteBar
 import org.senatov.mimitrends.model.MarketTimeZone
 import org.senatov.mimitrends.model.isValidMinuteBar
 import org.senatov.mimitrends.model.ScanResult
+import org.senatov.mimitrends.model.BrokerTrade
 import org.slf4j.LoggerFactory
 import java.nio.file.Files
 import java.nio.file.Path
@@ -224,6 +225,9 @@ class AnalyticsRepository(
         val parsed = ScalableCsvImporter.parse(path)
         return locked { transaction { brokerTransactions.import(parsed) } }
     }
+
+    fun loadBrokerTrades(symbol: String, companyName: String): List<BrokerTrade> =
+        locked { brokerTransactions.loadTrades(symbol, companyName) }
 
     override fun close() = lock.withLock {
         runCatching { connection.createStatement().use { it.execute("PRAGMA optimize") } }

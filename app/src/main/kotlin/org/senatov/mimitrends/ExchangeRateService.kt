@@ -37,6 +37,13 @@ class ExchangeRateService(private val cachePath: Path = Path.of(System.getProper
         }
     }
 
+    fun convertCurrency(value: Double, source: String, target: DisplayCurrency): Double = when {
+        source.equals(target.name, ignoreCase = true) -> value
+        source.equals("USD", ignoreCase = true) && target == DisplayCurrency.EUR -> usdToEur(value)
+        source.equals("EUR", ignoreCase = true) && target == DisplayCurrency.USD -> eurToUsd(value)
+        else -> value
+    }
+
     fun refresh(): CompletableFuture<Double> {
         log.debug(LogTag.API, "refresh()")
         val request = HttpRequest.newBuilder(URI.create("https://www.ecb.europa.eu/stats/eurofxref/eurofxref-daily.xml"))

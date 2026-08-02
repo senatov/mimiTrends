@@ -60,10 +60,12 @@ internal class MarketDataService(
         repository.listSymbols().forEach { symbol ->
             val profile = repository.loadCompanyProfile(symbol)
             analytics.upsertInstrument(InstrumentMetadata(
-                symbol, profile?.name ?: symbol,
-                profile?.exchange ?: if (symbol.contains('.')) "EUROPE" else "US",
-                currency(symbol), MarketTimeZone.forSymbol(symbol).id,
-                symbol.substringBefore('.').takeIf { it != symbol }
+                symbol = symbol,
+                name = profile?.name ?: symbol,
+                exchange = profile?.exchange ?: if (symbol.contains('.')) "EUROPE" else "US",
+                currency = currency(symbol),
+                timezone = MarketTimeZone.forSymbol(symbol).id,
+                aliases = symbol.substringBefore('.').takeIf { it != symbol }
             ))
         }
     }

@@ -12,6 +12,28 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 class AnalyticsRepositoryTest {
+    @Test fun `resolves isin by company name and reconstructs broker trade`() {
+        val directory = Files.createTempDirectory("mimitrends-trades")
+        val database = directory.resolve("test.db")
+        val csv = directory.resolve("transactions.csv")
+        Files.writeString(csv, """date;time;status;reference;description;assetType;type;isin;shares;price;amount;fee;tax;currency
+2026-07-31;18:00:00;Executed;BUY-1;Apple;Security;Buy;US0378331005;2;100,00;-200,00;1,00;0,00;EUR
+2026-07-31;19:00:00;Executed;SELL-1;Apple;Security;Sell;US0378331005;2;110,00;220,00;1,00;0,00;EUR
+""")
+        val analytics = AnalyticsRepository(database)
+        analytics.upsertInstrument(InstrumentMetadata("AAPL", "Apple Inc.", "NASDAQ", "USD", "America/New_York"))
+        analytics.importScalableTransactions(csv)
+        val trade = analytics.loadBrokerTrades("AAPL", "Apple Inc.").single()
+        assertEquals(18.0, requireNotNull(trade.profitAmount), 0.000_001)
+        assertEquals(18.0 / 201.0 * 100.0, requireNotNull(trade.profitPercent), 0.000_001)
+        analytics.close()
+        DriverManager.getConnection("jdbc:sqlite:$database").use { connection ->
+            connection.createStatement().executeQuery("SELECT isin FROM instrument_metadata WHERE symbol='AAPL'").use {
+                it.next(); assertEquals("US0378331005", it.getString(1))
+            }
+        }
+    }
+
     @Test fun `imports scalable csv idempotently and parses european decimals`() {
         val directory = Files.createTempDirectory("mimitrends-scalable")
         val database = directory.resolve("test.db")
