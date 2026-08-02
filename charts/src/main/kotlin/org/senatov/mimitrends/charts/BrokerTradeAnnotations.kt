@@ -13,9 +13,16 @@ import java.awt.Font
 import java.awt.geom.Ellipse2D
 import java.awt.geom.Path2D
 import java.text.DecimalFormat
+import java.text.SimpleDateFormat
+import java.util.Date
 
 internal class BrokerTradeAnnotations(private val plot: XYPlot) {
-    fun render(trades: List<BrokerTrade>, bars: List<MinuteBar>, barPriceMultiplier: Double) {
+    fun render(
+        trades: List<BrokerTrade>,
+        bars: List<MinuteBar>,
+        referenceBars: List<MinuteBar>,
+        barPriceMultiplier: Double
+    ) {
         plot.clearAnnotations()
         if (bars.isEmpty()) return
         val firstEpoch = bars.first().minuteEpochSeconds
@@ -25,7 +32,7 @@ internal class BrokerTradeAnnotations(private val plot: XYPlot) {
         }
         val priceSpan = (bars.maxOf { it.high } - bars.minOf { it.low })
             .coerceAtLeast(bars.last().close * 0.02) * barPriceMultiplier
-        val timeStep = medianBarSeconds(bars) * 1_000.0
+        val timeStep = medianBarSeconds(referenceBars) * 1_000.0
         visible.forEachIndexed { index, trade ->
             val entryX = trade.entryEpochSeconds * 1_000.0
             val exitX = (trade.exitEpochSeconds ?: lastEpoch) * 1_000.0
@@ -40,9 +47,17 @@ internal class BrokerTradeAnnotations(private val plot: XYPlot) {
                 quadTo(controlX, controlY, exitX, exitY)
             }
             plot.addAnnotation(XYShapeAnnotation(path, MARKER_STROKE, ORANGE))
+            val entryAlignment = alignToCandle(trade.entryEpochSeconds, trade.entryPrice,
+                referenceBars, timeStep, barPriceMultiplier)
+            val exitAlignment = trade.exitEpochSeconds?.let { epoch ->
+                alignToCandle(epoch, requireNotNull(trade.exitPrice), referenceBars, timeStep, barPriceMultiplier)
+            }
+            entryAlignment?.let(::addConnector)
+            exitAlignment?.let(::addConnector)
             addPoint(entryX, entryY, timeStep, priceSpan, ORANGE)
             addPoint(exitX, exitY, timeStep, priceSpan, if (trade.isOpen) ORANGE else pnlColor(trade))
-            addCard(trade, controlX, controlY + priceSpan * 0.025, timeStep, priceSpan)
+            addCard(trade, controlX, controlY + priceSpan * 0.025, timeStep, priceSpan,
+                entryAlignment, exitAlignment)
         }
     }
 
@@ -59,7 +74,9 @@ internal class BrokerTradeAnnotations(private val plot: XYPlot) {
         x: Double,
         y: Double,
         timeStep: Double,
-        priceSpan: Double
+        priceSpan: Double,
+        entryAlignment: CandleAlignment?,
+        exitAlignment: CandleAlignment?
     ) {
         val formatter = DecimalFormat("#,##0.00")
         val symbol = currencySymbol(trade.currency)
@@ -67,6 +84,10 @@ internal class BrokerTradeAnnotations(private val plot: XYPlot) {
         val exit = trade.exitPrice?.let(formatter::format)
         val title = if (exit == null) "BUY $symbol$entry · OPEN"
         else "BUY $symbol$entry → SELL $symbol$exit"
+        val aligned = listOfNotNull(entryAlignment, exitAlignment).firstOrNull()
+        val sessionNote = aligned?.let {
+            " · extended → candle ${SimpleDateFormat("HH:mm").format(Date(it.candleX.toLong()))}"
+        }.orEmpty()
         val pnl = trade.profitAmount?.let { amount ->
             val sign = if (amount >= 0.0) "+" else "−"
             val absolute = formatter.format(kotlin.math.abs(amount))
@@ -77,8 +98,30 @@ internal class BrokerTradeAnnotations(private val plot: XYPlot) {
         val height = priceSpan * 0.105
         plot.addAnnotation(XYBoxAnnotation(x - width / 2, y, x + width / 2, y + height,
             BasicStroke(0.8f), Color(255, 255, 255, 215), Color(247, 249, 251, 225)))
-        plot.addAnnotation(text(title, x, y + height * 0.68, Color(48, 55, 63), Font.PLAIN))
+        plot.addAnnotation(text(title + sessionNote, x, y + height * 0.68, Color(48, 55, 63), Font.PLAIN))
         plot.addAnnotation(text(pnl, x, y + height * 0.30, pnlColor(trade), Font.BOLD))
+    }
+
+    private fun alignToCandle(
+        epochSeconds: Long,
+        tradePrice: Double,
+        bars: List<MinuteBar>,
+        timeStep: Double,
+        multiplier: Double
+    ): CandleAlignment? {
+        val tradeX = epochSeconds * 1_000.0
+        val nearest = bars.minByOrNull { kotlin.math.abs(it.minuteEpochSeconds * 1_000.0 - tradeX) } ?: return null
+        val candleX = nearest.minuteEpochSeconds * 1_000.0
+        if (kotlin.math.abs(candleX - tradeX) <= timeStep * 1.5) return null
+        return CandleAlignment(tradeX, tradePrice, candleX, nearest.close * multiplier)
+    }
+
+    private fun addConnector(alignment: CandleAlignment) {
+        val line = Path2D.Double().apply {
+            moveTo(alignment.tradeX, alignment.tradeY)
+            lineTo(alignment.candleX, alignment.candleY)
+        }
+        plot.addAnnotation(XYShapeAnnotation(line, CONNECTOR_STROKE, Color(219, 126, 35, 150)))
     }
 
     private fun text(value: String, x: Double, y: Double, color: Color, style: Int) =
@@ -111,6 +154,15 @@ internal class BrokerTradeAnnotations(private val plot: XYPlot) {
     private companion object {
         val ORANGE = Color(235, 133, 35, 225)
         val MARKER_STROKE = BasicStroke(3.2f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND)
+        val CONNECTOR_STROKE = BasicStroke(1.3f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND,
+            0f, floatArrayOf(5f, 5f), 0f)
         const val MAX_LEVELS = 4
     }
+
+    private data class CandleAlignment(
+        val tradeX: Double,
+        val tradeY: Double,
+        val candleX: Double,
+        val candleY: Double
+    )
 }

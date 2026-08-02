@@ -181,7 +181,7 @@ class TrendChartView : StackPane() {
         signalSummaryLabel.isManaged = request.signal != null
         showLatestPrice(closes.last(), request.currencySymbol)
         showSignalWindow(request.bars.last().minuteEpochSeconds, request.signal)
-        if (tradesButton.isSelected) tradeAnnotations.render(request.trades, visible, request.priceMultiplier)
+        if (tradesButton.isSelected) tradeAnnotations.render(request.trades, visible, source, request.priceMultiplier)
         else tradeAnnotations.clear()
         chart.fireChartChanged()
     }

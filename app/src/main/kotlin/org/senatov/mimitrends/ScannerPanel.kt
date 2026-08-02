@@ -52,7 +52,10 @@ class ScannerPanel(
     }
     private val marketHoursTitle = Label().apply { styleClass += "market-hours-title" }
     private val marketHoursLabel = Label().apply { styleClass += "market-hours-list" }
-    private val marketHoursPanel = VBox(4.0, marketHoursTitle, marketHoursLabel).apply {
+    private val brokerHoursTitle = Label("SCALABLE VENUES").apply { styleClass += "market-hours-title" }
+    private val brokerHoursLabel = Label().apply { styleClass += "market-hours-list" }
+    private val marketHoursPanel = VBox(4.0, marketHoursTitle, marketHoursLabel,
+        Region().apply { minHeight = 5.0 }, brokerHoursTitle, brokerHoursLabel).apply {
         alignment = Pos.TOP_LEFT
         minWidth = 270.0
         prefWidth = 270.0
@@ -236,7 +239,14 @@ class ScannerPanel(
         })).apply { cycleCount = seconds.coerceAtMost(Int.MAX_VALUE.toLong()).toInt(); play() }
     }
 
-    fun showMarketClosed(snapshotSize: Int, persisted: Boolean, nextOpening: String, localZone: String, marketHours: List<String>) {
+    fun showMarketClosed(
+        snapshotSize: Int,
+        persisted: Boolean,
+        nextOpening: String,
+        localZone: String,
+        marketHours: List<String>,
+        brokerHours: List<String>
+    ) {
         cycleStatus.styleClass.remove("market-closed")
         cycleStatus.styleClass += "market-closed"
         cycleStatus.text = "ALL SELECTED MARKETS ARE CLOSED · " + when {
@@ -246,10 +256,12 @@ class ScannerPanel(
         }
         cycleStatus.tooltip = Tooltip("The scanner is not presenting cached closing bars as current market signals.")
         marketClosedSubtitle.text = "Saved closing snapshot · scanner resumes $nextOpening"
-        marketHoursTitle.text = "LOCAL HOURS · $localZone"
+        marketHoursTitle.text = "PRICE DATA MARKETS · $localZone"
         marketHoursLabel.text = marketHours.joinToString("\n")
-        marketHoursPanel.isVisible = marketHours.isNotEmpty()
-        marketHoursPanel.isManaged = marketHours.isNotEmpty()
+        brokerHoursTitle.text = "SCALABLE VENUES · $localZone"
+        brokerHoursLabel.text = brokerHours.joinToString("\n")
+        marketHoursPanel.isVisible = marketHours.isNotEmpty() || brokerHours.isNotEmpty()
+        marketHoursPanel.isManaged = marketHoursPanel.isVisible
         marketClosedOverlay.isVisible = true
         marketClosedOverlay.isManaged = true
         marketClosedOverlay.toFront()
