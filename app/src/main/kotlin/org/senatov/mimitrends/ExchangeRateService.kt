@@ -1,6 +1,7 @@
 package org.senatov.mimitrends
 
 import org.senatov.mimitrends.log.LogTag
+import org.senatov.mimitrends.model.DisplayCurrency
 import org.slf4j.LoggerFactory
 import java.net.URI
 import java.net.http.HttpClient
@@ -24,6 +25,16 @@ class ExchangeRateService(private val cachePath: Path = Path.of(System.getProper
     fun eurToUsd(value: Double): Double {
         log.trace(LogTag.STATE, "eurToUsd(value={})", value)
         return value * usdPerEur
+    }
+
+    fun convert(symbol: String, value: Double, target: DisplayCurrency): Double {
+        val sourceIsEuro = symbol.uppercase().let {
+            it.endsWith(".DE") || it.endsWith(".F") || it.endsWith(".PA") || it.endsWith(".AS")
+        }
+        return when (target) {
+            DisplayCurrency.EUR -> if (sourceIsEuro) value else usdToEur(value)
+            DisplayCurrency.USD -> if (sourceIsEuro) eurToUsd(value) else value
+        }
     }
 
     fun refresh(): CompletableFuture<Double> {

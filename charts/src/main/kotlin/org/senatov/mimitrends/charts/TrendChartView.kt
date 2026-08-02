@@ -13,19 +13,12 @@ import javafx.scene.input.MouseEvent
 import org.jfree.chart.JFreeChart
 import org.jfree.chart.axis.DateAxis
 import org.jfree.chart.axis.NumberAxis
-import org.jfree.chart.axis.AxisLocation
 import org.jfree.chart.fx.ChartViewer
-import org.jfree.chart.fx.interaction.ChartMouseEventFX
-import org.jfree.chart.fx.interaction.ChartMouseListenerFX
-import org.jfree.chart.labels.HighLowItemLabelGenerator
-import org.jfree.chart.labels.StandardXYToolTipGenerator
 import org.jfree.chart.plot.CombinedDomainXYPlot
-import org.jfree.chart.plot.PlotOrientation
 import org.jfree.chart.plot.ValueMarker
 import org.jfree.chart.plot.IntervalMarker
 import org.jfree.chart.plot.XYPlot
 import org.jfree.chart.renderer.xy.CandlestickRenderer
-import org.jfree.chart.renderer.xy.XYBarRenderer
 import org.jfree.data.time.Millisecond
 import org.jfree.data.time.TimeSeries
 import org.jfree.data.time.TimeSeriesCollection
@@ -43,12 +36,9 @@ import org.slf4j.LoggerFactory
 import java.awt.BasicStroke
 import java.awt.Color
 import java.awt.Font
-import java.awt.Paint
-import java.awt.geom.Point2D
 import java.text.DecimalFormat
 import java.text.SimpleDateFormat
 import java.util.Date
-import kotlin.math.ceil
 
 class TrendChartView : StackPane() {
     private val log = LoggerFactory.getLogger(javaClass)
@@ -141,7 +131,7 @@ class TrendChartView : StackPane() {
     private fun renderRequest(request: RenderRequest) {
         val focused = focusButton.isSelected && request.signal != null
         val source = if (focused) focusOnSignal(request.bars, requireNotNull(request.signal)) else request.bars
-        val visible = aggregate(source)
+        val visible = TrendChartSupport.aggregate(source, MAX_CANDLES)
         if (visible.isEmpty()) {
             clear()
             return
@@ -169,10 +159,10 @@ class TrendChartView : StackPane() {
 
         val volumeSeries = TimeSeries("Volume")
         visible.forEach { bar -> volumeSeries.addOrUpdate(Millisecond(Date(bar.minuteEpochSeconds * 1_000)), bar.volume) }
-        val barWidthMillis = inferBarWidth(visible)
+        val barWidthMillis = TrendChartSupport.inferBarWidth(visible)
         volumePlot.dataset = XYBarDataset(TimeSeriesCollection(volumeSeries), barWidthMillis)
 
-        dateAxis.dateFormatOverride = SimpleDateFormat(datePattern(visible))
+        dateAxis.dateFormatOverride = SimpleDateFormat(TrendChartSupport.datePattern(visible))
         priceAxis.numberFormatOverride = DecimalFormat("${request.currencySymbol}#,##0.00")
         cursorDateFormat = SimpleDateFormat("dd MMM yyyy  HH:mm")
         cursorPriceFormat = DecimalFormat("${request.currencySymbol}#,##0.00")
@@ -292,84 +282,8 @@ class TrendChartView : StackPane() {
 
     private fun configureChart() {
         log.debug(LogTag.UI, "configureChart()")
-        val background = Color(250, 250, 251)
-        val plotBackground = Color.WHITE
-        val grid = Color(196, 204, 213)
-        chart.backgroundPaint = background
-        chart.setAntiAlias(true)
-        chart.title.isVisible = false
-
-        dateAxis.lowerMargin = 0.01
-        dateAxis.upperMargin = 0.01
-        dateAxis.isTickLabelsVisible = true
-        dateAxis.isTickMarksVisible = true
-        dateAxis.isAutoTickUnitSelection = true
-        dateAxis.tickLabelFont = Font("SansSerif", Font.PLAIN, 11)
-        dateAxis.tickLabelPaint = Color(54, 65, 76)
-        dateAxis.axisLinePaint = Color(170, 178, 186)
-
-        priceAxis.autoRangeIncludesZero = false
-        priceAxis.isTickLabelsVisible = true
-        priceAxis.isTickMarksVisible = true
-        priceAxis.isAutoTickUnitSelection = true
-        priceAxis.lowerMargin = 0.04
-        priceAxis.upperMargin = 0.04
-        volumeAxis.autoRangeIncludesZero = true
-        pricePlot.rangeAxisLocation = AxisLocation.BOTTOM_OR_RIGHT
-        volumePlot.rangeAxisLocation = AxisLocation.BOTTOM_OR_RIGHT
-        listOf(priceAxis, volumeAxis).forEach { axis ->
-            axis.tickLabelFont = Font("SansSerif", Font.PLAIN, 11)
-            axis.tickLabelPaint = Color(54, 65, 76)
-            axis.axisLinePaint = Color(170, 178, 186)
-        }
-
-        candleRenderer.upPaint = Color(38, 148, 92)
-        candleRenderer.downPaint = Color(211, 70, 82)
-        candleRenderer.useOutlinePaint = true
-        candleRenderer.defaultOutlinePaint = Color(70, 75, 81)
-        candleRenderer.defaultStroke = BasicStroke(1.0f)
-        candleRenderer.defaultToolTipGenerator = HighLowItemLabelGenerator(
-            SimpleDateFormat("dd MMM yyyy HH:mm"), DecimalFormat("#,##0.00")
-        )
-        candleRenderer.autoWidthMethod = CandlestickRenderer.WIDTHMETHOD_SMALLEST
-        candleRenderer.autoWidthFactor = 0.72
-        candleRenderer.drawVolume = false
-
-        volumeRenderer.setShadowVisible(false)
-        volumeRenderer.margin = 0.12
-        volumeRenderer.defaultToolTipGenerator = StandardXYToolTipGenerator(
-            "{0}: {1}  {2}", SimpleDateFormat("dd MMM HH:mm"), DecimalFormat("#,##0")
-        )
-
-        listOf(pricePlot, volumePlot).forEach { plot ->
-            plot.backgroundPaint = plotBackground
-            plot.domainGridlinePaint = grid
-            plot.rangeGridlinePaint = grid
-            plot.domainGridlineStroke = BasicStroke(0.8f)
-            plot.rangeGridlineStroke = BasicStroke(0.8f)
-            plot.isDomainPannable = true
-            plot.isRangePannable = true
-            plot.isDomainCrosshairVisible = false
-            plot.isRangeCrosshairVisible = false
-        }
-        combinedPlot.gap = 4.0
-        combinedPlot.orientation = PlotOrientation.VERTICAL
-        combinedPlot.add(pricePlot, 4)
-        combinedPlot.add(volumePlot, 1)
-        combinedPlot.backgroundPaint = background
-        viewer.addChartMouseListener(object : ChartMouseListenerFX {
-            override fun chartMouseClicked(event: ChartMouseEventFX) {
-                val trigger: MouseEvent = event.trigger
-                log.trace(LogTag.UI, "chartMouseClicked(x={}, y={})", trigger.x, trigger.y)
-            }
-
-            override fun chartMouseMoved(event: ChartMouseEventFX) {
-                val trigger: MouseEvent = event.trigger
-                log.trace(LogTag.UI, "chartMouseMoved(x={}, y={})", trigger.x, trigger.y)
-                viewer.canvas.setAnchor(Point2D.Double(trigger.x, trigger.y))
-                updateCursor(trigger.x, trigger.y)
-            }
-        })
+        TrendChartSupport.configure(chart, viewer, dateAxis, priceAxis, volumeAxis, candleRenderer,
+            volumeRenderer, pricePlot, volumePlot, combinedPlot, ::updateCursor)
     }
 
     private fun updateCursor(x: Double, y: Double) {
@@ -390,7 +304,7 @@ class TrendChartView : StackPane() {
         renderedBars.minByOrNull { kotlin.math.abs(it.minuteEpochSeconds * 1_000.0 - timeValue) }?.let { bar ->
             val format = { value: Double -> "$renderedCurrencySymbol${"%,.2f".format(value * renderedPriceMultiplier)}" }
             val change = if (bar.open != 0.0) (bar.close - bar.open) / bar.open * 100.0 else 0.0
-            cursorDetailsLabel.text = "${cursorDateFormat.format(Date(bar.minuteEpochSeconds * 1_000))}  ·  O ${format(bar.open)}  H ${format(bar.high)}  L ${format(bar.low)}  C ${format(bar.close)}  ·  ${"%+.2f".format(change)}%  ·  Vol ${compactVolume(bar.volume)}"
+            cursorDetailsLabel.text = "${cursorDateFormat.format(Date(bar.minuteEpochSeconds * 1_000))}  ·  O ${format(bar.open)}  H ${format(bar.high)}  L ${format(bar.low)}  C ${format(bar.close)}  ·  ${"%+.2f".format(change)}%  ·  Vol ${TrendChartSupport.compactVolume(bar.volume)}"
         }
         // Keep both labels inside the plot canvas. TextAnchor describes the part of the
         // label placed on the marker anchor, so bottom anchors make the text grow upward.
@@ -427,62 +341,6 @@ class TrendChartView : StackPane() {
         volumePlot.addDomainMarker(volumeTimeCursor)
         pricePlot.addRangeMarker(priceCursor)
         cursorMarkersInstalled = true
-    }
-
-    private fun aggregate(bars: List<MinuteBar>): List<MinuteBar> {
-        log.debug(LogTag.UI, "aggregate(bars={})", bars.size)
-        val chunkSize = ceil(bars.size / MAX_CANDLES.toDouble()).toInt().coerceAtLeast(1)
-        return bars.chunked(chunkSize).map { chunk ->
-            val first = chunk.first()
-            val last = chunk.last()
-            MinuteBar(
-                first.symbol, last.minuteEpochSeconds, first.open,
-                chunk.maxOf { it.high }, chunk.minOf { it.low }, last.close,
-                chunk.sumOf { it.volume }
-            )
-        }
-    }
-
-    private fun inferBarWidth(bars: List<MinuteBar>): Double {
-        log.debug(LogTag.UI, "inferBarWidth(bars={})", bars.size)
-        if (bars.size < 2) return 48_000.0
-        val intervals = bars.zipWithNext { first, second ->
-            (second.minuteEpochSeconds - first.minuteEpochSeconds).coerceAtLeast(1) * 1_000.0
-        }.sorted()
-        return intervals[intervals.size / 2] * 0.82
-    }
-
-    private fun datePattern(bars: List<MinuteBar>): String {
-        val span = bars.last().minuteEpochSeconds - bars.first().minuteEpochSeconds
-        log.debug(LogTag.UI, "datePattern(spanSeconds={})", span)
-        return when {
-            span <= 86_400 -> "HH:mm"
-            span <= 7 * 86_400 -> "dd MMM  HH:mm"
-            span <= 180 * 86_400 -> "dd MMM"
-            else -> "MMM yy"
-        }
-    }
-
-    private fun compactVolume(value: Double): String = when {
-        value >= 1_000_000 -> "%.2fM".format(value / 1_000_000.0)
-        value >= 1_000 -> "%.1fK".format(value / 1_000.0)
-        else -> "%,.0f".format(value)
-    }
-
-    private class DirectionalVolumeRenderer : XYBarRenderer() {
-        var directions: List<Int> = emptyList()
-        var signalColumn: Int? = null
-
-        override fun getItemPaint(row: Int, column: Int): Paint = when {
-            column == signalColumn -> Color(231, 132, 36, 225)
-            directions.getOrNull(column) == 1 -> Color(38, 148, 92, 105)
-            directions.getOrNull(column) == -1 -> Color(211, 70, 82, 105)
-            else -> Color(132, 141, 151, 85)
-        }
-
-        private companion object {
-            const val serialVersionUID = 1L
-        }
     }
 
     private data class RenderRequest(

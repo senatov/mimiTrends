@@ -5,9 +5,6 @@ import javafx.animation.Animation
 import javafx.animation.KeyFrame
 import javafx.animation.ScaleTransition
 import javafx.animation.Timeline
-import javafx.beans.property.ReadOnlyObjectWrapper
-import javafx.beans.property.ReadOnlyDoubleWrapper
-import javafx.beans.property.ReadOnlyLongWrapper
 import javafx.collections.FXCollections
 import javafx.collections.transformation.SortedList
 import javafx.geometry.Pos
@@ -35,9 +32,6 @@ import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.concurrent.CompletableFuture
-import java.util.concurrent.ConcurrentHashMap
-import java.util.function.BiConsumer
-import java.io.ByteArrayInputStream
 import javafx.util.Duration
 
 class ScannerPanel(
@@ -70,6 +64,7 @@ class ScannerPanel(
     private val marketClosedFooter = StackPane(closeMarketOverlayButton).apply {
         alignment = Pos.BOTTOM_CENTER
         maxWidth = Double.MAX_VALUE
+        maxHeight = Region.USE_PREF_SIZE
         styleClass += "market-closed-footer"
     }
     val marketClosedOverlay = StackPane(
@@ -111,8 +106,7 @@ class ScannerPanel(
     private val time = DateTimeFormatter.ofPattern("HH:mm:ss").withZone(ZoneId.systemDefault())
     private var currency = DisplayCurrency.EUR
     private var convertPrice: (String, Double) -> Double = { _, value -> value }
-    private val logoImages = ConcurrentHashMap<String, Image>()
-    private val companyNames = ConcurrentHashMap<String, String>()
+    private val columnFactory = ScannerColumnFactory(table, loadProfile)
     private val autoFitter: TableColumnAutoFitter<ScanResult>
 
     init {
@@ -121,19 +115,19 @@ class ScannerPanel(
             scanIndicator.apply { styleClass += "scanner-timer" }, cycleStatus.apply { styleClass += "scanner-cycle" },
             javafx.scene.layout.Region().also { javafx.scene.layout.HBox.setHgrow(it, Priority.ALWAYS) })
         sortedRows.comparatorProperty().bind(table.comparatorProperty())
-        val symbol = symbolColumn()
-        val signal = signalColumn("Signal", ScanResult::signalSource)
-        val move = numberColumn("Move 10m", ScanResult::windowChangePercent, ::percent)
-        val price = numberColumn("Price", { convertPrice(it.symbol, it.price) }) { "${currency.symbol}%,.2f".format(it) }
-        val scoreColumn = readableMetricColumn("Strength", ScanResult::anomalyScore, SignalMetricPresentation::strength)
-        val priceAction = readableMetricColumn("Price action", SignalMetricPresentation::priceActionSeverity, SignalMetricPresentation::priceAction)
-        val volume = readableMetricColumn("Volume", SignalMetricPresentation::volumeSeverity, SignalMetricPresentation::volume)
-        val age = signalColumn("Age", ScanResult::signalWindowLabel)
-        val feed = signalColumn("Feed", ScanResult::dataStatus)
-        val turnover = numberColumn("Turnover", { convertPrice(it.symbol, it.sessionTurnover) }, ::compactMoney)
-        val updated = updatedColumn(ScanResult::updatedAtMillis) { time.format(Instant.ofEpochMilli(it)) }
+        val symbol = columnFactory.symbol()
+        val signal = columnFactory.signal("Signal", ScanResult::signalSource)
+        val move = columnFactory.number("Move 10m", ScanResult::windowChangePercent, ::percent)
+        val price = columnFactory.number("Price", { convertPrice(it.symbol, it.price) }) { "${currency.symbol}%,.2f".format(it) }
+        val scoreColumn = columnFactory.metric("Strength", ScanResult::anomalyScore, SignalMetricPresentation::strength)
+        val priceAction = columnFactory.metric("Price action", SignalMetricPresentation::priceActionSeverity, SignalMetricPresentation::priceAction)
+        val volume = columnFactory.metric("Volume", SignalMetricPresentation::volumeSeverity, SignalMetricPresentation::volume)
+        val age = columnFactory.signal("Age", ScanResult::signalWindowLabel)
+        val feed = columnFactory.signal("Feed", ScanResult::dataStatus)
+        val turnover = columnFactory.number("Turnover", { convertPrice(it.symbol, it.sessionTurnover) }, ::compactMoney)
+        val updated = columnFactory.updated { time.format(Instant.ofEpochMilli(it)) }
         autoFitter = TableColumnAutoFitter(table, listOf(
-            TableColumnAutoFitter.Spec(symbol, { companyNames[it.symbol] ?: it.symbol }, 120.0, 460.0, flexible = true, reserveWidth = 32.0),
+            TableColumnAutoFitter.Spec(symbol, columnFactory::companyName, 120.0, 460.0, flexible = true, reserveWidth = 32.0),
             TableColumnAutoFitter.Spec(signal, ScanResult::signalSource, 74.0, 190.0),
             TableColumnAutoFitter.Spec(move, { percent(it.windowChangePercent) }, 82.0, 130.0, reserveWidth = 8.0),
             TableColumnAutoFitter.Spec(price, { "${currency.symbol}%,.2f".format(convertPrice(it.symbol, it.price)) }, 72.0, 135.0, reserveWidth = 8.0),
@@ -145,6 +139,7 @@ class ScannerPanel(
             TableColumnAutoFitter.Spec(turnover, { compactMoney(convertPrice(it.symbol, it.sessionTurnover)) }, 88.0, 145.0, reserveWidth = 8.0),
             TableColumnAutoFitter.Spec(updated, { time.format(Instant.ofEpochMilli(it.updatedAtMillis)) }, 88.0, 125.0, reserveWidth = 8.0)
         ))
+        columnFactory.onContentChanged = autoFitter::request
         scoreColumn.sortType = TableColumn.SortType.DESCENDING
         table.sortOrder += scoreColumn
         table.setOnSort {
@@ -157,14 +152,14 @@ class ScannerPanel(
             TableRow<ScanResult>().apply {
                 setOnMouseClicked { e -> if (!isEmpty && e.button == MouseButton.PRIMARY && e.clickCount == 1) onOpen(item) }
                 contextMenu = ContextMenu(
-                    MenuItem("Copy company name").apply { setOnAction { item?.let { copyText(companyNames[it.symbol] ?: it.symbol) } } },
+                    MenuItem("Copy company name").apply { setOnAction { item?.let { copyText(columnFactory.companyName(it)) } } },
                     MenuItem("Copy ticker").apply { setOnAction { item?.let { copyText(it.symbol) } } }
                 )
             }
         }
         table.setOnKeyPressed { event ->
             if (event.code == KeyCode.C && event.isShortcutDown) {
-                table.selectionModel.selectedItem?.let { copyText(companyNames[it.symbol] ?: it.symbol) }
+                table.selectionModel.selectedItem?.let { copyText(columnFactory.companyName(it)) }
                 event.consume()
             }
         }
@@ -285,206 +280,6 @@ class ScannerPanel(
             -mimi-table-grid: ${value.gridColor};
         """.trimIndent()
         table.refresh(); autoFitter.request()
-    }
-
-    private fun signalColumn(title: String = "Signal", value: (ScanResult) -> String): TableColumn<ScanResult, String> {
-        log.debug(LogTag.UI, "signalColumn(title={})", title)
-        return TableColumn<ScanResult, String>(title).apply {
-            setCellValueFactory { ReadOnlyObjectWrapper(value(it.value)) }
-            setCellFactory {
-                object : TableCell<ScanResult, String>() {
-                    override fun updateItem(item: String?, empty: Boolean) {
-                        super.updateItem(item, empty)
-                        val result = tableRow?.item
-                        if (empty || item == null || result == null) {
-                            text = null
-                            style = ""
-                            tooltip = null
-                            return
-                        }
-                        val visual = signalVisual(result)
-                        text = item
-                        style = "-fx-text-fill: ${visual.color}; -fx-font-weight: ${visual.weight};"
-                        tooltip = Tooltip(visual.description).apply { showDelay = Duration.millis(450.0) }
-                    }
-                }
-            }
-            isResizable = true
-            isReorderable = true
-            prefWidth = 115.0
-            minWidth = 55.0
-            table.columns += this
-        }
-    }
-
-    private fun signalVisual(result: ScanResult): SignalVisual {
-        val down = result.signalSource.contains('↓')
-        val directionalColor = if (down) "#c43d4b" else "#138a55"
-        val weakColor = if (down) "#a9787d" else "#668b72"
-        return when {
-            result.signalAgeMinutes > 0 -> SignalVisual("#7b8189", 400,
-                "Old signal · ${result.signalAgeMinutes} minute(s) ago")
-            result.signalSource.contains("relaxed", ignoreCase = true) -> SignalVisual("#ad7100", 500,
-                "Questionable signal · accepted only by relaxed statistical thresholds")
-            result.signalSource.startsWith("Trend") && kotlin.math.abs(result.windowChangePercent) < 0.90 ->
-                SignalVisual(weakColor, 500, "Weak current trend · direction is active but close to the minimum threshold")
-            result.anomalyScore < 1.25 -> SignalVisual("#ad7100", 500,
-                "Questionable signal · low composite confidence")
-            else -> SignalVisual(directionalColor, 600,
-                if (down) "Strong current downward movement" else "Strong current upward movement")
-        }
-    }
-
-    private data class SignalVisual(val color: String, val weight: Int, val description: String)
-
-    private fun readableMetricColumn(
-        title: String,
-        sortValue: (ScanResult) -> Double,
-        metric: (ScanResult) -> SignalMetric
-    ): TableColumn<ScanResult, ScanResult> = TableColumn<ScanResult, ScanResult>(title).apply {
-        setCellValueFactory { ReadOnlyObjectWrapper(it.value) }
-        comparator = Comparator { left, right -> sortValue(left).compareTo(sortValue(right)) }
-        isSortable = true
-        setCellFactory {
-            object : TableCell<ScanResult, ScanResult>() {
-                override fun updateItem(item: ScanResult?, empty: Boolean) {
-                    super.updateItem(item, empty)
-                    if (empty || item == null) {
-                        text = null; style = ""; tooltip = null
-                        return
-                    }
-                    val value = metric(item)
-                    text = value.label
-                    style = "-fx-text-fill: ${value.color}; -fx-font-weight: ${value.weight};"
-                    tooltip = Tooltip(value.details).apply { showDelay = Duration.millis(350.0) }
-                }
-            }
-        }
-        isResizable = true; isReorderable = true; prefWidth = 125.0; minWidth = 82.0
-        table.columns += this
-    }
-
-    private fun numberColumn(
-        title: String,
-        value: (ScanResult) -> Double,
-        format: (Double) -> String
-    ): TableColumn<ScanResult, Number> {
-        log.debug(LogTag.UI, "numberColumn(title={})", title)
-        return TableColumn<ScanResult, Number>(title).apply {
-            setCellValueFactory { ReadOnlyDoubleWrapper(value(it.value)) }
-            comparator = Comparator { left, right -> left.toDouble().compareTo(right.toDouble()) }
-            isSortable = true
-            setCellFactory { object : TableCell<ScanResult, Number>() {
-                override fun updateItem(item: Number?, empty: Boolean) {
-                    super.updateItem(item, empty)
-                    val value = item?.toDouble()
-                    text = if (empty || value == null) null else if (value.isFinite()) format(value) else "—"
-                }
-            } }
-            isResizable = true; isReorderable = true; prefWidth = 115.0; minWidth = 55.0
-            table.columns += this
-        }
-    }
-
-    private fun updatedColumn(
-        value: (ScanResult) -> Long,
-        format: (Long) -> String
-    ): TableColumn<ScanResult, Number> = TableColumn<ScanResult, Number>("Updated").apply {
-        setCellValueFactory { ReadOnlyLongWrapper(value(it.value)) }
-        setCellFactory { object : TableCell<ScanResult, Number>() {
-            override fun updateItem(item: Number?, empty: Boolean) {
-                super.updateItem(item, empty); text = if (empty || item == null) null else format(item.toLong())
-            }
-        } }
-        isResizable = true; isReorderable = true; prefWidth = 105.0; minWidth = 75.0
-        table.columns += this
-    }
-
-    private fun symbolColumn(): TableColumn<ScanResult, String> {
-        log.debug(LogTag.UI, "symbolColumn()")
-        val column = TableColumn<ScanResult, String>("Symbol").apply {
-            setCellValueFactory { ReadOnlyObjectWrapper(it.value.symbol) }
-            setCellFactory {
-                object : TableCell<ScanResult, String>() {
-                    private var renderedSymbol: String? = null
-
-                    override fun updateItem(symbol: String?, empty: Boolean) {
-                        super.updateItem(symbol, empty)
-                        if (empty || symbol == null) {
-                            renderedSymbol = null
-                            text = null
-                            graphic = null
-                            tooltip = null
-                            return
-                        }
-
-                        renderedSymbol = symbol
-                        text = symbol
-                        contentDisplay = ContentDisplay.LEFT
-                        graphic = logoBadge(symbol, null, 22.0)
-                        tooltip = companyTooltip(symbol, null)
-                        loadProfile?.invoke(symbol)?.whenComplete(BiConsumer<CompanyProfile?, Throwable?> { profile, error ->
-                            if (error == null && profile != null) Platform.runLater {
-                                companyNames[symbol] = profile.name
-                                if (renderedSymbol == symbol && item == symbol) {
-                                    text = profile.name
-                                    graphic = logoBadge(symbol, profile.logoBytes, 22.0)
-                                    tooltip = companyTooltip(symbol, profile)
-                                    autoFitter.request()
-                                }
-                            }
-                        })
-                    }
-                }
-            }
-            isResizable = true
-            isReorderable = true
-            prefWidth = 210.0
-            minWidth = 120.0
-        }
-        table.columns += column
-        return column
-    }
-
-    private fun companyTooltip(symbol: String, profile: CompanyProfile?): Tooltip {
-        log.debug(LogTag.UI, "companyTooltip(symbol={}, loaded={})", symbol, profile != null)
-        val name = profile?.name ?: "Loading company details…"
-        val exchange = profile?.exchange ?: "Loading exchange…"
-        val details = VBox(2.0,
-            Label(name).apply { styleClass += "company-tooltip-name" },
-            Label("Ticker: $symbol").apply { styleClass += "company-tooltip-exchange" },
-            Label("Exchange: $exchange").apply { styleClass += "company-tooltip-exchange" }
-        )
-        val card = HBox(9.0, logoBadge(symbol, profile?.logoBytes, 38.0), details).apply {
-            alignment = Pos.CENTER_LEFT
-        }
-        return Tooltip().apply {
-            graphic = card
-            showDelay = Duration.seconds(2.0)
-            hideDelay = Duration.millis(150.0)
-            styleClass += "company-tooltip"
-        }
-    }
-
-    private fun logoBadge(symbol: String, logoBytes: ByteArray?, size: Double): StackPane {
-        log.debug(LogTag.UI, "logoBadge(symbol={}, hasLogo={}, size={})", symbol, logoBytes != null, size)
-        val placeholder = Label(symbol.take(1)).apply {
-            minWidth = size; prefWidth = size; maxWidth = size
-            minHeight = size; prefHeight = size; maxHeight = size
-            alignment = Pos.CENTER
-            style = "-fx-background-color: #dce5f0; -fx-background-radius: ${size / 2}; -fx-text-fill: #17365f; -fx-font-weight: 500;"
-        }
-        return StackPane(placeholder).apply {
-            minWidth = size; prefWidth = size; maxWidth = size
-            minHeight = size; prefHeight = size; maxHeight = size
-            logoBytes?.let { bytes ->
-                val image = logoImages.computeIfAbsent(symbol) { Image(ByteArrayInputStream(bytes)) }
-                children += ImageView(image).apply {
-                    fitWidth = size; fitHeight = size; isPreserveRatio = true; isSmooth = true
-                    styleClass += "company-logo"
-                }
-            }
-        }
     }
 
     private fun percent(value: Double?) = value?.let { "%+.2f%%".format(it) } ?: "N/A"

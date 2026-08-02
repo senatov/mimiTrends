@@ -1,25 +1,17 @@
 package org.senatov.mimitrends
 
 import javafx.application.Platform
-import javafx.geometry.Insets
-import javafx.geometry.Pos
 import javafx.scene.Parent
 import javafx.scene.control.*
 import javafx.scene.layout.*
-import javafx.scene.image.Image
-import javafx.scene.image.ImageView
 import org.senatov.mimitrends.charts.TrendChartView
 import org.senatov.mimitrends.db.MarketRepository
 import org.senatov.mimitrends.db.AnalyticsRepository
-import org.senatov.mimitrends.db.InstrumentMetadata
-import org.senatov.mimitrends.db.CorporateAction
 import org.senatov.mimitrends.log.LogTag
 import org.senatov.mimitrends.model.MinuteBar
-import org.senatov.mimitrends.model.CompanyProfile
 import org.senatov.mimitrends.model.MarketRegion
 import org.senatov.mimitrends.model.ScannerCriteria
 import org.senatov.mimitrends.model.ScanResult
-import org.senatov.mimitrends.model.MarketTimeZone
 import org.senatov.mimitrends.scanner.ScannerEngine
 import org.senatov.mimitrends.scanner.ScannerSettingsService
 import org.senatov.mimitrends.scanner.MarketCalendar
@@ -29,9 +21,6 @@ import org.senatov.mimitrends.ws.FinnhubMinuteAggregator
 import org.senatov.mimitrends.marketdata.YahooFinanceClient
 import org.senatov.mimitrends.marketdata.CompanyLogoClient
 import org.slf4j.LoggerFactory
-import java.io.PrintWriter
-import java.io.StringWriter
-import java.time.ZonedDateTime
 import javafx.util.Duration
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.Executors
@@ -60,9 +49,7 @@ class MainController(
     private val settingsButton = Button("⚙")
     private val aboutButton = Button("ⓘ")
     private val importTradesButton = Button("⇩")
-    private val statusLabel = Label()
-    private val errorDetailsButton = Button("!")
-    private var lastErrorDetails: String? = null
+    private val requestStatus = RequestStatusPane { selectedRangeValue }
     private val trendChart = TrendChartView()
     private val scannerSettings = ScannerSettingsService()
     private var scannerCriteria: ScannerCriteria = scannerSettings.load()
@@ -83,6 +70,7 @@ class MainController(
     private val contentSplitPane = SplitPane()
     private var finnhubClient: FinnhubWebSocketClient? = null
     private val liveTicks = ConcurrentHashMap<String, Long>()
+    private val marketData = MarketDataService(repository, analytics, scannerEngine, yahooFinance, ::dataStatus)
     private val liveAggregator = FinnhubMinuteAggregator { bar ->
         repository.upsertMinuteBar(bar)
         liveTicks[bar.symbol] = System.currentTimeMillis()
@@ -97,67 +85,18 @@ class MainController(
         ToolbarIconButton.configure(settingsButton, "Scanner and currency settings")
         settingsButton.setOnAction { showScannerSettings() }
         ToolbarIconButton.configure(aboutButton, "About MiMiTrends")
-        aboutButton.setOnAction { showAbout() }
+        aboutButton.setOnAction { AboutDialog.show(aboutButton.scene?.window) }
         ToolbarIconButton.configure(importTradesButton, "Import Scalable transactions CSV")
         importTradesButton.setOnAction { scalableImport.chooseAndImport(importTradesButton.scene?.window, ::handleScalableImport) }
 
-        val titleIdentity = HBox(
-                6.0,
-                Label("MiMiTrends").apply { styleClass += "app-title" },
-                Label("v${BuildInfo.version}").apply { styleClass += "app-version" }
-            ).apply { alignment = Pos.BASELINE_LEFT }
-        val titleActions = HBox(
-            8.0,
-            refreshButton,
-            settingsButton,
-            importTradesButton,
-            aboutButton
-        ).apply { alignment = Pos.CENTER_RIGHT }
-        val titleBar = StackPane(titleIdentity, buildBadge(), titleActions).apply {
-            styleClass += "title-toolbar"
-            StackPane.setAlignment(titleIdentity, Pos.CENTER_LEFT)
-            StackPane.setAlignment(children[1], Pos.CENTER)
-            StackPane.setAlignment(titleActions, Pos.CENTER_RIGHT)
-        }
-
-        contentSplitPane.apply {
-            orientation = javafx.geometry.Orientation.VERTICAL
-            items.setAll(scannerPanel, trendChart)
-            SplitPane.setResizableWithParent(scannerPanel, true)
-            SplitPane.setResizableWithParent(trendChart, true)
-            styleClass += "content-split-pane"
-        }
-        Platform.runLater { contentSplitPane.setDividerPosition(0, initialDivider) }
-
-        val content = VBox(contentSplitPane).apply {
-            padding = Insets(22.0, 24.0, 16.0, 24.0)
-            VBox.setVgrow(contentSplitPane, Priority.ALWAYS)
-        }
-
-        errorDetailsButton.apply {
-            styleClass += "error-details-button"
-            tooltip = Tooltip("Show complete error log")
-            isVisible = false
-            isManaged = false
-            setOnAction { showErrorDetails() }
-        }
-        val requestStatusBar = HBox(8.0, statusLabel, spacer(), errorDetailsButton).apply {
-            alignment = Pos.CENTER_LEFT
-            styleClass += "request-status-bar"
-        }
-        val toolbar = VBox(titleBar, requestStatusBar)
-        val root = BorderPane(content, toolbar, null, null, null)
-        root.styleClass += "app-root"
-        val appLayers = StackPane(root, scannerPanel.marketClosedOverlay).apply {
-            styleClass += "app-layers"
-            StackPane.setAlignment(scannerPanel.marketClosedOverlay, Pos.CENTER)
-        }
+        val appLayers = MainViewFactory.create(refreshButton, settingsButton, importTradesButton,
+            aboutButton, scannerPanel, trendChart, contentSplitPane, requestStatus, initialDivider)
 
         apiKey?.takeIf(String::isNotBlank)?.let(::restartFinnhubLive)
         analytics.applyRetention()
         batchScheduler.execute {
-            ensureCachedInstrumentMetadata()
-            if (analytics.stats().aggregateBars == 0L) backfillCachedAnalytics()
+            marketData.ensureCachedInstrumentMetadata()
+            if (analytics.stats().aggregateBars == 0L) marketData.backfillCachedAnalytics()
         }
         startScanner()
         Platform.runLater { loadLocalChart(currentSymbol) }
@@ -189,36 +128,8 @@ class MainController(
                 importTradesButton.isDisable = false
                 log.warn(LogTag.DB, "Scalable CSV import failed path={}", event.path, event.error)
                 setStatus("Scalable import failed: ${event.error.message}", true,
-                    formatErrorLog("Import ${event.path}", event.error))
+                    requestStatus.formatError("Import ${event.path}", event.error))
             }
-        }
-    }
-
-    private fun buildBadge(): HBox {
-        val icon = javaClass.getResourceAsStream("/icons/icon_128x128.png")?.use { stream ->
-            ImageView(Image(stream)).apply {
-                fitWidth = 30.0
-                fitHeight = 30.0
-                isPreserveRatio = true
-                styleClass += "build-badge-icon"
-            }
-        } ?: ImageView()
-        return HBox(
-            7.0,
-            icon,
-            VBox(
-                0.0,
-                Label(BuildInfo.buildType).apply { styleClass += "build-badge-type" },
-                Label("${BuildInfo.buildTime} · #${BuildInfo.buildNumber} at Host: ${BuildInfo.buildHost}").apply {
-                    styleClass += "build-badge-details"
-                }
-            ).apply { alignment = Pos.CENTER_LEFT }
-        ).apply {
-            alignment = Pos.CENTER_LEFT
-            styleClass += "build-badge"
-            Tooltip.install(this, Tooltip(
-                "MiMiTrends ${BuildInfo.displayVersion}\nBuilt ${BuildInfo.buildTime} on ${BuildInfo.buildHost}"
-            ))
         }
     }
 
@@ -268,7 +179,7 @@ class MainController(
                     "${it.symbol} · ${MARKET_OPEN_FORMAT.format(local)}"
                 } ?: "market schedule unavailable"
                 val persisted = analytics.loadLatestPublishedResults(criteria.resultLimit)
-                val saved = if (persisted.isNotEmpty()) persisted else closedMarketSnapshot(criteria)
+                val saved = if (persisted.isNotEmpty()) persisted else marketData.closedMarketSnapshot(selectedMarketSymbols(), criteria)
                 val userZone = java.time.ZoneId.systemDefault()
                 val hoursFormat = java.time.format.DateTimeFormatter.ofPattern("EEE HH:mm")
                 val timeFormat = java.time.format.DateTimeFormatter.ofPattern("HH:mm")
@@ -309,7 +220,7 @@ class MainController(
             val errors = mutableListOf<String>()
             symbols.forEachIndexed { index, symbol ->
                 if (generation != scanGeneration.get()) return@forEachIndexed
-                runCatching { loadAndEvaluate(symbol, criteria) }
+                runCatching { marketData.loadAndEvaluate(symbol, criteria) }
                     .onSuccess { (primary, fallback) ->
                         val status = dataStatus(symbol)
                         val primaryResult = primary?.copy(dataStatus = status)
@@ -358,115 +269,6 @@ class MainController(
             )
         }
         batchScheduler.execute { runCatching(scan).onFailure { log.error(LogTag.API, "initial Yahoo scan failed", it) } }
-    }
-
-    private fun backfillCachedAnalytics() {
-        val from = java.time.Instant.now().epochSecond - 90 * 86_400L
-        val symbols = repository.listSymbols()
-        log.info(LogTag.DB, "analytics backfill started symbols={}", symbols.size)
-        symbols.forEach { symbol ->
-            runCatching {
-                val bars = repository.loadMinuteBars(symbol, from)
-                if (bars.isNotEmpty()) {
-                    repository.loadCompanyProfile(symbol)?.let { profile -> analytics.upsertInstrument(InstrumentMetadata(
-                        symbol, profile.name, profile.exchange, if (symbol.contains('.')) "EUR" else "USD",
-                        MarketTimeZone.forSymbol(symbol).id
-                    )) }
-                    analytics.refreshDerived(symbol, bars, "SQLITE_BACKFILL")
-                    analytics.recordDataQuality(symbol, "SQLITE_BACKFILL", "CACHE", bars.last().minuteEpochSeconds, bars.size)
-                }
-            }.onFailure { error -> log.warn(LogTag.DB, "analytics backfill failed symbol={}", symbol, error) }
-        }
-        log.info(LogTag.DB, "analytics backfill completed symbols={}", symbols.size)
-    }
-
-    private fun closedMarketSnapshot(criteria: ScannerCriteria): List<ScanResult> {
-        val now = java.time.Instant.now().epochSecond
-        return selectedMarketSymbols().mapNotNull { symbol ->
-            runCatching {
-                val bars = repository.loadMinuteBars(symbol, now - 30 * 86_400L)
-                val result = scannerEngine.evaluate(symbol, bars, criteria)
-                    ?: scannerEngine.evaluateFallback(symbol, bars, criteria)
-                    ?: return@runCatching null
-                val wallClockAge = ((now - result.updatedAtMillis / 1_000L) / 60L).toInt().coerceAtLeast(1)
-                result.copy(signalAgeMinutes = wallClockAge, dataStatus = "CLOSED CACHE",
-                    signalWindowLabel = "${result.signalWindowLabel} saved")
-            }.getOrNull()
-        }.sortedByDescending(ScanResult::anomalyScore).take(criteria.resultLimit)
-    }
-
-    private fun ensureCachedInstrumentMetadata() {
-        repository.listSymbols().forEach { symbol ->
-            val profile = repository.loadCompanyProfile(symbol)
-            analytics.upsertInstrument(InstrumentMetadata(
-                symbol = symbol,
-                name = profile?.name ?: symbol,
-                exchange = profile?.exchange ?: if (symbol.contains('.')) "EUROPE" else "US",
-                currency = if (symbol.contains('.')) "EUR" else "USD",
-                timezone = MarketTimeZone.forSymbol(symbol).id,
-                aliases = symbol.substringBefore('.').takeIf { it != symbol }
-            ))
-        }
-    }
-
-    private fun loadAndEvaluate(symbol: String, criteria: ScannerCriteria): Pair<ScanResult?, ScanResult?> {
-        log.debug(LogTag.API, "loadAndEvaluate(symbol={})", symbol)
-        val now = java.time.Instant.now().epochSecond
-        val freshAfter = now - criteria.scanIntervalSeconds
-        val cached = repository.loadMinuteBars(symbol, now - 7 * 86_400)
-        val latestLocal = cached.lastOrNull()?.minuteEpochSeconds
-        val cachedSessions = cached.map { it.minuteEpochSeconds / 86_400L }.distinct().size
-        val needsBootstrap = cachedSessions < 2
-        val localFresh = !needsBootstrap && latestLocal != null && latestLocal >= freshAfter
-        var source = "SQLITE"
-        val bars = if (localFresh) {
-            log.debug(LogTag.DB, "using fresh SQLite bars symbol={}", symbol)
-            cached
-        } else {
-            source = "YAHOO"
-            // Yahoo permits one-minute history only for a short recent window. An old cache is
-            // refreshed with the normal five-day bootstrap instead of an invalid long request.
-            val incrementalAfter = if (needsBootstrap) null else latestLocal?.takeIf { it >= now - 7 * 86_400 }
-            if (needsBootstrap) log.debug(LogTag.DB, "bootstrapping historical baseline symbol={} cachedSessions={}", symbol, cachedSessions)
-            val series = yahooFinance.loadIntraday(symbol, incrementalAfter)
-            series.bars.forEach(repository::upsertMinuteBar)
-            val oldProfile = repository.loadCompanyProfile(symbol)
-            repository.upsertCompanyProfile(CompanyProfile(
-                symbol, series.companyName, series.exchange, oldProfile?.logoUrl,
-                oldProfile?.logoBytes, System.currentTimeMillis()
-            ))
-            analytics.upsertInstrument(InstrumentMetadata(
-                symbol = symbol, name = series.companyName, exchange = series.exchange,
-                currency = series.currency.ifBlank { if (symbol.contains('.')) "EUR" else "USD" },
-                timezone = MarketTimeZone.forSymbol(symbol).id
-            ))
-            series.events.forEach { event -> analytics.upsertCorporateAction(CorporateAction(
-                symbol = symbol, actionType = event.type, effectiveEpochSeconds = event.epochSeconds,
-                ratio = event.ratio, amount = event.amount, currency = event.currency, source = "YAHOO"
-            )) }
-            repository.loadMinuteBars(symbol, now - 30 * 86_400)
-        }
-        val lastCompletedMinute = now / 60L * 60L - 60L
-        val completed = bars.filter { it.minuteEpochSeconds <= lastCompletedMinute }
-        if (source == "SQLITE") repository.loadCompanyProfile(symbol)?.let { profile ->
-            analytics.upsertInstrument(InstrumentMetadata(
-                symbol = symbol, name = profile.name, exchange = profile.exchange,
-                currency = if (symbol.contains('.')) "EUR" else "USD",
-                timezone = MarketTimeZone.forSymbol(symbol).id
-            ))
-        }
-        if (dataStatus(symbol) == "LIVE") source = "FINNHUB"
-        analytics.recordDataQuality(symbol, source, dataStatus(symbol), completed.lastOrNull()?.minuteEpochSeconds, completed.size)
-        analytics.refreshDerived(symbol, completed, source)
-        completed.lastOrNull()?.let { analytics.recordSignalOutcomes(symbol, it.close, it.minuteEpochSeconds) }
-        val primary = scannerEngine.evaluate(symbol, completed, criteria)
-        val fallback = if (primary == null) scannerEngine.evaluateFallback(symbol, completed, criteria) else null
-        return primary to fallback
-    }
-
-    private fun isMarketOpen(symbol: String, instant: java.time.Instant = java.time.Instant.now()): Boolean {
-        log.trace(LogTag.STATE, "isMarketOpen(symbol={})", symbol)
-        return MarketCalendar.isOpen(symbol, instant)
     }
 
     private fun selectedMarketSymbols(): List<String> {
@@ -534,7 +336,7 @@ class MainController(
     private fun dataStatus(symbol: String): String {
         val liveAt = liveTicks[symbol]
         if (liveAt != null && System.currentTimeMillis() - liveAt <= 180_000L) return "LIVE"
-        if (!isMarketOpen(symbol)) return "CACHE"
+        if (!MarketCalendar.isOpen(symbol)) return "CACHE"
         return when {
             !symbol.contains('.') -> "YAHOO RT"
             symbol.endsWith(".MI") -> "DELAYED 20m"
@@ -544,80 +346,11 @@ class MainController(
         }
     }
 
-    private fun showAbout() {
-        log.debug(LogTag.UI, "showAbout()")
-        Dialog<ButtonType>().apply {
-            aboutButton.scene?.window?.let(::initOwner)
-            title = "About MiMiTrends"
-            dialogPane.buttonTypes.setAll(ButtonType.OK)
-            dialogPane.headerText = "MiMiTrends ${BuildInfo.displayVersion}"
-            javaClass.getResourceAsStream("/icons/icon_128x128.png")?.use { stream ->
-                dialogPane.graphic = ImageView(Image(stream)).apply {
-                    fitWidth = 72.0; fitHeight = 72.0; isPreserveRatio = true
-                }
-            }
-            dialogPane.content = TabPane(
-                aboutTab("Overview", """
-                    Local-first fresh market impulse scanner for macOS, Linux, and Windows.
-
-                    Market history    Yahoo Finance and SQLite
-                    Live market data  Finnhub WebSocket (optional, user-owned API key)
-                    Currency rates    European Central Bank
-                    Local database    ~/.mimi/trends/mimitrends.db
-                    Settings          ~/.mimi/trends/
-                    Log file          /tmp/MiMiTrends.log
-
-                    Read-only demonstration application. It does not place orders.
-                    © 2026 MiMiTrends
-                """.trimIndent()),
-                aboutTab("Libraries", """
-                    Kotlin Standard Library ${KotlinVersion.CURRENT} — Apache License 2.0
-                    JavaFX ${System.getProperty("javafx.runtime.version", "26")} — GPLv2 with Classpath Exception
-                    AtlantaFX 2.1.0 — MIT License
-                    JFreeChart 1.5.6 — LGPL 2.1 or later
-                    JFreeChart-FX 2.0.2 — LGPL 2.1 or later
-                    SQLite JDBC 3.50.3.0 — Apache License 2.0
-                    Jackson Databind 2.22.1 — Apache License 2.0
-                    SLF4J API 2.0.17 — MIT License
-                    Apache Log4j 2.26.1 — Apache License 2.0
-
-                    Data and branding services are not bundled libraries. Their availability and
-                    terms are governed by the respective providers.
-                """.trimIndent()),
-                aboutTab("System", """
-                    Application       ${BuildInfo.displayVersion}
-                    Build type        ${BuildInfo.buildType}
-                    Built             ${BuildInfo.buildTime}
-                    Build host        ${BuildInfo.buildHost}
-                    Java runtime      ${System.getProperty("java.runtime.version")}
-                    Java VM           ${System.getProperty("java.vm.name")}
-                    JavaFX runtime    ${System.getProperty("javafx.runtime.version", "26")}
-                    Operating system  ${System.getProperty("os.name")} ${System.getProperty("os.version")}
-                    Architecture      ${System.getProperty("os.arch")}
-                    Locale            ${java.util.Locale.getDefault().toLanguageTag()}
-                """.trimIndent())
-            ).apply { tabClosingPolicy = TabPane.TabClosingPolicy.UNAVAILABLE }
-            dialogPane.prefWidth = 680.0
-            dialogPane.prefHeight = 520.0
-            isResizable = true
-            setResultConverter { it }
-        }.showAndWait()
-    }
-
-    private fun aboutTab(title: String, text: String): Tab {
-        log.debug(LogTag.UI, "aboutTab(title={})", title)
-        return Tab(title, TextArea(text).apply {
-            isEditable = false
-            isWrapText = true
-            style = "-fx-font-family: 'SF Pro Display'; -fx-font-size: 13px;"
-        })
-    }
-
     private fun loadLocalChart(symbol: String) {
         log.debug(LogTag.UI, "loadLocalChart(symbol={})", symbol)
         if (symbol.isBlank()) return
         setLoading(true)
-        val days = selectedDays()
+        val days = ChartRange.days(selectedRangeValue)
         setStatus("Requesting SQLite: $symbol · $selectedRangeValue")
         CompletableFuture.supplyAsync {
             repository.loadMinuteBars(symbol, java.time.Instant.now().minusSeconds(days * 86_400).epochSecond) to
@@ -627,7 +360,7 @@ class MainController(
                     setLoading(false)
                     if (error != null) {
                         log.error(LogTag.DB, "local chart load failed symbol={}", symbol, error)
-                        setStatus("SQLite read failed: ${error.message ?: "unknown error"}", true, formatErrorLog(symbol, error))
+                        setStatus("SQLite read failed: ${error.message ?: "unknown error"}", true, requestStatus.formatError(symbol, error))
                     } else if (chartData != null && chartData.first.isNotEmpty()) {
                         val bars = chartData.first
                         val currency = scannerCriteria.displayCurrency
@@ -644,18 +377,6 @@ class MainController(
             })
     }
 
-    private fun selectedDays(): Long {
-        log.debug(LogTag.UI, "selectedDays(range={})", selectedRangeValue)
-        return when (selectedRangeValue) {
-        "1D" -> 1
-        "5D" -> 5
-        "1M" -> 30
-        "6M" -> 180
-        "1Y" -> 365
-        else -> 90
-        }
-    }
-
     private fun setLoading(value: Boolean) {
         log.debug(LogTag.UI, "setLoading(value={})", value)
         trendChart.setLoading(value)
@@ -669,63 +390,11 @@ class MainController(
 
     private fun setStatus(message: String, error: Boolean, details: String?) {
         log.debug(LogTag.UI, "setStatus(message={}, error={}, details={})", message, error, details != null)
-        statusLabel.text = message
-        statusLabel.styleClass.removeAll("status-error")
-        if (error) statusLabel.styleClass += "status-error"
-        lastErrorDetails = details
-        errorDetailsButton.isVisible = error && !details.isNullOrBlank()
-        errorDetailsButton.isManaged = errorDetailsButton.isVisible
-    }
-
-    private fun showErrorDetails() {
-        log.debug(LogTag.UI, "showErrorDetails()")
-        val details = lastErrorDetails ?: return
-        val textArea = TextArea(details).apply {
-            isEditable = false
-            isWrapText = false
-            prefColumnCount = 100
-            prefRowCount = 28
-            styleClass += "error-log-area"
-        }
-        Dialog<ButtonType>().apply {
-            errorDetailsButton.scene?.window?.let(::initOwner)
-            title = "MiMiTrends error log"
-            headerText = statusLabel.text
-            dialogPane.content = textArea
-            dialogPane.buttonTypes += ButtonType.CLOSE
-            isResizable = true
-        }.showAndWait()
-    }
-
-    private fun formatErrorLog(query: String, error: Throwable?, message: String? = null): String {
-        log.debug(LogTag.UI, "formatErrorLog(query={}, hasError={})", query, error != null)
-        val stackTrace = if (error == null) {
-            message ?: "No exception stack trace is available."
-        } else {
-            StringWriter().also { writer -> error.printStackTrace(PrintWriter(writer)) }.toString()
-        }
-        return buildString {
-            appendLine("MiMiTrends error report")
-            appendLine("Time: ${ZonedDateTime.now()}")
-            appendLine("Query: $query")
-            appendLine("Range: $selectedRangeValue")
-            appendLine()
-            append(stackTrace)
-        }
+        requestStatus.update(message, error, details)
     }
 
     private fun displayPrice(symbol: String, value: Double): Double {
-        log.trace(LogTag.UI, "displayPrice(symbol={}, value={})", symbol, value)
-        val sourceIsEuro = symbol.uppercase().let { it.endsWith(".DE") || it.endsWith(".F") || it.endsWith(".PA") || it.endsWith(".AS") }
-        return when (scannerCriteria.displayCurrency) {
-            org.senatov.mimitrends.model.DisplayCurrency.EUR -> if (sourceIsEuro) value else exchangeRates.usdToEur(value)
-            org.senatov.mimitrends.model.DisplayCurrency.USD -> if (sourceIsEuro) exchangeRates.eurToUsd(value) else value
-        }
-    }
-
-    private fun spacer(): Region {
-        log.debug(LogTag.UI, "spacer()")
-        return Region().also { HBox.setHgrow(it, Priority.ALWAYS) }
+        return exchangeRates.convert(symbol, value, scannerCriteria.displayCurrency)
     }
 
 }
