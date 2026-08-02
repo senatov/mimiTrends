@@ -269,6 +269,16 @@ class MainController(
                 } ?: "market schedule unavailable"
                 val persisted = analytics.loadLatestPublishedResults(criteria.resultLimit)
                 val saved = if (persisted.isNotEmpty()) persisted else closedMarketSnapshot(criteria)
+                val userZone = java.time.ZoneId.systemDefault()
+                val hoursFormat = java.time.format.DateTimeFormatter.ofPattern("EEE HH:mm")
+                val timeFormat = java.time.format.DateTimeFormatter.ofPattern("HH:mm")
+                val marketHours = MarketCalendar.nextTradingHours(selectedSymbols, now).map { hours ->
+                    val open = hours.opensAt.atZone(userZone)
+                    val close = hours.closesAt.atZone(userZone)
+                    val closeText = if (close.toLocalDate() == open.toLocalDate()) timeFormat.format(close) else hoursFormat.format(close)
+                    "${hours.market}  ${hoursFormat.format(open)}–$closeText"
+                }
+                val localZoneName = java.time.format.DateTimeFormatter.ofPattern("z").format(now.atZone(userZone))
                 log.info(LogTag.DB, "closed-market snapshot source={} results={}",
                     if (persisted.isNotEmpty()) "PERSISTED" else "CLOSED_CACHE", saved.size)
                 Platform.runLater {
@@ -276,7 +286,7 @@ class MainController(
                     saved.forEach(scannerPanel::update)
                     scannerPanel.completeScan(criteria.resultLimit)
                     scannerPanel.showCountdown(resumeDelaySeconds)
-                    scannerPanel.showMarketClosed(saved.size, persisted.isNotEmpty(), resumeText)
+                    scannerPanel.showMarketClosed(saved.size, persisted.isNotEmpty(), resumeText, localZoneName, marketHours)
                     setStatus(if (saved.isEmpty())
                         "All selected markets are closed · scanner paused until $resumeText"
                     else if (persisted.isNotEmpty())

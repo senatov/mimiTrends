@@ -12,6 +12,7 @@ import org.senatov.mimitrends.model.MarketTimeZone
 
 object MarketCalendar {
     data class Opening(val symbol: String, val instant: Instant)
+    data class TradingHours(val market: String, val opensAt: Instant, val closesAt: Instant)
 
     fun isOpen(symbol: String, instant: Instant = Instant.now()): Boolean {
         val market = marketFor(symbol)
@@ -38,6 +39,22 @@ object MarketCalendar {
     fun nextOpening(symbols: Collection<String>, instant: Instant = Instant.now()): Opening? = symbols
         .map { Opening(it, nextOpening(it, instant)) }
         .minByOrNull(Opening::instant)
+
+    fun nextTradingHours(symbols: Collection<String>, instant: Instant = Instant.now()): List<TradingHours> = symbols
+        .map(::marketFor)
+        .distinctBy(Market::kind)
+        .map { market ->
+            var date = instant.atZone(market.zone).toLocalDate()
+            while (!isTradingDay(market, date) || !ZonedDateTime.of(date, market.close, market.zone).toInstant().isAfter(instant)) {
+                date = date.plusDays(1)
+            }
+            TradingHours(
+                market = market.label,
+                opensAt = ZonedDateTime.of(date, market.open, market.zone).toInstant(),
+                closesAt = ZonedDateTime.of(date, market.close, market.zone).toInstant()
+            )
+        }
+        .sortedBy(TradingHours::opensAt)
 
     private fun isTradingDay(market: Market, date: LocalDate): Boolean =
         date.dayOfWeek !in setOf(DayOfWeek.SATURDAY, DayOfWeek.SUNDAY) && date !in holidays(market, date.year)
@@ -79,10 +96,10 @@ object MarketCalendar {
     }
 
     private fun marketFor(symbol: String): Market = when {
-        symbol.endsWith(".DE", true) -> Market(Kind.XETRA, MarketTimeZone.forSymbol(symbol), LocalTime.of(9, 0), LocalTime.of(17, 30))
-        symbol.endsWith(".HE", true) -> Market(Kind.HELSINKI, MarketTimeZone.forSymbol(symbol), LocalTime.of(10, 0), LocalTime.of(18, 30))
-        symbol.contains('.') -> Market(Kind.EURONEXT, MarketTimeZone.forSymbol(symbol), LocalTime.of(9, 0), LocalTime.of(17, 30))
-        else -> Market(Kind.US, MarketTimeZone.forSymbol(symbol), LocalTime.of(9, 30), LocalTime.of(16, 0))
+        symbol.endsWith(".DE", true) -> Market(Kind.XETRA, "XETRA", MarketTimeZone.forSymbol(symbol), LocalTime.of(9, 0), LocalTime.of(17, 30))
+        symbol.endsWith(".HE", true) -> Market(Kind.HELSINKI, "HELSINKI", MarketTimeZone.forSymbol(symbol), LocalTime.of(10, 0), LocalTime.of(18, 30))
+        symbol.contains('.') -> Market(Kind.EURONEXT, "EURONEXT", MarketTimeZone.forSymbol(symbol), LocalTime.of(9, 0), LocalTime.of(17, 30))
+        else -> Market(Kind.US, "US", MarketTimeZone.forSymbol(symbol), LocalTime.of(9, 30), LocalTime.of(16, 0))
     }
 
     private fun observed(date: LocalDate): LocalDate = when (date.dayOfWeek) {
@@ -113,6 +130,6 @@ object MarketCalendar {
         return LocalDate.of(year, month, day)
     }
 
-    private data class Market(val kind: Kind, val zone: ZoneId, val open: LocalTime, val close: LocalTime)
+    private data class Market(val kind: Kind, val label: String, val zone: ZoneId, val open: LocalTime, val close: LocalTime)
     private enum class Kind { US, XETRA, EURONEXT, HELSINKI }
 }

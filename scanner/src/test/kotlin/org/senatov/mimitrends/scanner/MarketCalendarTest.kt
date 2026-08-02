@@ -35,4 +35,15 @@ class MarketCalendarTest {
         assertEquals("VNA.DE", opening.symbol)
         assertEquals(Instant.parse("2026-08-03T07:00:00Z"), opening.instant)
     }
+
+    @Test fun `trading hours are unique per market and use next sessions`() {
+        val hours = MarketCalendar.nextTradingHours(
+            listOf("AAPL", "MSFT", "VNA.DE"), Instant.parse("2026-08-02T12:00:00Z")
+        )
+        assertEquals(listOf("XETRA", "US"), hours.map(MarketCalendar.TradingHours::market))
+        assertEquals(Instant.parse("2026-08-03T07:00:00Z"), hours[0].opensAt)
+        assertEquals(Instant.parse("2026-08-03T15:30:00Z"), hours[0].closesAt)
+        assertEquals(Instant.parse("2026-08-03T13:30:00Z"), hours[1].opensAt)
+        assertEquals(Instant.parse("2026-08-03T20:00:00Z"), hours[1].closesAt)
+    }
 }

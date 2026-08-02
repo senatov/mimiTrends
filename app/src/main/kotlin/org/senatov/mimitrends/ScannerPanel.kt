@@ -11,6 +11,7 @@ import javafx.beans.property.ReadOnlyLongWrapper
 import javafx.collections.FXCollections
 import javafx.collections.transformation.SortedList
 import javafx.geometry.Pos
+import javafx.geometry.Insets
 import javafx.scene.image.Image
 import javafx.scene.image.ImageView
 import javafx.scene.control.*
@@ -54,6 +55,14 @@ class ScannerPanel(
     private val marketClosedSubtitle = Label("Saved closing snapshot · not live").apply {
         styleClass += "market-closed-subtitle"
     }
+    private val marketHoursTitle = Label().apply { styleClass += "market-hours-title" }
+    private val marketHoursLabel = Label().apply { styleClass += "market-hours-list" }
+    private val marketHoursPanel = VBox(4.0, marketHoursTitle, marketHoursLabel).apply {
+        alignment = Pos.CENTER_LEFT
+        maxWidth = 180.0
+        isMouseTransparent = true
+        styleClass += "market-hours-panel"
+    }
     private val marketClosedFooter = StackPane(closeMarketOverlayButton).apply {
         alignment = Pos.BOTTOM_CENTER
         maxWidth = Double.MAX_VALUE
@@ -72,6 +81,7 @@ class ScannerPanel(
             alignment = Pos.TOP_CENTER
             styleClass += "market-closed-content"
         },
+        marketHoursPanel,
         marketClosedFooter
     ).apply {
         alignment = Pos.CENTER
@@ -82,6 +92,8 @@ class ScannerPanel(
         isVisible = false
         isManaged = false
         styleClass += "market-closed-overlay"
+        StackPane.setAlignment(marketHoursPanel, Pos.CENTER_LEFT)
+        StackPane.setMargin(marketHoursPanel, Insets(70.0, 0.0, 105.0, 24.0))
         StackPane.setAlignment(marketClosedFooter, Pos.BOTTOM_CENTER)
         marketClosedFooter.prefHeightProperty().bind(heightProperty().multiply(0.15))
     }
@@ -225,7 +237,7 @@ class ScannerPanel(
         })).apply { cycleCount = seconds.coerceAtMost(Int.MAX_VALUE.toLong()).toInt(); play() }
     }
 
-    fun showMarketClosed(snapshotSize: Int, persisted: Boolean, nextOpening: String) {
+    fun showMarketClosed(snapshotSize: Int, persisted: Boolean, nextOpening: String, localZone: String, marketHours: List<String>) {
         cycleStatus.styleClass.remove("market-closed")
         cycleStatus.styleClass += "market-closed"
         cycleStatus.text = "ALL SELECTED MARKETS ARE CLOSED · " + when {
@@ -235,6 +247,10 @@ class ScannerPanel(
         }
         cycleStatus.tooltip = Tooltip("The scanner is not presenting cached closing bars as current market signals.")
         marketClosedSubtitle.text = "Saved closing snapshot · scanner resumes $nextOpening"
+        marketHoursTitle.text = "LOCAL HOURS · $localZone"
+        marketHoursLabel.text = marketHours.joinToString("\n")
+        marketHoursPanel.isVisible = marketHours.isNotEmpty()
+        marketHoursPanel.isManaged = marketHours.isNotEmpty()
         marketClosedOverlay.isVisible = true
         marketClosedOverlay.isManaged = true
         marketClosedOverlay.toFront()
