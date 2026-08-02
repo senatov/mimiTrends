@@ -293,29 +293,27 @@
 .market-hours-panel {
     -fx-padding: 13 15 14 15;
     -fx-background-color:
-        linear-gradient(to bottom right, rgba(255,255,255,0.90), rgba(210,228,242,0.74)),
-        radial-gradient(center 16% 2%, radius 96%, rgba(255,255,255,0.94), rgba(176,205,228,0.24));
+        linear-gradient(to bottom, rgba(255,255,255,0.98) 0%, rgba(235,246,255,0.92) 22%, rgba(188,216,238,0.86) 100%),
+        radial-gradient(center 14% 0%, radius 92%, rgba(255,255,255,1.0), rgba(149,190,222,0.32));
     -fx-background-radius: 16px;
-    -fx-border-color: rgba(255,255,255,0.98), rgba(73,105,132,0.42);
-    -fx-border-insets: 0, 1;
+    -fx-border-color: rgba(255,255,255,1.0), rgba(55,91,122,0.54);
+    -fx-border-insets: 0, 2;
     -fx-border-radius: 16px, 15px;
     -fx-border-width: 1px;
-    -fx-effect: dropshadow(gaussian, rgba(31,54,75,0.25), 18, 0.14, 0, 6);
+    -fx-effect: dropshadow(gaussian, rgba(24,48,70,0.40), 24, 0.18, 0, 9);
 }
 .market-hours-title {
     -fx-font-family: "SF Pro Display", "Helvetica Neue", sans-serif;
     -fx-font-size: 11px;
     -fx-font-weight: 600;
-    -fx-text-fill: #152a3a;
-    -fx-effect: dropshadow(gaussian, rgba(255,255,255,0.74), 1, 0.10, 0, -1);
+    -fx-text-fill: #0b1d2b;
 }
 .market-hours-list {
     -fx-font-family: "Menlo", "SF Mono", "Monospaced";
     -fx-font-size: 12px;
     -fx-font-weight: 600;
     -fx-line-spacing: 6px;
-    -fx-text-fill: #0d2232;
-    -fx-effect: dropshadow(gaussian, rgba(255,255,255,0.66), 1, 0.08, 0, -1);
+    -fx-text-fill: #071925;
 }
 .market-closed-footer {
     -fx-padding: 8 24 14 24;
