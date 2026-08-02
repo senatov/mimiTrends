@@ -55,7 +55,7 @@ class ScannerPanel(
         styleClass += "market-closed-subtitle"
     }
     private val marketClosedFooter = StackPane(closeMarketOverlayButton).apply {
-        alignment = Pos.CENTER
+        alignment = Pos.BOTTOM_CENTER
         maxWidth = Double.MAX_VALUE
         styleClass += "market-closed-footer"
     }
@@ -97,6 +97,7 @@ class ScannerPanel(
     private var convertPrice: (String, Double) -> Double = { _, value -> value }
     private val logoImages = ConcurrentHashMap<String, Image>()
     private val companyNames = ConcurrentHashMap<String, String>()
+    private val autoFitter: TableColumnAutoFitter<ScanResult>
 
     init {
         log.debug(LogTag.UI, "init()")
@@ -104,17 +105,30 @@ class ScannerPanel(
             scanIndicator.apply { styleClass += "scanner-timer" }, cycleStatus.apply { styleClass += "scanner-cycle" },
             javafx.scene.layout.Region().also { javafx.scene.layout.HBox.setHgrow(it, Priority.ALWAYS) })
         sortedRows.comparatorProperty().bind(table.comparatorProperty())
-        symbolColumn()
-        signalColumn("Signal", ScanResult::signalSource)
-        numberColumn("Move 10m", ScanResult::windowChangePercent, ::percent)
-        numberColumn("Price", { convertPrice(it.symbol, it.price) }) { "${currency.symbol}%,.2f".format(it) }
+        val symbol = symbolColumn()
+        val signal = signalColumn("Signal", ScanResult::signalSource)
+        val move = numberColumn("Move 10m", ScanResult::windowChangePercent, ::percent)
+        val price = numberColumn("Price", { convertPrice(it.symbol, it.price) }) { "${currency.symbol}%,.2f".format(it) }
         val scoreColumn = readableMetricColumn("Strength", ScanResult::anomalyScore, SignalMetricPresentation::strength)
-        readableMetricColumn("Price action", SignalMetricPresentation::priceActionSeverity, SignalMetricPresentation::priceAction)
-        readableMetricColumn("Volume", SignalMetricPresentation::volumeSeverity, SignalMetricPresentation::volume)
-        signalColumn("Age", ScanResult::signalWindowLabel)
-        signalColumn("Feed", ScanResult::dataStatus)
-        numberColumn("Turnover", { convertPrice(it.symbol, it.sessionTurnover) }, ::compactMoney)
-        updatedColumn(ScanResult::updatedAtMillis) { time.format(Instant.ofEpochMilli(it)) }
+        val priceAction = readableMetricColumn("Price action", SignalMetricPresentation::priceActionSeverity, SignalMetricPresentation::priceAction)
+        val volume = readableMetricColumn("Volume", SignalMetricPresentation::volumeSeverity, SignalMetricPresentation::volume)
+        val age = signalColumn("Age", ScanResult::signalWindowLabel)
+        val feed = signalColumn("Feed", ScanResult::dataStatus)
+        val turnover = numberColumn("Turnover", { convertPrice(it.symbol, it.sessionTurnover) }, ::compactMoney)
+        val updated = updatedColumn(ScanResult::updatedAtMillis) { time.format(Instant.ofEpochMilli(it)) }
+        autoFitter = TableColumnAutoFitter(table, listOf(
+            TableColumnAutoFitter.Spec(symbol, { companyNames[it.symbol] ?: it.symbol }, 120.0, 460.0, flexible = true, reserveWidth = 32.0),
+            TableColumnAutoFitter.Spec(signal, ScanResult::signalSource, 74.0, 190.0),
+            TableColumnAutoFitter.Spec(move, { percent(it.windowChangePercent) }, 82.0, 130.0, reserveWidth = 8.0),
+            TableColumnAutoFitter.Spec(price, { "${currency.symbol}%,.2f".format(convertPrice(it.symbol, it.price)) }, 72.0, 135.0, reserveWidth = 8.0),
+            TableColumnAutoFitter.Spec(scoreColumn, { SignalMetricPresentation.strength(it).label }, 88.0, 140.0),
+            TableColumnAutoFitter.Spec(priceAction, { SignalMetricPresentation.priceAction(it).label }, 100.0, 190.0),
+            TableColumnAutoFitter.Spec(volume, { SignalMetricPresentation.volume(it).label }, 82.0, 160.0),
+            TableColumnAutoFitter.Spec(age, ScanResult::signalWindowLabel, 72.0, 150.0),
+            TableColumnAutoFitter.Spec(feed, ScanResult::dataStatus, 65.0, 130.0),
+            TableColumnAutoFitter.Spec(turnover, { compactMoney(convertPrice(it.symbol, it.sessionTurnover)) }, 88.0, 145.0, reserveWidth = 8.0),
+            TableColumnAutoFitter.Spec(updated, { time.format(Instant.ofEpochMilli(it.updatedAtMillis)) }, 88.0, 125.0, reserveWidth = 8.0)
+        ))
         scoreColumn.sortType = TableColumn.SortType.DESCENDING
         table.sortOrder += scoreColumn
         table.setOnSort {
@@ -188,6 +202,7 @@ class ScannerPanel(
         log.debug(LogTag.UI, "completeScan(results={})", stagedRows.size)
         rows.setAll(stagedRows.values.sortedByDescending(ScanResult::anomalyScore).take(resultLimit))
         stagedRows.clear(); scanning = false; hourglass?.stop()
+        autoFitter.request()
     }
 
     fun abortScan() {
@@ -234,7 +249,7 @@ class ScannerPanel(
 
     fun setCurrency(value: DisplayCurrency, converter: (String, Double) -> Double) {
         log.debug(LogTag.UI, "setCurrency(currency={})", value)
-        currency = value; convertPrice = converter; table.refresh()
+        currency = value; convertPrice = converter; table.refresh(); autoFitter.request()
     }
 
     fun setAppearance(value: TableAppearance) {
@@ -249,7 +264,7 @@ class ScannerPanel(
             -mimi-selection: ${value.selectionColor};
             -mimi-table-grid: ${value.gridColor};
         """.trimIndent()
-        table.refresh()
+        table.refresh(); autoFitter.request()
     }
 
     private fun signalColumn(title: String = "Signal", value: (ScanResult) -> String): TableColumn<ScanResult, String> {
@@ -365,9 +380,9 @@ class ScannerPanel(
         table.columns += this
     }
 
-    private fun symbolColumn() {
+    private fun symbolColumn(): TableColumn<ScanResult, String> {
         log.debug(LogTag.UI, "symbolColumn()")
-        table.columns += TableColumn<ScanResult, String>("Symbol").apply {
+        val column = TableColumn<ScanResult, String>("Symbol").apply {
             setCellValueFactory { ReadOnlyObjectWrapper(it.value.symbol) }
             setCellFactory {
                 object : TableCell<ScanResult, String>() {
@@ -395,6 +410,7 @@ class ScannerPanel(
                                     text = profile.name
                                     graphic = logoBadge(symbol, profile.logoBytes, 22.0)
                                     tooltip = companyTooltip(symbol, profile)
+                                    autoFitter.request()
                                 }
                             }
                         })
@@ -406,6 +422,8 @@ class ScannerPanel(
             prefWidth = 210.0
             minWidth = 120.0
         }
+        table.columns += column
+        return column
     }
 
     private fun companyTooltip(symbol: String, profile: CompanyProfile?): Tooltip {

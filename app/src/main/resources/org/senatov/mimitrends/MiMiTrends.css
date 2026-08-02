@@ -291,7 +291,7 @@
     -fx-padding: 22 90 0 90;
 }
 .market-closed-footer {
-    -fx-padding: 10 24 12 24;
+    -fx-padding: 8 24 14 24;
     -fx-background-color:
         linear-gradient(to bottom, rgba(247,251,255,0.62), rgba(216,229,241,0.78)),
         radial-gradient(center 50% 0%, radius 100%, rgba(255,255,255,0.72), rgba(255,255,255,0.08));
