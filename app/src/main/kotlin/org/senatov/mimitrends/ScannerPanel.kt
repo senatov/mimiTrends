@@ -22,6 +22,7 @@ import javafx.scene.input.KeyCode
 import javafx.scene.input.KeyEvent
 import javafx.scene.layout.HBox
 import javafx.scene.layout.Priority
+import javafx.scene.layout.Region
 import javafx.scene.layout.StackPane
 import javafx.scene.layout.VBox
 import org.senatov.mimitrends.log.LogTag
@@ -58,8 +59,11 @@ class ScannerPanel(
     private val marketHoursTitle = Label().apply { styleClass += "market-hours-title" }
     private val marketHoursLabel = Label().apply { styleClass += "market-hours-list" }
     private val marketHoursPanel = VBox(4.0, marketHoursTitle, marketHoursLabel).apply {
-        alignment = Pos.CENTER_LEFT
-        maxWidth = 180.0
+        alignment = Pos.TOP_LEFT
+        minWidth = 270.0
+        prefWidth = 270.0
+        maxWidth = 270.0
+        maxHeight = Region.USE_PREF_SIZE
         isMouseTransparent = true
         styleClass += "market-hours-panel"
     }
@@ -92,8 +96,8 @@ class ScannerPanel(
         isVisible = false
         isManaged = false
         styleClass += "market-closed-overlay"
-        StackPane.setAlignment(marketHoursPanel, Pos.CENTER_LEFT)
-        StackPane.setMargin(marketHoursPanel, Insets(70.0, 0.0, 105.0, 24.0))
+        StackPane.setAlignment(marketHoursPanel, Pos.TOP_LEFT)
+        StackPane.setMargin(marketHoursPanel, Insets(108.0, 0.0, 0.0, 28.0))
         StackPane.setAlignment(marketClosedFooter, Pos.BOTTOM_CENTER)
         marketClosedFooter.prefHeightProperty().bind(heightProperty().multiply(0.15))
     }
