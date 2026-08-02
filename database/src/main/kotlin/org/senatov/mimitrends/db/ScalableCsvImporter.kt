@@ -44,7 +44,7 @@ object ScalableCsvImporter {
     }
 
     private fun decimal(value: String, zeroBasedRow: Int): Double = runCatching {
-        value.replace(".", "").replace(',', '.').toDouble()
+        if (value.isBlank()) 0.0 else value.replace(".", "").replace(',', '.').toDouble()
     }.getOrElse { error("Invalid number '$value' on Scalable CSV row ${zeroBasedRow + 2}") }
 
     internal fun parseLine(line: String): List<String> {

@@ -19,16 +19,17 @@ class AnalyticsRepositoryTest {
         Files.writeString(csv, """date;time;status;reference;description;assetType;type;isin;shares;price;amount;fee;tax;currency
 2026-07-31;22:47:47;Executed;"SCAL-1";"Apple";Security;Sell;US0378331005;13;268,1653846154;3.486,1500000002;0,00;0,00;EUR
 2026-07-31;18:25:11;Cancelled;"SCAL-2";"Amazon.com";Security;Buy;US0231351067;0;0,00;0,00;0,00;0,00;EUR
+2026-06-08;02:00:00;Executed;"CASH-1";"Broker deposit";Cash;Deposit;;;;2.000,00;0,00;;EUR
 """)
         val analytics = AnalyticsRepository(database)
         val first = analytics.importScalableTransactions(csv)
         val second = analytics.importScalableTransactions(csv)
-        assertEquals(2, first.parsed)
-        assertEquals(2, first.imported)
+        assertEquals(3, first.parsed)
+        assertEquals(3, first.imported)
         assertEquals(0, first.duplicates)
         assertEquals(0, second.imported)
-        assertEquals(2, second.duplicates)
-        assertEquals(2, analytics.stats().brokerTransactions)
+        assertEquals(3, second.duplicates)
+        assertEquals(3, analytics.stats().brokerTransactions)
         analytics.close()
 
         DriverManager.getConnection("jdbc:sqlite:$database").use { connection ->
@@ -36,6 +37,10 @@ class AnalyticsRepositoryTest {
                 statement.executeQuery("SELECT shares, price, amount FROM broker_transactions WHERE reference='SCAL-1'").use {
                     it.next(); assertEquals(13.0, it.getDouble(1)); assertEquals(268.1653846154, it.getDouble(2), 0.000_000_000_1)
                     assertEquals(3486.1500000002, it.getDouble(3), 0.000_000_000_1)
+                }
+                statement.executeQuery("SELECT shares, price, amount, tax FROM broker_transactions WHERE reference='CASH-1'").use {
+                    it.next(); assertEquals(0.0, it.getDouble(1)); assertEquals(0.0, it.getDouble(2))
+                    assertEquals(2000.0, it.getDouble(3)); assertEquals(0.0, it.getDouble(4))
                 }
             }
         }
