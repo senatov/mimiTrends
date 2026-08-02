@@ -54,6 +54,11 @@ class ScannerPanel(
     private val marketClosedSubtitle = Label("Saved closing snapshot · not live").apply {
         styleClass += "market-closed-subtitle"
     }
+    private val marketClosedFooter = StackPane(closeMarketOverlayButton).apply {
+        alignment = Pos.CENTER
+        maxWidth = Double.MAX_VALUE
+        styleClass += "market-closed-footer"
+    }
     val marketClosedOverlay = StackPane(
         ImageView(Image(requireNotNull(javaClass.getResourceAsStream("/images/sleeping-dog-market-closed.png")))).apply {
             fitWidth = 590.0; fitHeight = 500.0; isPreserveRatio = true
@@ -67,7 +72,7 @@ class ScannerPanel(
             alignment = Pos.TOP_CENTER
             styleClass += "market-closed-content"
         },
-        closeMarketOverlayButton
+        marketClosedFooter
     ).apply {
         alignment = Pos.CENTER
         maxWidth = 680.0
@@ -77,7 +82,8 @@ class ScannerPanel(
         isVisible = false
         isManaged = false
         styleClass += "market-closed-overlay"
-        StackPane.setAlignment(closeMarketOverlayButton, Pos.TOP_RIGHT)
+        StackPane.setAlignment(marketClosedFooter, Pos.BOTTOM_CENTER)
+        marketClosedFooter.prefHeightProperty().bind(heightProperty().multiply(0.15))
     }
     private val empty = Label("Waiting for the first local/Yahoo scan…")
     private val cycleStatus = Label()
