@@ -20,7 +20,7 @@ internal object AdaptiveResultSelector {
         val results = selected.values.sortedByDescending(ScanResult::anomalyScore).take(limit)
         val adaptiveCount = results.count {
             it.signalSource.contains("relaxed") || it.signalSource.startsWith("Trend") ||
-                it.signalSource.startsWith("Steady rise")
+                it.signalSource.startsWith("Steady rise") || it.signalSource.startsWith("Recovery rise")
         }
         return AdaptiveSelection(results, adaptiveCount)
     }

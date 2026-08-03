@@ -321,7 +321,7 @@ class ScannerEngineTest {
         assertNull(SteadyRiseDetector(java.time.ZoneId.of("UTC")).detect("TEST", bars, criteria()))
     }
 
-    @Test fun `rejects a clean short bounce inside an established decline`() {
+    @Test fun `labels a continuing bounce inside an established decline as recovery`() {
         val bars = normalBars(days = 3).toMutableList()
         var minute = 3 * 1_440
         var previous = 100.0
@@ -336,7 +336,29 @@ class ScannerEngineTest {
             previous = close
         }
 
-        assertNull(SteadyRiseDetector(java.time.ZoneId.of("UTC")).detect("TEST", bars, criteria()))
+        val result = requireNotNull(SteadyRiseDetector(java.time.ZoneId.of("UTC")).detect("TEST", bars, criteria()))
+
+        assertEquals("Recovery rise ↑", result.signalSource)
+        assertTrue(result.anomalyScore > 0.0)
+    }
+
+    @Test fun `detects a rise when liquid quotes have short gaps`() {
+        val bars = normalBars(days = 3).toMutableList()
+        var minute = 3 * 1_440
+        var previous = 100.0
+        repeat(21) { index ->
+            if (index !in setOf(4, 9, 15)) {
+                val close = previous + 0.04
+                bars += candle(minute, previous, close, 300.0)
+                previous = close
+            }
+            minute++
+        }
+
+        val result = requireNotNull(SteadyRiseDetector(java.time.ZoneId.of("UTC"))
+            .detect("TEST", bars, criteria()))
+
+        assertEquals("Steady rise ↑", result.signalSource)
     }
 
     private fun normalBars(days: Int = 4) = (0 until days).flatMap { day ->

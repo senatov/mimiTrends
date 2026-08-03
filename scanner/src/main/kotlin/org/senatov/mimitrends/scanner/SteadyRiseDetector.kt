@@ -36,7 +36,7 @@ internal class SteadyRiseDetector(private val zoneOverride: ZoneId? = null) {
             sessionVolume = session.sumOf { it.volume },
             sessionTurnover = turnover,
             signalAgeMinutes = 0,
-            signalSource = "Steady rise ↑",
+            signalSource = if (best.recovery) "Recovery rise ↑" else "Steady rise ↑",
             updatedAtMillis = latest.minuteEpochSeconds * 1_000,
             signalWindowLabel = "${best.minutes}m steady",
             signalPrice = latest.close,
@@ -45,8 +45,11 @@ internal class SteadyRiseDetector(private val zoneOverride: ZoneId? = null) {
     }
 
     private fun evaluateWindow(session: List<MinuteBar>, minutes: Int, criteria: ScannerCriteria): RiseWindow? {
-        val bars = session.takeLast(minutes + 1)
-        if (bars.size < minutes + 1 || !continuous(bars)) return null
+        val latestEpoch = session.lastOrNull()?.minuteEpochSeconds ?: return null
+        val bars = session.filter { it.minuteEpochSeconds >= latestEpoch - minutes * 60L }
+        val coveredMinutes = (bars.lastOrNull()?.minuteEpochSeconds ?: return null) - bars.first().minuteEpochSeconds
+        if (bars.size < minimumSamples(minutes) || coveredMinutes < minutes * 60L * MIN_WINDOW_COVERAGE ||
+            !hasAcceptableGaps(bars)) return null
         val totalReturn = percent(bars.first().close, bars.last().close)
         val minimumReturn = max(MIN_RETURN_PERCENT, criteria.minTrendReturnPercent * sqrt(minutes / 180.0))
         if (totalReturn < minimumReturn) return null
@@ -57,17 +60,21 @@ internal class SteadyRiseDetector(private val zoneOverride: ZoneId? = null) {
         val regression = regression(bars)
         if (regression.slope <= 0.0 || regression.rSquared < MIN_R_SQUARED) return null
         if (changes.count { it >= 0.0 }.toDouble() / changes.size < MIN_POSITIVE_STEP_RATIO) return null
-        val contextBars = session.takeLast(CONTEXT_MINUTES + 1)
-        if (contextBars.size >= CONTEXT_MINUTES + 1) {
+        val contextBars = session.filter { it.minuteEpochSeconds >= latestEpoch - CONTEXT_MINUTES * 60L }
+        var recovery = false
+        if (contextBars.size >= minimumSamples(CONTEXT_MINUTES)) {
             val contextRegression = regression(contextBars)
-            if (contextRegression.slope <= 0.0 || percent(contextBars.first().close, contextBars.last().close) <= 0.0) return null
+            recovery = contextRegression.slope <= 0.0 ||
+                percent(contextBars.first().close, contextBars.last().close) <= 0.0
         }
-        val latestBars = bars.takeLast(LATEST_BARS)
+        val latestBars = bars.filter { it.minuteEpochSeconds >= latestEpoch - LATEST_MINUTES * 60L }
+        if (latestBars.size < MIN_LATEST_SAMPLES) return null
         val latestReturn = percent(latestBars.first().close, latestBars.last().close)
         if (latestReturn < max(MIN_LATEST_RETURN_PERCENT, totalReturn * MIN_CONTINUATION_SHARE)) return null
         if (maximumDrawdownPercent(bars) > max(MAX_DRAWDOWN_PERCENT, totalReturn * MAX_DRAWDOWN_SHARE)) return null
-        val score = 1.25 + totalReturn * 1.20 + regression.rSquared * 1.25 + efficiency
-        return RiseWindow(minutes, bars, totalReturn, efficiency, score)
+        val contextWeight = if (recovery) RECOVERY_SCORE_WEIGHT else 1.0
+        val score = (1.25 + totalReturn * 1.20 + regression.rSquared * 1.25 + efficiency) * contextWeight
+        return RiseWindow(minutes, bars, totalReturn, efficiency, score, recovery)
     }
 
     private fun maximumDrawdownPercent(bars: List<MinuteBar>): Double {
@@ -82,13 +89,15 @@ internal class SteadyRiseDetector(private val zoneOverride: ZoneId? = null) {
 
     private fun regression(bars: List<MinuteBar>): Regression {
         val values = bars.map { it.close }
-        val meanX = (values.lastIndex) / 2.0
+        val firstEpoch = bars.first().minuteEpochSeconds
+        val xValues = bars.map { (it.minuteEpochSeconds - firstEpoch) / 60.0 }
+        val meanX = xValues.average()
         val meanY = values.average()
         var covariance = 0.0
         var varianceX = 0.0
         var varianceY = 0.0
         values.forEachIndexed { index, value ->
-            val dx = index - meanX
+            val dx = xValues[index] - meanX
             val dy = value - meanY
             covariance += dx * dy
             varianceX += dx * dx
@@ -99,8 +108,10 @@ internal class SteadyRiseDetector(private val zoneOverride: ZoneId? = null) {
         return Regression(slope, rSquared.coerceIn(0.0, 1.0))
     }
 
-    private fun continuous(bars: List<MinuteBar>) = bars.zipWithNext().all { (first, second) ->
-        second.minuteEpochSeconds - first.minuteEpochSeconds == 60L
+    private fun minimumSamples(minutes: Int) = max(MIN_WINDOW_SAMPLES, (minutes * MIN_SAMPLE_RATIO).toInt())
+
+    private fun hasAcceptableGaps(bars: List<MinuteBar>) = bars.zipWithNext().all { (first, second) ->
+        second.minuteEpochSeconds - first.minuteEpochSeconds <= MAX_GAP_MINUTES * 60L
     }
 
     private fun local(bar: MinuteBar) = Instant.ofEpochSecond(bar.minuteEpochSeconds)
@@ -112,7 +123,8 @@ internal class SteadyRiseDetector(private val zoneOverride: ZoneId? = null) {
         val bars: List<MinuteBar>,
         val returnPercent: Double,
         val efficiency: Double,
-        val score: Double
+        val score: Double,
+        val recovery: Boolean
     )
     private data class Regression(val slope: Double, val rSquared: Double)
 
@@ -124,10 +136,16 @@ internal class SteadyRiseDetector(private val zoneOverride: ZoneId? = null) {
         const val MIN_R_SQUARED = 0.55
         const val MIN_POSITIVE_STEP_RATIO = 0.52
         const val CONTEXT_MINUTES = 60
-        const val LATEST_BARS = 6
+        const val LATEST_MINUTES = 5
+        const val MIN_LATEST_SAMPLES = 3
         const val MIN_LATEST_RETURN_PERCENT = 0.05
         const val MIN_CONTINUATION_SHARE = 0.08
         const val MAX_DRAWDOWN_PERCENT = 0.30
         const val MAX_DRAWDOWN_SHARE = 0.40
+        const val MIN_WINDOW_COVERAGE = 0.70
+        const val MIN_SAMPLE_RATIO = 0.55
+        const val MIN_WINDOW_SAMPLES = 6
+        const val MAX_GAP_MINUTES = 5
+        const val RECOVERY_SCORE_WEIGHT = 0.85
     }
 }
