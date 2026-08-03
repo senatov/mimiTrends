@@ -75,7 +75,7 @@ class ScannerEngineTest {
 
     @Test fun `does not treat a multi minute data gap as a one minute impulse`() {
         val bars = normalBars().toMutableList()
-        bars += candle(nextMinute(bars) + 2, 100.0, 104.0, 5_000.0)
+        bars += candle(nextMinute(bars) + 2, 104.0, 104.01, 5_000.0)
 
         assertNull(engine().evaluate("TEST", bars, criteria()))
     }

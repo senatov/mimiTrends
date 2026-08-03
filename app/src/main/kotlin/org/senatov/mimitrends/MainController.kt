@@ -100,6 +100,10 @@ class MainController(
         apiKey?.takeIf(String::isNotBlank)?.let(::restartFinnhubLive)
         analytics.applyRetention()
         batchScheduler.execute {
+            val saved = analytics.loadLatestPublishedResults(scannerCriteria.resultLimit)
+            Platform.runLater { scannerPanel.showSnapshot(saved, scannerCriteria.resultLimit) }
+        }
+        batchScheduler.execute {
             marketData.ensureCachedInstrumentMetadata()
             if (analytics.stats().aggregateBars == 0L) marketData.backfillCachedAnalytics()
         }
@@ -150,9 +154,7 @@ class MainController(
     }
 
     fun selectedSymbol(): String = currentSymbol.ifEmpty { "AAPL" }
-
     fun selectedRange(): String = selectedRangeValue
-
     fun dividerPosition(): Double = contentSplitPane.dividers.firstOrNull()?.position ?: initialDivider
 
     private fun startScanner() {
@@ -248,6 +250,9 @@ class MainController(
                 if (published.isEmpty() && errors.size == symbols.size && symbols.isNotEmpty()) {
                     scannerPanel.abortScan()
                     setStatus("Yahoo scan produced no data; previous table retained", true, errors.joinToString("\n"))
+                } else if (published.isEmpty()) {
+                    scannerPanel.abortScan()
+                    setStatus("No current signals · previous saved table retained")
                 } else {
                     published.forEach(scannerPanel::update)
                     scannerPanel.completeScan(criteria.resultLimit)

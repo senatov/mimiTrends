@@ -214,13 +214,15 @@ class ScannerEngine(private val zoneOverride: ZoneId? = null) {
 
     private fun features(bars: List<MinuteBar>): List<Feature> = bars.zipWithNext().mapIndexedNotNull { index, (previous, bar) ->
         val seconds = bar.minuteEpochSeconds - previous.minuteEpochSeconds
-        if (seconds != 60L || previous.close <= 0.0) return@mapIndexedNotNull null
+        if (seconds !in 1..180 || previous.close <= 0.0) return@mapIndexedNotNull null
+        val referencePrice = if (seconds == 60L) previous.close else bar.open
+        if (referencePrice <= 0.0) return@mapIndexedNotNull null
         val range = (bar.high - bar.low).coerceAtLeast(0.0)
         Feature(
             index = index,
             bar = bar,
-            returnPercent = percent(previous.close, bar.close),
-            rangePercent = range / previous.close * 100.0,
+            returnPercent = percent(referencePrice, bar.close),
+            rangePercent = range / referencePrice * 100.0,
             bodyRatio = if (range > 0.0) abs(bar.close - bar.open) / range else 0.0,
             closeLocation = if (range > 0.0) (bar.close - bar.low) / range else 0.5
         )

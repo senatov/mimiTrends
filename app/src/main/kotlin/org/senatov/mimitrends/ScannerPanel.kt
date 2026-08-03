@@ -197,6 +197,11 @@ class ScannerPanel(
         }
     }
 
+    fun showSnapshot(results: Collection<ScanResult>, resultLimit: Int) {
+        rows.setAll(results.sortedByDescending(ScanResult::anomalyScore).take(resultLimit))
+        autoFitter.request()
+    }
+
     fun clear() {
         log.debug(LogTag.UI, "clear()")
         rows.clear(); stagedRows.clear(); scanning = false
