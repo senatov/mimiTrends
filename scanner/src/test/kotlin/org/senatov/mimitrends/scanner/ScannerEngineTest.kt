@@ -137,6 +137,43 @@ class ScannerEngineTest {
         assertNull(VReversalDetector(java.time.ZoneId.of("UTC")).detect(bars, criteria()))
     }
 
+    @Test fun `detects a multi-scale reversal after a six minute selloff`() {
+        val bars = normalBars().toMutableList()
+        var minute = nextMinute(bars)
+        var previous = 100.0
+        repeat(6) {
+            val close = previous - 0.07
+            bars += candle(minute++, previous, close, 600.0)
+            previous = close
+        }
+        repeat(3) {
+            val close = previous + 0.11
+            bars += candle(minute++, previous, close, 900.0)
+            previous = close
+        }
+
+        val reversal = requireNotNull(VReversalDetector(java.time.ZoneId.of("UTC")).detect(bars, criteria()))
+
+        assertEquals(1, reversal.direction)
+        assertTrue(reversal.shockPercent >= 0.40)
+        assertTrue(reversal.recoveryRatio >= 0.60)
+    }
+
+    @Test fun `rejects a slow weak bounce after a fast fall`() {
+        val bars = normalBars().toMutableList()
+        var minute = nextMinute(bars)
+        bars += candle(minute++, 100.0, 99.84, 800.0)
+        bars += candle(minute++, 99.84, 99.68, 900.0)
+        var previous = 99.68
+        repeat(8) {
+            val close = previous + 0.027
+            bars += candle(minute++, previous, close, 500.0)
+            previous = close
+        }
+
+        assertNull(VReversalDetector(java.time.ZoneId.of("UTC")).detect(bars, criteria()))
+    }
+
     @Test fun `keeps a price impulse but marks zero volume as unavailable`() {
         val bars = normalBars().toMutableList()
         bars += candle(nextMinute(bars), 100.0, 96.0, 0.0, VolumeStatus.MISSING)

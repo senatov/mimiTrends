@@ -6,6 +6,8 @@ import org.senatov.mimitrends.model.ScannerCriteria
 import java.time.Instant
 import java.time.ZoneId
 import kotlin.math.abs
+import kotlin.math.exp
+import kotlin.math.ln
 import kotlin.math.max
 
 internal data class VReversal(
@@ -24,103 +26,117 @@ private data class VPattern(
     val direction: Int,
     val shockPercent: Double,
     val recoveryPercent: Double,
+    val shockEfficiency: Double,
     val recoveryEfficiency: Double,
+    val velocityRatio: Double,
     val extremeAgeMinutes: Int,
+    val shockBars: Int,
     val volume: Double,
     val latest: MinuteBar
 )
 
-private const val PATTERN_BARS = 11
-private const val MIN_PATTERN_BARS = 5
-private const val MAX_EXTREME_AGE_MINUTES = 9
-private const val SHOCK_WINDOW_BARS = 3
-private const val MIN_SHOCK_PERCENT = 0.25
-private const val MIN_RECOVERY_PERCENT = 0.20
-private const val MIN_RECOVERY_EFFICIENCY = 0.50
-private const val MIN_DIRECTIONAL_STEPS = 2
-private const val MIN_QUALITY = 0.70
-private const val TIME_RADIUS_MINUTES = 15L
-private const val MIN_SESSIONS = 3
-private const val MAX_SESSIONS = 20
-private const val MIN_BASELINE = 15
-private const val RETURN_FLOOR = 0.015
-
 internal class VReversalDetector(private val zoneOverride: ZoneId? = null) {
     fun detect(bars: List<MinuteBar>, criteria: ScannerCriteria): VReversal? {
         val recent = sameSessionTail(bars)
-        if (recent.size < MIN_PATTERN_BARS) return null
-        val bullish = bullishPattern(recent, criteria)
-        val bearish = bearishPattern(recent, criteria)
-        val pattern = listOfNotNull(bullish, bearish).maxByOrNull { it.shockPercent } ?: return null
-        val shockZ = shockZ(bars, pattern, criteria) ?: return null
-        if (shockZ < criteria.minJumpZ) return null
-        val recoveryRatio = (pattern.recoveryPercent / pattern.shockPercent).coerceIn(0.0, 1.5)
-        val score = (0.65 * shockZ + 0.50 * recoveryRatio) *
-            (MIN_QUALITY + (1.0 - MIN_QUALITY) * pattern.recoveryEfficiency)
-        return VReversal(pattern.direction, pattern.recoveryPercent * pattern.direction,
-            pattern.shockPercent, shockZ, recoveryRatio, pattern.volume, score,
-            recent.last(), pattern.extremeAgeMinutes)
+        if (recent.size < MIN_PATTERN_BARS || !continuous(recent)) return null
+        return patterns(recent, criteria).mapNotNull { pattern -> score(bars, pattern, criteria) }
+            .maxByOrNull { it.score }
     }
 
-    private fun bullishPattern(bars: List<MinuteBar>, criteria: ScannerCriteria): VPattern? {
-        val extremeIndex = bars.indices.minByOrNull { bars[it].low } ?: return null
-        if (extremeIndex !in 1 until bars.lastIndex) return null
-        val age = bars.lastIndex - extremeIndex
-        if (age > MAX_EXTREME_AGE_MINUTES) return null
-        val reference = bars.subList((extremeIndex - SHOCK_WINDOW_BARS).coerceAtLeast(0), extremeIndex)
-            .maxOf { it.high }
+    private fun patterns(bars: List<MinuteBar>, criteria: ScannerCriteria): List<VPattern> = buildList {
+        for (extremeIndex in 1 until bars.lastIndex) {
+            val age = bars.lastIndex - extremeIndex
+            if (age > MAX_EXTREME_AGE_MINUTES) continue
+            val maxShockBars = minOf(MAX_SHOCK_BARS, extremeIndex)
+            for (shockBars in MIN_SHOCK_BARS..maxShockBars) {
+                bullishPattern(bars, extremeIndex, shockBars, criteria)?.let(::add)
+                bearishPattern(bars, extremeIndex, shockBars, criteria)?.let(::add)
+            }
+        }
+    }
+
+    private fun bullishPattern(
+        bars: List<MinuteBar>, extremeIndex: Int, shockBars: Int, criteria: ScannerCriteria
+    ): VPattern? {
+        val shockSlice = bars.subList(extremeIndex - shockBars, extremeIndex + 1)
+        if (bars[extremeIndex].low > shockSlice.minOf { it.low }) return null
+        val reference = shockSlice.first().high
         val extreme = bars[extremeIndex].low
-        val shock = declinePercent(reference, extreme)
-        val recovery = risePercent(extreme, bars.last().close)
-        return pattern(bars, extremeIndex, 1, shock, recovery, age, criteria)
+        return pattern(bars, extremeIndex, shockBars, 1, declinePercent(reference, extreme),
+            risePercent(extreme, bars.last().close), criteria)
     }
 
-    private fun bearishPattern(bars: List<MinuteBar>, criteria: ScannerCriteria): VPattern? {
-        val extremeIndex = bars.indices.maxByOrNull { bars[it].high } ?: return null
-        if (extremeIndex !in 1 until bars.lastIndex) return null
-        val age = bars.lastIndex - extremeIndex
-        if (age > MAX_EXTREME_AGE_MINUTES) return null
-        val reference = bars.subList((extremeIndex - SHOCK_WINDOW_BARS).coerceAtLeast(0), extremeIndex)
-            .minOf { it.low }
+    private fun bearishPattern(
+        bars: List<MinuteBar>, extremeIndex: Int, shockBars: Int, criteria: ScannerCriteria
+    ): VPattern? {
+        val shockSlice = bars.subList(extremeIndex - shockBars, extremeIndex + 1)
+        if (bars[extremeIndex].high < shockSlice.maxOf { it.high }) return null
+        val reference = shockSlice.first().low
         val extreme = bars[extremeIndex].high
-        val shock = risePercent(reference, extreme)
-        val recovery = declinePercent(extreme, bars.last().close)
-        return pattern(bars, extremeIndex, -1, shock, recovery, age, criteria)
+        return pattern(bars, extremeIndex, shockBars, -1, risePercent(reference, extreme),
+            declinePercent(extreme, bars.last().close), criteria)
     }
 
     private fun pattern(
-        bars: List<MinuteBar>,
-        extremeIndex: Int,
-        direction: Int,
-        shock: Double,
-        recovery: Double,
-        age: Int,
-        criteria: ScannerCriteria
+        bars: List<MinuteBar>, extremeIndex: Int, shockBars: Int, direction: Int,
+        shock: Double, recovery: Double, criteria: ScannerCriteria
     ): VPattern? {
         val minimumShock = max(MIN_SHOCK_PERCENT, criteria.minAbsoluteMovePercent * 1.25)
         val minimumRecovery = max(MIN_RECOVERY_PERCENT, criteria.minAbsoluteMovePercent)
         if (shock < minimumShock || recovery < minimumRecovery) return null
+        val shockPrices = bars.subList(extremeIndex - shockBars, extremeIndex + 1).map { it.close }
+        val shockChanges = shockPrices.zipWithNext { first, second -> -percent(first, second) * direction }
+        val shockPath = shockChanges.sumOf { abs(it) }
+        val shockEfficiency = if (shockPath > 0.0) shock / shockPath else 0.0
+        if (shockEfficiency < MIN_SHOCK_EFFICIENCY) return null
         val recoveryBars = bars.subList(extremeIndex, bars.size)
-        val prices = if (direction > 0) listOf(bars[extremeIndex].low) + recoveryBars.map { it.close }
-            else listOf(bars[extremeIndex].high) + recoveryBars.map { it.close }
-        val signedChanges = prices.zipWithNext { first, second -> percent(first, second) * direction }
-        val path = signedChanges.sumOf { abs(it) }
-        val efficiency = if (path > 0.0) recovery / path else 0.0
-        if (efficiency < MIN_RECOVERY_EFFICIENCY || (signedChanges.lastOrNull() ?: 0.0) <= 0.0) return null
-        if (signedChanges.count { it > 0.0 } < MIN_DIRECTIONAL_STEPS) return null
-        return VPattern(direction, shock, recovery, efficiency, age, bars.sumOf { it.volume }, bars.last())
+        val extreme = if (direction > 0) bars[extremeIndex].low else bars[extremeIndex].high
+        val recoveryPrices = listOf(extreme) + recoveryBars.map { it.close }
+        val recoveryChanges = recoveryPrices.zipWithNext { first, second -> percent(first, second) * direction }
+        val recoveryPath = recoveryChanges.sumOf { abs(it) }
+        val recoveryEfficiency = if (recoveryPath > 0.0) recovery / recoveryPath else 0.0
+        if (recoveryEfficiency < MIN_RECOVERY_EFFICIENCY) return null
+        if (recoveryChanges.count { it > 0.0 } < MIN_DIRECTIONAL_STEPS) return null
+        if ((recoveryChanges.lastOrNull() ?: 0.0) <= 0.0) return null
+        val age = bars.lastIndex - extremeIndex
+        val activeShockBars = shockChanges.count { it > ACTIVE_SHOCK_STEP_PERCENT }.coerceAtLeast(1)
+        val velocityRatio = (recovery / age.coerceAtLeast(1)) / (shock / activeShockBars)
+        if (velocityRatio < MIN_VELOCITY_RATIO) return null
+        if (bottomTouches(recoveryBars, extreme, shock, direction) > MAX_BOTTOM_TOUCHES) return null
+        return VPattern(direction, shock, recovery, shockEfficiency, recoveryEfficiency, velocityRatio,
+            age, shockBars, bars.sumOf { it.volume }, bars.last())
+    }
+
+    private fun bottomTouches(bars: List<MinuteBar>, extreme: Double, shock: Double, direction: Int): Int {
+        val tolerance = extreme * shock / 100.0 * BOTTOM_ZONE_SHARE
+        return bars.drop(1).count { bar ->
+            if (direction > 0) bar.low <= extreme + tolerance else bar.high >= extreme - tolerance
+        }
+    }
+
+    private fun score(bars: List<MinuteBar>, pattern: VPattern, criteria: ScannerCriteria): VReversal? {
+        val shockZ = shockZ(bars, pattern, criteria) ?: return null
+        if (shockZ < criteria.minJumpZ) return null
+        val recoveryRatio = (pattern.recoveryPercent / pattern.shockPercent).coerceIn(0.0, 1.5)
+        val quality = MIN_QUALITY + (1.0 - MIN_QUALITY) * pattern.recoveryEfficiency
+        val freshness = exp(-ln(2.0) * pattern.extremeAgeMinutes / FRESHNESS_HALF_LIFE_MINUTES)
+        val raw = 0.58 * shockZ + 0.80 * recoveryRatio +
+            0.35 * pattern.velocityRatio.coerceAtMost(2.0) + 0.30 * pattern.shockEfficiency.coerceAtMost(1.0)
+        return VReversal(pattern.direction, pattern.recoveryPercent * pattern.direction,
+            pattern.shockPercent, shockZ, recoveryRatio, pattern.volume, raw * quality * freshness,
+            pattern.latest, pattern.extremeAgeMinutes)
     }
 
     private fun shockZ(bars: List<MinuteBar>, pattern: VPattern, criteria: ScannerCriteria): Double? {
         val latestDate = local(pattern.latest).toLocalDate()
         val latestTime = local(pattern.latest).toLocalTime()
-        val historical = bars.windowed(SHOCK_WINDOW_BARS).mapNotNull { sample ->
+        val sampleSize = pattern.shockBars + 1
+        val historical = bars.windowed(sampleSize).mapNotNull { sample ->
             if (!continuous(sample)) return@mapNotNull null
             val end = sample.last()
             val date = local(end).toLocalDate()
-            if (date == latestDate || abs(java.time.Duration.between(local(end).toLocalTime(), latestTime).toMinutes()) > TIME_RADIUS_MINUTES) {
-                return@mapNotNull null
-            }
+            val minutes = abs(java.time.Duration.between(local(end).toLocalTime(), latestTime).toMinutes())
+            if (date == latestDate || minutes > TIME_RADIUS_MINUTES) return@mapNotNull null
             date to abs(percent(sample.first().open, sample.last().close))
         }
         val dates = historical.asReversed().map { it.first }.distinct()
@@ -138,7 +154,8 @@ internal class VReversalDetector(private val zoneOverride: ZoneId? = null) {
     }
 
     private fun continuous(bars: List<MinuteBar>) = bars.zipWithNext().all { (first, second) ->
-        second.minuteEpochSeconds - first.minuteEpochSeconds == 60L && local(first).toLocalDate() == local(second).toLocalDate()
+        second.minuteEpochSeconds - first.minuteEpochSeconds == 60L &&
+            local(first).toLocalDate() == local(second).toLocalDate()
     }
 
     private fun robustScale(values: List<Double>): Double {
@@ -159,4 +176,27 @@ internal class VReversalDetector(private val zoneOverride: ZoneId? = null) {
     private fun risePercent(low: Double, last: Double) = max(0.0, percent(low, last))
     private fun declinePercent(high: Double, last: Double) = max(0.0, -percent(high, last))
 
+    private companion object {
+        const val PATTERN_BARS = 16
+        const val MIN_PATTERN_BARS = 5
+        const val MAX_EXTREME_AGE_MINUTES = 9
+        const val MIN_SHOCK_BARS = 2
+        const val MAX_SHOCK_BARS = 6
+        const val MIN_SHOCK_PERCENT = 0.25
+        const val MIN_RECOVERY_PERCENT = 0.20
+        const val MIN_SHOCK_EFFICIENCY = 0.45
+        const val MIN_RECOVERY_EFFICIENCY = 0.50
+        const val MIN_DIRECTIONAL_STEPS = 2
+        const val MIN_VELOCITY_RATIO = 0.35
+        const val ACTIVE_SHOCK_STEP_PERCENT = 0.01
+        const val BOTTOM_ZONE_SHARE = 0.15
+        const val MAX_BOTTOM_TOUCHES = 3
+        const val MIN_QUALITY = 0.70
+        const val FRESHNESS_HALF_LIFE_MINUTES = 8.0
+        const val TIME_RADIUS_MINUTES = 20L
+        const val MIN_SESSIONS = 3
+        const val MAX_SESSIONS = 20
+        const val MIN_BASELINE = 15
+        const val RETURN_FLOOR = 0.015
+    }
 }
