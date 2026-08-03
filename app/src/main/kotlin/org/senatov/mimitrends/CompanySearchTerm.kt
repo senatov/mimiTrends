@@ -1,8 +1,10 @@
 package org.senatov.mimitrends
 
 internal object CompanySearchTerm {
+    fun normalizeDisplay(companyName: String): String = companyName.trim().replace(WHITESPACE, " ")
+
     fun from(companyName: String, symbol: String): String {
-        val words = companyName.trim().split(WHITESPACE).map { it.trim(*EDGE_PUNCTUATION) }
+        val words = normalizeDisplay(companyName).split(WHITESPACE).map { it.trim(*EDGE_PUNCTUATION) }
             .filter(String::isNotBlank).toMutableList()
         while (words.isNotEmpty() && isRemovableSuffix(words.last())) words.removeLast()
         return words.joinToString(" ").takeIf(String::isNotBlank) ?: symbol.substringBefore('.').trim()

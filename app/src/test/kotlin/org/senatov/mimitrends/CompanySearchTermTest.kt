@@ -4,6 +4,10 @@ import org.junit.jupiter.api.Test
 import kotlin.test.assertEquals
 
 class CompanySearchTermTest {
+    @Test fun `normalizes whitespace without shortening the displayed company name`() {
+        assertEquals("BEIERSDORF AG I", CompanySearchTerm.normalizeDisplay("  BEIERSDORF AG                 I  "))
+    }
+
     @Test fun `removes legal form and exchange class from a company name`() {
         assertEquals("BEIERSDORF", CompanySearchTerm.from("BEIERSDORF AG                 I", "BEI.DE"))
     }

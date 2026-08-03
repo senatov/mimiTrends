@@ -137,11 +137,12 @@ internal class ScannerColumnFactory(
                     loadProfile?.invoke(symbol)?.whenComplete(
                         BiConsumer<CompanyProfile?, Throwable?> { profile, error ->
                         if (error == null && profile != null) Platform.runLater {
-                            companyNames[symbol] = profile.name
+                            val displayName = CompanySearchTerm.normalizeDisplay(profile.name)
+                            companyNames[symbol] = displayName
                             if (renderedSymbol == symbol && item == symbol) {
-                                text = profile.name
+                                text = displayName
                                 graphic = logoBadge(symbol, profile.logoBytes, 22.0)
-                                tooltip = companyTooltip(symbol, profile)
+                                tooltip = companyTooltip(symbol, profile.copy(name = displayName))
                                 onContentChanged()
                             }
                         }
