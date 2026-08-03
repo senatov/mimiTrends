@@ -78,7 +78,7 @@ internal class SteadyRiseDetector(private val zoneOverride: ZoneId? = null) {
         val latestReturn = percent(latestBars.first().close, latestBars.last().close)
         if (latestReturn < max(MIN_LATEST_RETURN_PERCENT, totalReturn * MIN_CONTINUATION_SHARE)) return null
         val tailBars = latestBars.filter { it.minuteEpochSeconds >= latestEpoch - TAIL_MINUTES * 60L }
-        if (tailBars.size < MIN_TAIL_SAMPLES || regression(tailBars).slope <= 0.0) return null
+        if (tailBars.size < MIN_TAIL_SAMPLES || !hasAcceptableTail(tailBars, changes)) return null
         if (maximumDrawdownPercent(bars) > max(MAX_DRAWDOWN_PERCENT, totalReturn * MAX_DRAWDOWN_SHARE)) return null
         val contextWeight = if (recovery) RECOVERY_SCORE_WEIGHT else 1.0
         val score = (1.25 + totalReturn * 1.20 + regression.rSquared * 1.25 + efficiency) * contextWeight
@@ -107,6 +107,15 @@ internal class SteadyRiseDetector(private val zoneOverride: ZoneId? = null) {
             drawdown = max(drawdown, -percent(peak, bar.close))
         }
         return drawdown
+    }
+
+    private fun hasAcceptableTail(tailBars: List<MinuteBar>, windowChanges: List<Double>): Boolean {
+        if (regression(tailBars).slope > 0.0) return true
+        val tailReturn = percent(tailBars.first().close, tailBars.last().close)
+        if (tailReturn >= 0.0) return tailReturn > 0.0
+        val averageMinuteMove = windowChanges.map(::abs).average()
+        val permittedPullback = minOf(MAX_TAIL_PULLBACK_PERCENT, averageMinuteMove)
+        return -tailReturn <= permittedPullback
     }
 
     private fun regression(bars: List<MinuteBar>): Regression {
@@ -164,6 +173,7 @@ internal class SteadyRiseDetector(private val zoneOverride: ZoneId? = null) {
         const val MIN_LATEST_SAMPLES = 3
         const val TAIL_MINUTES = 3
         const val MIN_TAIL_SAMPLES = 3
+        const val MAX_TAIL_PULLBACK_PERCENT = 0.05
         const val MIN_LATEST_RETURN_PERCENT = 0.05
         const val MIN_CONTINUATION_SHARE = 0.08
         const val MAX_DRAWDOWN_PERCENT = 0.30

@@ -92,6 +92,11 @@ The scanner also recognizes fresh V-shaped reversals across two- to six-minute s
 
 Clean staircase-like growth is ranked separately as `Steady rise ↑`. The detector evaluates 10- to 180-minute windows and requires a meaningful return, regression fit, directional efficiency, a majority of non-negative minute steps, bounded drawdown, and positive continuation during the latest five minutes. Once an hour of session data exists, the 60-minute return and regression slope must also be positive, preventing a clean short bounce inside an established decline from being mislabeled as sustained growth. Short 10- and 15-minute windows still allow unusually clean opening trends to qualify before an hour of context exists.
 
+A slightly negative three-minute tail does not immediately invalidate an otherwise continuing rise. It is
+accepted only when the pullback is no larger than 0.05% and remains below the average absolute minute move
+of the selected trend window. This reduces signal flicker from ordinary noise without retaining a material
+short-term reversal.
+
 ### Comparable baseline
 
 For a candidate candle, the scanner prefers historical candles from prior sessions within approximately ±15 minutes of the same exchange-local time. This matters because volatility and volume near an opening auction are not comparable with quiet midday trading.

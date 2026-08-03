@@ -290,6 +290,27 @@ class ScannerEngineTest {
         assertNull(SteadyRiseDetector(java.time.ZoneId.of("UTC")).detect("TEST", bars, criteria()))
     }
 
+    @Test fun `allows a brief below average pullback inside a continuing rise`() {
+        val bars = normalBars(days = 3).toMutableList()
+        var minute = 3 * 1_440
+        var previous = 100.0
+        repeat(27) {
+            val close = previous + 0.04
+            bars += candle(minute++, previous, close, 300.0)
+            previous = close
+        }
+        listOf(0.04, -0.03, 0.01, 0.01).forEach { change ->
+            val close = previous + change
+            bars += candle(minute++, previous, close, 300.0)
+            previous = close
+        }
+
+        val result = requireNotNull(SteadyRiseDetector(java.time.ZoneId.of("UTC"))
+            .detect("TEST", bars, criteria()))
+
+        assertEquals("Steady rise ↑", result.signalSource)
+    }
+
     @Test fun `recommends a clean recent staircase rise`() {
         val bars = normalBars().toMutableList()
         var minute = nextMinute(bars)
