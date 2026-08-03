@@ -83,6 +83,60 @@ class ScannerEngineTest {
         assertNull(EarlyMomentumDetector(java.time.ZoneId.of("UTC")).detect(bars, criteria()))
     }
 
+    @Test fun `detects a Generali-like bullish V reversal after the rebound starts`() {
+        val bars = normalBars().toMutableList()
+        var minute = nextMinute(bars)
+        bars += candle(minute++, 100.0, 99.86, 600.0)
+        bars += candle(minute++, 99.86, 99.72, 800.0)
+        bars += candle(minute++, 99.72, 99.80, 900.0)
+        bars += candle(minute++, 99.80, 99.91, 1_000.0)
+        bars += candle(minute, 99.91, 100.01, 1_100.0)
+
+        val result = requireNotNull(engine().evaluate("TEST", bars, criteria()))
+
+        assertEquals("V-Reversal ↑", result.signalSource)
+        assertTrue(result.windowChangePercent >= 0.25)
+        assertTrue(result.priceAnomaly >= 3.0)
+    }
+
+    @Test fun `detects a bearish V reversal symmetrically`() {
+        val bars = normalBars().toMutableList()
+        var minute = nextMinute(bars)
+        bars += candle(minute++, 100.0, 100.14, 600.0)
+        bars += candle(minute++, 100.14, 100.28, 800.0)
+        bars += candle(minute++, 100.28, 100.20, 900.0)
+        bars += candle(minute++, 100.20, 100.09, 1_000.0)
+        bars += candle(minute, 100.09, 99.99, 1_100.0)
+
+        val result = requireNotNull(engine().evaluate("TEST", bars, criteria()))
+
+        assertEquals("V-Reversal ↓", result.signalSource)
+        assertTrue(result.windowChangePercent <= -0.25)
+    }
+
+    @Test fun `does not call an unrecovered fall a V reversal`() {
+        val bars = normalBars().toMutableList()
+        var minute = nextMinute(bars)
+        bars += candle(minute++, 100.0, 99.85, 600.0)
+        bars += candle(minute++, 99.85, 99.70, 800.0)
+        bars += candle(minute++, 99.70, 99.68, 900.0)
+        bars += candle(minute, 99.68, 99.67, 1_000.0)
+
+        assertNull(VReversalDetector(java.time.ZoneId.of("UTC")).detect(bars, criteria()))
+    }
+
+    @Test fun `expires a V reversal after ten inactive minutes`() {
+        val bars = normalBars().toMutableList()
+        var minute = nextMinute(bars)
+        bars += candle(minute++, 100.0, 99.85, 600.0)
+        bars += candle(minute++, 99.85, 99.70, 800.0)
+        bars += candle(minute++, 99.70, 99.82, 900.0)
+        bars += candle(minute++, 99.82, 99.94, 1_000.0)
+        repeat(10) { bars += candle(minute++, 99.94, 99.94, 100.0) }
+
+        assertNull(VReversalDetector(java.time.ZoneId.of("UTC")).detect(bars, criteria()))
+    }
+
     @Test fun `keeps a price impulse but marks zero volume as unavailable`() {
         val bars = normalBars().toMutableList()
         bars += candle(nextMinute(bars), 100.0, 96.0, 0.0, VolumeStatus.MISSING)
@@ -114,6 +168,16 @@ class ScannerEngineTest {
         val bars = normalBars().toMutableList()
         bars += candle(nextMinute(bars), 100.0, 100.01, 50_000.0)
         assertNull(engine().evaluate("TEST", bars, criteria()))
+    }
+
+    @Test fun `broad adaptive tier admits a near-threshold move rejected by the mild tier`() {
+        val bars = normalBars().toMutableList()
+        bars += candle(nextMinute(bars), 100.0, 100.19, 5_000.0)
+
+        assertNull(engine().evaluateFallback("TEST", bars, criteria(), 0.85))
+        val result = requireNotNull(engine().evaluateFallback("TEST", bars, criteria(), 0.55))
+
+        assertTrue(result.signalSource.contains("relaxed"))
     }
 
     @Test fun `rejects a statistically unusual but economically tiny candle`() {

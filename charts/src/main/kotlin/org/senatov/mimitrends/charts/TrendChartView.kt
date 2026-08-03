@@ -39,7 +39,6 @@ import java.awt.Font
 import java.text.DecimalFormat
 import java.text.SimpleDateFormat
 import java.util.Date
-
 class TrendChartView : StackPane() {
     private val log = LoggerFactory.getLogger(javaClass)
     private val dateAxis = DateAxis()
@@ -79,7 +78,6 @@ class TrendChartView : StackPane() {
     private var cursorPinned = false
     private val tradeAnnotations = BrokerTradeAnnotations(pricePlot)
     private val signalTrendOverlay = SignalTrendOverlay(pricePlot)
-
     init {
         log.debug(LogTag.UI, "init()")
         minHeight = 0.0
@@ -121,7 +119,6 @@ class TrendChartView : StackPane() {
         VBox.setVgrow(viewer, Priority.ALWAYS)
         children += listOf(content, progress)
     }
-
     fun renderMinuteBars(
         symbol: String,
         bars: List<MinuteBar>,
@@ -137,7 +134,6 @@ class TrendChartView : StackPane() {
             priceMultiplier, currencySymbol, signal, trades)
         renderRequest(requireNotNull(lastRequest))
     }
-
     private fun renderRequest(request: RenderRequest) {
         val focused = focusButton.isSelected && request.signal != null
         val timeline = if (focused) ChartTimeline.focused(request.bars, requireNotNull(request.signal).signalEpochMillis / 1_000L)
@@ -148,7 +144,6 @@ class TrendChartView : StackPane() {
             clear()
             return
         }
-
         val dates = Array(plotted.size) { Date(plotted[it].minuteEpochSeconds * 1_000) }
         val highs = DoubleArray(visible.size) { visible[it].high * request.priceMultiplier }
         val lows = DoubleArray(visible.size) { visible[it].low * request.priceMultiplier }
@@ -245,10 +240,12 @@ class TrendChartView : StackPane() {
         if (signal == null || latestEpoch <= 0) return
         val isTrend = signal.signalSource.startsWith("Trend")
         val isMomentum = signal.signalSource.startsWith("Momentum")
+        val isReversal = signal.signalSource.startsWith("V-Reversal")
         val ageMinutes = signal.signalAgeMinutes
         val windowMinutes = when {
             isTrend -> signal.signalWindowLabel.filter(Char::isDigit).toIntOrNull() ?: 180
             isMomentum -> 3
+            isReversal -> signal.signalWindowLabel.filter(Char::isDigit).toIntOrNull() ?: 5
             else -> 1
         }
         val endEpoch = signal.signalEpochMillis / 1_000L
@@ -270,6 +267,7 @@ class TrendChartView : StackPane() {
         val label = when {
             isTrend -> "Trend ${signal.signalWindowLabel}"
             isMomentum -> "Early momentum 3m"
+            isReversal -> "V-reversal ${signal.signalWindowLabel}"
             else -> "Signal"
         }
         val numericLabel = listOfNotNull(label, signalDate, entry?.let { "Entry ${lastRequest?.currencySymbol}${"%,.2f".format(it)}" }).joinToString(" · ")

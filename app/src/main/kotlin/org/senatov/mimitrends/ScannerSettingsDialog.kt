@@ -27,7 +27,7 @@ class ScannerSettingsDialog(
     private val dialog = Dialog<ScannerSettingsResult>()
     private val marketRegion = ComboBox(FXCollections.observableArrayList(MarketRegion.entries)).apply { value = current.marketRegion }
     private val scanInterval = Spinner<Int>(60, 3_600, current.scanIntervalSeconds.toInt(), 30).apply { isEditable = true }
-    private val resultLimit = Spinner<Int>(10, 100, current.resultLimit, 5).apply { isEditable = true }
+    private val resultLimit = Spinner<Int>(5, 15, current.resultLimit.coerceIn(5, 15), 1).apply { isEditable = true }
     private val price = Spinner<Double>(0.0, 10_000.0, current.minPrice, 0.5).apply { isEditable = true }
     private val turnover = Spinner<Double>(0.0, 10_000_000_000.0, current.minSessionTurnover, 100_000.0).apply { isEditable = true }
     private val sessions = Spinner<Int>(3, 20, current.baselineSessions, 1).apply { isEditable = true }
@@ -38,7 +38,7 @@ class ScannerSettingsDialog(
     private val relativeVolume = Spinner<Double>(0.0, 20.0, current.minRelativeVolume, 0.1).apply { isEditable = true }
     private val bodyRatio = Spinner<Double>(0.0, 1.0, current.minBodyRatio, 0.05).apply { isEditable = true }
     private val absoluteMove = Spinner<Double>(0.0, 10.0, current.minAbsoluteMovePercent, 0.05).apply { isEditable = true }
-    private val minimumResults = Spinner<Int>(1, 50, current.minimumTableResults, 1).apply { isEditable = true }
+    private val minimumResults = Spinner<Int>(5, 15, current.minimumTableResults.coerceIn(5, 15), 1).apply { isEditable = true }
     private val trendWindow = Spinner<Int>(60, 360, current.trendWindowMinutes, 30).apply { isEditable = true }
     private val trendReturn = Spinner<Double>(0.1, 20.0, current.minTrendReturnPercent, 0.1).apply { isEditable = true }
     private val trendEfficiency = Spinner<Double>(0.01, 1.0, current.minTrendEfficiency, 0.01).apply { isEditable = true }
@@ -75,12 +75,12 @@ class ScannerSettingsDialog(
                 settingRow("Relative volume", "Current candle volume divided by its robust local median.", relativeVolume),
                 settingRow("Minimum candle body", "Body/range ratio; 0.55 rejects weak wicks and random ticks.", bodyRatio),
                 settingRow("Minimum absolute move", "Hard percentage floor; prevents tiny low-volatility noise from qualifying by Z-score alone.", absoluteMove),
-                settingRow("Minimum table results", "If strict impulses are scarce, fill to this count with relaxed impulses and rising trends.", minimumResults),
+                settingRow("Target table results", "Adapt thresholds gradually to retain about this many current candidates (5–15).", minimumResults),
                 settingRow("Trend window", "Minutes used to recognize persistent half-session growth with tolerable pullbacks.", trendWindow),
                 settingRow("Minimum trend return", "Required net growth over the trend window, in percent.", trendReturn),
                 settingRow("Trend efficiency", "Net progress divided by total path length; lower values permit deeper pullbacks.", trendEfficiency),
                 settingRow("Market universe", "Select US listings, European listings, or both.", marketRegion),
-                settingRow("Results to display", "Highest current anomaly scores retained after a complete scan.", resultLimit),
+                settingRow("Maximum results", "Hard display cap between 5 and 15; weaker rows are never added beyond the target.", resultLimit),
                 settingRow("Minimum source price", "Low-priced instruments below this value are ignored.", price),
                 settingRow("Minimum session turnover", "Set to zero to keep the broadest statistical candidate base.", turnover),
                 settingRow("Historical sessions", "Local sessions used to establish each instrument's normal behaviour.", sessions)

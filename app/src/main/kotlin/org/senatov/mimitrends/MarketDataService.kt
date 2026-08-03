@@ -70,7 +70,7 @@ internal class MarketDataService(
         }
     }
 
-    fun loadAndEvaluate(symbol: String, criteria: ScannerCriteria): Pair<ScanResult?, ScanResult?> {
+    fun loadAndEvaluate(symbol: String, criteria: ScannerCriteria): ScanEvaluation {
         val now = java.time.Instant.now().epochSecond
         val cached = repository.loadMinuteBars(symbol, now - 7 * 86_400)
         val latestLocal = cached.lastOrNull()?.minuteEpochSeconds
@@ -102,7 +102,10 @@ internal class MarketDataService(
         analytics.refreshDerived(symbol, completed, source)
         completed.lastOrNull()?.let { analytics.recordSignalOutcomes(symbol, it.close, it.minuteEpochSeconds) }
         val primary = scannerEngine.evaluate(symbol, completed, criteria)
-        return primary to if (primary == null) scannerEngine.evaluateFallback(symbol, completed, criteria) else null
+        val fallback = if (primary != null) emptyList() else RELAXATION_LEVELS.map { factor ->
+            scannerEngine.evaluateFallback(symbol, completed, criteria, factor)
+        }
+        return ScanEvaluation(primary, fallback)
     }
 
     fun loadPriorityResult(symbol: String, criteria: ScannerCriteria): ScanResult? {
@@ -110,9 +113,16 @@ internal class MarketDataService(
         val priorityCriteria = criteria.copy(
             scanIntervalSeconds = PriorityScanCoordinator.PRIORITY_SCAN_INTERVAL_SECONDS
         )
-        val (primary, fallback) = loadAndEvaluate(symbol, priorityCriteria)
-        return (primary ?: fallback)?.copy(dataStatus = dataStatus(symbol))
+        val evaluation = loadAndEvaluate(symbol, priorityCriteria)
+        return (evaluation.primary ?: evaluation.fallback.firstNotNullOfOrNull { it })
+            ?.copy(dataStatus = dataStatus(symbol))
     }
 
     private fun currency(symbol: String) = if (symbol.contains('.')) "EUR" else "USD"
+
+    private companion object {
+        val RELAXATION_LEVELS = listOf(0.85, 0.70, 0.55)
+    }
 }
+
+internal data class ScanEvaluation(val primary: ScanResult?, val fallback: List<ScanResult?>)

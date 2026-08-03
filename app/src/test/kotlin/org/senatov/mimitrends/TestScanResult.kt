@@ -3,8 +3,8 @@ package org.senatov.mimitrends
 import org.senatov.mimitrends.model.ScanResult
 
 internal object TestScanResult {
-    fun create(anomalyScore: Double = 4.0, signalSource: String = "Impulse ↑") = ScanResult(
-        symbol = "TEST",
+    fun create(anomalyScore: Double = 4.0, signalSource: String = "Impulse ↑", symbol: String = "TEST") = ScanResult(
+        symbol = symbol,
         price = 100.0,
         anomalyScore = anomalyScore,
         priceAnomaly = 5.0,

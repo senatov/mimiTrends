@@ -15,10 +15,11 @@ import kotlin.math.ln
 import kotlin.math.ln1p
 import kotlin.math.max
 
-/** Detects only directional impulses in the latest completed minute bars. */
+/** Detects fresh directional impulses, early momentum, and V-shaped reversals. */
 class ScannerEngine(private val zoneOverride: ZoneId? = null) {
     private val log = LoggerFactory.getLogger(javaClass)
     private val earlyMomentumDetector = EarlyMomentumDetector(zoneOverride)
+    private val vReversalDetector = VReversalDetector(zoneOverride)
 
     internal fun freshnessWeight(ageMinutes: Double): Double =
         exp(-ln(2.0) * ageMinutes.coerceAtLeast(0.0) / FRESHNESS_HALF_LIFE_MINUTES)
@@ -38,11 +39,16 @@ class ScannerEngine(private val zoneOverride: ZoneId? = null) {
         }
         val signal = candidates.maxByOrNull(Signal::score)
         val momentum = earlyMomentumDetector.detect(sorted, criteria)
-        if (signal == null && momentum == null) return null
+        val reversal = vReversalDetector.detect(sorted, criteria)
+        if (signal == null && momentum == null && reversal == null) return null
         val sessionBars = sameSession(sorted, latest)
         val turnover = sessionBars.sumOf { it.close * it.volume }
         if (latest.close < criteria.minPrice || turnover < criteria.minSessionTurnover) return null
-        if (momentum != null && momentum.score > (signal?.score ?: Double.NEGATIVE_INFINITY)) {
+        val impulseScore = signal?.score ?: Double.NEGATIVE_INFINITY
+        if (reversal != null && reversal.score >= max(impulseScore, momentum?.score ?: Double.NEGATIVE_INFINITY)) {
+            return reversalResult(symbol, latest, sessionBars, turnover, reversal)
+        }
+        if (momentum != null && momentum.score > impulseScore) {
             return momentumResult(symbol, latest, sessionBars, turnover, momentum)
         }
         val selected = requireNotNull(signal)
@@ -99,19 +105,52 @@ class ScannerEngine(private val zoneOverride: ZoneId? = null) {
         signalEpochMillis = latest.minuteEpochSeconds * 1_000
     )
 
-    fun evaluateFallback(symbol: String, bars: List<MinuteBar>, criteria: ScannerCriteria): ScanResult? {
-        log.debug(LogTag.DB, "evaluateFallback(symbol={}, bars={})", symbol, bars.size)
+    private fun reversalResult(
+        symbol: String,
+        latest: MinuteBar,
+        sessionBars: List<MinuteBar>,
+        turnover: Double,
+        reversal: VReversal
+    ) = ScanResult(
+        symbol = symbol,
+        price = latest.close,
+        anomalyScore = reversal.score,
+        priceAnomaly = reversal.shockZ,
+        volumeAnomaly = Double.NaN,
+        rangeAnomaly = reversal.shockZ,
+        relativeVolume = Double.NaN,
+        candleBodyRatio = reversal.recoveryRatio.coerceIn(0.0, 1.0),
+        windowChangePercent = reversal.recoveryPercent,
+        windowVolume = reversal.volume,
+        sessionVolume = sessionBars.sumOf(MinuteBar::volume),
+        sessionTurnover = turnover,
+        signalAgeMinutes = 0,
+        signalSource = if (reversal.direction > 0) "V-Reversal ↑" else "V-Reversal ↓",
+        updatedAtMillis = latest.minuteEpochSeconds * 1_000,
+        signalWindowLabel = "${reversal.extremeAgeMinutes}m recovery",
+        signalPrice = latest.close,
+        signalEpochMillis = latest.minuteEpochSeconds * 1_000
+    )
+
+    fun evaluateFallback(
+        symbol: String, bars: List<MinuteBar>, criteria: ScannerCriteria, relaxation: Double = 0.80
+    ): ScanResult? {
+        val factor = relaxation.coerceIn(0.55, 0.90)
+        log.debug(LogTag.DB, "evaluateFallback(symbol={}, bars={}, factor={})", symbol, bars.size, factor)
         val relaxed = criteria.copy(
-            minJumpZ = criteria.minJumpZ * 0.80,
-            minRangeZ = criteria.minRangeZ * 0.80,
-            minVolumeZ = criteria.minVolumeZ * 0.75,
-            minRelativeVolume = criteria.minRelativeVolume * 0.85,
-            minBodyRatio = criteria.minBodyRatio * 0.90
+            minJumpZ = criteria.minJumpZ * factor,
+            minRangeZ = criteria.minRangeZ * factor,
+            minVolumeZ = criteria.minVolumeZ * factor,
+            minRelativeVolume = criteria.minRelativeVolume * (0.75 + factor * 0.25),
+            minBodyRatio = criteria.minBodyRatio * (0.75 + factor * 0.25),
+            minAbsoluteMovePercent = criteria.minAbsoluteMovePercent * (0.70 + factor * 0.30),
+            minTrendReturnPercent = criteria.minTrendReturnPercent * factor,
+            minTrendEfficiency = criteria.minTrendEfficiency * (0.75 + factor * 0.25)
         )
         evaluate(symbol, bars, relaxed)?.let { impulse ->
-            return impulse.copy(signalSource = "${impulse.signalSource} · relaxed", anomalyScore = impulse.anomalyScore * 0.85)
+            return impulse.copy(signalSource = "${impulse.signalSource} · relaxed", anomalyScore = impulse.anomalyScore * factor)
         }
-        return evaluateTrend(symbol, bars, criteria)
+        return evaluateTrend(symbol, bars, relaxed)
     }
 
     private fun evaluateTrend(symbol: String, bars: List<MinuteBar>, criteria: ScannerCriteria): ScanResult? {

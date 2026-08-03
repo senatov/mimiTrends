@@ -78,7 +78,7 @@ data class ScannerCriteria(
     val anomalyWindow: AnomalyWindow = AnomalyWindow.HOUR,
     val marketRegion: MarketRegion = MarketRegion.BOTH,
     val scanIntervalSeconds: Long = 180,
-    val resultLimit: Int = 50,
+    val resultLimit: Int = 15,
     val minPrice: Double = 2.0,
     val minSessionTurnover: Double = 0.0,
     val baselineSessions: Int = 5,

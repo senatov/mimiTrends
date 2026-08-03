@@ -192,13 +192,13 @@ class ScannerPanel(
         val target = if (scanning) stagedRows else rows.associateByTo(linkedMapOf(), ScanResult::symbol)
         if (result == null) target.remove(symbol) else target[symbol] = result
         if (!scanning) {
-            rows.setAll(target.values)
+            replaceRows(target.values)
             autoFitter.request()
         }
     }
 
     fun showSnapshot(results: Collection<ScanResult>, resultLimit: Int) {
-        rows.setAll(results.sortedByDescending(ScanResult::anomalyScore).take(resultLimit))
+        replaceRows(results.sortedByDescending(ScanResult::anomalyScore).take(resultLimit))
         autoFitter.request()
     }
 
@@ -229,9 +229,26 @@ class ScannerPanel(
 
     fun completeScan(resultLimit: Int = 50) {
         log.debug(LogTag.UI, "completeScan(results={})", stagedRows.size)
-        rows.setAll(stagedRows.values.sortedByDescending(ScanResult::anomalyScore).take(resultLimit))
+        replaceRows(stagedRows.values.sortedByDescending(ScanResult::anomalyScore).take(resultLimit))
         stagedRows.clear(); scanning = false; hourglass?.stop()
         autoFitter.request()
+    }
+
+    private fun replaceRows(replacements: Collection<ScanResult>) {
+        val selectedSymbol = table.selectionModel.selectedItem?.symbol
+        rows.setAll(replacements)
+        table.sort()
+        val retainedIndex = selectedSymbol?.let { symbol -> sortedRows.indexOfFirst { it.symbol == symbol } } ?: -1
+        if (retainedIndex >= 0) {
+            table.selectionModel.select(retainedIndex)
+            return
+        }
+        sortedRows.firstOrNull()?.let { first ->
+            table.selectionModel.select(0)
+            table.scrollTo(0)
+            log.debug(LogTag.UI, "selectionFallback(symbol={}, previous={})", first.symbol, selectedSymbol)
+            onOpen(first)
+        }
     }
 
     fun abortScan() {

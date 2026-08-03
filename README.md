@@ -87,6 +87,8 @@ Hovering the derived columns reveals the exact jump, range, volume Z-scores, RVO
 
 MiMiTrends evaluates completed, minute-aligned OHLCV bars. Bars with non-finite values, impossible OHLC relationships, negative volume, invalid prices, or malformed timestamps are excluded. A valid zero-volume bar may remain in the price series; positive historical volume is still required when constructing a relative-volume reference.
 
+The scanner also recognizes fresh V-shaped reversals. It requires a statistically unusual three-minute shock of at least 0.25%, a recovery of at least 0.20%, two confirming steps in the recovery direction, and at least 50% directional recovery efficiency. The extreme expires after nine minutes, so an unrecovered fall or an old, inactive bounce is not promoted as a current opportunity.
+
 ### Comparable baseline
 
 For a candidate candle, the scanner prefers historical candles from prior sessions within approximately ±15 minutes of the same exchange-local time. This matters because volatility and volume near an opening auction are not comparable with quiet midday trading.

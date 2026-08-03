@@ -212,19 +212,20 @@ class MainController(
                 setStatus("Finnhub live + Yahoo/SQLite: scanning ${symbols.size} symbols · fresh impulses only")
             }
             val results = mutableListOf<ScanResult>()
-            val fallbackResults = mutableListOf<ScanResult>()
+            val fallbackLevels = List(3) { mutableListOf<ScanResult>() }
             val errors = mutableListOf<String>()
             symbols.forEachIndexed { index, symbol ->
                 if (generation != scanGeneration.get()) return@forEachIndexed
                 runCatching { marketData.loadAndEvaluate(symbol, criteria) }
-                    .onSuccess { (primary, fallback) ->
+                    .onSuccess { evaluation ->
                         val status = dataStatus(symbol)
-                        val primaryResult = primary?.copy(dataStatus = status)
-                        val fallbackResult = fallback?.copy(dataStatus = status)
+                        val primaryResult = evaluation.primary?.copy(dataStatus = status)
+                        val fallbackResults = evaluation.fallback.map { it?.copy(dataStatus = status) }
                         primaryResult?.let(results::add)
-                        fallbackResult?.let(fallbackResults::add)
-                        analytics.recordScanCandidate(runId, symbol, primaryResult ?: fallbackResult,
-                            if (primaryResult == null && fallbackResult == null) "NO_CURRENT_SIGNAL" else null, status)
+                        fallbackResults.forEachIndexed { level, result -> result?.let(fallbackLevels[level]::add) }
+                        val bestFallback = fallbackResults.firstNotNullOfOrNull { it }
+                        analytics.recordScanCandidate(runId, symbol, primaryResult ?: bestFallback,
+                            if (primaryResult == null && bestFallback == null) "NO_CURRENT_SIGNAL" else null, status)
                     }
                     .onFailure { error ->
                         errors += "$symbol: ${error.message ?: error.javaClass.simpleName}"
@@ -238,11 +239,10 @@ class MainController(
             if (errors.isNotEmpty()) {
                 log.warn(LogTag.API, "scan completed with failures count={} sample={}", errors.size, errors.take(3).joinToString("; "))
             }
-            val target = criteria.minimumTableResults.coerceAtMost(criteria.resultLimit)
-            val supplements = fallbackResults.sortedByDescending(ScanResult::anomalyScore)
-                .take((target - results.size).coerceAtLeast(0))
-            val published = (results + supplements).sortedByDescending(ScanResult::anomalyScore)
-                .take(criteria.resultLimit)
+            val selection = AdaptiveResultSelector.select(
+                results, fallbackLevels, criteria.minimumTableResults, criteria.resultLimit
+            )
+            val published = selection.results
             priorityScanner.replaceCandidates(published)
             analytics.completeScan(runId, published.map(ScanResult::symbol), errors.size)
             Platform.runLater {
@@ -258,7 +258,7 @@ class MainController(
                     scannerPanel.completeScan(criteria.resultLimit)
                     scannerPanel.showCountdown(criteria.scanIntervalSeconds)
                     val marketState = if (symbols.isEmpty()) "all selected markets closed"
-                        else "${results.size} strict impulses + ${supplements.size} trend/relaxed"
+                        else "${results.size.coerceAtMost(published.size)} strict impulses + ${selection.adaptiveCount} adaptive"
                     log.info(LogTag.API, "scan completed: {}", marketState)
                     setStatus("Hybrid scan complete · $marketState · next in ${criteria.scanIntervalSeconds}s")
                 }
