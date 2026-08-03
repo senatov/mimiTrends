@@ -25,6 +25,7 @@ class ScannerSettingsDialog(
     finnhubConfigured: Boolean
 ) {
     private val dialog = Dialog<ScannerSettingsResult>()
+    private val geometry = WindowGeometryService("settings", DEFAULT_WIDTH, DEFAULT_HEIGHT)
     private val marketRegion = ComboBox(FXCollections.observableArrayList(MarketRegion.entries)).apply { value = current.marketRegion }
     private val scanInterval = Spinner<Int>(60, 3_600, current.scanIntervalSeconds.toInt(), 30).apply { isEditable = true }
     private val resultLimit = Spinner<Int>(5, 15, current.resultLimit.coerceIn(5, 15), 1).apply { isEditable = true }
@@ -121,10 +122,11 @@ class ScannerSettingsDialog(
             Tab("Scanner", ScrollPane(scanner).apply { isFitToWidth = true; styleClass += "settings-scroll" }).apply { isClosable = false },
             Tab("Appearance", ScrollPane(appearance).apply { isFitToWidth = true; styleClass += "settings-scroll" }).apply { isClosable = false }
         )
-        dialog.dialogPane.prefWidth = 780.0
-        dialog.dialogPane.prefHeight = 720.0
+        dialog.dialogPane.prefWidth = DEFAULT_WIDTH
+        dialog.dialogPane.prefHeight = DEFAULT_HEIGHT
         dialog.dialogPane.buttonTypes += listOf(ButtonType.CANCEL, ButtonType("Save", ButtonBar.ButtonData.OK_DONE))
         dialog.setResultConverter { if (it.buttonData == ButtonBar.ButtonData.OK_DONE) parse() else null }
+        geometry.attach(dialog)
     }
 
     private fun section(title: String, vararg content: javafx.scene.Node): VBox = VBox(10.0).apply {
@@ -181,4 +183,9 @@ class ScannerSettingsDialog(
     private fun hex(color: Color): String = "#%02X%02X%02X".format(
         (color.red * 255).toInt(), (color.green * 255).toInt(), (color.blue * 255).toInt()
     )
+
+    private companion object {
+        const val DEFAULT_WIDTH = 897.0
+        const val DEFAULT_HEIGHT = 720.0
+    }
 }
