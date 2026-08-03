@@ -95,20 +95,7 @@ data class ScannerCriteria(
     val minTrendEfficiency: Double = 0.08,
     val displayCurrency: DisplayCurrency = DisplayCurrency.EUR,
     val tableAppearance: TableAppearance = TableAppearance(),
-    val symbols: List<String> = listOf(
-        "AAPL", "MSFT", "NVDA", "AMZN", "META", "GOOGL", "TSLA", "AVGO", "JPM", "V",
-        "MA", "LLY", "WMT", "ORCL", "NFLX", "AMD", "COST", "HD", "BAC", "XOM",
-        "CVX", "CRM", "KO", "PEP", "DIS",
-        "SAP.DE", "SIE.DE", "ALV.DE", "DTE.DE", "BMW.DE", "MBG.DE", "BAS.DE", "RWE.DE", "DBK.DE", "DHL.DE",
-        "ASML.AS", "INGA.AS", "AD.AS", "UNA.AS", "PHIA.AS", "MC.PA", "OR.PA", "TTE.PA", "AIR.PA", "BNP.PA",
-        "SAN.PA", "SU.PA", "ENEL.MI", "ISP.MI", "STLAM.MI",
-        "UBER", "ABNB", "PYPL", "QCOM", "INTC", "MU", "AMAT", "TSM", "NVO", "PFE",
-        "MRK", "ABBV", "GS", "MS", "C", "CAT", "GE", "BA", "NKE", "SBUX",
-        "SHOP", "PLTR", "COIN", "SOFI", "SNAP",
-        "ADS.DE", "IFX.DE", "VOW3.DE", "HEN3.DE", "BEI.DE", "BAYN.DE", "MTX.DE", "ZAL.DE", "FRE.DE", "EOAN.DE",
-        "VNA.DE", "RMS.PA", "DG.PA", "CS.PA", "RI.PA", "ACA.PA", "STMPA.PA", "ASM.AS", "HEIA.AS", "KPN.AS",
-        "PRX.AS", "UCG.MI", "ENI.MI", "G.MI", "NOKIA.HE"
-    )
+    val symbols: List<String> = DefaultSymbolUniverse.symbols
 )
 
 data class ScanResult(

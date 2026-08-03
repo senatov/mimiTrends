@@ -92,7 +92,7 @@ class ScannerSettingsDialog(
                 settingRow("Finnhub live feed", "Optional. A new key is stored locally; blank keeps the existing configuration.", finnhubApiKey)
             ),
             section("Candidate universe",
-                Label("Comma-separated Yahoo symbols. The expanded default universe contains 100 liquid US and European listings.").apply {
+                Label("Comma-separated Yahoo symbols. The default universe contains 256 liquid US and European listings.").apply {
                     isWrapText = true; styleClass += "settings-help"
                 },
                 symbols.apply { prefRowCount = 5; maxHeight = 130.0 }

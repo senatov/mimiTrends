@@ -49,10 +49,13 @@ class ScannerSettingsService(private val path: Path = Path.of(System.getProperty
                     gridColor = color(p.getProperty("table.gridColor"), "#9CA9B5")
                 ),
                 symbols = normalizeSymbols(p.getProperty("symbols", ScannerCriteria().symbols.joinToString(","))).let { stored ->
-                    // Extend the original 50-symbol installation profile with the broader liquid
+                    // Extend prior standard installation profiles with the broader liquid
                     // universe without overwriting a genuinely customized watchlist.
-                    if (stored.size == 50 && "AAPL" in stored && "STLAM.MI" in stored) {
-                        (stored + ScannerCriteria().symbols).distinct()
+                    val defaults = ScannerCriteria().symbols
+                    if (stored.size in setOf(50, 100) && stored.all(defaults::contains) &&
+                        "AAPL" in stored && "STLAM.MI" in stored
+                    ) {
+                        (stored + defaults).distinct()
                     } else stored
                 }
             )
