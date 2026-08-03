@@ -29,6 +29,7 @@ class AnalyticsRepository(
     private val connection: Connection
     private val brokerTransactions: BrokerTransactionStore
     private val signalCalibration: SignalCalibrationStore
+    private val signalOutcomes: SignalOutcomeStore
 
     init {
         Files.createDirectories(databasePath.parent)
@@ -45,6 +46,7 @@ class AnalyticsRepository(
         migrate()
         brokerTransactions = BrokerTransactionStore(connection)
         signalCalibration = SignalCalibrationStore(connection)
+        signalOutcomes = SignalOutcomeStore(connection)
     }
 
     fun upsertInstrument(value: InstrumentMetadata) = locked {
@@ -128,24 +130,15 @@ class AnalyticsRepository(
         }
     }
 
-    fun recordSignalOutcomes(symbol: String, currentPrice: Double, observedEpoch: Long) = locked {
-        if (!currentPrice.isFinite() || currentPrice <= 0.0) return@locked
-        connection.prepareStatement("""INSERT OR IGNORE INTO signal_outcomes
-            (run_id, symbol, horizon_minutes, entry_price, observed_price, return_percent, observed_at, elapsed_minutes)
-            SELECT c.run_id, c.symbol, ?, c.entry_price, ?, (? / c.entry_price - 1.0) * 100.0, ?,
-                   (? - c.signal_epoch) / 60.0
-            FROM scan_candidates c JOIN scan_runs r ON r.id=c.run_id
-            WHERE c.symbol=? AND c.published=1 AND c.entry_price>0 AND c.signal_epoch<=?
-              AND c.signal_epoch>=?""").use { s ->
-            for (horizon in listOf(5, 10, 30)) {
-                s.setInt(1, horizon); s.setDouble(2, currentPrice); s.setDouble(3, currentPrice)
-                s.setLong(4, observedEpoch); s.setLong(5, observedEpoch); s.setString(6, symbol.uppercase())
-                s.setLong(7, observedEpoch - horizon * 60L)
-                s.setLong(8, observedEpoch - (horizon + OUTCOME_MAX_LAG_MINUTES) * 60L); s.addBatch()
-            }
-            s.executeBatch()
+    fun recordSignalOutcomes(symbol: String, currentPrice: Double, observedEpoch: Long,
+        highPrice: Double = currentPrice, lowPrice: Double = currentPrice
+    ) = locked { transaction { signalOutcomes.record(symbol, currentPrice, highPrice, lowPrice, observedEpoch) } }
+
+    fun recordSignalOutcomes(symbol: String, bars: List<MinuteBar>) = locked { transaction {
+        bars.takeLast(OUTCOME_TRACKING_BARS).forEach {
+            signalOutcomes.record(symbol, it.close, it.high, it.low, it.minuteEpochSeconds)
         }
-    }
+    } }
 
     fun withCalibration(result: ScanResult): ScanResult = locked { signalCalibration.enrich(result) }
 
@@ -341,7 +334,7 @@ class AnalyticsRepository(
         const val RAW_RETENTION_DAYS = 90
         const val AGGREGATE_RETENTION_DAYS = 730
         const val SCAN_RETENTION_DAYS = 180
-        const val OUTCOME_MAX_LAG_MINUTES = 4
+        const val OUTCOME_TRACKING_BARS = 35
         val SCHEMA_V1 = listOf(
             """CREATE TABLE IF NOT EXISTS instrument_metadata(symbol TEXT PRIMARY KEY, name TEXT NOT NULL, exchange TEXT NOT NULL, currency TEXT NOT NULL, timezone TEXT NOT NULL, isin TEXT, wkn TEXT, aliases TEXT, tradable INTEGER NOT NULL, updated_at INTEGER NOT NULL)""",
             """CREATE TABLE IF NOT EXISTS corporate_actions(symbol TEXT NOT NULL, action_type TEXT NOT NULL, effective_epoch INTEGER NOT NULL, ratio REAL, amount REAL, currency TEXT, source TEXT NOT NULL, PRIMARY KEY(symbol, action_type, effective_epoch))""",
@@ -388,7 +381,14 @@ class AnalyticsRepository(
             "CREATE INDEX IF NOT EXISTS idx_broker_isin_time ON broker_transactions(isin, occurred_at DESC)",
             "CREATE INDEX IF NOT EXISTS idx_broker_signal ON broker_transactions(linked_run_id, linked_symbol)"
         )
-        val MIGRATIONS = listOf(1 to SCHEMA_V1, 2 to SCHEMA_V2, 3 to SCHEMA_V3, 4 to SCHEMA_V4)
+        val SCHEMA_V5 = listOf(
+            "ALTER TABLE signal_outcomes ADD COLUMN maximum_return_percent REAL",
+            "ALTER TABLE signal_outcomes ADD COLUMN minimum_return_percent REAL",
+            """CREATE TABLE signal_excursions(run_id INTEGER NOT NULL, symbol TEXT NOT NULL,
+                maximum_return_percent REAL NOT NULL, minimum_return_percent REAL NOT NULL, last_observed_at INTEGER NOT NULL,
+                PRIMARY KEY(run_id, symbol), FOREIGN KEY(run_id, symbol) REFERENCES scan_candidates(run_id, symbol) ON DELETE CASCADE)"""
+        )
+        val MIGRATIONS = listOf(1 to SCHEMA_V1, 2 to SCHEMA_V2, 3 to SCHEMA_V3, 4 to SCHEMA_V4, 5 to SCHEMA_V5)
         const val UPSERT_INSTRUMENT = """INSERT INTO instrument_metadata(symbol, name, exchange, currency, timezone, isin, wkn, aliases, tradable, updated_at)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(symbol) DO UPDATE SET name=excluded.name, exchange=excluded.exchange,
             currency=excluded.currency, timezone=excluded.timezone, isin=COALESCE(excluded.isin, instrument_metadata.isin),

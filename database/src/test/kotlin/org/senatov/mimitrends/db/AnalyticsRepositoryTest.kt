@@ -91,6 +91,8 @@ class AnalyticsRepositoryTest {
         val saved = analytics.loadLatestPublishedResults(10).single()
         assertEquals("TEST", saved.symbol)
         assertEquals("SAVED SNAPSHOT", saved.dataStatus)
+        analytics.recordSignalOutcomes("TEST", 103.0, signalEpoch + 2 * 60L)
+        analytics.recordSignalOutcomes("TEST", 99.0, signalEpoch + 4 * 60L)
         analytics.recordSignalOutcomes("TEST", 102.0, signalEpoch + 5 * 60L)
         val stats = analytics.stats()
         assertEquals(1, stats.instruments)
@@ -110,10 +112,13 @@ class AnalyticsRepositoryTest {
                 statement.executeQuery("SELECT signal_epoch, entry_price FROM scan_candidates").use {
                     it.next(); assertEquals(signalEpoch, it.getLong(1)); assertEquals(100.0, it.getDouble(2))
                 }
-                statement.executeQuery("SELECT entry_price, observed_price, return_percent, elapsed_minutes FROM signal_outcomes").use {
+                statement.executeQuery("""SELECT entry_price, observed_price, return_percent, elapsed_minutes,
+                    maximum_return_percent, minimum_return_percent FROM signal_outcomes""").use {
                     it.next(); assertEquals(100.0, it.getDouble(1)); assertEquals(102.0, it.getDouble(2))
                     assertEquals(2.0, it.getDouble(3), 0.000_001)
                     assertEquals(5.0, it.getDouble(4), 0.000_001)
+                    assertEquals(3.0, it.getDouble(5), 0.000_001)
+                    assertEquals(-1.0, it.getDouble(6), 0.000_001)
                 }
             }
         }

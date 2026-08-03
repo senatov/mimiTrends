@@ -19,7 +19,7 @@ internal object SignalMetricPresentation {
             else -> Level.WATCH
         }
         val calibration = if (result.continuationProbability.isFinite())
-            "\nEmpirical ${result.calibrationHorizonMinutes}m continuation: %.0f%% (%d independent episodes)."
+            "\nEmpirical ${result.calibrationHorizonMinutes}m outcome available: %.0f%% after estimated friction (%d episodes)."
                 .format(result.continuationProbability * 100.0, result.calibrationSamples)
         else "\nContinuation calibration: insufficient independent episodes (${result.calibrationSamples}/5)."
         return SignalMetric(level.anomalyLabel, level.color, if (score >= 4.0) 600 else 500,
@@ -27,6 +27,37 @@ internal object SignalMetricPresentation {
                 "This is not a buy/sell recommendation and does not predict direction.%s"
                 .format(score, calibration))
     }
+
+    fun outcome(result: ScanResult): SignalMetric {
+        if (!result.medianNetReturnPercent.isFinite()) {
+            return SignalMetric("Collecting", "#707981", 400,
+                "Need at least 5 independent ${result.calibrationHorizonMinutes}-minute episodes; " +
+                    "currently ${result.calibrationSamples}. Nearby repeated scans count as one episode.")
+        }
+        val probability = result.continuationProbability * 100.0
+        val median = result.medianNetReturnPercent
+        val color = when {
+            median > 0.0 && result.continuationLowerBound >= 0.50 -> "#137b50"
+            median < 0.0 && result.continuationUpperBound <= 0.50 -> "#b23b48"
+            else -> "#9a6717"
+        }
+        val excursions = if (result.medianFavorableExcursionPercent.isFinite())
+            "\nMedian favorable excursion: %+.2f%%\nMedian adverse excursion: %+.2f%%"
+                .format(result.medianFavorableExcursionPercent, result.medianAdverseExcursionPercent)
+        else "\nExcursion history is still being collected."
+        val details = ("Median net directional return at ${result.calibrationHorizonMinutes}m: %+.2f%%\n" +
+            "Middle 50%%: %+.2f%% to %+.2f%%\n" +
+            "Profitable after 0.20%% estimated friction: %.0f%% (95%% interval %.0f–%.0f%%)\n" +
+            "Independent episodes: %d%s").format(
+                median, result.lowerQuartileNetReturnPercent, result.upperQuartileNetReturnPercent,
+                probability, result.continuationLowerBound * 100.0, result.continuationUpperBound * 100.0,
+                result.calibrationSamples, excursions
+            )
+        return SignalMetric("%+.2f%% · %.0f%%".format(median, probability), color, 500, details)
+    }
+
+    fun outcomeSeverity(result: ScanResult): Double =
+        result.medianNetReturnPercent.takeIf(Double::isFinite) ?: Double.NEGATIVE_INFINITY
 
     fun priceAction(result: ScanResult): SignalMetric {
         val arrow = directionArrow(result)

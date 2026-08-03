@@ -16,22 +16,28 @@ class SignalCalibrationStoreTest {
                     run_id INTEGER, symbol TEXT, signal_epoch INTEGER, signal TEXT,
                     accepted INTEGER, published INTEGER)""")
                 statement.execute("""CREATE TABLE signal_outcomes(
-                    run_id INTEGER, symbol TEXT, horizon_minutes INTEGER, return_percent REAL)""")
+                    run_id INTEGER, symbol TEXT, horizon_minutes INTEGER, return_percent REAL,
+                    maximum_return_percent REAL, minimum_return_percent REAL)""")
                 repeat(6) { index ->
                     val run = index + 1
                     val symbol = "S$run"
                     val outcome = if (index < 4) 0.5 else -0.5
                     statement.execute("INSERT INTO scan_candidates VALUES($run,'$symbol',${1_000 + index * 2_000},'Impulse ↑',1,1)")
-                    statement.execute("INSERT INTO signal_outcomes VALUES($run,'$symbol',10,$outcome)")
+                    statement.execute("INSERT INTO signal_outcomes VALUES($run,'$symbol',10,$outcome,0.8,-0.3)")
                 }
                 statement.execute("INSERT INTO scan_candidates VALUES(99,'S1',1300,'Impulse ↑',1,1)")
-                statement.execute("INSERT INTO signal_outcomes VALUES(99,'S1',10,5.0)")
+                statement.execute("INSERT INTO signal_outcomes VALUES(99,'S1',10,5.0,5.0,-0.1)")
             }
 
             val calibrated = SignalCalibrationStore(connection).enrich(result())
 
             assertEquals(6, calibrated.calibrationSamples)
-            assertEquals(9.0 / 16.0, calibrated.continuationProbability, 1e-12)
+            assertEquals(5.0 / 8.0, calibrated.continuationProbability, 1e-12)
+            assertEquals(0.3, calibrated.medianNetReturnPercent, 1e-12)
+            assertEquals(0.8, calibrated.medianFavorableExcursionPercent, 1e-12)
+            assertEquals(-0.3, calibrated.medianAdverseExcursionPercent, 1e-12)
+            assertTrue(calibrated.continuationLowerBound < calibrated.continuationProbability)
+            assertTrue(calibrated.continuationUpperBound > calibrated.continuationProbability)
             assertEquals(4.0, calibrated.anomalyScore, 1e-12)
         }
     }
@@ -40,7 +46,8 @@ class SignalCalibrationStoreTest {
         DriverManager.getConnection("jdbc:sqlite::memory:").use { connection ->
             connection.createStatement().use { statement ->
                 statement.execute("CREATE TABLE scan_candidates(run_id INTEGER, symbol TEXT, signal_epoch INTEGER, signal TEXT, accepted INTEGER, published INTEGER)")
-                statement.execute("CREATE TABLE signal_outcomes(run_id INTEGER, symbol TEXT, horizon_minutes INTEGER, return_percent REAL)")
+                statement.execute("""CREATE TABLE signal_outcomes(run_id INTEGER, symbol TEXT, horizon_minutes INTEGER,
+                    return_percent REAL, maximum_return_percent REAL, minimum_return_percent REAL)""")
             }
             val calibrated = SignalCalibrationStore(connection).enrich(result())
             assertTrue(calibrated.continuationProbability.isNaN())

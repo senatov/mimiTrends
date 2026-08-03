@@ -100,7 +100,7 @@ internal class MarketDataService(
         if (dataStatus(symbol) == "LIVE") source = "FINNHUB"
         analytics.recordDataQuality(symbol, source, dataStatus(symbol), completed.lastOrNull()?.minuteEpochSeconds, completed.size)
         analytics.refreshDerived(symbol, completed, source)
-        completed.lastOrNull()?.let { analytics.recordSignalOutcomes(symbol, it.close, it.minuteEpochSeconds) }
+        analytics.recordSignalOutcomes(symbol, completed)
         val primary = scannerEngine.evaluate(symbol, completed, criteria)?.withFeedAge(now)
         val fallback = if (primary != null) emptyList() else RELAXATION_LEVELS.map { factor ->
             scannerEngine.evaluateFallback(symbol, completed, criteria, factor)

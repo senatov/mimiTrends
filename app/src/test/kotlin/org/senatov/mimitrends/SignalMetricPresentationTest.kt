@@ -13,6 +13,26 @@ class SignalMetricPresentationTest {
         assertTrue(metric.details.contains("does not predict direction"))
     }
 
+    @Test fun `outcome combines net return probability and uncertainty`() {
+        val result = TestScanResult.create().copy(
+            continuationProbability = 0.58,
+            calibrationSamples = 67,
+            continuationLowerBound = 0.46,
+            continuationUpperBound = 0.69,
+            medianNetReturnPercent = 0.08,
+            lowerQuartileNetReturnPercent = -0.24,
+            upperQuartileNetReturnPercent = 0.31,
+            medianFavorableExcursionPercent = 0.42,
+            medianAdverseExcursionPercent = -0.27
+        )
+
+        val metric = SignalMetricPresentation.outcome(result)
+
+        assertEquals("+0.08% · 58%", metric.label)
+        assertTrue(metric.details.contains("95% interval 46–69%"))
+        assertTrue(metric.details.contains("Median adverse excursion: -0.27%"))
+    }
+
     @Test fun `labels missing impulse volume as unavailable`() {
         val result = TestScanResult.create(signalSource = "Impulse ↓")
 

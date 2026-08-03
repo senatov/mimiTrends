@@ -22,7 +22,8 @@ foreign keys, and independent tests.
 | `baseline_stats`        | Median/MAD return and log-volume by instrument and minute of trading day.               |
 | `scan_runs`             | One durable record for every complete scanner pass.                                     |
 | `scan_candidates`       | Accepted and rejected symbols, rejection reason, metrics, source and publication state. |
-| `signal_outcomes`       | Realized 5/10/30 minute return after each published signal.                             |
+| `signal_outcomes`       | Realized 5/10/30 minute return plus observed favorable/adverse excursions.              |
+| `signal_excursions`     | In-progress high/low return tracking for active published signals.                      |
 | `broker_transactions`   | Deduplicated Scalable operations with optional links to saved scanner signals.           |
 
 ## Data flow

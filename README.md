@@ -75,6 +75,7 @@ The primary table intentionally uses plain-language categories instead of exposi
 | Move 10m | Signed price change over the latest ten-minute display window. |
 | Price | Latest completed locally available price in the selected display currency. |
 | Anomaly | Composite anomaly ranking: `Low`, `Moderate`, `High`, or `Very high`. This measures how unusual and well-confirmed the detected move is; it is not a buy/sell recommendation or a prediction that the move will continue. |
+| Outcome | Median directional return after 0.20% estimated friction and the empirically profitable share, such as `+0.08% · 58%`. The tooltip includes the middle 50% range, a 95% uncertainty interval, sample count, and favorable/adverse excursions. |
 | Price action | Human-readable interpretation such as `Strong impulse ↑`, `Steady trend ↑`, or `Volatile / unstable`. |
 | Volume | `Normal`, `Elevated`, `Strong`, `Extreme`, or `Price-led`, with relative volume when available. |
 | Age | Whether the signal is latest, several minutes old, or a trend window. |
@@ -197,6 +198,16 @@ This allows reasonable pullbacks while rejecting a noisy sideways chart that mer
 
 Published signals are evaluated later at target horizons of 5, 10, and 30 minutes. Outcome returns use the exact signal candle price and timestamp rather than the later scan-completion price.
 
+The scanner's `Outcome` column uses independent ten-minute episodes. Repeated publications for the same
+symbol and signal family within fifteen minutes count as one episode. Directional returns are reduced by a
+conservative 0.20% friction allowance before profitability is assessed, so a negligible move is not counted
+as a useful continuation. The displayed probability uses mild beta smoothing, while its uncertainty range is
+a 95% Wilson interval. A minimum of five independent episodes is required before the metric is displayed.
+
+While an episode is active, observed candle highs and lows update its maximum favorable excursion (MFE) and
+maximum adverse excursion (MAE). These path metrics describe typical opportunity and drawdown after a signal;
+older outcomes created before this schema was introduced remain usable but have no excursion values.
+
 The database stores both the target horizon and the actual elapsed time. This avoids silently treating a delayed observation as an exact five-minute result. Outcome collection accepts only a small scheduling delay and records:
 
 - signal entry price;
@@ -204,6 +215,7 @@ The database stores both the target horizon and the actual elapsed time. This av
 - target horizon;
 - actual elapsed minutes;
 - realized percentage return;
+- maximum favorable and adverse movement observed before the horizon;
 - observation timestamp.
 
 This apparatus is intended for later empirical work: measuring continuation rates, evaluating thresholds, comparing signal classes, and detecting whether an apparently strong score has predictive value. The application does not yet present these records as a backtest or claim a validated trading edge.

@@ -133,7 +133,14 @@ data class ScanResult(
     val signalEpochMillis: Long = updatedAtMillis,
     val continuationProbability: Double = Double.NaN,
     val calibrationSamples: Int = 0,
-    val calibrationHorizonMinutes: Int = 10
+    val calibrationHorizonMinutes: Int = 10,
+    val continuationLowerBound: Double = Double.NaN,
+    val continuationUpperBound: Double = Double.NaN,
+    val medianNetReturnPercent: Double = Double.NaN,
+    val lowerQuartileNetReturnPercent: Double = Double.NaN,
+    val upperQuartileNetReturnPercent: Double = Double.NaN,
+    val medianFavorableExcursionPercent: Double = Double.NaN,
+    val medianAdverseExcursionPercent: Double = Double.NaN
 )
 
 data class CompanyProfile(

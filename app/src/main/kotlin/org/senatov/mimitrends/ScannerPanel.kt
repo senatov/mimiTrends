@@ -123,6 +123,7 @@ class ScannerPanel(
         val move = columnFactory.number("Move 10m", ScanResult::windowChangePercent, ::percent)
         val price = columnFactory.number("Price", { convertPrice(it.symbol, it.price) }) { "${currency.symbol}%,.2f".format(it) }
         val scoreColumn = columnFactory.metric("Anomaly", ScanResult::anomalyScore, SignalMetricPresentation::strength)
+        val outcome = columnFactory.metric("Outcome", SignalMetricPresentation::outcomeSeverity, SignalMetricPresentation::outcome)
         val priceAction = columnFactory.metric("Price action", SignalMetricPresentation::priceActionSeverity, SignalMetricPresentation::priceAction)
         val volume = columnFactory.metric("Volume", SignalMetricPresentation::volumeSeverity, SignalMetricPresentation::volume)
         val age = columnFactory.signal("Age", ScanResult::signalWindowLabel)
@@ -135,6 +136,7 @@ class ScannerPanel(
             TableColumnAutoFitter.Spec(move, { percent(it.windowChangePercent) }, 82.0, 130.0, reserveWidth = 8.0),
             TableColumnAutoFitter.Spec(price, { "${currency.symbol}%,.2f".format(convertPrice(it.symbol, it.price)) }, 72.0, 135.0, reserveWidth = 8.0),
             TableColumnAutoFitter.Spec(scoreColumn, { SignalMetricPresentation.strength(it).label }, 88.0, 140.0),
+            TableColumnAutoFitter.Spec(outcome, { SignalMetricPresentation.outcome(it).label }, 105.0, 165.0),
             TableColumnAutoFitter.Spec(priceAction, { SignalMetricPresentation.priceAction(it).label }, 100.0, 190.0),
             TableColumnAutoFitter.Spec(volume, { SignalMetricPresentation.volume(it).label }, 82.0, 160.0),
             TableColumnAutoFitter.Spec(age, ScanResult::signalWindowLabel, 72.0, 150.0),
