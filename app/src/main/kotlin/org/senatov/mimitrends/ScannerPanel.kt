@@ -155,14 +155,14 @@ class ScannerPanel(
             TableRow<ScanResult>().apply {
                 setOnMouseClicked { e -> if (!isEmpty && e.button == MouseButton.PRIMARY && e.clickCount == 1) onOpen(item) }
                 contextMenu = ContextMenu(
-                    MenuItem("Copy company name").apply { setOnAction { item?.let { copyText(columnFactory.companyName(it)) } } },
+                    MenuItem("Copy search keyword").apply { setOnAction { item?.let { copySearchKeyword(it) } } },
                     MenuItem("Copy ticker").apply { setOnAction { item?.let { copyText(it.symbol) } } }
                 )
             }
         }
         table.setOnKeyPressed { event ->
             if (event.code == KeyCode.C && event.isShortcutDown) {
-                table.selectionModel.selectedItem?.let { copyText(columnFactory.companyName(it)) }
+                table.selectionModel.selectedItem?.let(::copySearchKeyword)
                 event.consume()
             }
         }
@@ -180,6 +180,10 @@ class ScannerPanel(
         VBox.setVgrow(tableContainer, Priority.ALWAYS)
         minHeight = 0.0
         maxHeight = Double.MAX_VALUE
+    }
+
+    private fun copySearchKeyword(result: ScanResult) {
+        copyText(CompanySearchTerm.from(columnFactory.companyName(result), result.symbol))
     }
 
     fun update(result: ScanResult) {
