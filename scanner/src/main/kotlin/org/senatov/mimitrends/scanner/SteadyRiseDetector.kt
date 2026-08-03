@@ -36,7 +36,11 @@ internal class SteadyRiseDetector(private val zoneOverride: ZoneId? = null) {
             sessionVolume = session.sumOf { it.volume },
             sessionTurnover = turnover,
             signalAgeMinutes = 0,
-            signalSource = if (best.recovery) "Recovery rise ↑" else "Steady rise ↑",
+            signalSource = when (best.phase) {
+                RisePhase.STEADY -> "Steady rise ↑"
+                RisePhase.RECOVERY -> "Recovery rise ↑"
+                RisePhase.RECOVERY_BREAKOUT -> "Recovery breakout ↑"
+            },
             updatedAtMillis = latest.minuteEpochSeconds * 1_000,
             signalWindowLabel = "${best.minutes}m steady",
             signalPrice = latest.close,
@@ -71,10 +75,26 @@ internal class SteadyRiseDetector(private val zoneOverride: ZoneId? = null) {
         if (latestBars.size < MIN_LATEST_SAMPLES) return null
         val latestReturn = percent(latestBars.first().close, latestBars.last().close)
         if (latestReturn < max(MIN_LATEST_RETURN_PERCENT, totalReturn * MIN_CONTINUATION_SHARE)) return null
+        val tailBars = latestBars.filter { it.minuteEpochSeconds >= latestEpoch - TAIL_MINUTES * 60L }
+        if (tailBars.size < MIN_TAIL_SAMPLES || regression(tailBars).slope <= 0.0) return null
         if (maximumDrawdownPercent(bars) > max(MAX_DRAWDOWN_PERCENT, totalReturn * MAX_DRAWDOWN_SHARE)) return null
         val contextWeight = if (recovery) RECOVERY_SCORE_WEIGHT else 1.0
         val score = (1.25 + totalReturn * 1.20 + regression.rSquared * 1.25 + efficiency) * contextWeight
-        return RiseWindow(minutes, bars, totalReturn, efficiency, score, recovery)
+        val phase = when {
+            !recovery -> RisePhase.STEADY
+            followsConsolidation(bars, latestEpoch, latestReturn) -> RisePhase.RECOVERY_BREAKOUT
+            else -> RisePhase.RECOVERY
+        }
+        return RiseWindow(minutes, bars, totalReturn, efficiency, score, phase)
+    }
+
+    private fun followsConsolidation(bars: List<MinuteBar>, latestEpoch: Long, latestReturn: Double): Boolean {
+        if (latestReturn < MIN_BREAKOUT_RETURN_PERCENT) return false
+        val preceding = bars.filter { it.minuteEpochSeconds in
+            (latestEpoch - (LATEST_MINUTES + CONSOLIDATION_MINUTES) * 60L)..(latestEpoch - LATEST_MINUTES * 60L) }
+        if (preceding.size < MIN_CONSOLIDATION_SAMPLES) return false
+        val rangePercent = percent(preceding.minOf { it.low }, preceding.maxOf { it.high })
+        return rangePercent <= MAX_CONSOLIDATION_RANGE_PERCENT && regression(preceding).rSquared < MAX_CONSOLIDATION_R_SQUARED
     }
 
     private fun maximumDrawdownPercent(bars: List<MinuteBar>): Double {
@@ -124,9 +144,10 @@ internal class SteadyRiseDetector(private val zoneOverride: ZoneId? = null) {
         val returnPercent: Double,
         val efficiency: Double,
         val score: Double,
-        val recovery: Boolean
+        val phase: RisePhase
     )
     private data class Regression(val slope: Double, val rSquared: Double)
+    private enum class RisePhase { STEADY, RECOVERY, RECOVERY_BREAKOUT }
 
     private companion object {
         val WINDOW_MINUTES = listOf(10, 15, 20, 30, 45, 60, 90, 120, 180)
@@ -138,6 +159,8 @@ internal class SteadyRiseDetector(private val zoneOverride: ZoneId? = null) {
         const val CONTEXT_MINUTES = 60
         const val LATEST_MINUTES = 5
         const val MIN_LATEST_SAMPLES = 3
+        const val TAIL_MINUTES = 3
+        const val MIN_TAIL_SAMPLES = 3
         const val MIN_LATEST_RETURN_PERCENT = 0.05
         const val MIN_CONTINUATION_SHARE = 0.08
         const val MAX_DRAWDOWN_PERCENT = 0.30
@@ -147,5 +170,10 @@ internal class SteadyRiseDetector(private val zoneOverride: ZoneId? = null) {
         const val MIN_WINDOW_SAMPLES = 6
         const val MAX_GAP_MINUTES = 5
         const val RECOVERY_SCORE_WEIGHT = 0.85
+        const val CONSOLIDATION_MINUTES = 10
+        const val MIN_CONSOLIDATION_SAMPLES = 6
+        const val MIN_BREAKOUT_RETURN_PERCENT = 0.12
+        const val MAX_CONSOLIDATION_RANGE_PERCENT = 0.20
+        const val MAX_CONSOLIDATION_R_SQUARED = 0.35
     }
 }

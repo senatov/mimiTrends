@@ -239,7 +239,7 @@ class TrendChartView : StackPane() {
         volumeSignalMarker = null
         if (signal == null || latestEpoch <= 0) return
         val isTrend = signal.signalSource.startsWith("Trend") || signal.signalSource.startsWith("Steady rise") ||
-            signal.signalSource.startsWith("Recovery rise")
+            signal.signalSource.startsWith("Recovery")
         val isMomentum = signal.signalSource.startsWith("Momentum")
         val isReversal = signal.signalSource.startsWith("V-Reversal")
         val ageMinutes = signal.signalAgeMinutes
