@@ -122,7 +122,7 @@ class ScannerPanel(
         val signal = columnFactory.signal("Signal", ScanResult::signalSource)
         val move = columnFactory.number("Move 10m", ScanResult::windowChangePercent, ::percent)
         val price = columnFactory.number("Price", { convertPrice(it.symbol, it.price) }) { "${currency.symbol}%,.2f".format(it) }
-        val scoreColumn = columnFactory.metric("Strength", ScanResult::anomalyScore, SignalMetricPresentation::strength)
+        val scoreColumn = columnFactory.metric("Anomaly", ScanResult::anomalyScore, SignalMetricPresentation::strength)
         val priceAction = columnFactory.metric("Price action", SignalMetricPresentation::priceActionSeverity, SignalMetricPresentation::priceAction)
         val volume = columnFactory.metric("Volume", SignalMetricPresentation::volumeSeverity, SignalMetricPresentation::volume)
         val age = columnFactory.signal("Age", ScanResult::signalWindowLabel)

@@ -22,8 +22,9 @@ internal object SignalMetricPresentation {
             "\nEmpirical ${result.calibrationHorizonMinutes}m continuation: %.0f%% (%d independent episodes)."
                 .format(result.continuationProbability * 100.0, result.calibrationSamples)
         else "\nContinuation calibration: insufficient independent episodes (${result.calibrationSamples}/5)."
-        return SignalMetric(level.label, level.color, if (score >= 4.0) 600 else 500,
-            "Composite anomaly strength: %.2f×\nMeasures rarity, confirmation, candle quality and freshness.%s"
+        return SignalMetric(level.anomalyLabel, level.color, if (score >= 4.0) 600 else 500,
+            "Anomaly score: %.2f\nMeasures rarity, confirmation, candle quality and freshness.\n" +
+                "This is not a buy/sell recommendation and does not predict direction.%s"
                 .format(score, calibration))
     }
 
@@ -83,10 +84,10 @@ internal object SignalMetricPresentation {
     private fun directionArrow(result: ScanResult) = if (result.windowChangePercent < 0) "↓" else "↑"
     private fun Double.finiteOrZero() = takeIf(Double::isFinite) ?: 0.0
 
-    private enum class Level(val label: String, val volumeLabel: String, val color: String) {
-        EXTREME("Extreme", "Extreme", "#a92f3d"),
-        STRONG("Strong", "Strong", "#b26012"),
-        NOTABLE("Notable", "Elevated", "#526f8a"),
-        WATCH("Watch", "Normal", "#707981")
+    private enum class Level(val anomalyLabel: String, val volumeLabel: String, val color: String) {
+        EXTREME("Very high", "Extreme", "#a92f3d"),
+        STRONG("High", "Strong", "#b26012"),
+        NOTABLE("Moderate", "Elevated", "#526f8a"),
+        WATCH("Low", "Normal", "#707981")
     }
 }

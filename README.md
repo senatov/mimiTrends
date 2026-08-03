@@ -74,7 +74,7 @@ The primary table intentionally uses plain-language categories instead of exposi
 | Signal | Fresh impulse, relaxed impulse, or persistent trend. |
 | Move 10m | Signed price change over the latest ten-minute display window. |
 | Price | Latest completed locally available price in the selected display currency. |
-| Strength | Composite ranking: `Watch`, `Notable`, `Strong`, or `Extreme`. |
+| Anomaly | Composite anomaly ranking: `Low`, `Moderate`, `High`, or `Very high`. This measures how unusual and well-confirmed the detected move is; it is not a buy/sell recommendation or a prediction that the move will continue. |
 | Price action | Human-readable interpretation such as `Strong impulse ↑`, `Steady trend ↑`, or `Volatile / unstable`. |
 | Volume | `Normal`, `Elevated`, `Strong`, `Extreme`, or `Price-led`, with relative volume when available. |
 | Age | Whether the signal is latest, several minutes old, or a trend window. |
