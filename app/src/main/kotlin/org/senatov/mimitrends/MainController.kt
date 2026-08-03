@@ -72,6 +72,10 @@ class MainController(
     private var finnhubClient: FinnhubWebSocketClient? = null
     private val liveTicks = ConcurrentHashMap<String, Long>()
     private val marketData = MarketDataService(repository, analytics, scannerEngine, yahooFinance, ::dataStatus)
+    private val priorityScanner = PriorityScanCoordinator(
+        { symbol -> marketData.loadPriorityResult(symbol, scannerCriteria) },
+        { symbol, result -> Platform.runLater { scannerPanel.applyPriorityResult(symbol, result) } }
+    )
     private val liveAggregator = FinnhubMinuteAggregator { bar ->
         repository.upsertMinuteBar(bar)
         liveTicks[bar.symbol] = System.currentTimeMillis()
@@ -137,6 +141,7 @@ class MainController(
     fun close() {
         log.debug(LogTag.UI, "close()")
         rotationTask?.cancel(false)
+        priorityScanner.close()
         finnhubClient?.close()
         batchScheduler.shutdownNow()
         runCatching { batchScheduler.awaitTermination(3, TimeUnit.SECONDS) }
@@ -144,23 +149,15 @@ class MainController(
         analytics.close()
     }
 
-    fun selectedSymbol(): String {
-        log.debug(LogTag.UI, "selectedSymbol()")
-        return currentSymbol.ifEmpty { "AAPL" }
-    }
+    fun selectedSymbol(): String = currentSymbol.ifEmpty { "AAPL" }
 
-    fun selectedRange(): String {
-        log.debug(LogTag.UI, "selectedRange()")
-        return selectedRangeValue
-    }
+    fun selectedRange(): String = selectedRangeValue
 
-    fun dividerPosition(): Double {
-        log.debug(LogTag.UI, "dividerPosition()")
-        return contentSplitPane.dividers.firstOrNull()?.position ?: initialDivider
-    }
+    fun dividerPosition(): Double = contentSplitPane.dividers.firstOrNull()?.position ?: initialDivider
 
     private fun startScanner() {
         log.debug(LogTag.API, "startScanner(symbols={})", scannerCriteria.symbols.size)
+        priorityScanner.replaceCandidates(emptyList())
         val generation = scanGeneration.incrementAndGet()
         val criteria = scannerCriteria
         rotationTask?.cancel(false)
@@ -170,6 +167,7 @@ class MainController(
             val symbols = selectedSymbols.filter { MarketCalendar.isOpen(it) }
             log.info(LogTag.API, "scan started symbols={} recentWindow={}m", symbols.size, criteria.maxSignalAgeMinutes)
             if (symbols.isEmpty()) {
+                priorityScanner.replaceCandidates(emptyList())
                 val now = java.time.Instant.now()
                 val nextOpening = MarketCalendar.nextOpening(selectedSymbols, now)
                 val resumeDelaySeconds = nextOpening?.let {
@@ -241,7 +239,9 @@ class MainController(
             val target = criteria.minimumTableResults.coerceAtMost(criteria.resultLimit)
             val supplements = fallbackResults.sortedByDescending(ScanResult::anomalyScore)
                 .take((target - results.size).coerceAtLeast(0))
-            val published = results + supplements
+            val published = (results + supplements).sortedByDescending(ScanResult::anomalyScore)
+                .take(criteria.resultLimit)
+            priorityScanner.replaceCandidates(published)
             analytics.completeScan(runId, published.map(ScanResult::symbol), errors.size)
             Platform.runLater {
                 if (generation != scanGeneration.get()) return@runLater

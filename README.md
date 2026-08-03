@@ -55,6 +55,8 @@ The primary question is not “What did this stock do over the last year?” but
 - applies a configurable minimum absolute move so tiny changes in quiet stocks do not become misleading signals;
 - supplements a sparse strict result set with relaxed impulses and persistent rising trends;
 - ranks completed results atomically instead of changing the visible table while a scan is running;
+- rechecks published `Strong` and `Extreme` signals every minute in a separate priority task, updating
+  their rows immediately and stopping when they fall below `Strong`;
 - stores minute OHLCV history, company profiles, derived statistics, scan runs, and signal outcomes in SQLite;
 - uses exchange-local time zones and market calendars for US, Xetra, Euronext, and Helsinki instruments;
 - pauses scanning while every selected market is closed and resumes after the earliest next opening;

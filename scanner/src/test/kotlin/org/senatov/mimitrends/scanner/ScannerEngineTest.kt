@@ -9,6 +9,11 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class ScannerEngineTest {
+    @Test fun `uses the configured freshness duration as a true half life`() {
+        assertEquals(1.0, engine().freshnessWeight(0.0), 1e-12)
+        assertEquals(0.5, engine().freshnessWeight(1.8), 1e-12)
+    }
+
     @Test fun `detects a fresh upward impulse`() {
         val bars = normalBars().toMutableList()
         bars += candle(nextMinute(bars), 100.0, 103.0, 2_000.0)
@@ -65,6 +70,13 @@ class ScannerEngineTest {
     @Test fun `rejects a statistically unusual but economically tiny candle`() {
         val bars = normalBars().toMutableList()
         bars += candle(nextMinute(bars), 100.0, 100.10, 10_000.0)
+        assertNull(engine().evaluate("TEST", bars, criteria()))
+    }
+
+    @Test fun `does not treat a multi minute data gap as a one minute impulse`() {
+        val bars = normalBars().toMutableList()
+        bars += candle(nextMinute(bars) + 2, 100.0, 104.0, 5_000.0)
+
         assertNull(engine().evaluate("TEST", bars, criteria()))
     }
 

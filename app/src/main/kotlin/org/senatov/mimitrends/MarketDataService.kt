@@ -105,5 +105,14 @@ internal class MarketDataService(
         return primary to if (primary == null) scannerEngine.evaluateFallback(symbol, completed, criteria) else null
     }
 
+    fun loadPriorityResult(symbol: String, criteria: ScannerCriteria): ScanResult? {
+        if (!org.senatov.mimitrends.scanner.MarketCalendar.isOpen(symbol)) return null
+        val priorityCriteria = criteria.copy(
+            scanIntervalSeconds = PriorityScanCoordinator.PRIORITY_SCAN_INTERVAL_SECONDS
+        )
+        val (primary, fallback) = loadAndEvaluate(symbol, priorityCriteria)
+        return (primary ?: fallback)?.copy(dataStatus = dataStatus(symbol))
+    }
+
     private fun currency(symbol: String) = if (symbol.contains('.')) "EUR" else "USD"
 }

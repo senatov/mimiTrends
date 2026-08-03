@@ -187,6 +187,16 @@ class ScannerPanel(
         if (scanning) stagedRows[result.symbol] = result
     }
 
+    fun applyPriorityResult(symbol: String, result: ScanResult?) {
+        log.debug(LogTag.UI, "applyPriorityResult(symbol={}, present={})", symbol, result != null)
+        val target = if (scanning) stagedRows else rows.associateByTo(linkedMapOf(), ScanResult::symbol)
+        if (result == null) target.remove(symbol) else target[symbol] = result
+        if (!scanning) {
+            rows.setAll(target.values)
+            autoFitter.request()
+        }
+    }
+
     fun clear() {
         log.debug(LogTag.UI, "clear()")
         rows.clear(); stagedRows.clear(); scanning = false

@@ -11,12 +11,16 @@ import java.time.Instant
 import java.time.ZoneId
 import kotlin.math.abs
 import kotlin.math.exp
+import kotlin.math.ln
 import kotlin.math.ln1p
 import kotlin.math.max
 
 /** Detects only directional impulses in the latest completed minute bars. */
 class ScannerEngine(private val zoneOverride: ZoneId? = null) {
     private val log = LoggerFactory.getLogger(javaClass)
+
+    internal fun freshnessWeight(ageMinutes: Double): Double =
+        exp(-ln(2.0) * ageMinutes.coerceAtLeast(0.0) / FRESHNESS_HALF_LIFE_MINUTES)
 
     fun evaluate(symbol: String, bars: List<MinuteBar>, criteria: ScannerCriteria): ScanResult? {
         log.debug(LogTag.DB, "evaluate(symbol={}, bars={}, maxAge={}m)", symbol, bars.size, criteria.maxSignalAgeMinutes)
@@ -170,7 +174,7 @@ class ScannerEngine(private val zoneOverride: ZoneId? = null) {
         val meaningfulMove = abs(candidate.returnPercent) >= criteria.minAbsoluteMovePercent
         if (!exceptionalPrice || !confirmed || !directionalClose || !meaningfulMove) return null
 
-        val freshness = exp(-age / FRESHNESS_HALF_LIFE)
+        val freshness = freshnessWeight(age.toDouble())
         val quality = 0.60 + 0.40 * candidate.bodyRatio.coerceIn(0.0, 1.0)
         val raw = 0.65 * max(jumpZ, rangeZ * 0.8) +
             0.25 * volumeZ.takeIf(Double::isFinite).orZero() + 0.10 * continuation
@@ -210,7 +214,7 @@ class ScannerEngine(private val zoneOverride: ZoneId? = null) {
 
     private fun features(bars: List<MinuteBar>): List<Feature> = bars.zipWithNext().mapIndexedNotNull { index, (previous, bar) ->
         val seconds = bar.minuteEpochSeconds - previous.minuteEpochSeconds
-        if (seconds !in 1..180 || previous.close <= 0.0) return@mapIndexedNotNull null
+        if (seconds != 60L || previous.close <= 0.0) return@mapIndexedNotNull null
         val range = (bar.high - bar.low).coerceAtLeast(0.0)
         Feature(
             index = index,
@@ -294,6 +298,8 @@ class ScannerEngine(private val zoneOverride: ZoneId? = null) {
     private data class Regression(val slope: Double, val rSquared: Double)
 
     private companion object {
+        private const val FRESHNESS_HALF_LIFE_MINUTES = 1.8
+
         const val MIN_FEATURES = 20
         const val MIN_IMPULSE_SESSIONS = 4
         const val MIN_TREND_SESSIONS = 2
@@ -305,7 +311,6 @@ class ScannerEngine(private val zoneOverride: ZoneId? = null) {
         const val RETURN_FLOOR = 0.01
         const val RANGE_FLOOR = 0.01
         const val LOG_VOLUME_FLOOR = 0.15
-        const val FRESHNESS_HALF_LIFE = 1.8
         const val MIN_TREND_BARS = 60
         const val MIN_TREND_R_SQUARED = 0.18
         const val DISPLAY_CHANGE_MINUTES = 10
