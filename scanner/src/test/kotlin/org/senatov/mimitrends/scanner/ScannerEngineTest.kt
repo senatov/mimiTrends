@@ -321,6 +321,24 @@ class ScannerEngineTest {
         assertNull(SteadyRiseDetector(java.time.ZoneId.of("UTC")).detect("TEST", bars, criteria()))
     }
 
+    @Test fun `rejects a clean short bounce inside an established decline`() {
+        val bars = normalBars(days = 3).toMutableList()
+        var minute = 3 * 1_440
+        var previous = 100.0
+        repeat(51) {
+            val close = previous - 0.02
+            bars += candle(minute++, previous, close, 300.0)
+            previous = close
+        }
+        repeat(10) {
+            val close = previous + 0.05
+            bars += candle(minute++, previous, close, 300.0)
+            previous = close
+        }
+
+        assertNull(SteadyRiseDetector(java.time.ZoneId.of("UTC")).detect("TEST", bars, criteria()))
+    }
+
     private fun normalBars(days: Int = 4) = (0 until days).flatMap { day ->
         (0 until 30).map { minute -> candle(day * 1_440 + minute, 100.0, 100.01, 100.0) }
     }

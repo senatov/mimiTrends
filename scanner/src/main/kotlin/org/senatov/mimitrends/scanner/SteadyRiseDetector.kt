@@ -57,6 +57,11 @@ internal class SteadyRiseDetector(private val zoneOverride: ZoneId? = null) {
         val regression = regression(bars)
         if (regression.slope <= 0.0 || regression.rSquared < MIN_R_SQUARED) return null
         if (changes.count { it >= 0.0 }.toDouble() / changes.size < MIN_POSITIVE_STEP_RATIO) return null
+        val contextBars = session.takeLast(CONTEXT_MINUTES + 1)
+        if (contextBars.size >= CONTEXT_MINUTES + 1) {
+            val contextRegression = regression(contextBars)
+            if (contextRegression.slope <= 0.0 || percent(contextBars.first().close, contextBars.last().close) <= 0.0) return null
+        }
         val latestBars = bars.takeLast(LATEST_BARS)
         val latestReturn = percent(latestBars.first().close, latestBars.last().close)
         if (latestReturn < max(MIN_LATEST_RETURN_PERCENT, totalReturn * MIN_CONTINUATION_SHARE)) return null
@@ -118,6 +123,7 @@ internal class SteadyRiseDetector(private val zoneOverride: ZoneId? = null) {
         const val MIN_EFFICIENCY = 0.45
         const val MIN_R_SQUARED = 0.55
         const val MIN_POSITIVE_STEP_RATIO = 0.52
+        const val CONTEXT_MINUTES = 60
         const val LATEST_BARS = 6
         const val MIN_LATEST_RETURN_PERCENT = 0.05
         const val MIN_CONTINUATION_SHARE = 0.08
