@@ -2,6 +2,7 @@ package org.senatov.mimitrends.marketdata
 
 import org.junit.jupiter.api.Test
 import kotlin.test.assertEquals
+import org.senatov.mimitrends.model.VolumeStatus
 
 class YahooFinanceClientTest {
     @Test fun `parses Yahoo chart OHLCV and metadata`() {
@@ -15,6 +16,18 @@ class YahooFinanceClientTest {
         assertEquals(2, series.bars.size)
         assertEquals(102.0, series.bars.last().close)
         assertEquals(750.0, series.bars.last().volume)
+        assertEquals(VolumeStatus.REPORTED, series.bars.last().volumeStatus)
+    }
+
+    @Test fun `distinguishes missing and reported zero volume`() {
+        val json = """{"chart":{"result":[{"meta":{},"timestamp":[60,120],
+            "indicators":{"quote":[{"open":[10.0,10.0],"high":[10.1,10.1],"low":[9.9,9.9],
+            "close":[10.0,10.0],"volume":[null,0]}]}}],"error":null}}"""
+
+        val bars = YahooFinanceClient().parse("TEST", json).bars
+
+        assertEquals(VolumeStatus.MISSING, bars[0].volumeStatus)
+        assertEquals(VolumeStatus.ZERO, bars[1].volumeStatus)
     }
 
     @Test fun `parses split and dividend events`() {

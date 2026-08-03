@@ -9,7 +9,6 @@ import javafx.scene.layout.VBox
 import javafx.scene.layout.HBox
 import javafx.scene.layout.Priority
 import javafx.geometry.Insets
-import javafx.scene.input.MouseEvent
 import org.jfree.chart.JFreeChart
 import org.jfree.chart.axis.DateAxis
 import org.jfree.chart.axis.NumberAxis
@@ -58,7 +57,7 @@ class TrendChartView : StackPane() {
     private val currentPriceLabel = Label()
     private val chartDetailsLabel = Label("Price and volume history")
     private val signalSummaryLabel = Label()
-    private val cursorDetailsLabel = Label("Move the cursor over a candle to inspect OHLC and volume")
+    private val cursorDetailsLabel = Label("Move anywhere above a candle to inspect it · click to pin")
     private val focusButton = ToggleButton("Signal focus")
     private val historyButton = ToggleButton("Full history")
     private val tradesButton = ToggleButton("Trades").apply { isSelected = true }
@@ -76,6 +75,7 @@ class TrendChartView : StackPane() {
     private var renderedBars: List<MinuteBar> = emptyList()
     private var renderedPriceMultiplier = 1.0
     private var renderedCurrencySymbol = "$"
+    private var cursorPinned = false
     private val tradeAnnotations = BrokerTradeAnnotations(pricePlot)
 
     init {
@@ -102,6 +102,8 @@ class TrendChartView : StackPane() {
         val modeSwitch = HBox(focusButton, historyButton, tradesButton).apply { styleClass += "chart-mode-switch" }
         signalSummaryLabel.styleClass += "chart-signal-summary"
         cursorDetailsLabel.styleClass += "chart-cursor-details"
+        cursorDetailsLabel.isWrapText = true
+        cursorDetailsLabel.maxWidth = Double.MAX_VALUE
         currentPriceLabel.styleClass += "chart-current-price"
         val spacer = javafx.scene.layout.Region().apply { HBox.setHgrow(this, Priority.ALWAYS) }
         val identityRow = HBox(10.0, instrumentLabel, currentPriceLabel, chartDetailsLabel, spacer, modeSwitch).apply {
@@ -150,6 +152,7 @@ class TrendChartView : StackPane() {
         val closes = DoubleArray(visible.size) { visible[it].close * request.priceMultiplier }
         val volumes = DoubleArray(visible.size) { visible[it].volume }
         renderedBars = visible
+        cursorPinned = false
         renderedPriceMultiplier = request.priceMultiplier
         renderedCurrencySymbol = request.currencySymbol
         volumeRenderer.directions = visible.map { bar ->
@@ -232,7 +235,8 @@ class TrendChartView : StackPane() {
         signalSummaryLabel.text = ""
         signalSummaryLabel.isVisible = false
         signalSummaryLabel.isManaged = false
-        cursorDetailsLabel.text = "Move the cursor over a candle to inspect OHLC and volume"
+        cursorDetailsLabel.text = "Move anywhere above a candle to inspect it · click to pin"
+        cursorPinned = false
         renderedBars = emptyList()
         tradeAnnotations.clear()
         chart.fireChartChanged()
@@ -292,29 +296,47 @@ class TrendChartView : StackPane() {
     private fun configureChart() {
         log.debug(LogTag.UI, "configureChart()")
         TrendChartSupport.configure(chart, viewer, dateAxis, priceAxis, volumeAxis, candleRenderer,
-            volumeRenderer, pricePlot, volumePlot, combinedPlot, ::updateCursor)
+            volumeRenderer, pricePlot, volumePlot, combinedPlot, ::updateCursor, ::togglePinnedCursor)
     }
 
     private fun updateCursor(x: Double, y: Double) {
         log.trace(LogTag.UI, "updateCursor(x={}, y={})", x, y)
-        val plotInfo = viewer.canvas.renderingInfo.plotInfo
-        if (plotInfo.subplotCount < 1) return
-        val priceArea = plotInfo.getSubplotInfo(0).dataArea
-        if (!priceArea.contains(x, y)) return
-        val timeValue = dateAxis.java2DToValue(x, priceArea, RectangleEdge.BOTTOM)
-        val priceValue = priceAxis.java2DToValue(y, priceArea, pricePlot.rangeAxisEdge)
-        if (!timeValue.isFinite() || !priceValue.isFinite()) return
-        if (!cursorMarkersInstalled) installCursorMarkers()
-        priceTimeCursor.value = timeValue
-        volumeTimeCursor.value = timeValue
-        priceCursor.value = priceValue
-        volumeTimeCursor.label = cursorDateFormat.format(Date(timeValue.toLong()))
-        priceCursor.label = cursorPriceFormat.format(priceValue)
-        renderedBars.minByOrNull { kotlin.math.abs(it.minuteEpochSeconds * 1_000.0 - timeValue) }?.let { bar ->
-            val format = { value: Double -> "$renderedCurrencySymbol${"%,.2f".format(value * renderedPriceMultiplier)}" }
-            val change = if (bar.open != 0.0) (bar.close - bar.open) / bar.open * 100.0 else 0.0
-            cursorDetailsLabel.text = "${cursorDateFormat.format(Date(bar.minuteEpochSeconds * 1_000))}  ·  O ${format(bar.open)}  H ${format(bar.high)}  L ${format(bar.low)}  C ${format(bar.close)}  ·  ${"%+.2f".format(change)}%  ·  Vol ${TrendChartSupport.compactVolume(bar.volume)}"
+        if (cursorPinned) return
+        showCursorAt(x, y)
+    }
+
+    private fun togglePinnedCursor(x: Double, y: Double) {
+        if (cursorPinned) {
+            cursorPinned = false
+            cursorDetailsLabel.text = cursorDetailsLabel.text.substringBefore("  ·  PINNED") + "  ·  LIVE"
+            return
         }
+        if (showCursorAt(x, y)) {
+            cursorPinned = true
+            cursorDetailsLabel.text = cursorDetailsLabel.text.substringBefore("  ·  LIVE") + "  ·  PINNED"
+        }
+    }
+
+    private fun showCursorAt(x: Double, y: Double): Boolean {
+        val plotInfo = viewer.canvas.renderingInfo.plotInfo
+        if (plotInfo.subplotCount < 2 || renderedBars.isEmpty()) return false
+        val priceArea = plotInfo.getSubplotInfo(0).dataArea
+        val volumeArea = plotInfo.getSubplotInfo(1).dataArea
+        if (x !in priceArea.minX..priceArea.maxX || y !in priceArea.minY..volumeArea.maxY) return false
+        val timeValue = dateAxis.java2DToValue(x, priceArea, RectangleEdge.BOTTOM)
+        if (!timeValue.isFinite()) return false
+        val bar = renderedBars.minByOrNull { kotlin.math.abs(it.minuteEpochSeconds * 1_000.0 - timeValue) } ?: return false
+        val snappedTime = bar.minuteEpochSeconds * 1_000.0
+        val priceValue = if (priceArea.contains(x, y)) priceAxis.java2DToValue(y, priceArea, pricePlot.rangeAxisEdge)
+        else bar.close * renderedPriceMultiplier
+        if (!priceValue.isFinite()) return false
+        if (!cursorMarkersInstalled) installCursorMarkers()
+        priceTimeCursor.value = snappedTime
+        volumeTimeCursor.value = snappedTime
+        priceCursor.value = priceValue
+        volumeTimeCursor.label = cursorDateFormat.format(Date(snappedTime.toLong()))
+        priceCursor.label = cursorPriceFormat.format(priceValue)
+        showBarDetails(bar)
         // Keep both labels inside the plot canvas. TextAnchor describes the part of the
         // label placed on the marker anchor, so bottom anchors make the text grow upward.
         volumeTimeCursor.labelTextAnchor = when {
@@ -329,6 +351,13 @@ class TrendChartView : StackPane() {
             priceCursor.labelAnchor = RectangleAnchor.TOP_RIGHT
             priceCursor.labelTextAnchor = TextAnchor.BOTTOM_RIGHT
         }
+        return true
+    }
+
+    private fun showBarDetails(bar: MinuteBar) {
+        cursorDetailsLabel.text = CandleInspectorPresentation.text(
+            bar, renderedPriceMultiplier, renderedCurrencySymbol, cursorDateFormat
+        )
     }
 
     private fun installCursorMarkers() {

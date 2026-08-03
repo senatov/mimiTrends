@@ -176,9 +176,14 @@
 }
 .chart-cursor-details {
     -fx-font-family: "SF Pro Display", "SansSerif";
-    -fx-font-size: 11px;
+    -fx-font-size: 12px;
     -fx-font-weight: 500;
     -fx-text-fill: #344655;
+    -fx-background-color: rgba(235, 241, 247, 0.82);
+    -fx-background-radius: 7px;
+    -fx-border-color: rgba(183, 196, 208, 0.72);
+    -fx-border-radius: 7px;
+    -fx-padding: 5 9 5 9;
 }
 .chart-mode-switch {
     -fx-background-color: rgba(218,224,230,0.72);

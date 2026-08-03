@@ -16,6 +16,7 @@ import org.jfree.chart.plot.XYPlot
 import org.jfree.chart.renderer.xy.CandlestickRenderer
 import org.jfree.chart.renderer.xy.XYBarRenderer
 import org.senatov.mimitrends.model.MinuteBar
+import org.senatov.mimitrends.model.VolumeStatus
 import java.awt.BasicStroke
 import java.awt.Color
 import java.awt.Font
@@ -37,7 +38,8 @@ internal object TrendChartSupport {
         pricePlot: XYPlot,
         volumePlot: XYPlot,
         combinedPlot: CombinedDomainXYPlot,
-        onCursorMoved: (Double, Double) -> Unit
+        onCursorMoved: (Double, Double) -> Unit,
+        onCursorClicked: (Double, Double) -> Unit
     ) {
         val background = Color(250, 250, 251)
         val grid = Color(196, 204, 213)
@@ -92,7 +94,9 @@ internal object TrendChartSupport {
         combinedPlot.add(volumePlot, 1)
         combinedPlot.backgroundPaint = background
         viewer.addChartMouseListener(object : ChartMouseListenerFX {
-            override fun chartMouseClicked(event: ChartMouseEventFX) = Unit
+            override fun chartMouseClicked(event: ChartMouseEventFX) {
+                onCursorClicked(event.trigger.x, event.trigger.y)
+            }
 
             override fun chartMouseMoved(event: ChartMouseEventFX) {
                 val trigger: MouseEvent = event.trigger
@@ -108,7 +112,8 @@ internal object TrendChartSupport {
             val first = chunk.first()
             val last = chunk.last()
             MinuteBar(first.symbol, last.minuteEpochSeconds, first.open, chunk.maxOf { it.high },
-                chunk.minOf { it.low }, last.close, chunk.sumOf { it.volume })
+                chunk.minOf { it.low }, last.close, chunk.sumOf { it.volume },
+                VolumeStatus.aggregate(chunk.map(MinuteBar::volumeStatus)))
         }
     }
 

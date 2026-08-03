@@ -120,6 +120,7 @@ The impulse model calculates:
 - **close location** — where the close lies inside the candle range.
 
 These technical values are persisted and remain available in tooltips, while the table converts them into plain-language price-action and volume labels.
+Volume quality is stored with every minute bar as `REPORTED`, `ZERO`, `MISSING`, or `ESTIMATED`. Missing, zero, and partial volume remains visible but receives no statistical confirmation and is excluded from volume baselines.
 
 ### Impulse qualification
 

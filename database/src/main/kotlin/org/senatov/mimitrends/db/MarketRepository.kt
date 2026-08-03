@@ -5,6 +5,7 @@ package org.senatov.mimitrends.db
 import org.senatov.mimitrends.log.LogTag
 import org.senatov.mimitrends.model.MinuteBar
 import org.senatov.mimitrends.model.CompanyProfile
+import org.senatov.mimitrends.model.VolumeStatus
 import org.slf4j.LoggerFactory
 import java.nio.file.Files
 import java.nio.file.Path
@@ -50,7 +51,7 @@ class MarketRepository(
         flushPending()
         return lock.withLock {
             connection.prepareStatement(
-                """SELECT minute_epoch, open, high, low, close, volume FROM minute_bars
+                """SELECT minute_epoch, open, high, low, close, volume, volume_status FROM minute_bars
                    WHERE symbol = ? AND minute_epoch >= ? ORDER BY minute_epoch"""
             ).use { statement ->
                 val normalized = symbol.uppercase()
@@ -58,7 +59,8 @@ class MarketRepository(
                 statement.executeQuery().use { result ->
                     buildList {
                         while (result.next()) add(MinuteBar(normalized, result.getLong(1), result.getDouble(2),
-                            result.getDouble(3), result.getDouble(4), result.getDouble(5), result.getDouble(6)))
+                            result.getDouble(3), result.getDouble(4), result.getDouble(5), result.getDouble(6),
+                            runCatching { VolumeStatus.valueOf(result.getString(7)) }.getOrDefault(VolumeStatus.MISSING)))
                     }
                 }
             }
@@ -141,7 +143,8 @@ class MarketRepository(
                         batch.forEach { bar ->
                             statement.setString(1, bar.symbol); statement.setLong(2, bar.minuteEpochSeconds)
                             statement.setDouble(3, bar.open); statement.setDouble(4, bar.high); statement.setDouble(5, bar.low)
-                            statement.setDouble(6, bar.close); statement.setDouble(7, bar.volume); statement.addBatch()
+                            statement.setDouble(6, bar.close); statement.setDouble(7, bar.volume)
+                            statement.setString(8, bar.volumeStatus.name); statement.addBatch()
                         }
                         statement.executeBatch()
                     }
@@ -188,39 +191,60 @@ class MarketRepository(
 
     private fun migrate(connection: Connection) {
         log.debug(LogTag.DB, "migrate()")
-        connection.createStatement().use { statement ->
-            statement.executeUpdate(
-                """CREATE TABLE IF NOT EXISTS minute_bars (
-                    symbol TEXT NOT NULL, minute_epoch INTEGER NOT NULL, open REAL NOT NULL,
-                    high REAL NOT NULL, low REAL NOT NULL, close REAL NOT NULL, volume REAL NOT NULL,
-                    PRIMARY KEY(symbol, minute_epoch)
-                )"""
-            )
-            statement.executeUpdate("CREATE INDEX IF NOT EXISTS idx_minute_symbol_time ON minute_bars(symbol, minute_epoch)")
-            val removedSnapshots = statement.executeUpdate(
-                "DELETE FROM minute_bars WHERE minute_epoch % 60 != 0 AND volume <= 0"
-            )
-            if (removedSnapshots > 0) {
-                log.info(LogTag.DB, "removed malformed zero-volume quote snapshots count={}", removedSnapshots)
+        val previousAutoCommit = connection.autoCommit
+        connection.autoCommit = false
+        try {
+            connection.createStatement().use { statement ->
+                statement.executeUpdate(
+                    """CREATE TABLE IF NOT EXISTS minute_bars (
+                        symbol TEXT NOT NULL, minute_epoch INTEGER NOT NULL, open REAL NOT NULL,
+                        high REAL NOT NULL, low REAL NOT NULL, close REAL NOT NULL, volume REAL NOT NULL,
+                        volume_status TEXT NOT NULL DEFAULT 'MISSING',
+                        PRIMARY KEY(symbol, minute_epoch)
+                    )"""
+                )
+                val columns = statement.executeQuery("PRAGMA table_info(minute_bars)").use { result ->
+                    buildSet { while (result.next()) add(result.getString("name")) }
+                }
+                if ("volume_status" !in columns) {
+                    statement.executeUpdate("ALTER TABLE minute_bars ADD COLUMN volume_status TEXT NOT NULL DEFAULT 'MISSING'")
+                    statement.executeUpdate(
+                        "UPDATE minute_bars SET volume_status = CASE WHEN volume > 0 THEN 'REPORTED' ELSE 'MISSING' END"
+                    )
+                }
+                statement.executeUpdate("CREATE INDEX IF NOT EXISTS idx_minute_symbol_time ON minute_bars(symbol, minute_epoch)")
+                val removedSnapshots = statement.executeUpdate(
+                    "DELETE FROM minute_bars WHERE minute_epoch % 60 != 0 AND volume <= 0"
+                )
+                if (removedSnapshots > 0) {
+                    log.info(LogTag.DB, "removed malformed zero-volume quote snapshots count={}", removedSnapshots)
+                }
+                statement.executeUpdate(
+                    """CREATE TABLE IF NOT EXISTS company_profiles (
+                        symbol TEXT PRIMARY KEY, name TEXT NOT NULL, exchange TEXT NOT NULL,
+                        logo_url TEXT, logo BLOB, updated_at INTEGER NOT NULL
+                    )"""
+                )
+                // Remove the temporary generated-monogram source used by an older build so genuine
+                // cached company favicons are fetched on the next visible table render.
+                statement.executeUpdate(
+                    "UPDATE company_profiles SET logo_url = NULL, logo = NULL WHERE logo_url LIKE 'https://img.loadlogo.com/%'"
+                )
             }
-            statement.executeUpdate(
-                """CREATE TABLE IF NOT EXISTS company_profiles (
-                    symbol TEXT PRIMARY KEY, name TEXT NOT NULL, exchange TEXT NOT NULL,
-                    logo_url TEXT, logo BLOB, updated_at INTEGER NOT NULL
-                )"""
-            )
-            // Remove the temporary generated-monogram source used by an older build so genuine
-            // cached company favicons are fetched on the next visible table render.
-            statement.executeUpdate(
-                "UPDATE company_profiles SET logo_url = NULL, logo = NULL WHERE logo_url LIKE 'https://img.loadlogo.com/%'"
-            )
+            connection.commit()
+        } catch (error: Exception) {
+            connection.rollback()
+            throw error
+        } finally {
+            connection.autoCommit = previousAutoCommit
         }
     }
 
     private companion object {
-        const val UPSERT_SQL = """INSERT INTO minute_bars(symbol, minute_epoch, open, high, low, close, volume)
-            VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT(symbol, minute_epoch) DO UPDATE SET
-            open=excluded.open, high=excluded.high, low=excluded.low, close=excluded.close, volume=excluded.volume"""
+        const val UPSERT_SQL = """INSERT INTO minute_bars(symbol, minute_epoch, open, high, low, close, volume, volume_status)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(symbol, minute_epoch) DO UPDATE SET
+            open=excluded.open, high=excluded.high, low=excluded.low, close=excluded.close,
+            volume=excluded.volume, volume_status=excluded.volume_status"""
         const val UPSERT_PROFILE_SQL = """INSERT INTO company_profiles(symbol, name, exchange, logo_url, logo, updated_at)
             VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(symbol) DO UPDATE SET
             name=excluded.name, exchange=excluded.exchange, logo_url=excluded.logo_url,

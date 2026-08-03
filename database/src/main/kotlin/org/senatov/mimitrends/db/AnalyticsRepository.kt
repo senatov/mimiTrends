@@ -292,15 +292,17 @@ class AnalyticsRepository(
         val features = bars.zipWithNext().mapNotNull { (a, b) ->
             if (a.close <= 0 || b.minuteEpochSeconds - a.minuteEpochSeconds !in 1..180) null else {
                 val minute = Instant.ofEpochSecond(b.minuteEpochSeconds).atZone(zone).let { it.hour * 60 + it.minute }
-                Triple(minute, (b.close / a.close - 1.0) * 100.0, ln1p(b.volume.coerceAtLeast(0.0)))
+                BaselineSample(minute, (b.close / a.close - 1.0) * 100.0,
+                    b.volume.takeIf { b.volumeStatus.isReliable && it > 0.0 }?.let(::ln1p))
             }
-        }.groupBy { it.first }
+        }.groupBy(BaselineSample::minute)
         connection.prepareStatement("""INSERT INTO baseline_stats(symbol, minute_of_session, sample_count, median_return, mad_return, median_log_volume, mad_log_volume, updated_at)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(symbol, minute_of_session) DO UPDATE SET sample_count=excluded.sample_count,
             median_return=excluded.median_return, mad_return=excluded.mad_return, median_log_volume=excluded.median_log_volume,
             mad_log_volume=excluded.mad_log_volume, updated_at=excluded.updated_at""").use { s ->
             features.forEach { (minute, samples) ->
-                val returns = samples.map { it.second }; val volumes = samples.map { it.third }
+                val returns = samples.map(BaselineSample::returnPercent)
+                val volumes = samples.mapNotNull(BaselineSample::logVolume)
                 val medianReturn = median(returns); val medianVolume = median(volumes)
                 s.setString(1, symbol); s.setInt(2, minute); s.setInt(3, samples.size); s.setDouble(4, medianReturn)
                 s.setDouble(5, median(returns.map { abs(it - medianReturn) })); s.setDouble(6, medianVolume)
@@ -316,6 +318,7 @@ class AnalyticsRepository(
     }
 
     private fun zoneFor(symbol: String) = MarketTimeZone.forSymbol(symbol)
+    private data class BaselineSample(val minute: Int, val returnPercent: Double, val logVolume: Double?)
     private fun <T> transaction(block: () -> T): T {
         val previousAutoCommit = connection.autoCommit
         connection.autoCommit = false

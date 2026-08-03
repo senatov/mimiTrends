@@ -3,6 +3,7 @@ package org.senatov.mimitrends.scanner
 import org.junit.jupiter.api.Test
 import org.senatov.mimitrends.model.MinuteBar
 import org.senatov.mimitrends.model.ScannerCriteria
+import org.senatov.mimitrends.model.VolumeStatus
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
@@ -26,6 +27,33 @@ class ScannerEngineTest {
         val result = requireNotNull(engine().evaluate("TEST", bars, criteria()))
         assertEquals("Impulse ↓", result.signalSource)
         assertTrue(result.windowChangePercent < 0.0)
+    }
+
+    @Test fun `keeps a price impulse but marks zero volume as unavailable`() {
+        val bars = normalBars().toMutableList()
+        bars += candle(nextMinute(bars), 100.0, 96.0, 0.0, VolumeStatus.MISSING)
+
+        val result = requireNotNull(engine().evaluate("TEST", bars, criteria()))
+
+        assertTrue(result.volumeAnomaly.isNaN())
+        assertTrue(result.relativeVolume.isNaN())
+        assertEquals(0.0, result.windowVolume)
+    }
+
+    @Test fun `requires three historical sessions for an impulse baseline`() {
+        val bars = normalBars(days = 3).toMutableList()
+        bars += candle(nextMinute(bars), 100.0, 104.0, 5_000.0)
+
+        assertNull(engine().evaluate("TEST", bars, criteria()))
+    }
+
+    @Test fun `does not use an immaterial previous return as confirmation`() {
+        val bars = normalBars().toMutableList()
+        bars += candle(nextMinute(bars), 100.0, 100.001, 100.0)
+        bars += candle(nextMinute(bars), 100.001, 100.30, 0.0, VolumeStatus.MISSING)
+        val demandingBodyCriteria = criteria().copy(minBodyRatio = 0.99)
+
+        assertNull(engine().evaluate("TEST", bars, demandingBodyCriteria))
     }
 
     @Test fun `does not rank volume without an exceptional price candle`() {
@@ -82,16 +110,22 @@ class ScannerEngineTest {
         assertNull(engine().evaluateFallback("TEST", bars, criteria()))
     }
 
-    private fun normalBars() = (0 until 3).flatMap { day ->
+    private fun normalBars(days: Int = 4) = (0 until days).flatMap { day ->
         (0 until 30).map { minute -> candle(day * 1_440 + minute, 100.0, 100.01, 100.0) }
     }
 
     private fun nextMinute(bars: List<MinuteBar>) = (bars.last().minuteEpochSeconds / 60L + 1L).toInt()
 
-    private fun candle(minute: Int, open: Double, close: Double, volume: Double): MinuteBar {
+    private fun candle(
+        minute: Int,
+        open: Double,
+        close: Double,
+        volume: Double,
+        volumeStatus: VolumeStatus = if (volume > 0.0) VolumeStatus.REPORTED else VolumeStatus.ZERO
+    ): MinuteBar {
         val padding = if (kotlin.math.abs(close - open) > 1.0) 0.05 else 0.02
         return MinuteBar("TEST", minute * 60L, open, maxOf(open, close) + padding,
-            minOf(open, close) - padding, close, volume)
+            minOf(open, close) - padding, close, volume, volumeStatus)
     }
 
     private fun engine() = ScannerEngine(java.time.ZoneId.of("UTC"))

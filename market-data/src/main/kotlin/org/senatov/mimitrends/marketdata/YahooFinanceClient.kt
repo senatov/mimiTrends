@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import org.senatov.mimitrends.log.LogTag
 import org.senatov.mimitrends.model.MarketSeries
 import org.senatov.mimitrends.model.MinuteBar
+import org.senatov.mimitrends.model.VolumeStatus
 import org.senatov.mimitrends.model.MarketEvent
 import org.slf4j.LoggerFactory
 import java.net.URI
@@ -30,7 +31,7 @@ class YahooFinanceClient(
         val normalized = symbol.trim().uppercase()
         val encoded = URLEncoder.encode(normalized, StandardCharsets.UTF_8)
         val period = if (afterEpochSeconds == null) {
-            "range=5d"
+            "range=7d"
         } else {
             // Include two preceding minutes so an incomplete cached bar is safely replaced by SQLite UPSERT.
             "period1=${(afterEpochSeconds - 120).coerceAtLeast(0)}&period2=${Instant.now().epochSecond + 60}"
@@ -64,9 +65,15 @@ class YahooFinanceClient(
                 val high = quote.numberAt("high", index) ?: continue
                 val low = quote.numberAt("low", index) ?: continue
                 val close = quote.numberAt("close", index) ?: continue
-                val volume = quote.numberAt("volume", index) ?: 0.0
+                val reportedVolume = quote.numberAt("volume", index)
+                val volume = reportedVolume ?: 0.0
+                val volumeStatus = when {
+                    reportedVolume == null -> VolumeStatus.MISSING
+                    reportedVolume > 0.0 -> VolumeStatus.REPORTED
+                    else -> VolumeStatus.ZERO
+                }
                 val minuteEpoch = timestamps[index].asLong() / 60L * 60L
-                add(MinuteBar(symbol, minuteEpoch, open, high, low, close, volume))
+                add(MinuteBar(symbol, minuteEpoch, open, high, low, close, volume, volumeStatus))
             }
         }
         check(bars.isNotEmpty()) { "Yahoo Finance returned empty OHLCV data for $symbol" }

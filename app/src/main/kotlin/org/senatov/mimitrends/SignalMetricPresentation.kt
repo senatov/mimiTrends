@@ -43,9 +43,16 @@ internal object SignalMetricPresentation {
     fun volume(result: ScanResult): SignalMetric {
         val relative = result.relativeVolume.takeIf(Double::isFinite)
         val anomaly = result.volumeAnomaly.takeIf(Double::isFinite)
-        if (relative == null && anomaly == null) return SignalMetric(
-            "Price-led", Level.WATCH.color, 400, "Trend signal without a single-candle volume anomaly."
-        )
+        if (relative == null && anomaly == null) {
+            val impulse = result.signalSource.startsWith("Impulse")
+            return SignalMetric(
+                if (impulse) "Unavailable" else "Price-led",
+                Level.WATCH.color,
+                400,
+                if (impulse) "No reliable positive volume was reported for the signal candle."
+                else "Trend signal without a single-candle volume anomaly."
+            )
+        }
         val level = when {
             (relative ?: 0.0) >= 5.0 || (anomaly ?: 0.0) >= 5.0 -> Level.EXTREME
             (relative ?: 0.0) >= 3.0 || (anomaly ?: 0.0) >= 3.0 -> Level.STRONG

@@ -3,6 +3,7 @@ package org.senatov.mimitrends.ws
 import org.senatov.mimitrends.log.LogTag
 import org.senatov.mimitrends.model.MinuteBar
 import org.senatov.mimitrends.model.TradeTick
+import org.senatov.mimitrends.model.VolumeStatus
 import org.slf4j.LoggerFactory
 import java.util.concurrent.ConcurrentHashMap
 import java.util.function.Consumer
@@ -19,13 +20,17 @@ class FinnhubMinuteAggregator(private val onBar: Consumer<MinuteBar>) {
         bars.compute(tick.symbol) { _, previous ->
             if (previous == null || previous.minuteEpochSeconds != minute) {
                 completed = previous
-                MinuteBar(tick.symbol, minute, tick.price, tick.price, tick.price, tick.price, tick.volume.coerceAtLeast(0.0))
+                val volume = tick.volume.coerceAtLeast(0.0)
+                MinuteBar(tick.symbol, minute, tick.price, tick.price, tick.price, tick.price, volume,
+                    if (volume > 0.0) VolumeStatus.REPORTED else VolumeStatus.ZERO)
             } else {
+                val tickVolume = tick.volume.coerceAtLeast(0.0)
                 previous.copy(
                     high = maxOf(previous.high, tick.price),
                     low = minOf(previous.low, tick.price),
                     close = tick.price,
-                    volume = previous.volume + tick.volume.coerceAtLeast(0.0)
+                    volume = previous.volume + tickVolume,
+                    volumeStatus = if (previous.volume + tickVolume > 0.0) VolumeStatus.REPORTED else VolumeStatus.ZERO
                 )
             }
         }

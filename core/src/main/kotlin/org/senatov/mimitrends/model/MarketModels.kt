@@ -14,8 +14,28 @@ data class MinuteBar(
     val high: Double,
     val low: Double,
     val close: Double,
-    val volume: Double
+    val volume: Double,
+    val volumeStatus: VolumeStatus = VolumeStatus.REPORTED
 )
+
+enum class VolumeStatus {
+    REPORTED,
+    ZERO,
+    MISSING,
+    ESTIMATED;
+
+    val isReliable: Boolean get() = this == REPORTED
+
+    companion object {
+        fun aggregate(statuses: List<VolumeStatus>): VolumeStatus = when {
+            statuses.isEmpty() -> MISSING
+            statuses.all { it == REPORTED } -> REPORTED
+            statuses.all { it == ZERO } -> ZERO
+            statuses.none(VolumeStatus::isReliable) && statuses.any { it == MISSING } -> MISSING
+            else -> ESTIMATED
+        }
+    }
+}
 
 data class MarketSeries(
     val symbol: String,

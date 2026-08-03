@@ -24,7 +24,7 @@ class ScannerEngine(private val zoneOverride: ZoneId? = null) {
         val latest = sorted.lastOrNull() ?: return null
         val features = features(sorted)
         if (features.size < MIN_FEATURES) return null
-        if (features.map { local(it.bar).toLocalDate() }.distinct().size < MIN_SESSIONS) {
+        if (features.map { local(it.bar).toLocalDate() }.distinct().size < MIN_IMPULSE_SESSIONS) {
             log.debug(LogTag.DB, "insufficient baseline sessions symbol={}", symbol)
             return null
         }
@@ -80,7 +80,7 @@ class ScannerEngine(private val zoneOverride: ZoneId? = null) {
         val sorted = cleanBars(bars)
         val latest = sorted.lastOrNull() ?: return null
         val allDates = sorted.map { local(it).toLocalDate() }.distinct()
-        if (allDates.size < MIN_SESSIONS) return null
+        if (allDates.size < MIN_TREND_SESSIONS) return null
         val session = sameSession(sorted, latest)
         val windowStart = latest.minuteEpochSeconds - criteria.trendWindowMinutes * 60L
         val window = session.filter { it.minuteEpochSeconds >= windowStart }
@@ -92,7 +92,7 @@ class ScannerEngine(private val zoneOverride: ZoneId? = null) {
         val path = window.zipWithNext().sumOf { (a, b) -> abs(percent(a.close, b.close)) }
         val efficiency = if (path > 0.0) totalReturn / path else 0.0
         if (efficiency < criteria.minTrendEfficiency) return null
-        val regression = regression(window.map(MinuteBar::close))
+        val regression = regression(window)
         if (regression.slope <= 0.0 || regression.rSquared < MIN_TREND_R_SQUARED) return null
         val recentStart = latest.minuteEpochSeconds - RECENT_TREND_MINUTES * 60L
         val recentBars = window.filter { it.minuteEpochSeconds >= recentStart }
@@ -146,17 +146,25 @@ class ScannerEngine(private val zoneOverride: ZoneId? = null) {
 
         val returns = baseline.map(Feature::returnPercent)
         val ranges = baseline.map(Feature::rangePercent)
-        val logVolumes = baseline.map { ln1p(it.bar.volume.coerceAtLeast(0.0)) }
+        val logVolumes = baseline.mapNotNull { feature ->
+            feature.bar.volume.takeIf { feature.bar.volumeStatus.isReliable && it > 0.0 }?.let(::ln1p)
+        }
         val jumpZ = abs(candidate.returnPercent - median(returns)) / robustScale(returns, RETURN_FLOOR)
         val rangeZ = max(0.0, candidate.rangePercent - median(ranges)) / robustScale(ranges, RANGE_FLOOR)
-        val volumeZ = max(0.0, ln1p(candidate.bar.volume.coerceAtLeast(0.0)) - median(logVolumes)) /
-            robustScale(logVolumes, LOG_VOLUME_FLOOR)
-        val normalVolume = median(baseline.map { it.bar.volume }.filter { it > 0.0 }).coerceAtLeast(1.0)
-        val relativeVolume = candidate.bar.volume / normalVolume
+        val candidateVolume = candidate.bar.volume.takeIf { candidate.bar.volumeStatus.isReliable && it > 0.0 }
+        val volumeZ = if (candidateVolume != null && logVolumes.size >= MIN_VOLUME_BASELINE) {
+            max(0.0, ln1p(candidateVolume) - median(logVolumes)) / robustScale(logVolumes, LOG_VOLUME_FLOOR)
+        } else Double.NaN
+        val normalVolumes = baseline.map(Feature::bar)
+            .filter { it.volumeStatus.isReliable && it.volume > 0.0 }.map(MinuteBar::volume)
+        val relativeVolume = if (candidateVolume != null && normalVolumes.size >= MIN_VOLUME_BASELINE) {
+            candidateVolume / median(normalVolumes).coerceAtLeast(1.0)
+        } else Double.NaN
         val previous = all.getOrNull(candidate.index - 1)
-        val continuation = if (previous != null && previous.returnPercent * candidate.returnPercent > 0.0) 1.0 else 0.0
+        val continuation = if (previous != null && isImmediateContinuation(previous, candidate, criteria)) 1.0 else 0.0
         val directionalClose = if (candidate.returnPercent >= 0) candidate.closeLocation >= 0.70 else candidate.closeLocation <= 0.30
-        val confirmed = volumeZ >= criteria.minVolumeZ || relativeVolume >= criteria.minRelativeVolume ||
+        val confirmed = (volumeZ.isFinite() && volumeZ >= criteria.minVolumeZ) ||
+            (relativeVolume.isFinite() && relativeVolume >= criteria.minRelativeVolume) ||
             candidate.bodyRatio >= criteria.minBodyRatio || continuation > 0.0
         val exceptionalPrice = jumpZ >= criteria.minJumpZ || rangeZ >= criteria.minRangeZ
         val meaningfulMove = abs(candidate.returnPercent) >= criteria.minAbsoluteMovePercent
@@ -164,7 +172,8 @@ class ScannerEngine(private val zoneOverride: ZoneId? = null) {
 
         val freshness = exp(-age / FRESHNESS_HALF_LIFE)
         val quality = 0.60 + 0.40 * candidate.bodyRatio.coerceIn(0.0, 1.0)
-        val raw = 0.65 * max(jumpZ, rangeZ * 0.8) + 0.25 * volumeZ + 0.10 * continuation
+        val raw = 0.65 * max(jumpZ, rangeZ * 0.8) +
+            0.25 * volumeZ.takeIf(Double::isFinite).orZero() + 0.10 * continuation
         val signal = Signal(candidate, age, jumpZ, rangeZ, volumeZ, relativeVolume, raw * quality * freshness)
         log.debug(LogTag.DB,
             "impulse accepted symbol={} age={} return={} jumpZ={} rangeZ={} volumeZ={} rvol={} body={}",
@@ -176,12 +185,22 @@ class ScannerEngine(private val zoneOverride: ZoneId? = null) {
         val cutoff = candidate.bar.minuteEpochSeconds - 15 * 60L
         val candidateTime = local(candidate.bar).toLocalTime()
         val candidateDate = local(candidate.bar).toLocalDate()
-        val comparable = all.filter { feature ->
+        val historical = all.filter { feature ->
             feature.bar.minuteEpochSeconds < cutoff && local(feature.bar).toLocalDate() != candidateDate &&
-                abs(java.time.Duration.between(local(feature.bar).toLocalTime(), candidateTime).toMinutes()) <= 15
-        }.takeLast(sessions.coerceIn(3, 20) * 31)
-        return if (comparable.size >= MIN_BASELINE) comparable
-        else all.filter { it.bar.minuteEpochSeconds < cutoff }.takeLast(max(120, sessions * 100))
+                abs(java.time.Duration.between(local(feature.bar).toLocalTime(), candidateTime).toMinutes()) <= BASELINE_TIME_RADIUS_MINUTES
+        }
+        val selectedDates = historical.asReversed().map { local(it.bar).toLocalDate() }.distinct()
+            .take(sessions.coerceIn(MIN_BASELINE_SESSIONS, MAX_BASELINE_SESSIONS)).toSet()
+        if (selectedDates.size < MIN_BASELINE_SESSIONS) return emptyList()
+        return historical.filter { local(it.bar).toLocalDate() in selectedDates }
+    }
+
+    private fun isImmediateContinuation(previous: Feature, candidate: Feature, criteria: ScannerCriteria): Boolean {
+        val seconds = candidate.bar.minuteEpochSeconds - previous.bar.minuteEpochSeconds
+        if (seconds != 60L || local(previous.bar).toLocalDate() != local(candidate.bar).toLocalDate()) return false
+        val sameDirection = previous.returnPercent * candidate.returnPercent > 0.0
+        val materialPreviousMove = abs(previous.returnPercent) >= criteria.minAbsoluteMovePercent * 0.25
+        return sameDirection && materialPreviousMove
     }
 
     private fun cleanBars(bars: List<MinuteBar>): List<MinuteBar> = bars.asSequence()
@@ -209,15 +228,17 @@ class ScannerEngine(private val zoneOverride: ZoneId? = null) {
         return max(1.4826 * mad, max(abs(center) * 0.20, floor))
     }
 
-    private fun regression(values: List<Double>): Regression {
-        val count = values.size.toDouble()
-        val meanX = values.indices.sumOf { it.toDouble() } / count
-        val meanY = values.average()
+    private fun regression(bars: List<MinuteBar>): Regression {
+        val firstEpoch = bars.first().minuteEpochSeconds
+        val points = bars.map { (it.minuteEpochSeconds - firstEpoch) / 60.0 to it.close }
+        val count = points.size.toDouble()
+        val meanX = points.sumOf { it.first } / count
+        val meanY = points.sumOf { it.second } / count
         var covariance = 0.0
         var varianceX = 0.0
         var varianceY = 0.0
-        values.forEachIndexed { index, value ->
-            val dx = index - meanX
+        points.forEach { (minute, value) ->
+            val dx = minute - meanX
             val dy = value - meanY
             covariance += dx * dy
             varianceX += dx * dx
@@ -249,6 +270,7 @@ class ScannerEngine(private val zoneOverride: ZoneId? = null) {
     private fun local(bar: MinuteBar) = Instant.ofEpochSecond(bar.minuteEpochSeconds)
         .atZone(zoneOverride ?: MarketTimeZone.forSymbol(bar.symbol))
     private fun percent(open: Double, close: Double) = if (open > 0.0) (close / open - 1.0) * 100.0 else 0.0
+    private fun Double?.orZero() = this ?: 0.0
 
     private data class Feature(
         val index: Int,
@@ -273,8 +295,13 @@ class ScannerEngine(private val zoneOverride: ZoneId? = null) {
 
     private companion object {
         const val MIN_FEATURES = 20
-        const val MIN_SESSIONS = 2
+        const val MIN_IMPULSE_SESSIONS = 4
+        const val MIN_TREND_SESSIONS = 2
         const val MIN_BASELINE = 15
+        const val MIN_VOLUME_BASELINE = 10
+        const val MIN_BASELINE_SESSIONS = 3
+        const val MAX_BASELINE_SESSIONS = 20
+        const val BASELINE_TIME_RADIUS_MINUTES = 15L
         const val RETURN_FLOOR = 0.01
         const val RANGE_FLOOR = 0.01
         const val LOG_VOLUME_FLOOR = 0.15
