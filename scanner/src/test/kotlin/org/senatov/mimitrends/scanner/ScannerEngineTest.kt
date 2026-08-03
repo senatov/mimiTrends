@@ -216,9 +216,9 @@ class ScannerEngineTest {
         }
         assertNull(engine().evaluate("TEST", bars, criteria()))
         val result = requireNotNull(engine().evaluateFallback("TEST", bars, criteria()))
-        assertEquals("Trend ↑", result.signalSource)
-        assertEquals("10m", result.signalWindowLabel)
-        assertTrue(result.windowChangePercent >= 0.60)
+        assertEquals("Steady rise ↑", result.signalSource)
+        assertTrue(result.signalWindowLabel.endsWith("m steady"))
+        assertTrue(result.windowChangePercent >= 0.30)
     }
 
     @Test fun `rejects an old trend that is flat now`() {
@@ -233,6 +233,36 @@ class ScannerEngineTest {
             previous = close
         }
         assertNull(engine().evaluateFallback("TEST", bars, criteria()))
+    }
+
+    @Test fun `recommends a clean recent staircase rise`() {
+        val bars = normalBars().toMutableList()
+        var minute = nextMinute(bars)
+        var previous = 100.0
+        repeat(31) { index ->
+            val close = previous + 0.035 + kotlin.math.sin(index.toDouble()) * 0.004
+            bars += candle(minute++, previous, close, 300.0)
+            previous = close
+        }
+
+        val result = requireNotNull(engine().evaluateFallback("TEST", bars, criteria()))
+
+        assertEquals("Steady rise ↑", result.signalSource)
+        assertTrue(result.candleBodyRatio >= 0.80)
+        assertTrue(result.anomalyScore >= 3.0)
+    }
+
+    @Test fun `rejects a sideways path even when it is visually smooth`() {
+        val bars = normalBars().toMutableList()
+        var minute = nextMinute(bars)
+        var previous = 100.0
+        repeat(31) { index ->
+            val close = 100.0 + kotlin.math.sin(index / 4.0) * 0.04
+            bars += candle(minute++, previous, close, 300.0)
+            previous = close
+        }
+
+        assertNull(SteadyRiseDetector(java.time.ZoneId.of("UTC")).detect("TEST", bars, criteria()))
     }
 
     private fun normalBars(days: Int = 4) = (0 until days).flatMap { day ->

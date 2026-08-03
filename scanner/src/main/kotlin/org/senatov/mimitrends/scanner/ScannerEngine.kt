@@ -20,6 +20,7 @@ class ScannerEngine(private val zoneOverride: ZoneId? = null) {
     private val log = LoggerFactory.getLogger(javaClass)
     private val earlyMomentumDetector = EarlyMomentumDetector(zoneOverride)
     private val vReversalDetector = VReversalDetector(zoneOverride)
+    private val steadyRiseDetector = SteadyRiseDetector(zoneOverride)
 
     internal fun freshnessWeight(ageMinutes: Double): Double =
         exp(-ln(2.0) * ageMinutes.coerceAtLeast(0.0) / FRESHNESS_HALF_LIFE_MINUTES)
@@ -150,64 +151,7 @@ class ScannerEngine(private val zoneOverride: ZoneId? = null) {
         evaluate(symbol, bars, relaxed)?.let { impulse ->
             return impulse.copy(signalSource = "${impulse.signalSource} · relaxed", anomalyScore = impulse.anomalyScore * factor)
         }
-        return evaluateTrend(symbol, bars, relaxed)
-    }
-
-    private fun evaluateTrend(symbol: String, bars: List<MinuteBar>, criteria: ScannerCriteria): ScanResult? {
-        val sorted = cleanBars(bars)
-        val latest = sorted.lastOrNull() ?: return null
-        val allDates = sorted.map { local(it).toLocalDate() }.distinct()
-        if (allDates.size < MIN_TREND_SESSIONS) return null
-        val session = sameSession(sorted, latest)
-        val windowStart = latest.minuteEpochSeconds - criteria.trendWindowMinutes * 60L
-        val window = session.filter { it.minuteEpochSeconds >= windowStart }
-        if (window.size < MIN_TREND_BARS) return null
-        val first = window.first().close
-        val last = window.last().close
-        val totalReturn = percent(first, last)
-        if (totalReturn < criteria.minTrendReturnPercent) return null
-        val path = window.zipWithNext().sumOf { (a, b) -> abs(percent(a.close, b.close)) }
-        val efficiency = if (path > 0.0) totalReturn / path else 0.0
-        if (efficiency < criteria.minTrendEfficiency) return null
-        val regression = regression(window)
-        if (regression.slope <= 0.0 || regression.rSquared < MIN_TREND_R_SQUARED) return null
-        val recentStart = latest.minuteEpochSeconds - RECENT_TREND_MINUTES * 60L
-        val recentBars = window.filter { it.minuteEpochSeconds >= recentStart }
-        if (recentBars.size < MIN_RECENT_TREND_BARS) return null
-        val recentReturn = percent(recentBars.first().close, recentBars.last().close)
-        if (recentReturn < MIN_RECENT_TREND_RETURN_PERCENT) return null
-        val latestStart = latest.minuteEpochSeconds - LATEST_TREND_MINUTES * 60L
-        val latestBars = recentBars.filter { it.minuteEpochSeconds >= latestStart }
-        if (latestBars.size < MIN_LATEST_TREND_BARS) return null
-        val latestReturn = percent(latestBars.first().close, latestBars.last().close)
-        if (latestReturn < MIN_LATEST_TREND_RETURN_PERCENT) return null
-        val turnover = session.sumOf { it.close * it.volume }
-        if (latest.close < criteria.minPrice || turnover < criteria.minSessionTurnover) return null
-        val score = recentReturn * 1.5 + totalReturn * (0.5 + regression.rSquared * 0.5) *
-            (0.5 + efficiency.coerceAtMost(1.0) * 0.5)
-        log.debug(LogTag.DB,
-            "trend accepted symbol={} bars={} return={} efficiency={} rSquared={} recentReturn={} latestReturn={}",
-            symbol, window.size, totalReturn, efficiency, regression.rSquared, recentReturn, latestReturn)
-        return ScanResult(
-            symbol = symbol,
-            price = latest.close,
-            anomalyScore = score,
-            priceAnomaly = Double.NaN,
-            volumeAnomaly = Double.NaN,
-            rangeAnomaly = Double.NaN,
-            relativeVolume = Double.NaN,
-            candleBodyRatio = Double.NaN,
-            windowChangePercent = recentReturn,
-            windowVolume = recentBars.sumOf(MinuteBar::volume),
-            sessionVolume = session.sumOf(MinuteBar::volume),
-            sessionTurnover = turnover,
-            signalAgeMinutes = 0,
-            signalSource = "Trend ↑",
-            updatedAtMillis = latest.minuteEpochSeconds * 1_000,
-            signalWindowLabel = "${RECENT_TREND_MINUTES}m",
-            signalPrice = latest.close,
-            signalEpochMillis = latest.minuteEpochSeconds * 1_000
-        )
+        return steadyRiseDetector.detect(symbol, bars, relaxed)
     }
 
     private fun score(
@@ -307,27 +251,6 @@ class ScannerEngine(private val zoneOverride: ZoneId? = null) {
         return max(1.4826 * mad, max(abs(center) * 0.20, floor))
     }
 
-    private fun regression(bars: List<MinuteBar>): Regression {
-        val firstEpoch = bars.first().minuteEpochSeconds
-        val points = bars.map { (it.minuteEpochSeconds - firstEpoch) / 60.0 to it.close }
-        val count = points.size.toDouble()
-        val meanX = points.sumOf { it.first } / count
-        val meanY = points.sumOf { it.second } / count
-        var covariance = 0.0
-        var varianceX = 0.0
-        var varianceY = 0.0
-        points.forEach { (minute, value) ->
-            val dx = minute - meanX
-            val dy = value - meanY
-            covariance += dx * dy
-            varianceX += dx * dx
-            varianceY += dy * dy
-        }
-        val slope = if (varianceX > 0.0) covariance / varianceX else 0.0
-        val rSquared = if (varianceX > 0.0 && varianceY > 0.0) covariance * covariance / (varianceX * varianceY) else 0.0
-        return Regression(slope, rSquared.coerceIn(0.0, 1.0))
-    }
-
     private fun median(values: List<Double>): Double {
         if (values.isEmpty()) return 0.0
         val sorted = values.sorted()
@@ -370,14 +293,11 @@ class ScannerEngine(private val zoneOverride: ZoneId? = null) {
         val score: Double
     )
 
-    private data class Regression(val slope: Double, val rSquared: Double)
-
     private companion object {
         private const val FRESHNESS_HALF_LIFE_MINUTES = 1.8
 
         const val MIN_FEATURES = 20
         const val MIN_IMPULSE_SESSIONS = 4
-        const val MIN_TREND_SESSIONS = 2
         const val MIN_BASELINE = 15
         const val MIN_VOLUME_BASELINE = 10
         const val MIN_BASELINE_SESSIONS = 3
@@ -386,14 +306,6 @@ class ScannerEngine(private val zoneOverride: ZoneId? = null) {
         const val RETURN_FLOOR = 0.01
         const val RANGE_FLOOR = 0.01
         const val LOG_VOLUME_FLOOR = 0.15
-        const val MIN_TREND_BARS = 60
-        const val MIN_TREND_R_SQUARED = 0.18
         const val DISPLAY_CHANGE_MINUTES = 10
-        const val RECENT_TREND_MINUTES = DISPLAY_CHANGE_MINUTES
-        const val LATEST_TREND_MINUTES = 5
-        const val MIN_RECENT_TREND_BARS = 6
-        const val MIN_LATEST_TREND_BARS = 3
-        const val MIN_RECENT_TREND_RETURN_PERCENT = 0.60
-        const val MIN_LATEST_TREND_RETURN_PERCENT = 0.15
     }
 }

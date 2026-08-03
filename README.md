@@ -89,6 +89,8 @@ MiMiTrends evaluates completed, minute-aligned OHLCV bars. Bars with non-finite 
 
 The scanner also recognizes fresh V-shaped reversals. It requires a statistically unusual three-minute shock of at least 0.25%, a recovery of at least 0.20%, two confirming steps in the recovery direction, and at least 50% directional recovery efficiency. The extreme expires after nine minutes, so an unrecovered fall or an old, inactive bounce is not promoted as a current opportunity.
 
+Clean staircase-like growth is ranked separately as `Steady rise ↑`. The detector evaluates 20- to 180-minute windows and requires a meaningful return, regression fit, directional efficiency, a majority of non-negative minute steps, bounded drawdown, and positive continuation during the latest five minutes.
+
 ### Comparable baseline
 
 For a candidate candle, the scanner prefers historical candles from prior sessions within approximately ±15 minutes of the same exchange-local time. This matters because volatility and volume near an opening auction are not comparable with quiet midday trading.

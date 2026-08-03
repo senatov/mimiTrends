@@ -167,7 +167,8 @@ internal class ScannerColumnFactory(
         return when {
             result.signalAgeMinutes > 0 -> SignalVisual("#7b8189", 400, "Old signal · ${result.signalAgeMinutes} minute(s) ago")
             result.signalSource.contains("relaxed", true) -> SignalVisual("#ad7100", 500, "Questionable signal · accepted only by relaxed statistical thresholds")
-            result.signalSource.startsWith("Trend") && kotlin.math.abs(result.windowChangePercent) < 0.90 ->
+            (result.signalSource.startsWith("Trend") || result.signalSource.startsWith("Steady rise")) &&
+                kotlin.math.abs(result.windowChangePercent) < 0.90 ->
                 SignalVisual(weakColor, 500, "Weak current trend · direction is active but close to the minimum threshold")
             result.anomalyScore < 1.25 -> SignalVisual("#ad7100", 500, "Questionable signal · low composite confidence")
             else -> SignalVisual(directionalColor, 600, if (down) "Strong current downward movement" else "Strong current upward movement")
