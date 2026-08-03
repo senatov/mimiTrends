@@ -118,6 +118,7 @@ internal class VReversalDetector(private val zoneOverride: ZoneId? = null) {
         val shockZ = shockZ(bars, pattern, criteria) ?: return null
         if (shockZ < criteria.minJumpZ) return null
         val recoveryRatio = (pattern.recoveryPercent / pattern.shockPercent).coerceIn(0.0, 1.5)
+        if (opposesDescendingStructure(bars, pattern) && !breaksOpposingStructure(bars, pattern)) return null
         val quality = MIN_QUALITY + (1.0 - MIN_QUALITY) * pattern.recoveryEfficiency
         val freshness = exp(-ln(2.0) * pattern.extremeAgeMinutes / FRESHNESS_HALF_LIFE_MINUTES)
         val raw = 0.58 * shockZ + 0.80 * recoveryRatio +
@@ -125,6 +126,32 @@ internal class VReversalDetector(private val zoneOverride: ZoneId? = null) {
         return VReversal(pattern.direction, pattern.recoveryPercent * pattern.direction,
             pattern.shockPercent, shockZ, recoveryRatio, pattern.volume, raw * quality * freshness,
             pattern.latest, pattern.extremeAgeMinutes)
+    }
+
+    private fun opposesDescendingStructure(bars: List<MinuteBar>, pattern: VPattern): Boolean {
+        val latestEpoch = pattern.latest.minuteEpochSeconds
+        val context = bars.filter {
+            local(it).toLocalDate() == local(pattern.latest).toLocalDate() &&
+                it.minuteEpochSeconds >= latestEpoch - STRUCTURE_MINUTES * 60L
+        }
+        if (context.size < MIN_STRUCTURE_BARS) return false
+        val midpoint = context.size / 2
+        val earlier = context.take(midpoint)
+        val later = context.drop(midpoint)
+        val directionalReturn = percent(context.first().close, context.last().close) * pattern.direction
+        val opposingHighs = if (pattern.direction > 0) later.maxOf { it.high } < earlier.maxOf { it.high }
+            else later.minOf { it.low } > earlier.minOf { it.low }
+        val opposingLows = if (pattern.direction > 0) later.minOf { it.low } < earlier.minOf { it.low }
+            else later.maxOf { it.high } > earlier.maxOf { it.high }
+        return directionalReturn < -MIN_OPPOSING_RETURN_PERCENT && opposingHighs && opposingLows
+    }
+
+    private fun breaksOpposingStructure(bars: List<MinuteBar>, pattern: VPattern): Boolean {
+        val session = bars.filter { local(it).toLocalDate() == local(pattern.latest).toLocalDate() }
+        val beforeExtreme = session.dropLast(pattern.extremeAgeMinutes + 1).takeLast(SWING_LOOKBACK_BARS)
+        if (beforeExtreme.size < MIN_SWING_BARS) return false
+        return if (pattern.direction > 0) pattern.latest.close > beforeExtreme.maxOf { it.close }
+        else pattern.latest.close < beforeExtreme.minOf { it.close }
     }
 
     private fun shockZ(bars: List<MinuteBar>, pattern: VPattern, criteria: ScannerCriteria): Double? {
@@ -198,5 +225,10 @@ internal class VReversalDetector(private val zoneOverride: ZoneId? = null) {
         const val MAX_SESSIONS = 20
         const val MIN_BASELINE = 15
         const val RETURN_FLOOR = 0.015
+        const val STRUCTURE_MINUTES = 30
+        const val MIN_STRUCTURE_BARS = 20
+        const val MIN_OPPOSING_RETURN_PERCENT = 0.25
+        const val SWING_LOOKBACK_BARS = 12
+        const val MIN_SWING_BARS = 6
     }
 }
