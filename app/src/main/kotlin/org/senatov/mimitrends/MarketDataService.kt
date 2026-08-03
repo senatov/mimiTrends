@@ -101,9 +101,10 @@ internal class MarketDataService(
         analytics.recordDataQuality(symbol, source, dataStatus(symbol), completed.lastOrNull()?.minuteEpochSeconds, completed.size)
         analytics.refreshDerived(symbol, completed, source)
         completed.lastOrNull()?.let { analytics.recordSignalOutcomes(symbol, it.close, it.minuteEpochSeconds) }
-        val primary = scannerEngine.evaluate(symbol, completed, criteria)
+        val primary = scannerEngine.evaluate(symbol, completed, criteria)?.withFeedAge(now)
         val fallback = if (primary != null) emptyList() else RELAXATION_LEVELS.map { factor ->
             scannerEngine.evaluateFallback(symbol, completed, criteria, factor)
+                ?.withFeedAge(now)
         }
         return ScanEvaluation(primary, fallback)
     }
@@ -126,3 +127,8 @@ internal class MarketDataService(
 }
 
 internal data class ScanEvaluation(val primary: ScanResult?, val fallback: List<ScanResult?>)
+
+internal fun ScanResult.withFeedAge(nowEpochSeconds: Long): ScanResult {
+    val feedAge = ((nowEpochSeconds - updatedAtMillis / 1_000L) / 60L).toInt().coerceAtLeast(0)
+    return copy(signalAgeMinutes = maxOf(signalAgeMinutes, feedAge))
+}
