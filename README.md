@@ -165,6 +165,15 @@ uses the same robust price and volume scale as an ordinary impulse. Because only
 eligible, the signal disappears automatically when acceleration stops; a flat ten-minute tail cannot remain
 an active momentum signal.
 
+### Range and chop rejection
+
+Fresh impulses, momentum, and reversals are checked against the preceding fifteen-minute price regime. A
+window is treated as range-bound when net displacement is small relative to the total travelled path and
+price repeatedly alternates direction. A candidate that remains inside that established high/low range is
+rejected. A close beyond the range with a small confirmation buffer is retained as a possible breakout. This
+prevents ordinary oscillation around a mean from being promoted while preserving genuine exits from
+consolidation.
+
 ### Composite score
 
 The raw impulse score gives most of its weight to the stronger price anomaly, then adds volume confirmation and immediate continuation:

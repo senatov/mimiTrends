@@ -36,11 +36,17 @@ class ScannerEngine(private val zoneOverride: ZoneId? = null) {
             return null
         }
         val candidates = features.takeLast(criteria.maxSignalAgeMinutes + 1).mapNotNull { candidate ->
-            score(candidate, features, latest, criteria)
+            score(candidate, features, latest, criteria)?.takeUnless {
+                RangeRegimeFilter.blocks(sorted, candidate.bar, candidate.returnPercent.direction())
+            }
         }
         val signal = candidates.maxByOrNull(Signal::score)
-        val momentum = earlyMomentumDetector.detect(sorted, criteria)
-        val reversal = vReversalDetector.detect(sorted, criteria)
+        val momentum = earlyMomentumDetector.detect(sorted, criteria)?.takeUnless {
+            RangeRegimeFilter.blocks(sorted, it.latestBar, it.returnPercent.direction())
+        }
+        val reversal = vReversalDetector.detect(sorted, criteria)?.takeUnless {
+            RangeRegimeFilter.blocks(sorted, it.latestBar, it.direction)
+        }
         if (signal == null && momentum == null && reversal == null) return null
         val sessionBars = sameSession(sorted, latest)
         val turnover = sessionBars.sumOf { it.close * it.volume }
@@ -273,6 +279,7 @@ class ScannerEngine(private val zoneOverride: ZoneId? = null) {
         .atZone(zoneOverride ?: MarketTimeZone.forSymbol(bar.symbol))
     private fun percent(open: Double, close: Double) = if (open > 0.0) (close / open - 1.0) * 100.0 else 0.0
     private fun Double?.orZero() = this ?: 0.0
+    private fun Double.direction() = if (this >= 0.0) 1 else -1
 
     private data class Feature(
         val index: Int,
