@@ -44,7 +44,7 @@ internal object SignalMetricPresentation {
         val relative = result.relativeVolume.takeIf(Double::isFinite)
         val anomaly = result.volumeAnomaly.takeIf(Double::isFinite)
         if (relative == null && anomaly == null) {
-            val impulse = result.signalSource.startsWith("Impulse")
+            val impulse = result.signalSource.startsWith("Impulse") || result.signalSource.startsWith("Momentum")
             return SignalMetric(
                 if (impulse) "Unavailable" else "Price-led",
                 Level.WATCH.color,

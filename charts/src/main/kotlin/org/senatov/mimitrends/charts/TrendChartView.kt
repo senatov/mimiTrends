@@ -73,10 +73,12 @@ class TrendChartView : StackPane() {
     private var latestPriceMarkerInstalled = false
     private var lastRequest: RenderRequest? = null
     private var renderedBars: List<MinuteBar> = emptyList()
+    private var renderedTimeline = ChartTimeline.linear(emptyList())
     private var renderedPriceMultiplier = 1.0
     private var renderedCurrencySymbol = "$"
     private var cursorPinned = false
     private val tradeAnnotations = BrokerTradeAnnotations(pricePlot)
+    private val signalTrendOverlay = SignalTrendOverlay(pricePlot)
 
     init {
         log.debug(LogTag.UI, "init()")
@@ -138,20 +140,23 @@ class TrendChartView : StackPane() {
 
     private fun renderRequest(request: RenderRequest) {
         val focused = focusButton.isSelected && request.signal != null
-        val source = if (focused) focusOnSignal(request.bars, requireNotNull(request.signal)) else request.bars
-        val visible = TrendChartSupport.aggregate(source, MAX_CANDLES)
+        val timeline = if (focused) ChartTimeline.focused(request.bars, requireNotNull(request.signal).signalEpochMillis / 1_000L)
+        else ChartTimeline.linear(TrendChartSupport.aggregate(request.bars, MAX_CANDLES))
+        val visible = timeline.actualBars
+        val plotted = timeline.plottedBars
         if (visible.isEmpty()) {
             clear()
             return
         }
 
-        val dates = Array(visible.size) { Date(visible[it].minuteEpochSeconds * 1_000) }
+        val dates = Array(plotted.size) { Date(plotted[it].minuteEpochSeconds * 1_000) }
         val highs = DoubleArray(visible.size) { visible[it].high * request.priceMultiplier }
         val lows = DoubleArray(visible.size) { visible[it].low * request.priceMultiplier }
         val opens = DoubleArray(visible.size) { visible[it].open * request.priceMultiplier }
         val closes = DoubleArray(visible.size) { visible[it].close * request.priceMultiplier }
         val volumes = DoubleArray(visible.size) { visible[it].volume }
         renderedBars = visible
+        renderedTimeline = timeline
         cursorPinned = false
         renderedPriceMultiplier = request.priceMultiplier
         renderedCurrencySymbol = request.currencySymbol
@@ -167,24 +172,31 @@ class TrendChartView : StackPane() {
         pricePlot.dataset = DefaultHighLowDataset(request.symbol, dates, highs, lows, opens, closes, volumes)
 
         val volumeSeries = TimeSeries("Volume")
-        visible.forEach { bar -> volumeSeries.addOrUpdate(Millisecond(Date(bar.minuteEpochSeconds * 1_000)), bar.volume) }
-        val barWidthMillis = TrendChartSupport.inferBarWidth(visible)
+        visible.indices.forEach { index ->
+            volumeSeries.addOrUpdate(Millisecond(Date(plotted[index].minuteEpochSeconds * 1_000)), visible[index].volume)
+        }
+        val barWidthMillis = TrendChartSupport.inferBarWidth(plotted)
         volumePlot.dataset = XYBarDataset(TimeSeriesCollection(volumeSeries), barWidthMillis)
 
-        dateAxis.dateFormatOverride = SimpleDateFormat(TrendChartSupport.datePattern(visible))
+        dateAxis.dateFormatOverride = timeline.dateFormat(TrendChartSupport.datePattern(visible))
         priceAxis.numberFormatOverride = DecimalFormat("${request.currencySymbol}#,##0.00")
         cursorDateFormat = SimpleDateFormat("dd MMM yyyy  HH:mm")
         cursorPriceFormat = DecimalFormat("${request.currencySymbol}#,##0.00")
         instrumentLabel.text = "${request.companyName}  (${request.symbol})"
         currentPriceLabel.text = "${request.currencySymbol}${"%,.2f".format(closes.last())} current"
-        chartDetailsLabel.text = if (focused) "Signal focus · ${source.size} minute bars" else "${request.rangeLabel} · ${request.bars.size} minute bars"
+        chartDetailsLabel.text = if (focused) "Signal focus · expanded recent impulse · ${visible.size} candles"
+            else "${request.rangeLabel} · ${request.bars.size} minute bars"
         val signalBar = request.signal?.let { nearestSignalBar(request.bars, it) }
-        signalSummaryLabel.text = request.signal?.let { signalSummary(it, signalBar, closes.last(), request) }.orEmpty()
+        signalSummaryLabel.text = request.signal?.let {
+            SignalChartPresentation.summary(it, signalBar, closes.last(), request.priceMultiplier, request.currencySymbol)
+        }.orEmpty()
         signalSummaryLabel.isVisible = request.signal != null
         signalSummaryLabel.isManaged = request.signal != null
         showLatestPrice(closes.last(), request.currencySymbol)
-        showSignalWindow(request.bars.last().minuteEpochSeconds, request.signal)
-        if (tradesButton.isSelected) tradeAnnotations.render(request.trades, visible, source, request.priceMultiplier)
+        showSignalWindow(request.bars.last().minuteEpochSeconds, request.signal, timeline)
+        if (focused) signalTrendOverlay.render(timeline, request.priceMultiplier) else signalTrendOverlay.clear()
+        if (tradesButton.isSelected) tradeAnnotations.render(request.trades, visible, plotted,
+            request.priceMultiplier, timeline::displayMillis)
         else tradeAnnotations.clear()
         chart.fireChartChanged()
     }
@@ -193,26 +205,6 @@ class TrendChartView : StackPane() {
         if (bars.isEmpty()) return null
         val epoch = signal.signalEpochMillis / 1_000L
         return bars.minByOrNull { kotlin.math.abs(it.minuteEpochSeconds - epoch) }
-    }
-
-    private fun focusOnSignal(bars: List<MinuteBar>, signal: ScanResult): List<MinuteBar> {
-        if (bars.isEmpty()) return bars
-        val signalEpoch = signal.signalEpochMillis / 1_000L
-        val signalIndex = bars.indices.minByOrNull { kotlin.math.abs(bars[it].minuteEpochSeconds - signalEpoch) } ?: bars.lastIndex
-        val start = (signalIndex - SIGNAL_CONTEXT_MINUTES).coerceAtLeast(0)
-        return bars.subList(start, bars.lastIndex + 1).takeLast(MAX_FOCUS_BARS)
-    }
-
-    private fun signalSummary(signal: ScanResult, signalBar: MinuteBar?, currentPrice: Double, request: RenderRequest): String {
-        val age = if (signal.signalAgeMinutes == 0) "now" else "${signal.signalAgeMinutes}m ago"
-        val date = signalBar?.let { SimpleDateFormat("dd MMM HH:mm").format(Date(it.minuteEpochSeconds * 1_000)) } ?: "—"
-        val entry = signal.signalPrice.takeIf { it.isFinite() && it > 0.0 }?.times(request.priceMultiplier)
-        val move = entry?.takeIf { it != 0.0 }?.let { (currentPrice - it) / it * 100.0 }
-        val volume = if (signal.relativeVolume.isFinite()) " · RVOL %.1f×".format(signal.relativeVolume) else ""
-        val prices = entry?.let {
-            " · Entry ${request.currencySymbol}${"%,.2f".format(it)} → now ${request.currencySymbol}${"%,.2f".format(currentPrice)} (${move?.let { value -> "%+.2f%%".format(value) } ?: "—"})"
-        }.orEmpty()
-        return "${signal.signalSource.uppercase()} · $date · $age$prices · Score ${"%.2f".format(signal.anomalyScore)}×$volume"
     }
 
     fun setLoading(loading: Boolean) {
@@ -228,7 +220,7 @@ class TrendChartView : StackPane() {
             pricePlot.removeRangeMarker(latestPriceMarker)
             latestPriceMarkerInstalled = false
         }
-        showSignalWindow(0, null)
+        showSignalWindow(0, null, renderedTimeline)
         instrumentLabel.text = "No collected market data"
         currentPriceLabel.text = ""
         chartDetailsLabel.text = ""
@@ -238,11 +230,13 @@ class TrendChartView : StackPane() {
         cursorDetailsLabel.text = "Move anywhere above a candle to inspect it · click to pin"
         cursorPinned = false
         renderedBars = emptyList()
+        renderedTimeline = ChartTimeline.linear(emptyList())
         tradeAnnotations.clear()
+        signalTrendOverlay.clear()
         chart.fireChartChanged()
     }
 
-    private fun showSignalWindow(latestEpoch: Long, signal: ScanResult?) {
+    private fun showSignalWindow(latestEpoch: Long, signal: ScanResult?, timeline: ChartTimeline) {
         log.debug(LogTag.UI, "showSignalWindow(latest={}, signal={})", latestEpoch, signal?.signalSource)
         priceSignalMarker?.let { pricePlot.removeDomainMarker(it, Layer.BACKGROUND) }
         volumeSignalMarker?.let { volumePlot.removeDomainMarker(it, Layer.BACKGROUND) }
@@ -250,10 +244,16 @@ class TrendChartView : StackPane() {
         volumeSignalMarker = null
         if (signal == null || latestEpoch <= 0) return
         val isTrend = signal.signalSource.startsWith("Trend")
+        val isMomentum = signal.signalSource.startsWith("Momentum")
         val ageMinutes = signal.signalAgeMinutes
-        val windowMinutes = if (isTrend) signal.signalWindowLabel.filter(Char::isDigit).toIntOrNull() ?: 180 else 1
-        val end = signal.signalEpochMillis.toDouble()
-        val start = end - windowMinutes * 60_000.0
+        val windowMinutes = when {
+            isTrend -> signal.signalWindowLabel.filter(Char::isDigit).toIntOrNull() ?: 180
+            isMomentum -> 3
+            else -> 1
+        }
+        val endEpoch = signal.signalEpochMillis / 1_000L
+        val end = timeline.displayMillis(endEpoch)
+        val start = timeline.displayMillis(endEpoch - windowMinutes * 60L)
         fun marker(label: String?): IntervalMarker = IntervalMarker(start, end).apply {
             paint = Color(242, 154, 56, 48)
             outlinePaint = Color(224, 124, 31, 150)
@@ -267,7 +267,11 @@ class TrendChartView : StackPane() {
         val signalBar = lastRequest?.let { nearestSignalBar(it.bars, signal) }
         val signalDate = signalBar?.let { SimpleDateFormat("dd MMM HH:mm").format(Date(it.minuteEpochSeconds * 1_000)) }
         val entry = lastRequest?.let { signal.signalPrice * it.priceMultiplier }
-        val label = if (isTrend) "Trend ${signal.signalWindowLabel}" else "Signal"
+        val label = when {
+            isTrend -> "Trend ${signal.signalWindowLabel}"
+            isMomentum -> "Early momentum 3m"
+            else -> "Signal"
+        }
         val numericLabel = listOfNotNull(label, signalDate, entry?.let { "Entry ${lastRequest?.currencySymbol}${"%,.2f".format(it)}" }).joinToString(" · ")
         priceSignalMarker = marker(numericLabel)
         volumeSignalMarker = marker(null)
@@ -325,8 +329,8 @@ class TrendChartView : StackPane() {
         if (x !in priceArea.minX..priceArea.maxX || y !in priceArea.minY..volumeArea.maxY) return false
         val timeValue = dateAxis.java2DToValue(x, priceArea, RectangleEdge.BOTTOM)
         if (!timeValue.isFinite()) return false
-        val bar = renderedBars.minByOrNull { kotlin.math.abs(it.minuteEpochSeconds * 1_000.0 - timeValue) } ?: return false
-        val snappedTime = bar.minuteEpochSeconds * 1_000.0
+        val bar = renderedTimeline.actualBarAt(timeValue) ?: return false
+        val snappedTime = renderedTimeline.displayMillis(bar.minuteEpochSeconds)
         val priceValue = if (priceArea.contains(x, y)) priceAxis.java2DToValue(y, priceArea, pricePlot.rangeAxisEdge)
         else bar.close * renderedPriceMultiplier
         if (!priceValue.isFinite()) return false
@@ -334,7 +338,7 @@ class TrendChartView : StackPane() {
         priceTimeCursor.value = snappedTime
         volumeTimeCursor.value = snappedTime
         priceCursor.value = priceValue
-        volumeTimeCursor.label = cursorDateFormat.format(Date(snappedTime.toLong()))
+        volumeTimeCursor.label = cursorDateFormat.format(Date(bar.minuteEpochSeconds * 1_000L))
         priceCursor.label = cursorPriceFormat.format(priceValue)
         showBarDetails(bar)
         // Keep both labels inside the plot canvas. TextAnchor describes the part of the
@@ -394,7 +398,5 @@ class TrendChartView : StackPane() {
 
     private companion object {
         const val MAX_CANDLES = 360
-        const val SIGNAL_CONTEXT_MINUTES = 180
-        const val MAX_FOCUS_BARS = 240
     }
 }

@@ -150,6 +150,16 @@ Maximum age         2 minutes
 
 All user-facing thresholds can be adjusted in Settings.
 
+### Early three-minute momentum
+
+The scanner also evaluates the latest three consecutive completed candles as one directional move.
+This catches a rapid rise or fall before any individual minute crosses the ordinary absolute-move threshold.
+The three-minute move must exceed 0.35%, remain at least 65% directionally efficient, continue in the latest
+minute, and be statistically unusual against comparable three-minute windows from prior sessions. Its score
+uses the same robust price and volume scale as an ordinary impulse. Because only the latest three candles are
+eligible, the signal disappears automatically when acceleration stops; a flat ten-minute tail cannot remain
+an active momentum signal.
+
 ### Composite score
 
 The raw impulse score gives most of its weight to the stronger price anomaly, then adds volume confirmation and immediate continuation:
@@ -238,6 +248,9 @@ Selecting a scanner row opens its locally stored candles and volume.
 - full company name and ticker;
 - current locally available price;
 - signal type, time, entry price, current/exit reference, score, and RVOL;
+- a non-linear trading-time axis that removes closed-market gaps and reserves at least one third of the width for fresh signal candles;
+- aggregated distant context with unaggregated minute candles around the signal;
+- fast 5-minute and local 15-minute direction overlays;
 - a highlighted signal interval and signal-volume bar;
 - real OHLC, candle return, and volume for the candle nearest the cursor;
 - stronger background grid lines for accurate visual comparison;

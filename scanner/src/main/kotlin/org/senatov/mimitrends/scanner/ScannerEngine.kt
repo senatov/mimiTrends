@@ -18,6 +18,7 @@ import kotlin.math.max
 /** Detects only directional impulses in the latest completed minute bars. */
 class ScannerEngine(private val zoneOverride: ZoneId? = null) {
     private val log = LoggerFactory.getLogger(javaClass)
+    private val earlyMomentumDetector = EarlyMomentumDetector(zoneOverride)
 
     internal fun freshnessWeight(ageMinutes: Double): Double =
         exp(-ln(2.0) * ageMinutes.coerceAtLeast(0.0) / FRESHNESS_HALF_LIFE_MINUTES)
@@ -35,35 +36,68 @@ class ScannerEngine(private val zoneOverride: ZoneId? = null) {
         val candidates = features.takeLast(criteria.maxSignalAgeMinutes + 1).mapNotNull { candidate ->
             score(candidate, features, latest, criteria)
         }
-        val signal = candidates.maxByOrNull(Signal::score) ?: return null
+        val signal = candidates.maxByOrNull(Signal::score)
+        val momentum = earlyMomentumDetector.detect(sorted, criteria)
+        if (signal == null && momentum == null) return null
         val sessionBars = sameSession(sorted, latest)
         val turnover = sessionBars.sumOf { it.close * it.volume }
         if (latest.close < criteria.minPrice || turnover < criteria.minSessionTurnover) return null
+        if (momentum != null && momentum.score > (signal?.score ?: Double.NEGATIVE_INFINITY)) {
+            return momentumResult(symbol, latest, sessionBars, turnover, momentum)
+        }
+        val selected = requireNotNull(signal)
         return ScanResult(
             symbol = symbol,
             price = latest.close,
-            anomalyScore = signal.score,
-            priceAnomaly = signal.jumpZ,
-            volumeAnomaly = signal.volumeZ,
-            rangeAnomaly = signal.rangeZ,
-            relativeVolume = signal.relativeVolume,
-            candleBodyRatio = signal.feature.bodyRatio,
+            anomalyScore = selected.score,
+            priceAnomaly = selected.jumpZ,
+            volumeAnomaly = selected.volumeZ,
+            rangeAnomaly = selected.rangeZ,
+            relativeVolume = selected.relativeVolume,
+            candleBodyRatio = selected.feature.bodyRatio,
             windowChangePercent = displayWindowChange(sorted, latest),
-            windowVolume = signal.feature.bar.volume,
+            windowVolume = selected.feature.bar.volume,
             sessionVolume = sessionBars.sumOf(MinuteBar::volume),
             sessionTurnover = turnover,
-            signalAgeMinutes = signal.ageMinutes,
-            signalSource = if (signal.feature.returnPercent >= 0) "Impulse ↑" else "Impulse ↓",
+            signalAgeMinutes = selected.ageMinutes,
+            signalSource = if (selected.feature.returnPercent >= 0) "Impulse ↑" else "Impulse ↓",
             updatedAtMillis = latest.minuteEpochSeconds * 1_000,
-            signalWindowLabel = when (signal.ageMinutes) {
+            signalWindowLabel = when (selected.ageMinutes) {
                 0 -> "latest"
                 1 -> "1m ago"
-                else -> "${signal.ageMinutes}m ago"
+                else -> "${selected.ageMinutes}m ago"
             },
-            signalPrice = signal.feature.bar.close,
-            signalEpochMillis = signal.feature.bar.minuteEpochSeconds * 1_000
+            signalPrice = selected.feature.bar.close,
+            signalEpochMillis = selected.feature.bar.minuteEpochSeconds * 1_000
         )
     }
+
+    private fun momentumResult(
+        symbol: String,
+        latest: MinuteBar,
+        sessionBars: List<MinuteBar>,
+        turnover: Double,
+        momentum: EarlyMomentum
+    ) = ScanResult(
+        symbol = symbol,
+        price = latest.close,
+        anomalyScore = momentum.score,
+        priceAnomaly = momentum.jumpZ,
+        volumeAnomaly = momentum.volumeZ,
+        rangeAnomaly = Double.NaN,
+        relativeVolume = momentum.relativeVolume,
+        candleBodyRatio = momentum.efficiency,
+        windowChangePercent = momentum.returnPercent,
+        windowVolume = momentum.volume,
+        sessionVolume = sessionBars.sumOf(MinuteBar::volume),
+        sessionTurnover = turnover,
+        signalAgeMinutes = 0,
+        signalSource = if (momentum.returnPercent >= 0.0) "Momentum 3m ↑" else "Momentum 3m ↓",
+        updatedAtMillis = latest.minuteEpochSeconds * 1_000,
+        signalWindowLabel = "3m acceleration",
+        signalPrice = latest.close,
+        signalEpochMillis = latest.minuteEpochSeconds * 1_000
+    )
 
     fun evaluateFallback(symbol: String, bars: List<MinuteBar>, criteria: ScannerCriteria): ScanResult? {
         log.debug(LogTag.DB, "evaluateFallback(symbol={}, bars={})", symbol, bars.size)

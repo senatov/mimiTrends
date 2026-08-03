@@ -20,8 +20,9 @@ internal class BrokerTradeAnnotations(private val plot: XYPlot) {
     fun render(
         trades: List<BrokerTrade>,
         bars: List<MinuteBar>,
-        referenceBars: List<MinuteBar>,
-        barPriceMultiplier: Double
+        displayBars: List<MinuteBar>,
+        barPriceMultiplier: Double,
+        displayMillis: (Long) -> Double = { it * 1_000.0 }
     ) {
         plot.clearAnnotations()
         if (bars.isEmpty()) return
@@ -32,10 +33,10 @@ internal class BrokerTradeAnnotations(private val plot: XYPlot) {
         }
         val priceSpan = (bars.maxOf { it.high } - bars.minOf { it.low })
             .coerceAtLeast(bars.last().close * 0.02) * barPriceMultiplier
-        val timeStep = medianBarSeconds(referenceBars) * 1_000.0
+        val timeStep = medianBarSeconds(displayBars) * 1_000.0
         visible.forEachIndexed { index, trade ->
-            val entryX = trade.entryEpochSeconds * 1_000.0
-            val exitX = (trade.exitEpochSeconds ?: lastEpoch) * 1_000.0
+            val entryX = displayMillis(trade.entryEpochSeconds)
+            val exitX = displayMillis(trade.exitEpochSeconds ?: lastEpoch)
             val entryY = trade.entryPrice
             val exitY = trade.exitPrice ?: trade.entryPrice
             val level = index % MAX_LEVELS
@@ -48,9 +49,9 @@ internal class BrokerTradeAnnotations(private val plot: XYPlot) {
             }
             plot.addAnnotation(XYShapeAnnotation(path, MARKER_STROKE, ORANGE))
             val entryAlignment = alignToCandle(trade.entryEpochSeconds, trade.entryPrice,
-                referenceBars, timeStep, barPriceMultiplier)
+                bars, timeStep, barPriceMultiplier, displayMillis)
             val exitAlignment = trade.exitEpochSeconds?.let { epoch ->
-                alignToCandle(epoch, requireNotNull(trade.exitPrice), referenceBars, timeStep, barPriceMultiplier)
+                alignToCandle(epoch, requireNotNull(trade.exitPrice), bars, timeStep, barPriceMultiplier, displayMillis)
             }
             entryAlignment?.let(::addConnector)
             exitAlignment?.let(::addConnector)
@@ -107,12 +108,13 @@ internal class BrokerTradeAnnotations(private val plot: XYPlot) {
         tradePrice: Double,
         bars: List<MinuteBar>,
         timeStep: Double,
-        multiplier: Double
+        multiplier: Double,
+        displayMillis: (Long) -> Double
     ): CandleAlignment? {
-        val tradeX = epochSeconds * 1_000.0
-        val nearest = bars.minByOrNull { kotlin.math.abs(it.minuteEpochSeconds * 1_000.0 - tradeX) } ?: return null
-        val candleX = nearest.minuteEpochSeconds * 1_000.0
-        if (kotlin.math.abs(candleX - tradeX) <= timeStep * 1.5) return null
+        val nearest = bars.minByOrNull { kotlin.math.abs(it.minuteEpochSeconds - epochSeconds) } ?: return null
+        val tradeX = displayMillis(epochSeconds)
+        val candleX = displayMillis(nearest.minuteEpochSeconds)
+        if (kotlin.math.abs(nearest.minuteEpochSeconds - epochSeconds) <= timeStep / 1_000.0 * 1.5) return null
         return CandleAlignment(tradeX, tradePrice, candleX, nearest.close * multiplier)
     }
 

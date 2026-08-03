@@ -34,6 +34,55 @@ class ScannerEngineTest {
         assertTrue(result.windowChangePercent < 0.0)
     }
 
+    @Test fun `detects an early three minute rise before any single candle qualifies`() {
+        val bars = normalBars().toMutableList()
+        var minute = nextMinute(bars)
+        bars += candle(minute++, 100.0, 100.17, 900.0)
+        bars += candle(minute++, 100.17, 100.34, 1_100.0)
+        bars += candle(minute, 100.34, 100.51, 1_300.0)
+
+        val result = requireNotNull(engine().evaluate("TEST", bars, criteria()))
+
+        assertEquals("Momentum 3m ↑", result.signalSource)
+        assertEquals("3m acceleration", result.signalWindowLabel)
+        assertTrue(result.windowChangePercent >= 0.50)
+        assertTrue(result.anomalyScore >= 4.0)
+    }
+
+    @Test fun `detects an early three minute fall symmetrically`() {
+        val bars = normalBars().toMutableList()
+        var minute = nextMinute(bars)
+        bars += candle(minute++, 100.0, 99.83, 900.0)
+        bars += candle(minute++, 99.83, 99.66, 1_100.0)
+        bars += candle(minute, 99.66, 99.49, 1_300.0)
+
+        val result = requireNotNull(engine().evaluate("TEST", bars, criteria()))
+
+        assertEquals("Momentum 3m ↓", result.signalSource)
+        assertTrue(result.windowChangePercent <= -0.50)
+    }
+
+    @Test fun `drops early momentum after ten flat minutes`() {
+        val bars = normalBars().toMutableList()
+        var minute = nextMinute(bars)
+        bars += candle(minute++, 100.0, 100.17, 900.0)
+        bars += candle(minute++, 100.17, 100.34, 1_100.0)
+        bars += candle(minute++, 100.34, 100.51, 1_300.0)
+        repeat(10) { bars += candle(minute++, 100.51, 100.51, 100.0) }
+
+        assertNull(engine().evaluate("TEST", bars, criteria()))
+    }
+
+    @Test fun `rejects a noisy three minute path with weak directional efficiency`() {
+        val bars = normalBars().toMutableList()
+        var minute = nextMinute(bars)
+        bars += candle(minute++, 100.0, 100.50, 900.0)
+        bars += candle(minute++, 100.50, 99.90, 1_100.0)
+        bars += candle(minute, 99.90, 100.40, 1_300.0)
+
+        assertNull(EarlyMomentumDetector(java.time.ZoneId.of("UTC")).detect(bars, criteria()))
+    }
+
     @Test fun `keeps a price impulse but marks zero volume as unavailable`() {
         val bars = normalBars().toMutableList()
         bars += candle(nextMinute(bars), 100.0, 96.0, 0.0, VolumeStatus.MISSING)

@@ -15,4 +15,10 @@ class SignalMetricPresentationTest {
 
         assertEquals("Price-led", SignalMetricPresentation.volume(result).label)
     }
+
+    @Test fun `labels early momentum without reliable volume as unavailable`() {
+        val result = TestScanResult.create(signalSource = "Momentum 3m ↑")
+
+        assertEquals("Unavailable", SignalMetricPresentation.volume(result).label)
+    }
 }
