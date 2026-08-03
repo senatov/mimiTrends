@@ -119,7 +119,7 @@ class ScannerPanel(
             javafx.scene.layout.Region().also { javafx.scene.layout.HBox.setHgrow(it, Priority.ALWAYS) })
         sortedRows.comparatorProperty().bind(table.comparatorProperty())
         val symbol = columnFactory.symbol()
-        val signal = columnFactory.signal("Signal", ScanResult::signalSource)
+        val signal = columnFactory.signal("Pattern", ScanResult::signalSource)
         val move = columnFactory.number("Move 10m", ScanResult::windowChangePercent, ::percent)
         val price = columnFactory.number("Price", { convertPrice(it.symbol, it.price) }) { "${currency.symbol}%,.2f".format(it) }
         val scoreColumn = columnFactory.metric("Anomaly", ScanResult::anomalyScore, SignalMetricPresentation::strength)

@@ -175,8 +175,12 @@ internal class ScannerColumnFactory(
             (result.signalSource.startsWith("Trend") || result.signalSource.startsWith("Steady rise")) &&
                 kotlin.math.abs(result.windowChangePercent) < 0.90 ->
                 SignalVisual(weakColor, 500, "Weak current trend · direction is active but close to the minimum threshold")
+            result.signalSource.startsWith("Trend") || result.signalSource.startsWith("Steady rise") ->
+                SignalVisual(directionalColor, 500, "Rising pattern across the measured window · continuation is not implied")
             result.anomalyScore < 1.25 -> SignalVisual("#ad7100", 500, "Questionable signal · low composite confidence")
-            else -> SignalVisual(directionalColor, 600, if (down) "Strong current downward movement" else "Strong current upward movement")
+            else -> SignalVisual(directionalColor, 600,
+                if (down) "Current downward anomaly · direction is descriptive, not a forecast"
+                else "Current upward anomaly · direction is descriptive, not a forecast")
         }
     }
 

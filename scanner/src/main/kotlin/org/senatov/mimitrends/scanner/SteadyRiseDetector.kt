@@ -58,6 +58,8 @@ internal class SteadyRiseDetector(private val zoneOverride: ZoneId? = null) {
         val minimumReturn = max(MIN_RETURN_PERCENT, criteria.minTrendReturnPercent * sqrt(minutes / 180.0))
         if (totalReturn < minimumReturn) return null
         val changes = bars.zipWithNext { first, second -> percent(first.close, second.close) }
+        val largestStep = changes.maxOrNull() ?: return null
+        if (largestStep > totalReturn * MAX_SINGLE_STEP_SHARE) return null
         val path = changes.sumOf { abs(it) }
         val efficiency = if (path > 0.0) totalReturn / path else 0.0
         if (efficiency < max(MIN_EFFICIENCY, criteria.minTrendEfficiency)) return null
@@ -156,6 +158,7 @@ internal class SteadyRiseDetector(private val zoneOverride: ZoneId? = null) {
         const val MIN_EFFICIENCY = 0.45
         const val MIN_R_SQUARED = 0.55
         const val MIN_POSITIVE_STEP_RATIO = 0.52
+        const val MAX_SINGLE_STEP_SHARE = 0.60
         const val CONTEXT_MINUTES = 60
         const val LATEST_MINUTES = 5
         const val MIN_LATEST_SAMPLES = 3

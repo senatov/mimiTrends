@@ -71,7 +71,7 @@ The primary table intentionally uses plain-language categories instead of exposi
 | Column | Meaning |
 | --- | --- |
 | Company / Symbol | Instrument identity and cached company profile. |
-| Signal | Fresh impulse, relaxed impulse, or persistent trend. |
+| Pattern | Detected fresh impulse, relaxed impulse, or persistent trend. It describes observed price action rather than recommending a trade. |
 | Move 10m | Signed price change over the latest ten-minute display window. |
 | Price | Latest completed locally available price in the selected display currency. |
 | Anomaly | Composite anomaly ranking: `Low`, `Moderate`, `High`, or `Very high`. This measures how unusual and well-confirmed the detected move is; it is not a buy/sell recommendation or a prediction that the move will continue. |

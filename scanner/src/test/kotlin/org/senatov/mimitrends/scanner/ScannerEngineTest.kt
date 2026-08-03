@@ -272,6 +272,24 @@ class ScannerEngineTest {
         assertNull(engine().evaluateFallback("TEST", bars, criteria()))
     }
 
+    @Test fun `does not call a single jump followed by shallow drift a steady rise`() {
+        val bars = normalBars(days = 3).toMutableList()
+        var minute = 3 * 1_440
+        var previous = 100.0
+        repeat(12) {
+            bars += candle(minute++, previous, previous + 0.01, 300.0)
+            previous += 0.01
+        }
+        bars += candle(minute++, previous, 105.0, 5_000.0)
+        previous = 105.0
+        repeat(8) {
+            bars += candle(minute++, previous, previous + 0.025, 300.0)
+            previous += 0.025
+        }
+
+        assertNull(SteadyRiseDetector(java.time.ZoneId.of("UTC")).detect("TEST", bars, criteria()))
+    }
+
     @Test fun `recommends a clean recent staircase rise`() {
         val bars = normalBars().toMutableList()
         var minute = nextMinute(bars)
