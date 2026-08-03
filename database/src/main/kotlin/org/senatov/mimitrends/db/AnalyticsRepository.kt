@@ -28,6 +28,7 @@ class AnalyticsRepository(
     private val lock = ReentrantLock()
     private val connection: Connection
     private val brokerTransactions: BrokerTransactionStore
+    private val signalCalibration: SignalCalibrationStore
 
     init {
         Files.createDirectories(databasePath.parent)
@@ -43,6 +44,7 @@ class AnalyticsRepository(
         }
         migrate()
         brokerTransactions = BrokerTransactionStore(connection)
+        signalCalibration = SignalCalibrationStore(connection)
     }
 
     fun upsertInstrument(value: InstrumentMetadata) = locked {
@@ -144,6 +146,8 @@ class AnalyticsRepository(
             s.executeBatch()
         }
     }
+
+    fun withCalibration(result: ScanResult): ScanResult = locked { signalCalibration.enrich(result) }
 
     fun completeScan(runId: Long, publishedSymbols: Collection<String>, failures: Int) = locked {
         transaction {

@@ -18,8 +18,13 @@ internal object SignalMetricPresentation {
             score >= 2.5 -> Level.NOTABLE
             else -> Level.WATCH
         }
+        val calibration = if (result.continuationProbability.isFinite())
+            "\nEmpirical ${result.calibrationHorizonMinutes}m continuation: %.0f%% (%d independent episodes)."
+                .format(result.continuationProbability * 100.0, result.calibrationSamples)
+        else "\nContinuation calibration: insufficient independent episodes (${result.calibrationSamples}/5)."
         return SignalMetric(level.label, level.color, if (score >= 4.0) 600 else 500,
-            "Composite signal strength: %.2f×\nIncludes price anomaly, volume confirmation, candle quality and freshness.".format(score))
+            "Composite anomaly strength: %.2f×\nMeasures rarity, confirmation, candle quality and freshness.%s"
+                .format(score, calibration))
     }
 
     fun priceAction(result: ScanResult): SignalMetric {
@@ -31,9 +36,9 @@ internal object SignalMetricPresentation {
         val jump = result.priceAnomaly.finiteOrZero()
         val range = result.rangeAnomaly.finiteOrZero()
         val (label, color) = when {
-            jump >= 6.0 && range >= 6.0 -> "Extreme impulse $arrow" to Level.EXTREME.color
+            jump >= 6.0 && range >= 6.0 -> "Exceptional move $arrow" to Level.EXTREME.color
             range >= jump * 1.5 && range >= 3.5 -> "Volatile / unstable" to "#9a6717"
-            jump >= 4.0 -> "Strong impulse $arrow" to if (arrow == "↑") "#137b50" else "#b23b48"
+            jump >= 4.0 -> "Rare impulse $arrow" to if (arrow == "↑") "#137b50" else "#b23b48"
             else -> "Elevated move $arrow" to Level.NOTABLE.color
         }
         return SignalMetric(label, color, if (jump >= 4.0 || range >= 5.0) 600 else 500,

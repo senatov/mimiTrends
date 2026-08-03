@@ -239,8 +239,10 @@ class MainController(
             if (errors.isNotEmpty()) {
                 log.warn(LogTag.API, "scan completed with failures count={} sample={}", errors.size, errors.take(3).joinToString("; "))
             }
+            val calibratedResults = results.map(analytics::withCalibration)
+            val calibratedFallbacks = fallbackLevels.map { level -> level.map(analytics::withCalibration) }
             val selection = AdaptiveResultSelector.select(
-                results, fallbackLevels, criteria.minimumTableResults, criteria.resultLimit
+                calibratedResults, calibratedFallbacks, criteria.minimumTableResults, criteria.resultLimit
             )
             val published = selection.results
             priorityScanner.replaceCandidates(published)
@@ -395,6 +397,4 @@ class MainController(
 
     private fun displayPrice(symbol: String, value: Double): Double =
         exchangeRates.convert(symbol, value, scannerCriteria.displayCurrency)
-
-
 }

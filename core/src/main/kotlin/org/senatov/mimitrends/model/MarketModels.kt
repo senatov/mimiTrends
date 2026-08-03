@@ -130,7 +130,10 @@ data class ScanResult(
     val dataStatus: String = "CACHE",
     val signalWindowLabel: String = "1m",
     val signalPrice: Double = price,
-    val signalEpochMillis: Long = updatedAtMillis
+    val signalEpochMillis: Long = updatedAtMillis,
+    val continuationProbability: Double = Double.NaN,
+    val calibrationSamples: Int = 0,
+    val calibrationHorizonMinutes: Int = 10
 )
 
 data class CompanyProfile(

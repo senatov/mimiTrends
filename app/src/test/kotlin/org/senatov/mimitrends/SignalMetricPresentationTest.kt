@@ -21,4 +21,10 @@ class SignalMetricPresentationTest {
 
         assertEquals("Unavailable", SignalMetricPresentation.volume(result).label)
     }
+
+    @Test fun `describes a statistically rare candle without promising strength`() {
+        val result = TestScanResult.create(anomalyScore = 2.8)
+
+        assertEquals("Rare impulse ↑", SignalMetricPresentation.priceAction(result).label)
+    }
 }
