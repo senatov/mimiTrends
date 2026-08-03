@@ -289,6 +289,25 @@ class ScannerEngineTest {
         assertTrue(result.anomalyScore >= 3.0)
     }
 
+    @Test fun `recognizes a strong SAP-like opening rise within eleven minutes`() {
+        val bars = normalBars(days = 3).toMutableList()
+        var minute = 3 * 1_440
+        val prices = listOf(160.76, 159.74, 159.94, 160.10, 160.32, 160.44,
+            160.56, 160.94, 161.58, 161.74, 161.94, 162.34)
+        var previous = 160.0
+        prices.forEach { close ->
+            bars += candle(minute++, previous, close, 5_000.0)
+            previous = close
+        }
+
+        val result = requireNotNull(SteadyRiseDetector(java.time.ZoneId.of("UTC"))
+            .detect("TEST", bars, criteria()))
+
+        assertEquals("Steady rise ↑", result.signalSource)
+        assertEquals("10m steady", result.signalWindowLabel)
+        assertTrue(result.windowChangePercent >= 1.50)
+    }
+
     @Test fun `rejects a sideways path even when it is visually smooth`() {
         val bars = normalBars().toMutableList()
         var minute = nextMinute(bars)

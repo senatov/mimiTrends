@@ -112,7 +112,7 @@ internal class SteadyRiseDetector(private val zoneOverride: ZoneId? = null) {
     private data class Regression(val slope: Double, val rSquared: Double)
 
     private companion object {
-        val WINDOW_MINUTES = listOf(20, 30, 45, 60, 90, 120, 180)
+        val WINDOW_MINUTES = listOf(10, 15, 20, 30, 45, 60, 90, 120, 180)
         const val MIN_SESSIONS = 2
         const val MIN_RETURN_PERCENT = 0.30
         const val MIN_EFFICIENCY = 0.45
