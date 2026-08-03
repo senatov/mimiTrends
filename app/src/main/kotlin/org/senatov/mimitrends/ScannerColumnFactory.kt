@@ -172,11 +172,17 @@ internal class ScannerColumnFactory(
                 SignalVisual("#2f7f61", 600, "Fresh breakout after recovery consolidation · earlier decline remains a risk factor")
             result.signalSource.startsWith("Recovery rise") ->
                 SignalVisual("#2f7f61", 600, "Continuing recovery rise · earlier decline remains a risk factor")
-            (result.signalSource.startsWith("Trend") || result.signalSource.startsWith("Steady rise")) &&
+            result.signalSource.startsWith("Steady rise") &&
                 kotlin.math.abs(result.windowChangePercent) < 0.90 ->
+                SignalVisual(STEADY_RISE_COLOR, 500, "Weak current trend · direction is active but close to the minimum threshold")
+            result.signalSource.startsWith("Steady rise") ->
+                SignalVisual(STEADY_RISE_COLOR, 600, "Rising pattern across the measured window · continuation is not implied")
+            result.signalSource.startsWith("Impulse") ->
+                SignalVisual(IMPULSE_COLOR, 600, "Fresh price impulse · direction is descriptive, not a forecast")
+            result.signalSource.startsWith("Trend") && kotlin.math.abs(result.windowChangePercent) < 0.90 ->
                 SignalVisual(weakColor, 500, "Weak current trend · direction is active but close to the minimum threshold")
-            result.signalSource.startsWith("Trend") || result.signalSource.startsWith("Steady rise") ->
-                SignalVisual(directionalColor, 500, "Rising pattern across the measured window · continuation is not implied")
+            result.signalSource.startsWith("Trend") ->
+                SignalVisual(directionalColor, 500, "Directional pattern across the measured window · continuation is not implied")
             result.anomalyScore < 1.25 -> SignalVisual("#ad7100", 500, "Questionable signal · low composite confidence")
             else -> SignalVisual(directionalColor, 600,
                 if (down) "Current downward anomaly · direction is descriptive, not a forecast"
@@ -219,4 +225,9 @@ internal class ScannerColumnFactory(
     }
 
     private data class SignalVisual(val color: String, val weight: Int, val description: String)
+
+    private companion object {
+        const val STEADY_RISE_COLOR = "#0B5D3B"
+        const val IMPULSE_COLOR = "#4B1F6F"
+    }
 }
