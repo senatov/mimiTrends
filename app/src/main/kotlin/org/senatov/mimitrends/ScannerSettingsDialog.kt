@@ -99,12 +99,6 @@ class ScannerSettingsDialog(
                 settingRow("Display currency", "Prices and turnover are converted only for presentation.", currency),
                 settingRow("Finnhub live feed", "Optional. A new key is stored locally; blank keeps the existing configuration.", finnhubApiKey)
             ),
-            section("Additional market-data providers",
-                settingRow("Tradegate public quotes", "Collect one EUR quote at a time during the Tradegate session and retain it in a separate provider series.", tradegateEnabled),
-                settingRow("Tradegate request interval", "Milliseconds between instruments. Requests are sequential; 1000 is the conservative default.", tradegateInterval),
-                settingRow("Euronext public quotes", "Resolve instruments through Euronext search and collect delayed website quotes into an independent provider series.", euronextEnabled),
-                settingRow("Euronext request interval", "Milliseconds between sequential instruments. 1500 limits website load while the universe is rotated continuously.", euronextInterval)
-            ),
             section("Candidate universe",
                 Label("Comma-separated Yahoo symbols. The default universe contains 256 liquid US and European listings.").apply {
                     isWrapText = true; styleClass += "settings-help"
@@ -112,6 +106,23 @@ class ScannerSettingsDialog(
                 symbols.apply { prefRowCount = 5; maxHeight = 130.0 }
             ),
             Label("Only fresh directional price impulses are ranked. Volume alone cannot qualify a symbol. Historical Yahoo bars and live Finnhub bars are retained in SQLite.").apply {
+                isWrapText = true; styleClass += "settings-footnote"
+            }
+        ).apply { padding = Insets(18.0) }
+
+        val providers = VBox(14.0,
+            Label("Optional website collectors run independently from Yahoo and Finnhub. Each provider stores its observations in a separate database series.").apply {
+                isWrapText = true; styleClass += "settings-footnote"
+            },
+            section("Tradegate",
+                settingRow("Public quote collector", "Resolve company names to Tradegate instruments and collect EUR quotes during its weekday trading session.", tradegateEnabled),
+                settingRow("Request interval", "Milliseconds between sequential instruments. A small timing jitter and automatic backoff are applied.", tradegateInterval)
+            ),
+            section("Euronext",
+                settingRow("Public quote collector", "Resolve ISIN and MIC through Euronext search and collect delayed market-information quotes.", euronextEnabled),
+                settingRow("Request interval", "Milliseconds between sequential instruments. A small timing jitter and automatic backoff are applied.", euronextInterval)
+            ),
+            Label("Collectors honor Retry-After responses, pause after access or throttling errors, and do not replace newer database observations with older quotes.").apply {
                 isWrapText = true; styleClass += "settings-footnote"
             }
         ).apply { padding = Insets(18.0) }
@@ -134,6 +145,7 @@ class ScannerSettingsDialog(
         ).apply { padding = Insets(18.0) }
         dialog.dialogPane.content = TabPane(
             Tab("Scanner", ScrollPane(scanner).apply { isFitToWidth = true; styleClass += "settings-scroll" }).apply { isClosable = false },
+            Tab("Market Data Providers", ScrollPane(providers).apply { isFitToWidth = true; styleClass += "settings-scroll" }).apply { isClosable = false },
             Tab("Appearance", ScrollPane(appearance).apply { isFitToWidth = true; styleClass += "settings-scroll" }).apply { isClosable = false }
         )
         dialog.dialogPane.prefWidth = DEFAULT_WIDTH
