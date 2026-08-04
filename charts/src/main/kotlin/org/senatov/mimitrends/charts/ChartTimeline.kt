@@ -54,6 +54,7 @@ internal class ChartTimeline private constructor(
         private const val DETAIL_BEFORE_SIGNAL = 12
         private const val MIN_CONTEXT_SLOTS = 12
         private const val DISPLAY_STEP_SECONDS = 60L
+        private const val SESSION_GAP_SECONDS = 2 * 60 * 60L
 
         fun linear(bars: List<MinuteBar>): ChartTimeline = ChartTimeline(bars, bars, false)
 
@@ -67,12 +68,27 @@ internal class ChartTimeline private constructor(
             val detail = bars.subList(detailStart, bars.size)
             val context = bars.subList(contextStart, detailStart)
             val contextSlots = (detail.size * 2).coerceAtLeast(MIN_CONTEXT_SLOTS)
-            val selected = TrendChartSupport.aggregate(context, contextSlots) + detail
+            val previousSessionClose = previousSessionClose(bars, signalIndex, contextStart)
+            val aggregateSlots = (contextSlots - if (previousSessionClose == null) 0 else 1).coerceAtLeast(1)
+            val selected = listOfNotNull(previousSessionClose) +
+                TrendChartSupport.aggregate(context, aggregateSlots) + detail
             val displayStart = selected.first().minuteEpochSeconds
             val plotted = selected.mapIndexed { index, bar ->
                 bar.copy(minuteEpochSeconds = displayStart + index * DISPLAY_STEP_SECONDS)
             }
             return ChartTimeline(selected, plotted, true)
+        }
+
+        private fun previousSessionClose(
+            bars: List<MinuteBar>,
+            signalIndex: Int,
+            contextStart: Int
+        ): MinuteBar? {
+            val boundary = (1..signalIndex).lastOrNull { index ->
+                bars[index].minuteEpochSeconds - bars[index - 1].minuteEpochSeconds >= SESSION_GAP_SECONDS
+            } ?: return null
+            val closeIndex = boundary - 1
+            return bars[closeIndex].takeIf { closeIndex < contextStart }
         }
     }
 }

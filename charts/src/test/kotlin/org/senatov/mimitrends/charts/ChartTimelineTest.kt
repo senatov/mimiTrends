@@ -34,4 +34,32 @@ class ChartTimelineTest {
 
         assertEquals(SimpleDateFormat("dd HH:mm").format(Date(86_400_000L)), formatted)
     }
+
+    @Test fun `focus timeline keeps previous session close outside recent context`() {
+        val previousSession = (0 until 300).map { index ->
+            MinuteBar("TEST", index * 60L, 100.0, 101.0, 99.0, 100.0, 1_000.0)
+        }
+        val currentSession = (0 until 240).map { index ->
+            val price = 110.0 + index / 100.0
+            MinuteBar("TEST", 86_400L + index * 60L, price, price + 1.0, price - 1.0, price, 1_000.0)
+        }
+        val bars = previousSession + currentSession
+
+        val timeline = ChartTimeline.focused(bars, currentSession.last().minuteEpochSeconds)
+
+        assertTrue(previousSession.last() in timeline.actualBars)
+        assertTrue(timeline.actualBars.any { it.minuteEpochSeconds >= currentSession.first().minuteEpochSeconds })
+    }
+
+    @Test fun `focus timeline does not duplicate previous close already in recent context`() {
+        val bars = listOf(
+            MinuteBar("TEST", 0L, 100.0, 101.0, 99.0, 100.0, 1_000.0),
+            MinuteBar("TEST", 86_400L, 110.0, 111.0, 109.0, 110.0, 1_000.0),
+            MinuteBar("TEST", 86_460L, 111.0, 112.0, 110.0, 111.0, 1_000.0)
+        )
+
+        val timeline = ChartTimeline.focused(bars, bars.last().minuteEpochSeconds)
+
+        assertEquals(1, timeline.actualBars.count { it.minuteEpochSeconds == 0L })
+    }
 }
