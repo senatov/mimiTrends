@@ -1,10 +1,17 @@
 package org.senatov.mimitrends.marketdata
 
 import org.junit.jupiter.api.Test
+import kotlin.test.assertFailsWith
 import kotlin.test.assertEquals
 import org.senatov.mimitrends.model.VolumeStatus
 
 class YahooFinanceClientTest {
+    @Test fun `classifies an empty quote window for retry`() {
+        val json = """{"chart":{"result":[{"meta":{},"timestamp":[1785840000],"indicators":{"quote":[{"open":[null],"high":[null],"low":[null],"close":[null],"volume":[null]}]}}]}}"""
+
+        assertFailsWith<YahooEmptyOhlcvException> { YahooFinanceClient().parse("KNEBV.HE", json) }
+    }
+
     @Test fun `parses Yahoo chart OHLCV and metadata`() {
         val json = """{"chart":{"result":[{"meta":{"currency":"EUR","longName":"SAP SE","fullExchangeName":"XETRA"},
             "timestamp":[60,120],"indicators":{"quote":[{"open":[100.0,101.0],"high":[102.0,103.0],

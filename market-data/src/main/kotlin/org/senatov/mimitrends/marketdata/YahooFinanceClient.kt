@@ -29,13 +29,23 @@ class YahooFinanceClient(
     fun loadIntraday(symbol: String, afterEpochSeconds: Long? = null): MarketSeries {
         log.debug(LogTag.API, "loadIntraday(symbol={}, after={})", symbol, afterEpochSeconds)
         val normalized = symbol.trim().uppercase()
-        val encoded = URLEncoder.encode(normalized, StandardCharsets.UTF_8)
         val period = if (afterEpochSeconds == null) {
             "range=7d"
         } else {
             // Include two preceding minutes so an incomplete cached bar is safely replaced by SQLite UPSERT.
             "period1=${(afterEpochSeconds - 120).coerceAtLeast(0)}&period2=${Instant.now().epochSecond + 60}"
         }
+        return try {
+            requestSeries(normalized, period)
+        } catch (error: YahooEmptyOhlcvException) {
+            if (afterEpochSeconds == null) throw error
+            log.debug(LogTag.API, "incremental Yahoo response empty; retrying full window symbol={}", normalized)
+            requestSeries(normalized, "range=7d")
+        }
+    }
+
+    private fun requestSeries(normalized: String, period: String): MarketSeries {
+        val encoded = URLEncoder.encode(normalized, StandardCharsets.UTF_8)
         val uri = URI.create(
             "https://query1.finance.yahoo.com/v8/finance/chart/$encoded" +
                 "?$period&interval=1m&includePrePost=false&events=div%2Csplits"
@@ -76,7 +86,7 @@ class YahooFinanceClient(
                 add(MinuteBar(symbol, minuteEpoch, open, high, low, close, volume, volumeStatus))
             }
         }
-        check(bars.isNotEmpty()) { "Yahoo Finance returned empty OHLCV data for $symbol" }
+        if (bars.isEmpty()) throw YahooEmptyOhlcvException(symbol)
         val events = buildList {
             result.path("events").path("splits").properties().forEach { (_, event) ->
                 val numerator = event.path("numerator").asDouble(Double.NaN)
@@ -110,5 +120,12 @@ class YahooFinanceClient(
 
     private companion object {
         const val USER_AGENT = "MiMiTrends/1.0 (personal desktop market viewer)"
+    }
+}
+
+internal class YahooEmptyOhlcvException(symbol: String) :
+    RuntimeException("Yahoo Finance returned empty OHLCV data for $symbol") {
+    companion object {
+        private const val serialVersionUID: Long = 1L
     }
 }
