@@ -46,8 +46,14 @@ class TradegateMarketDataClient(
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
 
-    fun resolveInstrument(companyName: String): TradegateInstrument? {
-        val query = URLEncoder.encode(companyName.trim(), StandardCharsets.UTF_8)
+    fun resolveInstrument(symbol: String, companyName: String): TradegateInstrument? {
+        val terms = listOf(symbol.substringBefore('.'), companyName.withoutLegalSuffix(), companyName)
+            .map(String::trim).filter(String::isNotEmpty).distinct()
+        return terms.firstNotNullOfOrNull(::searchInstrument)
+    }
+
+    private fun searchInstrument(searchTerm: String): TradegateInstrument? {
+        val query = URLEncoder.encode(searchTerm, StandardCharsets.UTF_8)
         val response = send(
             URI.create("$BASE_URL/kurssuche.php?suche=$query&lang=en"),
             "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
@@ -55,11 +61,25 @@ class TradegateMarketDataClient(
         if (response.statusCode() != 200) {
             throw ProviderHttpException.from(response.statusCode(), response.headers(), "Tradegate instrument search")
         }
-        val isin = ISIN_REGEX.find(response.body())?.groupValues?.get(1) ?: return null
-        val name = NAME_REGEX.find(response.body())?.groupValues?.get(1)?.decodeHtml()?.trim().orEmpty()
-        if (!isin.matches(VALID_ISIN)) return null
-        log.debug(LogTag.API, "Tradegate instrument resolved query={} isin={} name={}", companyName, isin, name)
-        return TradegateInstrument(isin, name.ifBlank { companyName })
+        return parseInstrumentPage(searchTerm, response.body())
+    }
+
+    internal fun parseInstrumentPage(searchTerm: String, body: String): TradegateInstrument? {
+        val direct = ISIN_REGEX.find(body)?.groupValues?.get(1)?.let { isin ->
+            val name = NAME_REGEX.find(body)?.groupValues?.get(1)?.decodeHtml()?.trim().orEmpty()
+            TradegateInstrument(isin, name)
+        }?.takeIf(::isLikelyEquity)
+        val listed = RESULT_ROW.findAll(body).mapNotNull { match ->
+            val row = match.groupValues[1]
+            if (!row.contains("basiswert.png", ignoreCase = true)) return@mapNotNull null
+            val isin = RESULT_ISIN.find(row)?.groupValues?.get(1) ?: return@mapNotNull null
+            val name = RESULT_NAME.find(row)?.groupValues?.get(1)?.replace(TAG, " ")?.decodeHtml()
+                ?.replace(Regex("\\s+"), " ")?.trim().orEmpty()
+            TradegateInstrument(isin, name)
+        }.firstOrNull(::isLikelyEquity)
+        return (direct ?: listed)?.also {
+            log.debug(LogTag.API, "Tradegate instrument resolved query={} isin={} name={}", searchTerm, it.isin, it.name)
+        }
     }
 
     fun loadQuote(isin: String): TradegateQuote {
@@ -77,7 +97,7 @@ class TradegateMarketDataClient(
 
     internal fun parseQuote(isin: String, body: String, dateHeader: String?): TradegateQuote {
         val json = mapper.readTree(body)
-        val last = json.decimal("last") ?: error("Tradegate returned no last price for $isin")
+        val last = json.decimal("last") ?: throw ProviderDataUnavailableException("Tradegate returned no last price for $isin")
         require(last.isFinite() && last > 0.0) { "Tradegate returned invalid last price for $isin" }
         return TradegateQuote(
             isin = isin,
@@ -124,7 +144,15 @@ class TradegateMarketDataClient(
     }
 
     private fun String.decodeHtml(): String = replace("&amp;", "&").replace("&quot;", "\"")
-        .replace("&#39;", "'").replace("&nbsp;", " ")
+        .replace("&#39;", "'").replace("&nbsp;", " ").replace("&eacute;", "é").replace("&euml;", "ë")
+
+    private fun String.withoutLegalSuffix(): String = replace(
+        Regex("(?i)\\s+(inc\\.?|corp\\.?|corporation|ag|se|n\\.?v\\.?|s\\.?a\\.?|plc|ltd\\.?)\\s*[A-Z]?$"),
+        ""
+    )
+
+    private fun isLikelyEquity(instrument: TradegateInstrument): Boolean =
+        !instrument.isin.startsWith("XS") && DEBT_MARKERS.none { instrument.name.contains(it, ignoreCase = true) }
 
     private companion object {
         const val BASE_URL = "https://www.tradegatebsx.com"
@@ -133,5 +161,10 @@ class TradegateMarketDataClient(
         val VALID_ISIN = Regex("[A-Z]{2}[A-Z0-9]{9}[0-9]")
         val ISIN_REGEX = Regex("var\\s+isin\\s*=\\s*\"([A-Z]{2}[A-Z0-9]{9}[0-9])\"")
         val NAME_REGEX = Regex("var\\s+securityName\\s*=\\s*\"([^\"]+)\"")
+        val RESULT_ROW = Regex("<tr[^>]*class=\"[^\"]*kurssuche_ergebnis[^\"]*\"[^>]*>(.*?)</tr>", RegexOption.DOT_MATCHES_ALL)
+        val RESULT_ISIN = Regex("orderbuch\\.php\\?lang=en&amp;isin=([A-Z]{2}[A-Z0-9]{9}[0-9])")
+        val RESULT_NAME = Regex("<a[^>]*orderbuch\\.php[^>]*>(.*?)</a>", RegexOption.DOT_MATCHES_ALL)
+        val TAG = Regex("<[^>]+>")
+        val DEBT_MARKERS = listOf("note", "notes", "nts.", "bond", "anleihe", "flr-", "medium term")
     }
 }

@@ -51,7 +51,7 @@ class ScannerSettingsService(private val path: Path = Path.of(System.getProperty
                     textColor = color(p.getProperty("table.textColor"), "#263238"),
                     evenRowColor = color(p.getProperty("table.evenRowColor"), "#FAFAFA"),
                     oddRowColor = color(p.getProperty("table.oddRowColor"), "#F0F0F0"),
-                    selectionColor = color(p.getProperty("table.selectionColor"), "#DCE8F6"),
+                    selectionColor = migratedSelectionColor(p.getProperty("table.selectionColor")),
                     gridColor = color(p.getProperty("table.gridColor"), "#9CA9B5")
                 ),
                 symbols = normalizeSymbols(p.getProperty("symbols", ScannerCriteria().symbols.joinToString(","))).let { stored ->
@@ -112,6 +112,15 @@ class ScannerSettingsService(private val path: Path = Path.of(System.getProperty
     private fun color(value: String?, fallback: String): String =
         value?.takeIf { it.matches(Regex("#[0-9a-fA-F]{6}")) } ?: fallback
 
+    private fun migratedSelectionColor(value: String?): String =
+        color(value, DEFAULT_SELECTION_COLOR).takeUnless { it.equals(LEGACY_SELECTION_COLOR, ignoreCase = true) }
+            ?: DEFAULT_SELECTION_COLOR
+
     private inline fun <reified T : Enum<T>> enumValue(value: String?, fallback: T): T =
         runCatching { enumValueOf<T>(value ?: fallback.name) }.getOrDefault(fallback)
+
+    private companion object {
+        const val DEFAULT_SELECTION_COLOR = "#FFFDE1"
+        const val LEGACY_SELECTION_COLOR = "#DCE8F6"
+    }
 }

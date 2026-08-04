@@ -23,4 +23,14 @@ class ScannerSettingsServiceTest {
         assertTrue(restored.euronextEnabled)
         assertEquals(2_250, restored.euronextRequestIntervalMillis)
     }
+
+    @Test
+    fun `migrates the former default selection fill to pale yellow`() {
+        val path = Files.createTempDirectory("mimitrends-selection-color").resolve("scanner.properties")
+        Files.writeString(path, "table.selectionColor=#DCE8F6\n")
+
+        val restored = ScannerSettingsService(path).load()
+
+        assertEquals("#FFFDE1", restored.tableAppearance.selectionColor)
+    }
 }

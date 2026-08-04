@@ -379,7 +379,7 @@
     -mimi-table-text: #263238;
     -mimi-row-even: #fafafa;
     -mimi-row-odd: #f0f0f0;
-    -mimi-selection: #dce8f6;
+    -mimi-selection: #fffde1;
     -mimi-table-grid: #9ca9b5;
     -fx-background-color: white;
     -fx-border-color: -mimi-table-grid;
@@ -403,7 +403,12 @@
 }
 .scanner-table .table-row-cell:even { -fx-background-color: -mimi-row-even; }
 .scanner-table .table-row-cell:odd { -fx-background-color: -mimi-row-odd; }
-.scanner-table .table-row-cell:selected { -fx-background-color: -mimi-selection; }
+.scanner-table .table-row-cell:selected {
+    -fx-background-color: -mimi-selection;
+    -fx-border-color: #397dcc;
+    -fx-border-width: 1px;
+    -fx-border-insets: 0;
+}
 .scanner-table .table-row-cell:hover { -fx-background-color: derive(-mimi-selection, 22%); }
 .scanner-table .table-cell {
     -fx-text-fill: -mimi-table-text;

@@ -27,3 +27,9 @@ class ProviderHttpException(
         private const val MAX_RETRY_MILLIS = 24 * 60 * 60_000L
     }
 }
+
+class ProviderDataUnavailableException(message: String) : RuntimeException(message) {
+    companion object {
+        private const val serialVersionUID: Long = 1L
+    }
+}

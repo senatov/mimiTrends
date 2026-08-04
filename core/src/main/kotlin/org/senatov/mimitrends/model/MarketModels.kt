@@ -110,7 +110,7 @@ data class TableAppearance(
     val textColor: String = "#263238",
     val evenRowColor: String = "#FAFAFA",
     val oddRowColor: String = "#F0F0F0",
-    val selectionColor: String = "#DCE8F6",
+    val selectionColor: String = "#FFFDE1",
     val gridColor: String = "#9CA9B5"
 )
 

@@ -3,6 +3,7 @@ package org.senatov.mimitrends
 import org.senatov.mimitrends.db.MarketRepository
 import org.senatov.mimitrends.log.LogTag
 import org.senatov.mimitrends.marketdata.TradegateMarketDataClient
+import org.senatov.mimitrends.marketdata.ProviderDataUnavailableException
 import org.senatov.mimitrends.model.MinuteBar
 import org.senatov.mimitrends.model.ProviderInstrument
 import org.senatov.mimitrends.model.ProviderMinuteBar
@@ -61,6 +62,11 @@ internal class TradegatePollingService(
             runCatching { poll(symbol) }
                 .onSuccess { backoff.success() }
                 .onFailure { error ->
+                    if (error is ProviderDataUnavailableException) {
+                        backoff.success()
+                        log.debug(LogTag.API, "Tradegate quote unavailable symbol={} cause={}", symbol, error.message)
+                        return@onFailure
+                    }
                     val delay = backoff.failure(error)
                     log.warn(LogTag.API, "Tradegate request paused symbol={} delay={}ms cause={}", symbol, delay, error.toString())
                 }
@@ -95,11 +101,11 @@ internal class TradegatePollingService(
     }
 
     private fun resolve(symbol: String): ProviderInstrument? {
-        repository.loadProviderInstrument(PROVIDER, symbol)?.let { return it }
+        repository.loadProviderInstrument(PROVIDER, symbol)?.takeIf(::isLikelyEquity)?.let { return it }
         val now = System.currentTimeMillis()
         if ((unresolvedUntil[symbol] ?: 0L) > now) return null
         val query = repository.loadCompanyProfile(symbol)?.name ?: return null
-        val resolved = client.resolveInstrument(query)
+        val resolved = client.resolveInstrument(symbol, query)
         if (resolved == null) {
             unresolvedUntil[symbol] = now + UNRESOLVED_RETRY_MILLIS
             return null
@@ -107,6 +113,11 @@ internal class TradegatePollingService(
         return ProviderInstrument(PROVIDER, symbol, resolved.isin, MIC, CURRENCY, resolved.name, now)
             .also(repository::upsertProviderInstrument)
     }
+
+    private fun isLikelyEquity(instrument: ProviderInstrument): Boolean =
+        !instrument.identifier.startsWith("XS") && DEBT_MARKERS.none {
+            instrument.resolvedName.contains(it, ignoreCase = true)
+        }
 
     internal fun isTradingSession(instant: Instant): Boolean {
         val local = instant.atZone(TRADEGATE_ZONE)
@@ -128,5 +139,6 @@ internal class TradegatePollingService(
         val TRADEGATE_ZONE: ZoneId = ZoneId.of("Europe/Berlin")
         val OPEN: LocalTime = LocalTime.of(8, 0)
         val CLOSE: LocalTime = LocalTime.of(22, 0)
+        val DEBT_MARKERS = listOf("note", "notes", "nts.", "bond", "anleihe", "flr-", "medium term")
     }
 }
