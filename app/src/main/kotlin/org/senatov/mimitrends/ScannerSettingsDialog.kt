@@ -44,6 +44,14 @@ class ScannerSettingsDialog(
     private val trendReturn = Spinner<Double>(0.1, 20.0, current.minTrendReturnPercent, 0.1).apply { isEditable = true }
     private val trendEfficiency = Spinner<Double>(0.01, 1.0, current.minTrendEfficiency, 0.01).apply { isEditable = true }
     private val currency = ComboBox(FXCollections.observableArrayList(DisplayCurrency.entries)).apply { value = current.displayCurrency }
+    private val tradegateEnabled = CheckBox("Enabled").apply { isSelected = current.tradegateEnabled }
+    private val tradegateInterval = Spinner<Int>(500, 10_000, current.tradegateRequestIntervalMillis.toInt(), 250).apply {
+        isEditable = true
+    }
+    private val euronextEnabled = CheckBox("Enabled").apply { isSelected = current.euronextEnabled }
+    private val euronextInterval = Spinner<Int>(750, 15_000, current.euronextRequestIntervalMillis.toInt(), 250).apply {
+        isEditable = true
+    }
     private val finnhubApiKey = PasswordField().apply {
         promptText = if (finnhubConfigured) "Configured — leave blank to keep" else "Optional API key"
     }
@@ -90,6 +98,12 @@ class ScannerSettingsDialog(
                 settingRow("Scan interval", "Seconds between complete scans; 180 is quota-friendly.", scanInterval),
                 settingRow("Display currency", "Prices and turnover are converted only for presentation.", currency),
                 settingRow("Finnhub live feed", "Optional. A new key is stored locally; blank keeps the existing configuration.", finnhubApiKey)
+            ),
+            section("Additional market-data providers",
+                settingRow("Tradegate public quotes", "Collect one EUR quote at a time during the Tradegate session and retain it in a separate provider series.", tradegateEnabled),
+                settingRow("Tradegate request interval", "Milliseconds between instruments. Requests are sequential; 1000 is the conservative default.", tradegateInterval),
+                settingRow("Euronext public quotes", "Resolve instruments through Euronext search and collect delayed website quotes into an independent provider series.", euronextEnabled),
+                settingRow("Euronext request interval", "Milliseconds between sequential instruments. 1500 limits website load while the universe is rotated continuously.", euronextInterval)
             ),
             section("Candidate universe",
                 Label("Comma-separated Yahoo symbols. The default universe contains 256 liquid US and European listings.").apply {
@@ -167,6 +181,10 @@ class ScannerSettingsDialog(
             minTrendReturnPercent = trendReturn.value,
             minTrendEfficiency = trendEfficiency.value,
             displayCurrency = currency.value,
+            tradegateEnabled = tradegateEnabled.isSelected,
+            tradegateRequestIntervalMillis = tradegateInterval.value.toLong(),
+            euronextEnabled = euronextEnabled.isSelected,
+            euronextRequestIntervalMillis = euronextInterval.value.toLong(),
             tableAppearance = TableAppearance(
                 fontFamily = fontFamily.value ?: "SF Pro Display",
                 fontSize = fontSize.value,

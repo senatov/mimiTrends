@@ -18,6 +18,46 @@ data class MinuteBar(
     val volumeStatus: VolumeStatus = VolumeStatus.REPORTED
 )
 
+data class ProviderMinuteBar(
+    val provider: String,
+    val symbol: String,
+    val identifier: String,
+    val mic: String,
+    val currency: String,
+    val bar: MinuteBar,
+    val observedAtMillis: Long
+)
+
+data class ProviderInstrument(
+    val provider: String,
+    val symbol: String,
+    val identifier: String,
+    val mic: String,
+    val currency: String,
+    val resolvedName: String,
+    val updatedAtMillis: Long = System.currentTimeMillis()
+)
+
+data class ProviderQuoteSnapshot(
+    val provider: String,
+    val symbol: String,
+    val identifier: String,
+    val currency: String,
+    val last: Double,
+    val bid: Double?,
+    val ask: Double?,
+    val bidSize: Double?,
+    val askSize: Double?,
+    val sessionVolume: Double?,
+    val sessionTurnover: Double?,
+    val averagePrice: Double?,
+    val executions: Long?,
+    val sessionHigh: Double?,
+    val sessionLow: Double?,
+    val previousClose: Double?,
+    val observedAtMillis: Long
+)
+
 enum class VolumeStatus {
     REPORTED,
     ZERO,
@@ -94,6 +134,10 @@ data class ScannerCriteria(
     val minTrendReturnPercent: Double = 0.45,
     val minTrendEfficiency: Double = 0.08,
     val displayCurrency: DisplayCurrency = DisplayCurrency.EUR,
+    val tradegateEnabled: Boolean = false,
+    val tradegateRequestIntervalMillis: Long = 1_000,
+    val euronextEnabled: Boolean = false,
+    val euronextRequestIntervalMillis: Long = 1_500,
     val tableAppearance: TableAppearance = TableAppearance(),
     val symbols: List<String> = DefaultSymbolUniverse.symbols
 )

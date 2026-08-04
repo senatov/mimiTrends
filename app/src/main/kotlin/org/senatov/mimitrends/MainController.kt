@@ -69,7 +69,10 @@ class MainController(
     private val contentSplitPane = SplitPane()
     private var finnhubClient: FinnhubWebSocketClient? = null
     private val liveTicks = ConcurrentHashMap<String, Long>()
-    private val marketData = MarketDataService(repository, analytics, scannerEngine, yahooFinance, ::dataStatus)
+    private val feedStatus = FeedStatusResolver(liveTicks)
+    private val marketData = MarketDataService(repository, analytics, scannerEngine, yahooFinance, feedStatus::status)
+    private val tradegateProvider = TradegatePollingService(repository)
+    private val euronextProvider = EuronextPollingService(repository)
     private val recentEvents = RecentEventRetainer()
     private val priorityScanner = PriorityScanCoordinator(
         { symbol -> marketData.loadPriorityResult(symbol, scannerCriteria) },
@@ -87,6 +90,8 @@ class MainController(
         log.debug(LogTag.UI, "createView()")
         scannerPanel.setCurrency(scannerCriteria.displayCurrency, ::displayPrice)
         scannerPanel.setAppearance(scannerCriteria.tableAppearance)
+        tradegateProvider.configure(scannerCriteria)
+        euronextProvider.configure(scannerCriteria)
         ToolbarIconButton.configure(refreshButton, "Refresh local chart", rotateOnHover = true)
         refreshButton.setOnAction { loadLocalChart(currentSymbol) }
         ToolbarIconButton.configure(settingsButton, "Scanner and currency settings")
@@ -148,6 +153,8 @@ class MainController(
         log.debug(LogTag.UI, "close()")
         rotationTask?.cancel(false)
         priorityScanner.close()
+        tradegateProvider.close()
+        euronextProvider.close()
         finnhubClient?.close()
         batchScheduler.shutdownNow()
         runCatching { batchScheduler.awaitTermination(3, TimeUnit.SECONDS) }
@@ -218,7 +225,7 @@ class MainController(
                 if (generation != scanGeneration.get()) return@forEachIndexed
                 runCatching { marketData.loadAndEvaluate(symbol, criteria) }
                     .onSuccess { evaluation ->
-                        val status = dataStatus(symbol)
+                        val status = feedStatus.status(symbol)
                         val primaryResult = evaluation.primary?.copy(dataStatus = status)
                         val fallbackResults = evaluation.fallback.map { it?.copy(dataStatus = status) }
                         primaryResult?.let(results::add)
@@ -302,6 +309,8 @@ class MainController(
                 restartFinnhubLive(key)
             }
             scannerCriteria = result.criteria; scannerSettings.save(result.criteria)
+            tradegateProvider.configure(result.criteria)
+            euronextProvider.configure(result.criteria)
             scannerPanel.setCurrency(result.criteria.displayCurrency, ::displayPrice)
             scannerPanel.setAppearance(result.criteria.tableAppearance)
             loadLocalChart(currentSymbol)
@@ -334,19 +343,6 @@ class MainController(
                 else setStatus("Finnhub connection failed · Yahoo/SQLite fallback active")
             }
         })
-    }
-
-    private fun dataStatus(symbol: String): String {
-        val liveAt = liveTicks[symbol]
-        if (liveAt != null && System.currentTimeMillis() - liveAt <= 180_000L) return "LIVE"
-        if (!MarketCalendar.isOpen(symbol)) return "CACHE"
-        return when {
-            !symbol.contains('.') -> "YAHOO RT"
-            symbol.endsWith(".MI") -> "DELAYED 20m"
-            symbol.endsWith(".DE") || symbol.endsWith(".PA") || symbol.endsWith(".AS") -> "DELAYED 15m"
-            symbol.endsWith(".HE") -> "YAHOO RT"
-            else -> "YAHOO"
-        }
     }
 
     private fun loadLocalChart(symbol: String) {

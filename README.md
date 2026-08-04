@@ -60,6 +60,9 @@ The primary question is not “What did this stock do over the last year?” but
 - rechecks published `Strong` and `Extreme` signals every minute in a separate priority task, updating
   their rows immediately and stopping when they fall below `Strong`;
 - stores minute OHLCV history, company profiles, derived statistics, scan runs, and signal outcomes in SQLite;
+- optionally walks the configured universe through Tradegate public EUR quotes one instrument at a time,
+- optionally rotates the universe through delayed Euronext website quotes as a separate provider series,
+  using a persistent cookie session and a configurable conservative request interval;
 - uses exchange-local time zones and market calendars for US, Xetra, Euronext, and Helsinki instruments;
 - pauses scanning while every selected market is closed and resumes after the earliest next opening;
 - identifies cached, delayed, and live data instead of presenting every quote as real-time;
@@ -164,6 +167,25 @@ Maximum age         2 minutes
 ```
 
 All user-facing thresholds can be adjusted in Settings.
+
+### Additional public providers
+
+The optional Tradegate collector is disabled by default and can be enabled in Settings. It resolves company
+names to strict 12-character ISINs, polls one instrument per request, and stores observations in a separate
+`TRADEGATE`/`XGAT` EUR series. Provider observations never overwrite Yahoo bars or mix currencies. Within a
+provider minute, only a response with a newer server observation time may update the close; high and low are
+expanded monotonically. Quotes currently have `MISSING` volume quality because the public snapshot exposes
+session totals rather than a reliably timestamped per-minute volume.
+
+The Euronext collector is independently disabled by default. It uses the public instrument autocomplete to
+resolve an ISIN and market MIC, prefers native Euronext venues and then EuroTLX, and reads the delayed detailed
+quote used by the market-information page. The website's CryptoJS response envelope is decoded locally using
+the key published in that same page. Last-trade timestamps, rather than download time, determine whether an
+observation is newer, so an old or suspended quote cannot create a current minute or replace fresher data.
+Euronext and Tradegate have separate sequential schedulers and request intervals in Settings.
+Both collectors keep one stable browser identity, add a small timing jitter, honor `Retry-After`, and back off
+exponentially after throttling or access errors. Repeated failures can pause a provider for up to six hours,
+and polling is limited to broad weekday trading windows instead of running continuously overnight.
 
 ### Early three-minute momentum
 
@@ -331,6 +353,9 @@ Minute bars use UPSERT semantics, allowing an incomplete or repeated provider ca
 | `scan_runs` | One durable record for every scanner pass. |
 | `scan_candidates` | Accepted/rejected symbols, raw metrics, exact signal time and entry price, source, and publication state. |
 | `signal_outcomes` | Target and actual horizons, observed price, and realized return. |
+| `provider_instruments` | Persisted provider-specific symbol-to-ISIN mappings, MIC, currency, and resolved name. |
+| `provider_minute_bars` | Venue-specific observations with provider, ISIN, MIC, currency, and monotonic observation time. |
+| `provider_quotes` | Latest provider bid/ask, sizes, session totals, average, executions, range, and previous close. |
 
 Candidate publication and scan completion occur in one transaction. This prevents a partially completed scan from appearing published. Foreign keys and cascading retention protect referential consistency.
 

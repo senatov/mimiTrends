@@ -39,6 +39,12 @@ class ScannerSettingsService(private val path: Path = Path.of(System.getProperty
                 minTrendReturnPercent = p.getProperty("minTrendReturnPercent", "0.45").toDouble().coerceIn(0.1, 20.0),
                 minTrendEfficiency = p.getProperty("minTrendEfficiency", "0.08").toDouble().coerceIn(0.01, 1.0),
                 displayCurrency = runCatching { DisplayCurrency.valueOf(p.getProperty("displayCurrency", "EUR")) }.getOrDefault(DisplayCurrency.EUR),
+                tradegateEnabled = p.getProperty("provider.tradegate.enabled", "false").toBooleanStrictOrNull() ?: false,
+                tradegateRequestIntervalMillis = p.getProperty("provider.tradegate.intervalMillis", "1000")
+                    .toLong().coerceIn(500, 10_000),
+                euronextEnabled = p.getProperty("provider.euronext.enabled", "false").toBooleanStrictOrNull() ?: false,
+                euronextRequestIntervalMillis = p.getProperty("provider.euronext.intervalMillis", "1500")
+                    .toLong().coerceIn(750, 15_000),
                 tableAppearance = TableAppearance(
                     fontFamily = p.getProperty("table.fontFamily", "SF Pro Display"),
                     fontSize = p.getProperty("table.fontSize", "12.0").toDouble().coerceIn(9.0, 22.0),
@@ -82,6 +88,10 @@ class ScannerSettingsService(private val path: Path = Path.of(System.getProperty
             setProperty("minTrendReturnPercent", value.minTrendReturnPercent.toString())
             setProperty("minTrendEfficiency", value.minTrendEfficiency.toString())
             setProperty("displayCurrency", value.displayCurrency.name)
+            setProperty("provider.tradegate.enabled", value.tradegateEnabled.toString())
+            setProperty("provider.tradegate.intervalMillis", value.tradegateRequestIntervalMillis.toString())
+            setProperty("provider.euronext.enabled", value.euronextEnabled.toString())
+            setProperty("provider.euronext.intervalMillis", value.euronextRequestIntervalMillis.toString())
             setProperty("table.fontFamily", value.tableAppearance.fontFamily)
             setProperty("table.fontSize", value.tableAppearance.fontSize.toString())
             setProperty("table.textColor", value.tableAppearance.textColor)

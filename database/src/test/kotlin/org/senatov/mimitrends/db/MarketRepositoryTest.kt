@@ -5,13 +5,64 @@ package org.senatov.mimitrends.db
 import org.senatov.mimitrends.model.MinuteBar
 import org.senatov.mimitrends.model.CompanyProfile
 import org.senatov.mimitrends.model.VolumeStatus
+import org.senatov.mimitrends.model.ProviderInstrument
+import org.senatov.mimitrends.model.ProviderMinuteBar
+import org.senatov.mimitrends.model.ProviderQuoteSnapshot
 import org.junit.jupiter.api.Test
 import java.nio.file.Files
 import java.sql.DriverManager
 import kotlin.test.assertEquals
 import kotlin.test.assertContentEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 
 class MarketRepositoryTest {
+    @Test fun `provider bars reject stale observations and merge newer minute values`() {
+        val repository = MarketRepository(Files.createTempDirectory("mimitrends-provider-bars").resolve("test.db"))
+        repository.upsertProviderInstrument(ProviderInstrument(
+            "TRADEGATE", "LRCX", "US5128073062", "XGAT", "EUR", "Lam Research Corp.", 1_000
+        ))
+        fun observation(price: Double, observedAt: Long) = ProviderMinuteBar(
+            "TRADEGATE", "LRCX", "US5128073062", "XGAT", "EUR",
+            MinuteBar("LRCX", 60, price, price, price, price, 0.0, VolumeStatus.MISSING), observedAt
+        )
+
+        assertEquals(true, repository.upsertProviderMinuteBar(observation(100.0, 10_000)))
+        assertEquals(true, repository.upsertProviderMinuteBar(observation(103.0, 20_000)))
+        assertEquals(false, repository.upsertProviderMinuteBar(observation(90.0, 15_000)))
+
+        val stored = repository.loadProviderMinuteBars("TRADEGATE", "LRCX", 0).single()
+        assertEquals(100.0, stored.bar.open)
+        assertEquals(103.0, stored.bar.high)
+        assertEquals(100.0, stored.bar.low)
+        assertEquals(103.0, stored.bar.close)
+        assertEquals(20_000, stored.observedAtMillis)
+        assertEquals("US5128073062", repository.loadProviderInstrument("TRADEGATE", "LRCX")?.identifier)
+        repository.close()
+    }
+
+    @Test fun `provider quote snapshot cannot move backwards`() {
+        val database = Files.createTempDirectory("mimitrends-provider-quotes").resolve("test.db")
+        val repository = MarketRepository(database)
+        fun quote(last: Double, observedAt: Long) = ProviderQuoteSnapshot(
+            "TRADEGATE", "LRCX", "US5128073062", "EUR", last, last - 0.1, last + 0.1,
+            10.0, 20.0, 1_000.0, 250_000.0, last - 0.5, 42, last + 1.0, last - 1.0, last - 2.0, observedAt
+        )
+        assertTrue(repository.upsertProviderQuote(quote(101.0, 20_000)))
+        assertFalse(repository.upsertProviderQuote(quote(99.0, 10_000)))
+        repository.close()
+
+        DriverManager.getConnection("jdbc:sqlite:$database").use { connection ->
+            connection.createStatement().executeQuery(
+                "SELECT last, observed_at FROM provider_quotes WHERE provider='TRADEGATE' AND symbol='LRCX'"
+            ).use { result ->
+                assertTrue(result.next())
+                assertEquals(101.0, result.getDouble(1))
+                assertEquals(20_000, result.getLong(2))
+            }
+        }
+    }
+
     @Test fun `stores and updates minute bars`() {
         val repository = MarketRepository(Files.createTempDirectory("mimitrends-db").resolve("test.db"))
         repository.upsertMinuteBar(MinuteBar("SAP.DE", 60, 100.0, 102.0, 99.0, 101.0, 500.0))

@@ -6,6 +6,9 @@ import org.senatov.mimitrends.log.LogTag
 import org.senatov.mimitrends.model.MinuteBar
 import org.senatov.mimitrends.model.CompanyProfile
 import org.senatov.mimitrends.model.VolumeStatus
+import org.senatov.mimitrends.model.ProviderInstrument
+import org.senatov.mimitrends.model.ProviderMinuteBar
+import org.senatov.mimitrends.model.ProviderQuoteSnapshot
 import org.slf4j.LoggerFactory
 import java.nio.file.Files
 import java.nio.file.Path
@@ -90,6 +93,89 @@ class MarketRepository(
             }
         }
     }
+
+    fun loadProviderInstrument(provider: String, symbol: String): ProviderInstrument? = lock.withLock {
+        connection.prepareStatement(
+            """SELECT identifier, mic, currency, resolved_name, updated_at FROM provider_instruments
+               WHERE provider=? AND symbol=?"""
+        ).use { statement ->
+            val normalizedProvider = provider.trim().uppercase()
+            val normalizedSymbol = symbol.trim().uppercase()
+            statement.setString(1, normalizedProvider); statement.setString(2, normalizedSymbol)
+            statement.executeQuery().use { result ->
+                if (!result.next()) null else ProviderInstrument(
+                    normalizedProvider, normalizedSymbol, result.getString(1), result.getString(2),
+                    result.getString(3), result.getString(4), result.getLong(5)
+                )
+            }
+        }
+    }
+
+    fun upsertProviderInstrument(value: ProviderInstrument) = lock.withLock {
+        connection.prepareStatement(UPSERT_PROVIDER_INSTRUMENT_SQL).use { statement ->
+            statement.setString(1, value.provider.trim().uppercase())
+            statement.setString(2, value.symbol.trim().uppercase())
+            statement.setString(3, value.identifier)
+            statement.setString(4, value.mic)
+            statement.setString(5, value.currency)
+            statement.setString(6, value.resolvedName)
+            statement.setLong(7, value.updatedAtMillis)
+            statement.executeUpdate()
+        }
+    }
+
+    /** Returns true only when the observation inserted a bar or advanced an existing minute. */
+    fun upsertProviderMinuteBar(value: ProviderMinuteBar): Boolean = lock.withLock {
+        connection.prepareStatement(UPSERT_PROVIDER_BAR_SQL).use { statement ->
+            val bar = value.bar
+            statement.setString(1, value.provider.trim().uppercase())
+            statement.setString(2, value.symbol.trim().uppercase())
+            statement.setString(3, value.identifier)
+            statement.setString(4, value.mic)
+            statement.setString(5, value.currency)
+            statement.setLong(6, bar.minuteEpochSeconds)
+            statement.setDouble(7, bar.open); statement.setDouble(8, bar.high); statement.setDouble(9, bar.low)
+            statement.setDouble(10, bar.close); statement.setDouble(11, bar.volume)
+            statement.setString(12, bar.volumeStatus.name); statement.setLong(13, value.observedAtMillis)
+            statement.executeUpdate() > 0
+        }
+    }
+
+    fun upsertProviderQuote(value: ProviderQuoteSnapshot): Boolean = lock.withLock {
+        connection.prepareStatement(UPSERT_PROVIDER_QUOTE_SQL).use { statement ->
+            statement.setString(1, value.provider.trim().uppercase()); statement.setString(2, value.symbol.trim().uppercase())
+            statement.setString(3, value.identifier); statement.setString(4, value.currency); statement.setDouble(5, value.last)
+            statement.setObject(6, value.bid); statement.setObject(7, value.ask); statement.setObject(8, value.bidSize)
+            statement.setObject(9, value.askSize); statement.setObject(10, value.sessionVolume)
+            statement.setObject(11, value.sessionTurnover); statement.setObject(12, value.averagePrice)
+            statement.setObject(13, value.executions); statement.setObject(14, value.sessionHigh)
+            statement.setObject(15, value.sessionLow); statement.setObject(16, value.previousClose)
+            statement.setLong(17, value.observedAtMillis); statement.executeUpdate() > 0
+        }
+    }
+
+    fun loadProviderMinuteBars(provider: String, symbol: String, fromEpochSeconds: Long): List<ProviderMinuteBar> =
+        lock.withLock {
+            connection.prepareStatement(
+                """SELECT identifier, mic, currency, minute_epoch, open, high, low, close, volume,
+                   volume_status, observed_at FROM provider_minute_bars
+                   WHERE provider=? AND symbol=? AND minute_epoch>=? ORDER BY minute_epoch"""
+            ).use { statement ->
+                val normalizedProvider = provider.trim().uppercase()
+                val normalizedSymbol = symbol.trim().uppercase()
+                statement.setString(1, normalizedProvider); statement.setString(2, normalizedSymbol)
+                statement.setLong(3, fromEpochSeconds)
+                statement.executeQuery().use { result -> buildList {
+                    while (result.next()) {
+                        val bar = MinuteBar(normalizedSymbol, result.getLong(4), result.getDouble(5),
+                            result.getDouble(6), result.getDouble(7), result.getDouble(8), result.getDouble(9),
+                            runCatching { VolumeStatus.valueOf(result.getString(10)) }.getOrDefault(VolumeStatus.MISSING))
+                        add(ProviderMinuteBar(normalizedProvider, normalizedSymbol, result.getString(1),
+                            result.getString(2), result.getString(3), bar, result.getLong(11)))
+                    }
+                } }
+            }
+        }
 
     fun loadCompanyProfile(symbol: String): CompanyProfile? {
         log.debug(LogTag.DB, "loadCompanyProfile(symbol={})", symbol)
@@ -225,6 +311,34 @@ class MarketRepository(
                         logo_url TEXT, logo BLOB, updated_at INTEGER NOT NULL
                     )"""
                 )
+                statement.executeUpdate(
+                    """CREATE TABLE IF NOT EXISTS provider_instruments (
+                        provider TEXT NOT NULL, symbol TEXT NOT NULL, identifier TEXT NOT NULL,
+                        mic TEXT NOT NULL, currency TEXT NOT NULL, resolved_name TEXT NOT NULL,
+                        updated_at INTEGER NOT NULL, PRIMARY KEY(provider, symbol)
+                    )"""
+                )
+                statement.executeUpdate(
+                    """CREATE TABLE IF NOT EXISTS provider_minute_bars (
+                        provider TEXT NOT NULL, symbol TEXT NOT NULL, identifier TEXT NOT NULL,
+                        mic TEXT NOT NULL, currency TEXT NOT NULL, minute_epoch INTEGER NOT NULL,
+                        open REAL NOT NULL, high REAL NOT NULL, low REAL NOT NULL, close REAL NOT NULL,
+                        volume REAL NOT NULL, volume_status TEXT NOT NULL, observed_at INTEGER NOT NULL,
+                        PRIMARY KEY(provider, symbol, minute_epoch)
+                    )"""
+                )
+                statement.executeUpdate(
+                    """CREATE TABLE IF NOT EXISTS provider_quotes (
+                        provider TEXT NOT NULL, symbol TEXT NOT NULL, identifier TEXT NOT NULL, currency TEXT NOT NULL,
+                        last REAL NOT NULL, bid REAL, ask REAL, bid_size REAL, ask_size REAL, session_volume REAL,
+                        session_turnover REAL, average_price REAL, executions INTEGER, session_high REAL,
+                        session_low REAL, previous_close REAL, observed_at INTEGER NOT NULL,
+                        PRIMARY KEY(provider, symbol)
+                    )"""
+                )
+                statement.executeUpdate(
+                    "CREATE INDEX IF NOT EXISTS idx_provider_bars_symbol_time ON provider_minute_bars(symbol, minute_epoch)"
+                )
                 // Remove the temporary generated-monogram source used by an older build so genuine
                 // cached company favicons are fetched on the next visible table render.
                 statement.executeUpdate(
@@ -249,5 +363,27 @@ class MarketRepository(
             VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(symbol) DO UPDATE SET
             name=excluded.name, exchange=excluded.exchange, logo_url=excluded.logo_url,
             logo=excluded.logo, updated_at=excluded.updated_at"""
+        const val UPSERT_PROVIDER_INSTRUMENT_SQL = """INSERT INTO provider_instruments(
+            provider, symbol, identifier, mic, currency, resolved_name, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(provider, symbol) DO UPDATE SET identifier=excluded.identifier, mic=excluded.mic,
+            currency=excluded.currency, resolved_name=excluded.resolved_name, updated_at=excluded.updated_at"""
+        const val UPSERT_PROVIDER_BAR_SQL = """INSERT INTO provider_minute_bars(
+            provider, symbol, identifier, mic, currency, minute_epoch, open, high, low, close, volume,
+            volume_status, observed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(provider, symbol, minute_epoch) DO UPDATE SET
+            high=MAX(provider_minute_bars.high, excluded.high),
+            low=MIN(provider_minute_bars.low, excluded.low), close=excluded.close,
+            volume=CASE WHEN excluded.volume_status='REPORTED' THEN excluded.volume ELSE provider_minute_bars.volume END,
+            volume_status=CASE WHEN excluded.volume_status='REPORTED' THEN excluded.volume_status ELSE provider_minute_bars.volume_status END,
+            observed_at=excluded.observed_at WHERE excluded.observed_at > provider_minute_bars.observed_at"""
+        const val UPSERT_PROVIDER_QUOTE_SQL = """INSERT INTO provider_quotes(provider, symbol, identifier, currency,
+            last, bid, ask, bid_size, ask_size, session_volume, session_turnover, average_price, executions,
+            session_high, session_low, previous_close, observed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(provider, symbol) DO UPDATE SET identifier=excluded.identifier, currency=excluded.currency,
+            last=excluded.last, bid=excluded.bid, ask=excluded.ask, bid_size=excluded.bid_size, ask_size=excluded.ask_size,
+            session_volume=excluded.session_volume, session_turnover=excluded.session_turnover,
+            average_price=excluded.average_price, executions=excluded.executions, session_high=excluded.session_high,
+            session_low=excluded.session_low, previous_close=excluded.previous_close, observed_at=excluded.observed_at
+            WHERE excluded.observed_at > provider_quotes.observed_at"""
     }
 }
