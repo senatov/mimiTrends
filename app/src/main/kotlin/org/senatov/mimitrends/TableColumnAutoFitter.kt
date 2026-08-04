@@ -5,6 +5,7 @@ import javafx.application.Platform
 import javafx.scene.control.TableCell
 import javafx.scene.control.TableColumn
 import javafx.scene.control.TableView
+import javafx.scene.control.Labeled
 import javafx.scene.text.Font
 import javafx.scene.text.Text
 import javafx.util.Duration
@@ -42,10 +43,12 @@ class TableColumnAutoFitter<T>(
     private fun fitNow() {
         if (table.width <= 0.0 || table.items.isEmpty()) return
         table.applyCss()
-        val font = table.lookupAll(".table-cell").firstNotNullOfOrNull { (it as? TableCell<*, *>)?.font }
+        val cellFont = table.lookupAll(".table-cell").firstNotNullOfOrNull { (it as? TableCell<*, *>)?.font }
             ?: Font.getDefault()
+        val headerFont = table.lookupAll(".column-header .label").firstNotNullOfOrNull { (it as? Labeled)?.font }
+            ?: cellFont
         val sampled = sample(table.items)
-        val measured = specs.associateWith { measure(it, sampled, font) }.toMutableMap()
+        val measured = specs.associateWith { measure(it, sampled, cellFont, headerFont) }.toMutableMap()
         val flexible = specs.firstOrNull(Spec<T>::flexible)
         if (flexible != null) {
             val fixedWidth = specs.filterNot(Spec<T>::flexible).sumOf { measured.getValue(it) }
@@ -59,29 +62,15 @@ class TableColumnAutoFitter<T>(
         }
     }
 
-    private fun measure(spec: Spec<T>, rows: List<T>, font: Font): Double {
-        val widths = rows.asSequence().map(spec.text).filter(String::isNotBlank).map { textWidth(it, font) }.toList()
-        val contentWidth = percentile85(trimmed(widths))
-        val headerWidth = textWidth(spec.column.text.orEmpty(), font) + HEADER_RESERVE
+    private fun measure(spec: Spec<T>, rows: List<T>, cellFont: Font, headerFont: Font): Double {
+        val contentWidth = rows.asSequence().map(spec.text).filter(String::isNotBlank)
+            .maxOfOrNull { textWidth(it, cellFont) } ?: 0.0
+        val headerWidth = textWidth(spec.column.text.orEmpty(), headerFont) + HEADER_RESERVE
         return ceil(maxOf(contentWidth + CONTENT_INSETS + spec.reserveWidth, headerWidth))
             .coerceIn(spec.minWidth, spec.maxWidth)
     }
 
     private fun textWidth(value: String, font: Font): Double = Text(value).apply { this.font = font }.layoutBounds.width
-
-    private fun trimmed(values: List<Double>): List<Double> {
-        if (values.size < 5) return values
-        val sorted = values.sorted()
-        val trim = maxOf(1, (sorted.size * 0.10).toInt())
-        return sorted.subList(trim, sorted.size - trim).takeIf(List<Double>::isNotEmpty) ?: values
-    }
-
-    private fun percentile85(values: List<Double>): Double {
-        if (values.isEmpty()) return 0.0
-        val sorted = values.sorted()
-        val index = (ceil(sorted.size * 0.85).toInt() - 1).coerceIn(0, sorted.lastIndex)
-        return sorted[index]
-    }
 
     private fun sample(rows: List<T>): List<T> {
         if (rows.size <= SAMPLE_LIMIT) return rows
@@ -95,8 +84,8 @@ class TableColumnAutoFitter<T>(
     private companion object {
         const val SAMPLE_LIMIT = 500
         const val SAMPLE_HEAD = 200
-        const val CONTENT_INSETS = 18.0
-        const val HEADER_RESERVE = 28.0
+        const val CONTENT_INSETS = 20.0
+        const val HEADER_RESERVE = 38.0
         const val TRAILING_INSET = 18.0
         const val DIVIDER_RESERVE = 1.0
         const val FLEXIBLE_MAX_FRACTION = 0.45
