@@ -4,6 +4,7 @@ import org.senatov.mimitrends.db.MarketRepository
 import org.senatov.mimitrends.log.LogTag
 import org.senatov.mimitrends.marketdata.EuronextInstrument
 import org.senatov.mimitrends.marketdata.EuronextMarketDataClient
+import org.senatov.mimitrends.marketdata.ProviderDataUnavailableException
 import org.senatov.mimitrends.model.MinuteBar
 import org.senatov.mimitrends.model.ProviderInstrument
 import org.senatov.mimitrends.model.ProviderMinuteBar
@@ -62,6 +63,11 @@ internal class EuronextPollingService(
             runCatching { poll(symbol) }
                 .onSuccess { backoff.success() }
                 .onFailure { error ->
+                    if (error is ProviderDataUnavailableException) {
+                        backoff.success()
+                        log.debug(LogTag.API, "Euronext quote unavailable symbol={} cause={}", symbol, error.message)
+                        return@onFailure
+                    }
                     val delay = backoff.failure(error)
                     log.warn(LogTag.API, "Euronext request paused symbol={} delay={}ms cause={}", symbol, delay, error.toString())
                 }

@@ -69,7 +69,7 @@ class EuronextMarketDataClient(
 
     internal fun parseQuote(html: String): EuronextQuote {
         val last = elementText(html, "header-instrument-price")?.decimal()
-            ?: error("Euronext returned no last traded price")
+            ?: throw ProviderDataUnavailableException("Euronext returned no last traded price")
         val currency = when (elementText(html, "header-instrument-currency")?.trim()) {
             "€", "EUR" -> "EUR"
             "$", "USD" -> "USD"
@@ -126,7 +126,16 @@ class EuronextMarketDataClient(
         Regex(">${Regex.escape(label)}<.*?<span[^>]*>([^<]+)</span>", setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL))
             .find(html)?.groupValues?.get(1)?.htmlText()?.decimal()
 
-    private fun String.decimal(): Double? = replace(" ", "").replace(',', '.').toDoubleOrNull()?.takeIf(Double::isFinite)
+    private fun String.decimal(): Double? {
+        val compact = replace(" ", "").replace("\u00A0", "")
+        val normalized = when {
+            ',' in compact && '.' in compact && compact.lastIndexOf('.') > compact.lastIndexOf(',') -> compact.replace(",", "")
+            ',' in compact && '.' in compact -> compact.replace(".", "").replace(',', '.')
+            ',' in compact && compact.substringAfterLast(',').length == 3 -> compact.replace(",", "")
+            else -> compact.replace(',', '.')
+        }
+        return normalized.toDoubleOrNull()?.takeIf(Double::isFinite)
+    }
     private fun String.htmlText(): String = replace("&nbsp;", " ").replace("&euro;", "€").trim()
     private fun String.hexBytes(): ByteArray = chunked(2).map { it.toInt(16).toByte() }.toByteArray()
 

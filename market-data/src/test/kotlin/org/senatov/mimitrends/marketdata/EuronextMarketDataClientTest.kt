@@ -4,6 +4,7 @@ import org.junit.jupiter.api.Test
 import java.time.LocalDateTime
 import java.time.ZoneId
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 
 class EuronextMarketDataClientTest {
     private val client = EuronextMarketDataClient()
@@ -38,5 +39,27 @@ class EuronextMarketDataClientTest {
             LocalDateTime.of(2026, 5, 25, 16, 34).atZone(ZoneId.of("Europe/Paris")).toInstant().toEpochMilli(),
             quote.observedAtMillis
         )
+    }
+
+    @Test
+    fun `parses English thousands separators in high prices`() {
+        val quote = client.parseQuote("""
+            <span id="header-instrument-currency">€</span>
+            <span id="header-instrument-price">1,049.00</span>
+            <div class="last-price-date-time">04/08/2026 - 14:43 &nbsp;CET</div>
+            <span>Best Bid</span><span>1,048.20</span>
+            <span>Best Ask</span><span>1,050.10</span>
+        """.trimIndent())
+
+        assertEquals(1_049.0, quote.last)
+        assertEquals(1_048.2, quote.bid)
+        assertEquals(1_050.1, quote.ask)
+    }
+
+    @Test
+    fun `reports genuinely absent last trade as unavailable data`() {
+        assertFailsWith<ProviderDataUnavailableException> {
+            client.parseQuote("<span id=\"header-instrument-currency\">€</span>")
+        }
     }
 }
