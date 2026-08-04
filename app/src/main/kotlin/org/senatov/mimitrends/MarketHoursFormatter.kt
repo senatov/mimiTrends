@@ -7,6 +7,11 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
 internal object MarketHoursFormatter {
+    fun nextOpening(opening: MarketCalendar.Opening): String {
+        val local = opening.instant.atZone(ZoneId.systemDefault())
+        return "${opening.symbol} · ${MARKET_OPEN.format(local)}"
+    }
+
     fun priceData(symbols: Collection<String>, instant: Instant, userZone: ZoneId): List<String> =
         MarketCalendar.nextTradingHours(symbols, instant).map { hours ->
             val open = hours.opensAt.atZone(userZone)
@@ -24,4 +29,5 @@ internal object MarketHoursFormatter {
 
     private val DAY_TIME = DateTimeFormatter.ofPattern("EEE HH:mm")
     private val TIME = DateTimeFormatter.ofPattern("HH:mm")
+    private val MARKET_OPEN = DateTimeFormatter.ofPattern("EEE dd MMM HH:mm z")
 }

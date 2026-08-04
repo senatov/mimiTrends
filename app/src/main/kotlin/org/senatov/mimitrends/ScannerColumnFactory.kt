@@ -166,6 +166,10 @@ internal class ScannerColumnFactory(
         val directionalColor = if (down) "#c43d4b" else "#138a55"
         val weakColor = if (down) "#a9787d" else "#668b72"
         return when {
+            result.signalSource.contains("· cooling") -> SignalVisual(
+                "#7b8189", 400,
+                "Recent event · no longer qualifies as an active signal · retained briefly for context"
+            )
             result.signalAgeMinutes > 0 -> SignalVisual("#7b8189", 400, "Old signal · ${result.signalAgeMinutes} minute(s) ago")
             result.signalSource.contains("relaxed", true) -> SignalVisual("#ad7100", 500, "Questionable signal · accepted only by relaxed statistical thresholds")
             result.signalSource.startsWith("Recovery breakout") ->

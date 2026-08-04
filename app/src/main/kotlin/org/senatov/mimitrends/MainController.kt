@@ -36,8 +36,6 @@ class MainController(
 ) {
     private companion object {
         const val MARKET_OPEN_GRACE_SECONDS = 5L
-        val MARKET_OPEN_FORMAT: java.time.format.DateTimeFormatter =
-            java.time.format.DateTimeFormatter.ofPattern("EEE dd MMM HH:mm z")
     }
     private val log = LoggerFactory.getLogger(MainController::class.java)
     private val repository = MarketRepository()
@@ -72,9 +70,13 @@ class MainController(
     private var finnhubClient: FinnhubWebSocketClient? = null
     private val liveTicks = ConcurrentHashMap<String, Long>()
     private val marketData = MarketDataService(repository, analytics, scannerEngine, yahooFinance, ::dataStatus)
+    private val recentEvents = RecentEventRetainer()
     private val priorityScanner = PriorityScanCoordinator(
         { symbol -> marketData.loadPriorityResult(symbol, scannerCriteria) },
-        { symbol, result -> Platform.runLater { scannerPanel.applyPriorityResult(symbol, result) } }
+        { symbol, result ->
+            val retained = recentEvents.priorityUpdate(symbol, result, System.currentTimeMillis())
+            Platform.runLater { scannerPanel.applyPriorityResult(symbol, retained) }
+        }
     )
     private val liveAggregator = FinnhubMinuteAggregator { bar ->
         repository.upsertMinuteBar(bar)
@@ -160,6 +162,7 @@ class MainController(
     private fun startScanner() {
         log.debug(LogTag.API, "startScanner(symbols={})", scannerCriteria.symbols.size)
         priorityScanner.replaceCandidates(emptyList())
+        recentEvents.clear()
         val generation = scanGeneration.incrementAndGet()
         val criteria = scannerCriteria
         rotationTask?.cancel(false)
@@ -175,10 +178,7 @@ class MainController(
                 val resumeDelaySeconds = nextOpening?.let {
                     java.time.Duration.between(now, it.instant).seconds.coerceAtLeast(1) + MARKET_OPEN_GRACE_SECONDS
                 } ?: criteria.scanIntervalSeconds
-                val resumeText = nextOpening?.let {
-                    val local = it.instant.atZone(java.time.ZoneId.systemDefault())
-                    "${it.symbol} · ${MARKET_OPEN_FORMAT.format(local)}"
-                } ?: "market schedule unavailable"
+                val resumeText = nextOpening?.let(MarketHoursFormatter::nextOpening) ?: "market schedule unavailable"
                 val persisted = analytics.loadLatestPublishedResults(criteria.resultLimit)
                 val saved = if (persisted.isNotEmpty()) persisted else marketData.closedMarketSnapshot(selectedMarketSymbols(), criteria)
                 val userZone = java.time.ZoneId.systemDefault()
@@ -244,25 +244,25 @@ class MainController(
             val selection = AdaptiveResultSelector.select(
                 calibratedResults, calibratedFallbacks, criteria.minimumTableResults, criteria.resultLimit
             )
-            val published = selection.results
-            priorityScanner.replaceCandidates(published)
-            analytics.completeScan(runId, published.map(ScanResult::symbol), errors.size)
+            val active = selection.results
+            val displayed = recentEvents.merge(active, System.currentTimeMillis(), criteria.resultLimit)
+            priorityScanner.replaceCandidates(active)
+            analytics.completeScan(runId, active.map(ScanResult::symbol), errors.size)
             Platform.runLater {
                 if (generation != scanGeneration.get()) return@runLater
-                if (published.isEmpty() && errors.size == symbols.size && symbols.isNotEmpty()) {
+                if (active.isEmpty() && errors.size == symbols.size && symbols.isNotEmpty()) {
                     scannerPanel.abortScan()
                     setStatus("Yahoo scan produced no data; previous table retained", true, errors.joinToString("\n"))
-                } else if (published.isEmpty()) {
-                    scannerPanel.abortScan()
-                    setStatus("No current signals · previous saved table retained")
                 } else {
-                    published.forEach(scannerPanel::update)
+                    displayed.forEach(scannerPanel::update)
                     scannerPanel.completeScan(criteria.resultLimit)
                     scannerPanel.showCountdown(criteria.scanIntervalSeconds)
                     val marketState = if (symbols.isEmpty()) "all selected markets closed"
-                        else "${results.size.coerceAtMost(published.size)} strict impulses + ${selection.adaptiveCount} adaptive"
+                        else "${results.size.coerceAtMost(active.size)} strict impulses + ${selection.adaptiveCount} adaptive"
+                    val coolingCount = displayed.size - active.size
                     log.info(LogTag.API, "scan completed: {}", marketState)
-                    setStatus("Hybrid scan complete · $marketState · next in ${criteria.scanIntervalSeconds}s")
+                    setStatus(if (active.isEmpty()) "No current signals · $coolingCount recent events cooling"
+                    else "Hybrid scan complete · $marketState · $coolingCount cooling · next in ${criteria.scanIntervalSeconds}s")
                 }
             }
             if (generation != scanGeneration.get()) return@scan

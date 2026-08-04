@@ -55,6 +55,8 @@ The primary question is not “What did this stock do over the last year?” but
 - applies a configurable minimum absolute move so tiny changes in quiet stocks do not become misleading signals;
 - supplements a sparse strict result set with relaxed impulses and persistent rising trends;
 - ranks completed results atomically instead of changing the visible table while a scan is running;
+- retains recently published events for up to twenty minutes after they stop qualifying, labels them as
+  `Cooling`, and decays their ranking score while always giving active signals priority;
 - rechecks published `Strong` and `Extreme` signals every minute in a separate priority task, updating
   their rows immediately and stopping when they fall below `Strong`;
 - stores minute OHLCV history, company profiles, derived statistics, scan runs, and signal outcomes in SQLite;
@@ -67,6 +69,9 @@ The primary question is not “What did this stock do over the last year?” but
 ## Reading the scanner table
 
 The primary table intentionally uses plain-language categories instead of exposing every raw statistical value.
+It distinguishes active signals from recent context: a `Cooling` row records a signal that was published
+recently but no longer passes the current detector. It is not presented as a continuing impulse and expires
+automatically. A rapid opposite V-reversal updates the same visible episode instead of silently erasing it.
 
 | Column | Meaning |
 | --- | --- |
