@@ -50,6 +50,10 @@ class ScannerPanel(
     private val marketClosedSubtitle = Label("Saved closing snapshot · not live").apply {
         styleClass += "market-closed-subtitle"
     }
+    private val marketClosedTitle = Label("ALL SELECTED MARKETS ARE CLOSED").apply {
+        styleClass += "market-closed-title"
+    }
+    private var closing = false
     private val marketHoursTitle = Label().apply { styleClass += "market-hours-title" }
     private val marketHoursLabel = Label().apply { styleClass += "market-hours-list" }
     private val brokerHoursTitle = Label("SCALABLE VENUES").apply { styleClass += "market-hours-title" }
@@ -77,7 +81,7 @@ class ScannerPanel(
         },
         VBox(
             7.0,
-            Label("ALL SELECTED MARKETS ARE CLOSED").apply { styleClass += "market-closed-title" },
+            marketClosedTitle,
             marketClosedSubtitle
         ).apply {
             alignment = Pos.TOP_CENTER
@@ -216,6 +220,7 @@ class ScannerPanel(
     }
 
     fun beginScan(number: Int, total: Int, symbols: List<String>) {
+        if (closing) return
         log.debug(LogTag.UI, "beginScan(number={}, total={}, symbols={})", number, total, symbols.size)
         countdown?.stop(); stagedRows.clear(); scanning = true
         marketClosedOverlay.isVisible = false; marketClosedOverlay.isManaged = false
@@ -285,6 +290,8 @@ class ScannerPanel(
         marketHours: List<String>,
         brokerHours: List<String>
     ) {
+        if (closing) return
+        marketClosedTitle.text = "ALL SELECTED MARKETS ARE CLOSED"
         cycleStatus.styleClass.remove("market-closed")
         cycleStatus.styleClass += "market-closed"
         cycleStatus.text = "ALL SELECTED MARKETS ARE CLOSED · " + when {
@@ -306,7 +313,25 @@ class ScannerPanel(
         Platform.runLater { closeMarketOverlayButton.requestFocus() }
     }
 
+    fun showClosing() {
+        closing = true
+        countdown?.stop()
+        hourglass?.stop()
+        scanIndicator.text = ""
+        cycleStatus.text = "Closing · waiting for current operations"
+        marketClosedTitle.text = "APPLICATION IS CLOSING"
+        marketClosedSubtitle.text = "Finishing current transactions and saving market data…"
+        marketHoursPanel.isVisible = false
+        marketHoursPanel.isManaged = false
+        marketClosedFooter.isVisible = false
+        marketClosedFooter.isManaged = false
+        marketClosedOverlay.isVisible = true
+        marketClosedOverlay.isManaged = true
+        marketClosedOverlay.toFront()
+    }
+
     private fun hideMarketClosedOverlay() {
+        if (closing) return
         marketClosedOverlay.isVisible = false
         marketClosedOverlay.isManaged = false
         table.requestFocus()

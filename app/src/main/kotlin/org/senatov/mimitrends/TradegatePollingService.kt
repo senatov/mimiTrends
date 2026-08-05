@@ -4,6 +4,7 @@ import org.senatov.mimitrends.db.MarketRepository
 import org.senatov.mimitrends.log.LogTag
 import org.senatov.mimitrends.marketdata.TradegateMarketDataClient
 import org.senatov.mimitrends.marketdata.ProviderDataUnavailableException
+import org.senatov.mimitrends.marketdata.ProviderHttpException
 import org.senatov.mimitrends.model.MinuteBar
 import org.senatov.mimitrends.model.ProviderInstrument
 import org.senatov.mimitrends.model.ProviderMinuteBar
@@ -62,9 +63,18 @@ internal class TradegatePollingService(
             runCatching { poll(symbol) }
                 .onSuccess { backoff.success() }
                 .onFailure { error ->
+                    if (error is InterruptedException) return@onFailure
                     if (error is ProviderDataUnavailableException) {
                         backoff.success()
                         log.debug(LogTag.API, "Tradegate quote unavailable symbol={} cause={}", symbol, error.message)
+                        return@onFailure
+                    }
+                    if (error is ProviderHttpException && error.statusCode in PERMANENT_INSTRUMENT_STATUSES) {
+                        repository.deleteProviderInstrument(PROVIDER, symbol)
+                        unresolvedUntil[symbol] = System.currentTimeMillis() + UNRESOLVED_RETRY_MILLIS
+                        backoff.success()
+                        log.warn(LogTag.API, "Tradegate instrument disabled symbol={} status={} retryIn={}h",
+                            symbol, error.statusCode, TimeUnit.MILLISECONDS.toHours(UNRESOLVED_RETRY_MILLIS))
                         return@onFailure
                     }
                     val delay = backoff.failure(error)
@@ -128,7 +138,7 @@ internal class TradegatePollingService(
     override fun close() {
         synchronized(this) { generation++; task?.cancel(false); task = null; symbols = emptyList() }
         scheduler.shutdownNow()
-        runCatching { scheduler.awaitTermination(3, TimeUnit.SECONDS) }
+        runCatching { scheduler.awaitTermination(20, TimeUnit.SECONDS) }
     }
 
     private companion object {
@@ -140,5 +150,6 @@ internal class TradegatePollingService(
         val OPEN: LocalTime = LocalTime.of(8, 0)
         val CLOSE: LocalTime = LocalTime.of(22, 0)
         val DEBT_MARKERS = listOf("note", "notes", "nts.", "bond", "anleihe", "flr-", "medium term")
+        val PERMANENT_INSTRUMENT_STATUSES = setOf(400, 404)
     }
 }

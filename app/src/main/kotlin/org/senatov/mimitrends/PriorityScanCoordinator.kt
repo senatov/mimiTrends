@@ -74,7 +74,7 @@ internal class PriorityScanCoordinator(
             stopLocked()
         }
         scheduler.shutdownNow()
-        runCatching { scheduler.awaitTermination(3, TimeUnit.SECONDS) }
+        runCatching { scheduler.awaitTermination(20, TimeUnit.SECONDS) }
     }
 
     internal companion object {

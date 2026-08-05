@@ -38,6 +38,8 @@ class MarketRepositoryTest {
         assertEquals(103.0, stored.bar.close)
         assertEquals(20_000, stored.observedAtMillis)
         assertEquals("US5128073062", repository.loadProviderInstrument("TRADEGATE", "LRCX")?.identifier)
+        assertTrue(repository.deleteProviderInstrument("tradegate", "lrcx"))
+        assertEquals(null, repository.loadProviderInstrument("TRADEGATE", "LRCX"))
         repository.close()
     }
 

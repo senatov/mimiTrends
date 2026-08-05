@@ -28,6 +28,7 @@ import java.util.concurrent.ScheduledFuture
 import java.util.concurrent.TimeUnit
 import java.util.function.BiConsumer
 import java.util.concurrent.atomic.AtomicLong
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.ConcurrentHashMap
 
 class MainController(
@@ -63,6 +64,7 @@ class MainController(
     private val scalableImport = ScalableImportAction(analytics, batchScheduler)
     private var rotationTask: ScheduledFuture<*>? = null
     private val scanGeneration = AtomicLong()
+    private val closing = AtomicBoolean()
     private val exchangeRates = ExchangeRateService()
     private val chartDataLoader = ChartDataLoader(repository, analytics, exchangeRates)
     private val initialDivider = initialDividerPosition.coerceIn(0.15, 0.75)
@@ -149,17 +151,17 @@ class MainController(
         }
     }
 
+    fun showClosing() {
+        scannerPanel.showClosing()
+        listOf(refreshButton, settingsButton, aboutButton, importTradesButton).forEach { it.isDisable = true }
+    }
     fun close() {
         log.debug(LogTag.UI, "close()")
+        if (!closing.compareAndSet(false, true)) return
+        scanGeneration.incrementAndGet()
         rotationTask?.cancel(false)
-        priorityScanner.close()
-        tradegateProvider.close()
-        euronextProvider.close()
-        finnhubClient?.close()
-        batchScheduler.shutdownNow()
-        runCatching { batchScheduler.awaitTermination(3, TimeUnit.SECONDS) }
-        repository.close()
-        analytics.close()
+        ApplicationResourceCloser.close(priorityScanner, tradegateProvider, euronextProvider,
+            { finnhubClient?.close() }, batchScheduler, repository, analytics, log)
     }
 
     fun selectedSymbol(): String = currentSymbol.ifEmpty { "AAPL" }
@@ -175,6 +177,7 @@ class MainController(
         rotationTask?.cancel(false)
         lateinit var scan: () -> Unit
         scan = scan@ {
+            if (closing.get()) return@scan
             val selectedSymbols = selectedMarketSymbols()
             val symbols = selectedSymbols.filter { MarketCalendar.isOpen(it) }
             log.info(LogTag.API, "scan started symbols={} recentWindow={}m", symbols.size, criteria.maxSignalAgeMinutes)
@@ -236,13 +239,14 @@ class MainController(
                     }
                     .onFailure { error ->
                         errors += "$symbol: ${error.message ?: error.javaClass.simpleName}"
-                        analytics.recordScanCandidate(runId, symbol, null,
+                        if (!closing.get()) analytics.recordScanCandidate(runId, symbol, null,
                             "ERROR: ${error.message ?: error.javaClass.simpleName}", "UNAVAILABLE")
                         log.debug(LogTag.API, "scan failed symbol={} cause={}", symbol, error.toString())
                     }
                 Platform.runLater { setStatus("Yahoo Finance: analyzed ${index + 1}/${symbols.size} · $symbol") }
             }
             repository.flushPending()
+            if (closing.get()) return@scan
             if (errors.isNotEmpty()) {
                 log.warn(LogTag.API, "scan completed with failures count={} sample={}", errors.size, errors.take(3).joinToString("; "))
             }

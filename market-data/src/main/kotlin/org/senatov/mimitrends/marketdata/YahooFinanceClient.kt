@@ -56,9 +56,19 @@ class YahooFinanceClient(
             .header("Accept", "application/json")
             .GET()
             .build()
-        val response = httpClient.send(request, HttpResponse.BodyHandlers.ofString())
+        val response = sendWithRetry(request)
         check(response.statusCode() == 200) { "Yahoo Finance HTTP ${response.statusCode()} for $normalized" }
         return parse(normalized, response.body())
+    }
+
+    private fun sendWithRetry(request: HttpRequest): HttpResponse<String> {
+        var response = httpClient.send(request, HttpResponse.BodyHandlers.ofString())
+        repeat(MAX_SERVER_RETRIES) { attempt ->
+            if (response.statusCode() !in 500..599) return response
+            Thread.sleep(RETRY_DELAY_MILLIS * (attempt + 1))
+            response = httpClient.send(request, HttpResponse.BodyHandlers.ofString())
+        }
+        return response
     }
 
     internal fun parse(symbol: String, body: String): MarketSeries {
@@ -120,6 +130,8 @@ class YahooFinanceClient(
 
     private companion object {
         const val USER_AGENT = "MiMiTrends/1.0 (personal desktop market viewer)"
+        const val MAX_SERVER_RETRIES = 2
+        const val RETRY_DELAY_MILLIS = 250L
     }
 }
 

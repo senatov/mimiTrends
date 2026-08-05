@@ -111,6 +111,14 @@ class MarketRepository(
         }
     }
 
+    fun deleteProviderInstrument(provider: String, symbol: String): Boolean = lock.withLock {
+        connection.prepareStatement("DELETE FROM provider_instruments WHERE provider=? AND symbol=?").use { statement ->
+            statement.setString(1, provider.trim().uppercase())
+            statement.setString(2, symbol.trim().uppercase())
+            statement.executeUpdate() > 0
+        }
+    }
+
     fun upsertProviderInstrument(value: ProviderInstrument) = lock.withLock {
         connection.prepareStatement(UPSERT_PROVIDER_INSTRUMENT_SQL).use { statement ->
             statement.setString(1, value.provider.trim().uppercase())

@@ -63,6 +63,7 @@ internal class EuronextPollingService(
             runCatching { poll(symbol) }
                 .onSuccess { backoff.success() }
                 .onFailure { error ->
+                    if (error is InterruptedException) return@onFailure
                     if (error is ProviderDataUnavailableException) {
                         backoff.success()
                         log.debug(LogTag.API, "Euronext quote unavailable symbol={} cause={}", symbol, error.message)
@@ -124,7 +125,7 @@ internal class EuronextPollingService(
     override fun close() {
         synchronized(this) { generation++; task?.cancel(false); task = null; symbols = emptyList() }
         scheduler.shutdownNow()
-        runCatching { scheduler.awaitTermination(3, TimeUnit.SECONDS) }
+        runCatching { scheduler.awaitTermination(20, TimeUnit.SECONDS) }
     }
 
     private companion object {

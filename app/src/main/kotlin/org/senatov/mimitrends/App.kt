@@ -2,15 +2,20 @@ package org.senatov.mimitrends
 
 import atlantafx.base.theme.CupertinoLight
 import javafx.application.Application
+import javafx.application.Platform
 import javafx.scene.Scene
 import javafx.scene.image.Image
 import javafx.scene.text.Font
 import javafx.stage.Stage
 import org.senatov.mimitrends.log.LogTag
 import org.slf4j.LoggerFactory
+import java.util.concurrent.CompletableFuture
+import java.util.concurrent.atomic.AtomicBoolean
+import java.util.function.BiConsumer
 
 class App : Application() {
     private val log = LoggerFactory.getLogger(App::class.java)
+    private val closing = AtomicBoolean()
 
     companion object {
         @JvmStatic
@@ -42,8 +47,17 @@ class App : Application() {
         stage.scene = scene
         uiStateService.restore(stage, uiState)
         stage.setOnCloseRequest {
+            it.consume()
+            if (!closing.compareAndSet(false, true)) return@setOnCloseRequest
             uiStateService.save(stage, controller.selectedSymbol(), controller.selectedRange(), controller.dividerPosition())
-            controller.close()
+            controller.showClosing()
+            CompletableFuture.runAsync(controller::close).whenComplete(BiConsumer<Void?, Throwable?> { _, error ->
+                if (error != null) log.error(LogTag.APP, "application shutdown failed", error)
+                Platform.runLater {
+                    stage.hide()
+                    Platform.exit()
+                }
+            })
         }
         stage.show()
         log.info(LogTag.APP, "stage shown width={} height={}", stage.width, stage.height)
