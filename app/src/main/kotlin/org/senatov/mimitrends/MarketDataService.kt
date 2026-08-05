@@ -77,6 +77,8 @@ internal class MarketDataService(
         val needsBootstrap = cached.map { it.minuteEpochSeconds / 86_400L }.distinct().size < 2
         val localFresh = !needsBootstrap && latestLocal != null && latestLocal >= now - criteria.scanIntervalSeconds
         var source = "SQLITE"
+        var metadata: InstrumentMetadata? = null
+        var corporateActions = emptyList<CorporateAction>()
         val bars = if (localFresh) cached else {
             source = "YAHOO"
             val incrementalAfter = if (needsBootstrap) null else latestLocal?.takeIf { it >= now - 7 * 86_400 }
@@ -85,22 +87,20 @@ internal class MarketDataService(
             val oldProfile = repository.loadCompanyProfile(symbol)
             repository.upsertCompanyProfile(CompanyProfile(symbol, series.companyName, series.exchange,
                 oldProfile?.logoUrl, oldProfile?.logoBytes, System.currentTimeMillis()))
-            analytics.upsertInstrument(InstrumentMetadata(symbol, series.companyName, series.exchange,
-                series.currency.ifBlank { currency(symbol) }, MarketTimeZone.forSymbol(symbol).id))
-            series.events.forEach { event -> analytics.upsertCorporateAction(CorporateAction(
+            metadata = InstrumentMetadata(symbol, series.companyName, series.exchange,
+                series.currency.ifBlank { currency(symbol) }, MarketTimeZone.forSymbol(symbol).id)
+            corporateActions = series.events.map { event -> CorporateAction(
                 symbol, event.type, event.epochSeconds, event.ratio, event.amount, event.currency, "YAHOO"
-            )) }
+            ) }
             repository.loadMinuteBars(symbol, now - 30 * 86_400)
         }
         val completed = bars.filter { it.minuteEpochSeconds <= now / 60L * 60L - 60L }
         if (source == "SQLITE") repository.loadCompanyProfile(symbol)?.let { profile ->
-            analytics.upsertInstrument(InstrumentMetadata(symbol, profile.name, profile.exchange,
-                currency(symbol), MarketTimeZone.forSymbol(symbol).id))
+            metadata = InstrumentMetadata(symbol, profile.name, profile.exchange,
+                currency(symbol), MarketTimeZone.forSymbol(symbol).id)
         }
         if (dataStatus(symbol) == "LIVE") source = "FINNHUB"
-        analytics.recordDataQuality(symbol, source, dataStatus(symbol), completed.lastOrNull()?.minuteEpochSeconds, completed.size)
-        analytics.refreshDerived(symbol, completed, source)
-        analytics.recordSignalOutcomes(symbol, completed)
+        analytics.recordMarketEvaluation(metadata, corporateActions, symbol, source, dataStatus(symbol), completed)
         val primary = scannerEngine.evaluate(symbol, completed, criteria)?.withFeedAge(now)
         val fallback = if (primary != null) emptyList() else RELAXATION_LEVELS.map { factor ->
             scannerEngine.evaluateFallback(symbol, completed, criteria, factor)

@@ -10,35 +10,29 @@ import org.senatov.mimitrends.model.ProviderInstrument
 import org.senatov.mimitrends.model.ProviderMinuteBar
 import org.senatov.mimitrends.model.ProviderQuoteSnapshot
 import org.slf4j.LoggerFactory
-import java.nio.file.Files
 import java.nio.file.Path
 import java.sql.Connection
-import java.sql.DriverManager
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
-import java.util.concurrent.locks.ReentrantLock
-import kotlin.concurrent.withLock
 
 class MarketRepository(
-    private val databasePath: Path = Path.of(System.getProperty("user.home"), ".mimi", "trends", "mimitrends.db")
+    private val database: EmbeddedDatabase = EmbeddedDatabase.open()
 ) : AutoCloseable {
+    constructor(databasePath: Path) : this(EmbeddedDatabase.open(databasePath))
+
     private val log = LoggerFactory.getLogger(javaClass)
-    private val lock = ReentrantLock()
     private val pendingLock = Any()
     private val pending = linkedMapOf<Pair<String, Long>, MinuteBar>()
     private val closed = AtomicBoolean(false)
     private val writer = Executors.newSingleThreadScheduledExecutor { task ->
         Thread(task, "mimitrends-sqlite-writer").apply { isDaemon = true }
     }
-    private val connection: Connection
+    private val connection: Connection = database.connection
 
     init {
-        log.debug(LogTag.DB, "init(databasePath={})", databasePath)
-        Files.createDirectories(databasePath.parent)
-        connection = DriverManager.getConnection("jdbc:sqlite:$databasePath")
-        configure(connection)
-        migrate(connection)
+        log.debug(LogTag.DB, "init()")
+        database.locked { migrate(it) }
         writer.scheduleWithFixedDelay(::flushSafely, 1, 1, TimeUnit.SECONDS)
     }
 
@@ -52,7 +46,7 @@ class MarketRepository(
     fun loadMinuteBars(symbol: String, fromEpochSeconds: Long): List<MinuteBar> {
         log.debug(LogTag.DB, "loadMinuteBars(symbol={}, from={})", symbol, fromEpochSeconds)
         flushPending()
-        return lock.withLock {
+        return database.locked {
             connection.prepareStatement(
                 """SELECT minute_epoch, open, high, low, close, volume, volume_status FROM minute_bars
                    WHERE symbol = ? AND minute_epoch >= ? ORDER BY minute_epoch"""
@@ -73,7 +67,7 @@ class MarketRepository(
     fun latestMinuteEpoch(symbol: String): Long? {
         log.debug(LogTag.DB, "latestMinuteEpoch(symbol={})", symbol)
         flushPending()
-        return lock.withLock {
+        return database.locked {
             connection.prepareStatement("SELECT MAX(minute_epoch) FROM minute_bars WHERE symbol = ?").use { statement ->
                 statement.setString(1, symbol.trim().uppercase())
                 statement.executeQuery().use { result ->
@@ -85,7 +79,7 @@ class MarketRepository(
 
     fun listSymbols(): List<String> {
         flushPending()
-        return lock.withLock {
+        return database.locked {
             connection.createStatement().use { statement ->
                 statement.executeQuery("SELECT DISTINCT symbol FROM minute_bars ORDER BY symbol").use { result ->
                     buildList { while (result.next()) add(result.getString(1)) }
@@ -94,7 +88,7 @@ class MarketRepository(
         }
     }
 
-    fun loadProviderInstrument(provider: String, symbol: String): ProviderInstrument? = lock.withLock {
+    fun loadProviderInstrument(provider: String, symbol: String): ProviderInstrument? = database.locked {
         connection.prepareStatement(
             """SELECT identifier, mic, currency, resolved_name, updated_at FROM provider_instruments
                WHERE provider=? AND symbol=?"""
@@ -111,7 +105,7 @@ class MarketRepository(
         }
     }
 
-    fun deleteProviderInstrument(provider: String, symbol: String): Boolean = lock.withLock {
+    fun deleteProviderInstrument(provider: String, symbol: String): Boolean = database.locked {
         connection.prepareStatement("DELETE FROM provider_instruments WHERE provider=? AND symbol=?").use { statement ->
             statement.setString(1, provider.trim().uppercase())
             statement.setString(2, symbol.trim().uppercase())
@@ -119,7 +113,7 @@ class MarketRepository(
         }
     }
 
-    fun upsertProviderInstrument(value: ProviderInstrument) = lock.withLock {
+    fun upsertProviderInstrument(value: ProviderInstrument) = database.locked {
         connection.prepareStatement(UPSERT_PROVIDER_INSTRUMENT_SQL).use { statement ->
             statement.setString(1, value.provider.trim().uppercase())
             statement.setString(2, value.symbol.trim().uppercase())
@@ -133,7 +127,7 @@ class MarketRepository(
     }
 
     /** Returns true only when the observation inserted a bar or advanced an existing minute. */
-    fun upsertProviderMinuteBar(value: ProviderMinuteBar): Boolean = lock.withLock {
+    fun upsertProviderMinuteBar(value: ProviderMinuteBar): Boolean = database.locked {
         connection.prepareStatement(UPSERT_PROVIDER_BAR_SQL).use { statement ->
             val bar = value.bar
             statement.setString(1, value.provider.trim().uppercase())
@@ -149,7 +143,7 @@ class MarketRepository(
         }
     }
 
-    fun upsertProviderQuote(value: ProviderQuoteSnapshot): Boolean = lock.withLock {
+    fun upsertProviderQuote(value: ProviderQuoteSnapshot): Boolean = database.locked {
         connection.prepareStatement(UPSERT_PROVIDER_QUOTE_SQL).use { statement ->
             statement.setString(1, value.provider.trim().uppercase()); statement.setString(2, value.symbol.trim().uppercase())
             statement.setString(3, value.identifier); statement.setString(4, value.currency); statement.setDouble(5, value.last)
@@ -163,7 +157,7 @@ class MarketRepository(
     }
 
     fun loadProviderMinuteBars(provider: String, symbol: String, fromEpochSeconds: Long): List<ProviderMinuteBar> =
-        lock.withLock {
+        database.locked {
             connection.prepareStatement(
                 """SELECT identifier, mic, currency, minute_epoch, open, high, low, close, volume,
                    volume_status, observed_at FROM provider_minute_bars
@@ -187,7 +181,7 @@ class MarketRepository(
 
     fun loadCompanyProfile(symbol: String): CompanyProfile? {
         log.debug(LogTag.DB, "loadCompanyProfile(symbol={})", symbol)
-        return lock.withLock {
+        return database.locked {
             connection.prepareStatement(
                 "SELECT name, exchange, logo_url, logo, updated_at FROM company_profiles WHERE symbol = ?"
             ).use { statement ->
@@ -210,7 +204,7 @@ class MarketRepository(
     fun upsertCompanyProfile(profile: CompanyProfile) {
         log.debug(LogTag.DB, "upsertCompanyProfile(symbol={}, logoBytes={})", profile.symbol, profile.logoBytes?.size ?: 0)
         check(!closed.get()) { "MarketRepository is closed" }
-        lock.withLock {
+        database.locked {
             connection.prepareStatement(UPSERT_PROFILE_SQL).use { statement ->
                 statement.setString(1, profile.symbol.trim().uppercase())
                 statement.setString(2, profile.name)
@@ -230,7 +224,7 @@ class MarketRepository(
             pending.values.toList().also { pending.clear() }
         }
         return try {
-            lock.withLock {
+            database.locked {
                 connection.autoCommit = false
                 try {
                     connection.prepareStatement(UPSERT_SQL).use { statement ->
@@ -262,25 +256,12 @@ class MarketRepository(
         if (!closed.compareAndSet(false, true)) return
         writer.shutdown()
         runCatching { flushPending() }.onFailure { log.error(LogTag.DB, "final database flush failed", it) }
-        lock.withLock { connection.close() }
+        database.close()
     }
 
     private fun flushSafely() {
         log.trace(LogTag.DB, "flushSafely()")
         if (!closed.get()) runCatching(::flushPending).onFailure { log.error(LogTag.DB, "background database flush failed", it) }
-    }
-
-    private fun configure(connection: Connection) {
-        log.debug(LogTag.DB, "configure()")
-        connection.createStatement().use { statement ->
-            statement.execute("PRAGMA journal_mode = WAL")
-            statement.execute("PRAGMA synchronous = NORMAL")
-            statement.execute("PRAGMA busy_timeout = 5000")
-            statement.execute("PRAGMA temp_store = MEMORY")
-            statement.execute("PRAGMA cache_size = -20000")
-            statement.execute("PRAGMA mmap_size = 268435456")
-            statement.execute("PRAGMA foreign_keys = ON")
-        }
     }
 
     private fun migrate(connection: Connection) {

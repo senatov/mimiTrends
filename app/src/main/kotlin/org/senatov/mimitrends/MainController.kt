@@ -108,6 +108,7 @@ class MainController(
 
         apiKey?.takeIf(String::isNotBlank)?.let(::restartFinnhubLive)
         analytics.applyRetention()
+        DatabaseStartupMaintenance.schedule(analytics, batchScheduler, log)
         batchScheduler.execute {
             val saved = analytics.loadLatestPublishedResults(scannerCriteria.resultLimit)
             Platform.runLater { scannerPanel.showSnapshot(saved, scannerCriteria.resultLimit) }
@@ -152,8 +153,7 @@ class MainController(
     }
 
     fun showClosing() {
-        scannerPanel.showClosing()
-        listOf(refreshButton, settingsButton, aboutButton, importTradesButton).forEach { it.isDisable = true }
+        ClosingPresentation.show(scannerPanel, listOf(refreshButton, settingsButton, aboutButton, importTradesButton))
     }
     fun close() {
         log.debug(LogTag.UI, "close()")
