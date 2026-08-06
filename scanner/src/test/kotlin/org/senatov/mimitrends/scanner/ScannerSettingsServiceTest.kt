@@ -33,4 +33,14 @@ class ScannerSettingsServiceTest {
 
         assertEquals("#FFFDE1", restored.tableAppearance.selectionColor)
     }
+
+    @Test
+    fun `migrates renamed tickers in a persisted watchlist`() {
+        val path = Files.createTempDirectory("mimitrends-ticker-migration").resolve("scanner.properties")
+        Files.writeString(path, "symbols=AAPL,MMC,FI,SQ,MRSH,FISV,XYZ\n")
+
+        val restored = ScannerSettingsService(path).load()
+
+        assertEquals(listOf("AAPL", "MRSH", "FISV", "XYZ"), restored.symbols)
+    }
 }

@@ -106,7 +106,12 @@ class ScannerSettingsService(private val path: Path = Path.of(System.getProperty
 
     fun normalizeSymbols(text: String): List<String> {
         log.debug(LogTag.IO, "normalizeSymbols(chars={})", text.length)
-        return text.split(',', ';', '\n', ' ', '\t').map(String::trim).filter(String::isNotEmpty).map(String::uppercase).distinct()
+        return text.split(',', ';', '\n', ' ', '\t')
+            .map(String::trim)
+            .filter(String::isNotEmpty)
+            .map(String::uppercase)
+            .map { symbol -> TICKER_MIGRATIONS[symbol] ?: symbol }
+            .distinct()
     }
 
     private fun color(value: String?, fallback: String): String =
@@ -122,5 +127,6 @@ class ScannerSettingsService(private val path: Path = Path.of(System.getProperty
     private companion object {
         const val DEFAULT_SELECTION_COLOR = "#FFFDE1"
         const val LEGACY_SELECTION_COLOR = "#DCE8F6"
+        val TICKER_MIGRATIONS = mapOf("MMC" to "MRSH", "FI" to "FISV", "SQ" to "XYZ")
     }
 }
