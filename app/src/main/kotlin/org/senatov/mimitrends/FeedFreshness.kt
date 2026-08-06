@@ -1,13 +1,17 @@
 package org.senatov.mimitrends
 
-import kotlin.math.ceil
-
 internal object FeedFreshness {
     fun ageMinutes(updatedAtMillis: Long, nowMillis: Long = System.currentTimeMillis()): Long =
-        ceil((nowMillis - updatedAtMillis).coerceAtLeast(0L) / 60_000.0).toLong()
+        (nowMillis - updatedAtMillis).coerceAtLeast(0L) / 60_000L
+
+    fun ageLabel(updatedAtMillis: Long, nowMillis: Long = System.currentTimeMillis()): String {
+        val elapsed = (nowMillis - updatedAtMillis).coerceAtLeast(0L)
+        return if (elapsed < 60_000L) "<1m" else "${elapsed / 60_000L}m"
+    }
 
     fun isStale(updatedAtMillis: Long, status: String, nowMillis: Long = System.currentTimeMillis()): Boolean =
-        ageMinutes(updatedAtMillis, nowMillis) > expectedDelayMinutes(status) + STALE_GRACE_MINUTES
+        (nowMillis - updatedAtMillis).coerceAtLeast(0L) >
+            (expectedDelayMinutes(status) + STALE_GRACE_MINUTES) * 60_000L
 
     fun icon(updatedAtMillis: Long, status: String, nowMillis: Long = System.currentTimeMillis()): String = when {
         isStale(updatedAtMillis, status, nowMillis) -> "⚠"
@@ -16,13 +20,13 @@ internal object FeedFreshness {
     }
 
     fun tooltip(updatedAtMillis: Long, status: String, nowMillis: Long = System.currentTimeMillis()): String {
-        val age = ageMinutes(updatedAtMillis, nowMillis)
+        val age = ageLabel(updatedAtMillis, nowMillis)
         val expected = expectedDelayMinutes(status)
         return when {
             isStale(updatedAtMillis, status, nowMillis) ->
-                "Stale market data · $age minutes old · expected delay at most $expected minutes"
-            expected > 0 -> "Delayed market data · $age minutes old · expected delay $expected minutes"
-            else -> "Current $status market data · $age minutes old"
+                "Stale market data · $age old · expected delay at most $expected minutes"
+            expected > 0 -> "Delayed market data · $age old · expected delay $expected minutes"
+            else -> "Current $status market data · $age old"
         }
     }
 

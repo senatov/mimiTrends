@@ -130,7 +130,7 @@ class ScannerPanel(
         val turnover = columnFactory.number("Turnover", { convertPrice(it.symbol, it.sessionTurnover) }, ::compactMoney)
         val updated = columnFactory.updated { time.format(Instant.ofEpochMilli(it)) }
         autoFitter = TableColumnAutoFitter(table, listOf(
-            TableColumnAutoFitter.Spec(freshness, { "${FeedFreshness.ageMinutes(it.updatedAtMillis)}m" }, 68.0, 96.0),
+            TableColumnAutoFitter.Spec(freshness, { FeedFreshness.ageLabel(it.updatedAtMillis) }, 68.0, 96.0),
             TableColumnAutoFitter.Spec(symbol, columnFactory::companyName, 120.0, 460.0, flexible = true, reserveWidth = 32.0),
             TableColumnAutoFitter.Spec(signal, ScanResult::signalSource, 74.0, 190.0),
             TableColumnAutoFitter.Spec(move, { percent(it.windowChangePercent) }, 82.0, 130.0, reserveWidth = 8.0),

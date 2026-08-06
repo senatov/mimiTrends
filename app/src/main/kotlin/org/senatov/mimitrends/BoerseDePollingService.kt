@@ -20,6 +20,7 @@ internal class TableQuoteProviderGroup(
 ) : AutoCloseable {
     private val boerseClient = BoerseDeMarketDataClient()
     private val bnpClient = BnpParibasMarketDataClient()
+    private val langSchwarz = LangSchwarzPollingService(repository, observationSink)
     private val providers = listOf(
         IsinQuotePollingService(repository, observationSink, "BOERSE_DE", "XSTU") { isin ->
             boerseClient.loadQuote(isin).let { CrawledQuote(it.last, it.currency, it.observedAtMillis) }
@@ -29,8 +30,15 @@ internal class TableQuoteProviderGroup(
         }
     )
 
-    fun replaceSymbols(values: Collection<String>) = providers.forEach { it.replaceSymbols(values) }
-    override fun close() = providers.forEach(AutoCloseable::close)
+    fun replaceSymbols(values: Collection<String>) {
+        providers.forEach { it.replaceSymbols(values) }
+        langSchwarz.replaceSymbols(values)
+    }
+
+    override fun close() {
+        providers.forEach(AutoCloseable::close)
+        langSchwarz.close()
+    }
 }
 
 private data class CrawledQuote(val last: Double, val currency: String, val observedAtMillis: Long)

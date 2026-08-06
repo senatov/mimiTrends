@@ -358,18 +358,13 @@ class AnalyticsRepository(
             features.forEach { (minute, samples) ->
                 val returns = samples.map(BaselineSample::returnPercent)
                 val volumes = samples.mapNotNull(BaselineSample::logVolume)
-                val medianReturn = median(returns); val medianVolume = median(volumes)
+                val medianReturn = RobustStatistics.median(returns); val medianVolume = RobustStatistics.median(volumes)
                 s.setString(1, symbol); s.setInt(2, minute); s.setInt(3, samples.size); s.setDouble(4, medianReturn)
-                s.setDouble(5, median(returns.map { abs(it - medianReturn) })); s.setDouble(6, medianVolume)
-                s.setDouble(7, median(volumes.map { abs(it - medianVolume) })); s.setLong(8, Instant.now().epochSecond); s.addBatch()
+                s.setDouble(5, RobustStatistics.median(returns.map { abs(it - medianReturn) })); s.setDouble(6, medianVolume)
+                s.setDouble(7, RobustStatistics.median(volumes.map { abs(it - medianVolume) }))
+                s.setLong(8, Instant.now().epochSecond); s.addBatch()
             }; s.executeBatch()
         }
-    }
-
-    private fun median(values: List<Double>): Double {
-        if (values.isEmpty()) return 0.0
-        val sorted = values.sorted(); val middle = sorted.size / 2
-        return if (sorted.size % 2 == 0) (sorted[middle - 1] + sorted[middle]) / 2 else sorted[middle]
     }
 
     private fun zoneFor(symbol: String) = MarketTimeZone.forSymbol(symbol)

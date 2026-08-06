@@ -179,6 +179,9 @@ class MarketRepository(
             }
         }
 
+    fun loadLatestProviderMinuteBar(symbol: String, notBeforeEpochSeconds: Long): ProviderMinuteBar? =
+        database.locked { LatestProviderBarReader.load(connection, symbol, notBeforeEpochSeconds) }
+
     fun loadCompanyProfile(symbol: String): CompanyProfile? {
         log.debug(LogTag.DB, "loadCompanyProfile(symbol={})", symbol)
         return database.locked {

@@ -37,6 +37,13 @@ class MarketRepositoryTest {
         assertEquals(100.0, stored.bar.low)
         assertEquals(103.0, stored.bar.close)
         assertEquals(20_000, stored.observedAtMillis)
+        val newerProvider = ProviderMinuteBar(
+            "EURONEXT", "LRCX", "US5128073062", "XPAR", "EUR",
+            MinuteBar("LRCX", 120, 104.0, 104.0, 104.0, 104.0, 0.0, VolumeStatus.MISSING), 125_000
+        )
+        repository.upsertProviderMinuteBar(newerProvider)
+        assertEquals("EURONEXT", repository.loadLatestProviderMinuteBar("lrcx", 100)?.provider)
+        assertEquals(null, repository.loadLatestProviderMinuteBar("LRCX", 121))
         assertEquals("US5128073062", repository.loadProviderInstrument("TRADEGATE", "LRCX")?.identifier)
         assertTrue(repository.deleteProviderInstrument("tradegate", "lrcx"))
         assertEquals(null, repository.loadProviderInstrument("TRADEGATE", "LRCX"))

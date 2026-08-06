@@ -9,7 +9,6 @@ import org.senatov.mimitrends.db.MarketRepository
 import org.senatov.mimitrends.db.AnalyticsRepository
 import org.senatov.mimitrends.log.LogTag
 import org.senatov.mimitrends.model.MinuteBar
-import org.senatov.mimitrends.model.MarketRegion
 import org.senatov.mimitrends.model.ProviderMinuteBar
 import org.senatov.mimitrends.model.ScannerCriteria
 import org.senatov.mimitrends.model.ScanResult
@@ -42,6 +41,7 @@ class MainController(
     private val log = LoggerFactory.getLogger(MainController::class.java)
     private val repository = MarketRepository()
     private val analytics = AnalyticsRepository()
+    private val savedResultQuotes = SavedResultQuoteRefresher(repository)
     private var currentSymbol = initialSymbol
     private var currentSignal: ScanResult? = null
     private var selectedRangeValue = initialRange.takeIf { it in setOf("1D", "5D", "1M", "3M", "6M", "1Y") } ?: "3M"
@@ -115,7 +115,7 @@ class MainController(
         analytics.applyRetention()
         DatabaseStartupMaintenance.schedule(analytics, batchScheduler, log)
         batchScheduler.execute {
-            val saved = analytics.loadLatestPublishedResults(scannerCriteria.resultLimit)
+            val saved = savedResultQuotes.refresh(analytics.loadLatestPublishedResults(scannerCriteria.resultLimit))
             Platform.runLater { scannerPanel.showSnapshot(saved, scannerCriteria.resultLimit) }
         }
         batchScheduler.execute {
@@ -188,7 +188,7 @@ class MainController(
         lateinit var scan: () -> Unit
         scan = scan@ {
             if (closing.get()) return@scan
-            val selectedSymbols = selectedMarketSymbols()
+            val selectedSymbols = MarketUniverseSelector.select(scannerCriteria)
             val symbols = selectedSymbols.filter { MarketCalendar.isOpen(it) }
             log.info(LogTag.API, "scan started symbols={} recentWindow={}m", symbols.size, criteria.maxSignalAgeMinutes)
             if (symbols.isEmpty()) {
@@ -199,8 +199,9 @@ class MainController(
                     java.time.Duration.between(now, it.instant).seconds.coerceAtLeast(1) + MARKET_OPEN_GRACE_SECONDS
                 } ?: criteria.scanIntervalSeconds
                 val resumeText = nextOpening?.let(MarketHoursFormatter::nextOpening) ?: "market schedule unavailable"
-                val persisted = analytics.loadLatestPublishedResults(criteria.resultLimit)
-                val saved = if (persisted.isNotEmpty()) persisted else marketData.closedMarketSnapshot(selectedMarketSymbols(), criteria)
+                val persisted = savedResultQuotes.refresh(analytics.loadLatestPublishedResults(criteria.resultLimit))
+                val saved = if (persisted.isNotEmpty()) persisted else marketData.closedMarketSnapshot(
+                    MarketUniverseSelector.select(scannerCriteria), criteria)
                 val userZone = java.time.ZoneId.systemDefault()
                 val marketHours = MarketHoursFormatter.priceData(selectedSymbols, now, userZone)
                 val brokerHours = MarketHoursFormatter.scalable(now, userZone)
@@ -243,7 +244,9 @@ class MainController(
             val active = batch.active
             val retained = recentEvents.merge(active, System.currentTimeMillis(), criteria.resultLimit)
             val showingSaved = retained.isEmpty()
-            val displayed = if (showingSaved) analytics.loadLatestPublishedResults(criteria.resultLimit) else retained
+            val displayed = if (showingSaved) {
+                savedResultQuotes.refresh(analytics.loadLatestPublishedResults(criteria.resultLimit))
+            } else retained
             tableQuoteProviders.replaceSymbols(displayed.map(ScanResult::symbol))
             priorityScanner.replaceCandidates(active)
             Platform.runLater {
@@ -272,18 +275,6 @@ class MainController(
             )
         }
         batchScheduler.execute { runCatching(scan).onFailure { log.error(LogTag.API, "initial Yahoo scan failed", it) } }
-    }
-
-    private fun selectedMarketSymbols(): List<String> {
-        log.debug(LogTag.STATE, "selectedMarketSymbols(region={})", scannerCriteria.marketRegion)
-        return scannerCriteria.symbols.filter { symbol ->
-            val european = symbol.contains('.')
-            when (scannerCriteria.marketRegion) {
-                MarketRegion.BOTH -> true
-                MarketRegion.US -> !european
-                MarketRegion.EUROPE -> european
-            }
-        }
     }
 
     private fun applyProviderObservation(observation: ProviderMinuteBar) {
@@ -343,7 +334,7 @@ class MainController(
                 Platform.runLater { setStatus("Finnhub unavailable · Yahoo/SQLite fallback active") }
             }
         )
-        selectedMarketSymbols().filterNot { it.contains('.') }.forEach(client::subscribe)
+        MarketUniverseSelector.select(scannerCriteria).filterNot { it.contains('.') }.forEach(client::subscribe)
         finnhubClient = client
         client.connect().whenComplete(java.util.function.BiConsumer<java.net.http.WebSocket?, Throwable?> { _, error ->
             Platform.runLater {
