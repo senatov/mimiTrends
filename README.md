@@ -443,28 +443,65 @@ Native packages contain a private runtime, so end users do not need to install a
 
 ### macOS
 
+Run the packaging script from the repository root to create a complete self-contained DMG. The
+package includes MiMiTrends and its private Java runtime, so the destination Mac does not need a
+separate JDK installation.
+
 ```bash
-./gradlew :app:packageMacApp
 ./Scripts/build-macos-dmg.zsh
+```
+
+![Building the signed macOS DMG](Doc/MacOSPackaging.png)
+
+The script requires Xcode Command Line Tools and a `Developer ID Application` certificate in the
+login Keychain. It automatically selects the first matching certificate, signs the application and
+embedded native libraries, builds the DMG, verifies it, and prints its location and SHA-256 hash.
+Use an explicit identity when more than one suitable certificate is installed:
+
+```bash
+./Scripts/build-macos-dmg.zsh --identity "Your Name (TEAMID)"
+```
+
+For a public release, first store App Store Connect credentials in a Keychain profile as described
+in [Native packaging](Doc/NativePackaging.md), then run the complete notarization workflow:
+
+```bash
 ./Scripts/build-macos-dmg.zsh --notarize
 ```
 
-The script automatically selects the first `Developer ID Application` certificate from the macOS
-Keychain. The notarized form uses the `MiMiNotary` keychain profile by default; both values can be
-overridden with `--identity` and `--profile`.
+The notarized form uses the `MiMiNotary` keychain profile by default; override it with `--profile`.
+Apple explains the distribution requirements in
+[Notarizing macOS software before distribution](https://developer.apple.com/documentation/security/notarizing-macos-software-before-distribution)
+and its current command-line workflow in
+[TN3147: Migrating to the latest notarization tool](https://developer.apple.com/documentation/technotes/tn3147-migrating-to-the-latest-notarization-tool).
 
-The signed pipeline also signs Mach-O libraries embedded inside JavaFX and SQLite dependency JARs,
-then verifies the complete DMG before it is allowed to reach Apple Notary Service.
+For a local unsigned `.app` image instead of a distributable DMG, run:
+
+```bash
+./gradlew :app:packageMacApp
+```
 
 ### Windows
+
+Run the following command from a Windows Command Prompt:
 
 ```bat
 Scripts\build-windows-exe.bat
 ```
 
-Windows packaging requires WiX Toolset 3.x on `PATH`.
+The script creates a self-contained EXE installer and prints its location and SHA-256 hash. It
+requires a JDK, WiX Toolset 3.x, and the WiX `candle.exe` and `light.exe` commands on `PATH`.
+For public distribution, sign and timestamp the resulting installer with a trusted code-signing
+certificate and verify its signature. See Microsoft's
+[SignTool documentation](https://learn.microsoft.com/en-us/windows/win32/seccrypto/signtool)
+and Oracle's
+[jpackage packaging prerequisites](https://docs.oracle.com/en/java/javase/17/jpackage/packaging-overview.html).
+
+This Windows packaging workflow has not been tested because I do not have a Windows system 😞
 
 ### Linux
+
+Run the packaging script on Linux:
 
 ```bash
 ./Scripts/build-linux-packages.sh
@@ -472,7 +509,16 @@ Windows packaging requires WiX Toolset 3.x on `PATH`.
 ./Scripts/build-linux-packages.sh --deb-only
 ```
 
-Building the Debian package also requires `fakeroot`.
+The default command creates both a portable self-contained `.tar.gz` archive and a Debian/Ubuntu
+`.deb` package. Use either option to build only one format. A JDK and `sha256sum` are required;
+building the Debian package additionally requires `fakeroot` and `dpkg-deb`. Inspect the `.deb`
+with `dpkg-deb --info` and `dpkg-deb --contents`, then install it on a disposable test system before
+distribution. See Oracle's
+[jpackage packaging prerequisites](https://docs.oracle.com/en/java/javase/17/jpackage/packaging-overview.html)
+and the official Debian documentation for
+[`dpkg-deb`](https://www.debian.org/doc/manuals/debian-faq/pkgtools.en.html#dpkg-deb).
+
+This Linux packaging workflow has not been tested because I do not have a Linux system 😞
 
 Outputs are written below:
 
