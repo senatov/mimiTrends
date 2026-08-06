@@ -34,6 +34,31 @@ internal class ScannerColumnFactory(
 
     fun companyName(result: ScanResult): String = companyNames[result.symbol] ?: result.symbol
 
+    fun freshness(): TableColumn<ScanResult, Number> = TableColumn<ScanResult, Number>("Delay").apply {
+        setCellValueFactory { ReadOnlyLongWrapper(FeedFreshness.ageMinutes(it.value.updatedAtMillis)) }
+        comparator = Comparator { left, right -> left.toLong().compareTo(right.toLong()) }
+        isSortable = true
+        setCellFactory {
+            object : TableCell<ScanResult, Number>() {
+                override fun updateItem(item: Number?, empty: Boolean) {
+                    super.updateItem(item, empty)
+                    val result = tableRow?.item
+                    if (empty || item == null || result == null) {
+                        text = null; tooltip = null; styleClass.remove("stale-feed-cell")
+                        return
+                    }
+                    val now = System.currentTimeMillis()
+                    val stale = FeedFreshness.isStale(result.updatedAtMillis, result.dataStatus, now)
+                    text = "${FeedFreshness.icon(result.updatedAtMillis, result.dataStatus, now)} ${item.toLong()}m"
+                    tooltip = Tooltip(FeedFreshness.tooltip(result.updatedAtMillis, result.dataStatus, now))
+                    styleClass.remove("stale-feed-cell")
+                    if (stale) styleClass += "stale-feed-cell"
+                }
+            }
+        }
+        configure(78.0, 68.0)
+    }
+
     fun signal(title: String, value: (ScanResult) -> String): TableColumn<ScanResult, String> =
         TableColumn<ScanResult, String>(title).apply {
             setCellValueFactory { ReadOnlyObjectWrapper(value(it.value)) }

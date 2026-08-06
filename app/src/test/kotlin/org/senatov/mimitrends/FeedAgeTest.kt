@@ -4,15 +4,21 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
 
 class FeedAgeTest {
-    @Test fun `reports the age of a delayed market data feed`() {
-        val result = TestScanResult.create().copy(updatedAtMillis = 1_000_000L)
-
-        assertEquals(15, result.withFeedAge(1_900L).signalAgeMinutes)
+    @Test fun `reports actual feed delay rounded up to a minute`() {
+        assertEquals(16, FeedFreshness.ageMinutes(1_000_000L, 1_900_001L))
     }
 
-    @Test fun `does not erase an older candle signal age`() {
-        val result = TestScanResult.create().copy(updatedAtMillis = 1_000_000L, signalAgeMinutes = 20)
+    @Test fun `accepts a feed within its declared delay and grace period`() {
+        val now = 2_200_000L
 
-        assertEquals(20, result.withFeedAge(1_900L).signalAgeMinutes)
+        assertEquals(false, FeedFreshness.isStale(1_000_000L, "DELAYED 15m", now))
+        assertEquals("◷", FeedFreshness.icon(1_000_000L, "DELAYED 15m", now))
+    }
+
+    @Test fun `marks a feed stale beyond its declared delay and grace period`() {
+        val now = 2_260_000L
+
+        assertEquals(true, FeedFreshness.isStale(1_000_000L, "DELAYED 15m", now))
+        assertEquals("⚠", FeedFreshness.icon(1_000_000L, "DELAYED 15m", now))
     }
 }

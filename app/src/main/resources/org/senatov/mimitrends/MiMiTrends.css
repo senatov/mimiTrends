@@ -424,6 +424,10 @@
     -fx-alignment: center-left;
 }
 .scanner-table .table-row-cell:selected .table-cell { -fx-text-fill: -mimi-table-text; }
+.scanner-table .table-cell.stale-feed-cell,
+.scanner-table .table-row-cell:selected .table-cell.stale-feed-cell {
+    -fx-text-fill: #a61f2d;
+}
 .scanner-table .table-cell.rare-impulse-cell,
 .scanner-table .table-row-cell:selected .table-cell.rare-impulse-cell {
     -fx-background-color: #e8f5e9;

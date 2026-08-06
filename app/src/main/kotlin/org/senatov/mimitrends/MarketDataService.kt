@@ -99,12 +99,18 @@ internal class MarketDataService(
             metadata = InstrumentMetadata(symbol, profile.name, profile.exchange,
                 currency(symbol), MarketTimeZone.forSymbol(symbol).id)
         }
-        if (dataStatus(symbol) == "LIVE") source = "FINNHUB"
-        analytics.recordMarketEvaluation(metadata, corporateActions, symbol, source, dataStatus(symbol), completed)
-        val primary = scannerEngine.evaluate(symbol, completed, criteria)?.withFeedAge(now)
+        val status = dataStatus(symbol)
+        if (status == "LIVE") source = "FINNHUB"
+        analytics.recordMarketEvaluation(metadata, corporateActions, symbol, source, status, completed)
+        val latestBarMillis = completed.lastOrNull()?.minuteEpochSeconds?.times(1_000L)
+        if (latestBarMillis == null || FeedFreshness.isStale(latestBarMillis, status, now * 1_000L)) {
+            val age = latestBarMillis?.let { FeedFreshness.ageMinutes(it, now * 1_000L) }
+            log.warn(LogTag.API, "market data rejected as stale symbol={} ageMinutes={} status={}", symbol, age, status)
+            return ScanEvaluation(null, emptyList())
+        }
+        val primary = scannerEngine.evaluate(symbol, completed, criteria)
         val fallback = if (primary != null) emptyList() else RELAXATION_LEVELS.map { factor ->
             scannerEngine.evaluateFallback(symbol, completed, criteria, factor)
-                ?.withFeedAge(now)
         }
         return ScanEvaluation(primary, fallback)
     }
@@ -127,8 +133,3 @@ internal class MarketDataService(
 }
 
 internal data class ScanEvaluation(val primary: ScanResult?, val fallback: List<ScanResult?>)
-
-internal fun ScanResult.withFeedAge(nowEpochSeconds: Long): ScanResult {
-    val feedAge = ((nowEpochSeconds - updatedAtMillis / 1_000L) / 60L).toInt().coerceAtLeast(0)
-    return copy(signalAgeMinutes = maxOf(signalAgeMinutes, feedAge))
-}
