@@ -186,22 +186,50 @@
     -fx-padding: 5 9 5 9;
 }
 .chart-mode-switch {
-    -fx-background-color: rgba(218,224,230,0.72);
-    -fx-background-radius: 7px;
+    -fx-background-color: #dce3ea;
+    -fx-background-radius: 8px;
+    -fx-border-color: #9eabb7;
+    -fx-border-radius: 8px;
+    -fx-border-width: 1px;
     -fx-padding: 2px;
+    -fx-spacing: 2px;
+}
+.chart-mode-caption {
+    -fx-font-family: "SF Pro Text", "Helvetica Neue", "System";
+    -fx-font-size: 9px;
+    -fx-font-weight: 600;
+    -fx-text-fill: #536474;
+    -fx-padding: 0 0 0 4px;
 }
 .chart-mode-button {
-    -fx-padding: 3 9 3 9;
-    -fx-font-size: 11px;
-    -fx-text-fill: #46535f;
-    -fx-background-color: transparent;
-    -fx-background-radius: 5px;
-    -fx-border-width: 0;
+    -fx-padding: 5px 11px 5px 11px;
+    -fx-font-family: "SF Pro Text", "Helvetica Neue", "System";
+    -fx-font-size: 11.5px;
+    -fx-font-weight: 500;
+    -fx-text-fill: #273746;
+    -fx-background-color: #f8fafc;
+    -fx-background-radius: 6px;
+    -fx-border-color: #c2ccd5;
+    -fx-border-radius: 6px;
+    -fx-border-width: 1px;
+    -fx-cursor: hand;
 }
-.chart-mode-button:selected {
-    -fx-text-fill: #253b4f;
-    -fx-background-color: rgba(255,255,255,0.96);
-    -fx-effect: dropshadow(gaussian, rgba(35,47,58,0.18), 4, 0.10, 0, 1);
+.chart-mode-button:hover {
+    -fx-background-color: #eaf1f7;
+    -fx-border-color: #6f8497;
+}
+.chart-view-button:selected {
+    -fx-text-fill: white;
+    -fx-background-color: #17365f;
+    -fx-border-color: #0e294c;
+    -fx-effect: dropshadow(gaussian, rgba(14,41,76,0.34), 6, 0.16, 0, 2);
+}
+.chart-overlay-switch { -fx-background-color: #f4e2cc; -fx-border-color: #c78a48; }
+.chart-overlay-button:selected {
+    -fx-text-fill: #ffffff;
+    -fx-background-color: #b85f12;
+    -fx-border-color: #8f4308;
+    -fx-effect: dropshadow(gaussian, rgba(143,67,8,0.30), 6, 0.14, 0, 2);
 }
 .volume-chart { -fx-background-color: white; -fx-border-color: #d7d8da; -fx-border-radius: 8px; -fx-background-radius: 8px; -fx-padding: 3px; }
 .volume-chart .chart-bar { -fx-bar-fill: #7ba9d8; }

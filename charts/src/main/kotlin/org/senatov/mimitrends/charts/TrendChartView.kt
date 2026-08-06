@@ -4,6 +4,7 @@ import javafx.scene.control.ProgressIndicator
 import javafx.scene.control.Label
 import javafx.scene.control.ToggleButton
 import javafx.scene.control.ToggleGroup
+import javafx.scene.control.Tooltip
 import javafx.scene.layout.StackPane
 import javafx.scene.layout.VBox
 import javafx.scene.layout.HBox
@@ -90,16 +91,32 @@ class TrendChartView : StackPane() {
         progress.maxWidth = 32.0
         progress.maxHeight = 32.0
         progress.isVisible = false
-        ToggleGroup().apply {
+        val viewModes = ToggleGroup().apply {
             focusButton.toggleGroup = this
             historyButton.toggleGroup = this
             selectToggle(focusButton)
         }
-        listOf(focusButton, historyButton, tradesButton).forEach { it.styleClass += "chart-mode-button" }
-        focusButton.setOnAction { lastRequest?.let(::renderRequest) }
-        historyButton.setOnAction { lastRequest?.let(::renderRequest) }
+        focusButton.styleClass += listOf("chart-mode-button", "chart-view-button")
+        historyButton.styleClass += listOf("chart-mode-button", "chart-view-button")
+        tradesButton.styleClass += listOf("chart-mode-button", "chart-overlay-button")
+        focusButton.tooltip = Tooltip("Show detailed candles around the selected signal")
+        historyButton.tooltip = Tooltip("Show the complete loaded chart range")
+        tradesButton.tooltip = Tooltip("Show or hide executed broker trades")
+        focusButton.setOnAction {
+            if (viewModes.selectedToggle == null) focusButton.isSelected = true
+            lastRequest?.let(::renderRequest)
+        }
+        historyButton.setOnAction {
+            if (viewModes.selectedToggle == null) historyButton.isSelected = true
+            lastRequest?.let(::renderRequest)
+        }
         tradesButton.setOnAction { lastRequest?.let(::renderRequest) }
-        val modeSwitch = HBox(focusButton, historyButton, tradesButton).apply { styleClass += "chart-mode-switch" }
+        val viewSwitch = HBox(focusButton, historyButton).apply { styleClass += "chart-mode-switch" }
+        val overlaySwitch = HBox(tradesButton).apply { styleClass += listOf("chart-mode-switch", "chart-overlay-switch") }
+        val modeSwitch = HBox(8.0,
+            VBox(1.0, Label("VIEW").apply { styleClass += "chart-mode-caption" }, viewSwitch),
+            VBox(1.0, Label("OVERLAY").apply { styleClass += "chart-mode-caption" }, overlaySwitch)
+        ).apply { alignment = javafx.geometry.Pos.BOTTOM_LEFT }
         signalSummaryLabel.styleClass += "chart-signal-summary"
         cursorDetailsLabel.styleClass += "chart-cursor-details"
         cursorDetailsLabel.isWrapText = true
