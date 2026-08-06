@@ -204,11 +204,18 @@ class AnalyticsRepository(
     }
 
     fun loadLatestPublishedResults(limit: Int): List<ScanResult> = locked {
-        connection.prepareStatement("""SELECT symbol, price, entry_price, score, jump_z, range_z, volume_z, rvol,
-            change_10m, turnover, signal, data_epoch, signal_epoch, source
-            FROM scan_candidates
-            WHERE run_id=(SELECT MAX(run_id) FROM scan_candidates WHERE published=1) AND published=1
-            ORDER BY score DESC LIMIT ?""").use { s ->
+        connection.prepareStatement("""WITH latest_by_symbol AS (
+                SELECT run_id, symbol, price, entry_price, score, jump_z, range_z, volume_z, rvol,
+                    change_10m, turnover, signal, data_epoch, signal_epoch, source,
+                    ROW_NUMBER() OVER (PARTITION BY symbol ORDER BY run_id DESC) AS recency_rank
+                FROM scan_candidates
+                WHERE published=1
+            )
+            SELECT symbol, price, entry_price, score, jump_z, range_z, volume_z, rvol,
+                change_10m, turnover, signal, data_epoch, signal_epoch, source
+            FROM latest_by_symbol
+            WHERE recency_rank=1
+            ORDER BY run_id DESC, data_epoch DESC, score DESC LIMIT ?""").use { s ->
             s.setInt(1, limit.coerceAtLeast(1))
             s.executeQuery().use { result -> buildList {
                 fun nullableMetric(index: Int): Double = result.getDouble(index).let { if (result.wasNull()) Double.NaN else it }

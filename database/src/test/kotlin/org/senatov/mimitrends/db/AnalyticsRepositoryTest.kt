@@ -12,6 +12,23 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 class AnalyticsRepositoryTest {
+    @Test fun `loads the latest published result for each symbol across scan runs`() {
+        val path = Files.createTempDirectory("mimitrends-published").resolve("test.db")
+        MarketRepository(path).close()
+        AnalyticsRepository(path).use { analytics ->
+            val firstRun = analytics.beginScan("EUROPE", 1, 180)
+            analytics.recordScanCandidate(firstRun, "SAP.DE", result(1_800_000_000L), null, "YAHOO")
+            analytics.completeScan(firstRun, listOf("SAP.DE"), 0)
+            val secondRun = analytics.beginScan("EUROPE", 1, 180)
+            analytics.recordScanCandidate(secondRun, "SIE.DE",
+                result(1_800_000_060L).copy(symbol = "SIE.DE"), null, "YAHOO")
+            analytics.completeScan(secondRun, listOf("SIE.DE"), 0)
+
+            assertEquals(listOf("SIE.DE", "SAP.DE"),
+                analytics.loadLatestPublishedResults(10).map(ScanResult::symbol))
+        }
+    }
+
     @Test fun `recovers interrupted scans and expires old provider observations`() {
         val path = Files.createTempDirectory("mimitrends-recovery").resolve("test.db")
         MarketRepository(path).close()

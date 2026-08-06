@@ -368,7 +368,17 @@
     -fx-translate-y: 1px;
     -fx-effect: innershadow(gaussian, rgba(70,80,88,0.22), 4, 0.10, 0, 1);
 }
-.scan-clock { -fx-min-width: 24px; -fx-pref-width: 24px; -fx-max-width: 24px; }
+.scan-clock {
+    -fx-min-width: 30px;
+    -fx-pref-width: 30px;
+    -fx-max-width: 30px;
+    -fx-background-color: linear-gradient(to bottom, #ffffff, #dce9df);
+    -fx-background-radius: 15px;
+    -fx-border-color: rgba(8,120,62,0.65);
+    -fx-border-radius: 15px;
+    -fx-border-width: 1px;
+    -fx-effect: dropshadow(gaussian, rgba(21,54,43,0.34), 8, 0.20, 0, 2);
+}
 .scan-clock-face { -fx-fill: #f7fbff; -fx-stroke: #17365f; -fx-stroke-width: 1.5px; }
 .scan-clock-minute-hand { -fx-stroke: #17365f; -fx-stroke-width: 1.8px; -fx-stroke-line-cap: round; }
 .scan-clock-second-hand { -fx-stroke: #08783e; -fx-stroke-width: 1.4px; -fx-stroke-line-cap: round; }

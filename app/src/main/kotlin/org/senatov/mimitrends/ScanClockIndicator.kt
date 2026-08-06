@@ -14,10 +14,10 @@ import javafx.scene.transform.Rotate
 import javafx.util.Duration
 
 internal class ScanClockIndicator : Pane() {
-    private val minuteHand = Line(12.0, 12.0, 12.0, 6.0).apply { styleClass += "scan-clock-minute-hand" }
-    private val secondHand = Line(12.0, 13.0, 12.0, 4.0).apply { styleClass += "scan-clock-second-hand" }
-    private val minuteRotation = Rotate(0.0, 12.0, 12.0).also(minuteHand.transforms::add)
-    private val secondRotation = Rotate(0.0, 12.0, 12.0).also(secondHand.transforms::add)
+    private val minuteHand = Line(CENTER, CENTER, CENTER, 9.0).apply { styleClass += "scan-clock-minute-hand" }
+    private val secondHand = Line(CENTER, 16.0, CENTER, 7.0).apply { styleClass += "scan-clock-second-hand" }
+    private val minuteRotation = Rotate(0.0, CENTER, CENTER).also(minuteHand.transforms::add)
+    private val secondRotation = Rotate(0.0, CENTER, CENTER).also(secondHand.transforms::add)
     private val tooltip = Tooltip()
     private var countdown: Timeline? = null
     private var scanRotation: RotateTransition? = null
@@ -30,10 +30,10 @@ internal class ScanClockIndicator : Pane() {
         prefHeight = SIZE
         maxHeight = SIZE
         styleClass += "scan-clock"
-        children += Circle(12.0, 12.0, 10.0).apply { styleClass += "scan-clock-face" }
+        children += Circle(CENTER, CENTER, 10.0).apply { styleClass += "scan-clock-face" }
         children += minuteHand
         children += secondHand
-        children += Circle(12.0, 12.0, 1.5).apply { styleClass += "scan-clock-center" }
+        children += Circle(CENTER, CENTER, 1.5).apply { styleClass += "scan-clock-center" }
         Tooltip.install(this, tooltip)
         accessibleRole = AccessibleRole.TEXT
         isVisible = false
@@ -93,6 +93,7 @@ internal class ScanClockIndicator : Pane() {
     }
 
     private companion object {
-        const val SIZE = 24.0
+        const val SIZE = 30.0
+        const val CENTER = SIZE / 2.0
     }
 }
