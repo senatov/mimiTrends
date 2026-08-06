@@ -70,7 +70,7 @@ class TrendChartView : StackPane() {
     private var volumeSignalMarker: IntervalMarker? = null
     private val latestPriceMarker = ValueMarker(0.0)
     private var latestPriceMarkerInstalled = false
-    private var lastRequest: RenderRequest? = null
+    private var lastRequest: TrendChartRenderRequest? = null
     private var renderedBars: List<MinuteBar> = emptyList()
     private var renderedTimeline = ChartTimeline.linear(emptyList())
     private var renderedPriceMultiplier = 1.0
@@ -130,11 +130,11 @@ class TrendChartView : StackPane() {
         trades: List<BrokerTrade> = emptyList()
     ) {
         log.debug(LogTag.UI, "renderMinuteBars(symbol={}, bars={}, range={})", symbol, bars.size, rangeLabel)
-        lastRequest = RenderRequest(symbol, companyName, bars.sortedBy { it.minuteEpochSeconds }, rangeLabel,
+        lastRequest = TrendChartRenderRequest(symbol, companyName, bars.sortedBy { it.minuteEpochSeconds }, rangeLabel,
             priceMultiplier, currencySymbol, signal, trades)
         renderRequest(requireNotNull(lastRequest))
     }
-    private fun renderRequest(request: RenderRequest) {
+    private fun renderRequest(request: TrendChartRenderRequest) {
         val focused = focusButton.isSelected && request.signal != null
         val timeline = if (focused) ChartTimeline.focused(request.bars, requireNotNull(request.signal).signalEpochMillis / 1_000L)
         else ChartTimeline.linear(TrendChartSupport.aggregate(request.bars, MAX_CANDLES))
@@ -383,17 +383,6 @@ class TrendChartView : StackPane() {
         pricePlot.addRangeMarker(priceCursor)
         cursorMarkersInstalled = true
     }
-
-    private data class RenderRequest(
-        val symbol: String,
-        val companyName: String,
-        val bars: List<MinuteBar>,
-        val rangeLabel: String,
-        val priceMultiplier: Double,
-        val currencySymbol: String,
-        val signal: ScanResult?,
-        val trades: List<BrokerTrade>
-    )
 
     private companion object {
         const val MAX_CANDLES = 360

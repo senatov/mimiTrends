@@ -12,6 +12,42 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 class AnalyticsRepositoryTest {
+    @Test fun `recovers interrupted scans and expires old provider observations`() {
+        val path = Files.createTempDirectory("mimitrends-recovery").resolve("test.db")
+        MarketRepository(path).close()
+        AnalyticsRepository(path).close()
+        DriverManager.getConnection("jdbc:sqlite:$path").use { connection ->
+            connection.createStatement().use { statement ->
+                statement.executeUpdate("""INSERT INTO scan_runs
+                    (started_at, region, requested_symbols, interval_seconds, status)
+                    VALUES (100, 'EUROPE', 1, 180, 'RUNNING')""")
+                statement.executeUpdate("""INSERT INTO provider_minute_bars
+                    (provider, symbol, identifier, mic, currency, minute_epoch, open, high, low, close,
+                     volume, volume_status, observed_at)
+                    VALUES ('TRADEGATE', 'TEST.DE', 'DE0000000001', 'XGAT', 'EUR', 100,
+                            10, 10, 10, 10, 0, 'MISSING', 100000)""")
+            }
+        }
+
+        val analytics = AnalyticsRepository(path)
+        analytics.applyRetention(nowEpoch = 100 + 91L * 86_400L)
+        analytics.close()
+
+        DriverManager.getConnection("jdbc:sqlite:$path").use { connection ->
+            connection.createStatement().use { statement ->
+                statement.executeQuery("SELECT status, completed_at FROM scan_runs").use { result ->
+                    assertTrue(result.next())
+                    assertEquals("ABORTED", result.getString(1))
+                    assertTrue(result.getLong(2) > 0L)
+                }
+                statement.executeQuery("SELECT COUNT(*) FROM provider_minute_bars").use { result ->
+                    assertTrue(result.next())
+                    assertEquals(0, result.getInt(1))
+                }
+            }
+        }
+    }
+
     @Test fun `resolves isin by company name and reconstructs broker trade`() {
         val directory = Files.createTempDirectory("mimitrends-trades")
         val database = directory.resolve("test.db")

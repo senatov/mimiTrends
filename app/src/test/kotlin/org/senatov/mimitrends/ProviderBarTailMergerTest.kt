@@ -2,6 +2,7 @@ package org.senatov.mimitrends
 
 import org.junit.jupiter.api.Test
 import org.senatov.mimitrends.model.MinuteBar
+import org.senatov.mimitrends.model.MarketDataSource
 import org.senatov.mimitrends.model.ProviderMinuteBar
 import org.senatov.mimitrends.model.VolumeStatus
 import kotlin.test.assertEquals
@@ -11,11 +12,11 @@ class ProviderBarTailMergerTest {
         val yahoo = listOf(bar(60, 100.0), bar(120, 101.0))
         val providers = listOf(provider("TRADEGATE", 180, 102.0), provider("TRADEGATE", 240, 103.0))
 
-        val merged = ProviderBarTailMerger.merge(yahoo, providers, "YAHOO", 300)
+        val merged = ProviderBarTailMerger.merge(yahoo, providers, MarketDataSource.YAHOO, 300)
 
-        assertEquals("TRADEGATE", merged.source)
-        assertEquals(listOf(60L, 120L, 180L, 240L), merged.bars.map(MinuteBar::minuteEpochSeconds))
-        assertEquals(VolumeStatus.MISSING, merged.bars.last().volumeStatus)
+        assertEquals(MarketDataSource.TRADEGATE, merged.latestSource)
+        assertEquals(listOf(60L, 120L, 180L, 240L), merged.analysisBars.map(MinuteBar::minuteEpochSeconds))
+        assertEquals(VolumeStatus.MISSING, merged.analysisBars.last().volumeStatus)
     }
 
     @Test fun `prefers Tradegate and never replaces overlapping Yahoo candles`() {
@@ -26,21 +27,21 @@ class ProviderBarTailMergerTest {
             provider("TRADEGATE", 180, 102.0)
         )
 
-        val merged = ProviderBarTailMerger.merge(yahoo, providers, "YAHOO", 240)
+        val merged = ProviderBarTailMerger.merge(yahoo, providers, MarketDataSource.YAHOO, 240)
 
-        assertEquals(listOf(100.0, 101.0, 102.0), merged.bars.map(MinuteBar::close))
-        assertEquals("TRADEGATE", merged.source)
+        assertEquals(listOf(100.0, 101.0, 102.0), merged.analysisBars.map(MinuteBar::close))
+        assertEquals(MarketDataSource.TRADEGATE, merged.latestSource)
     }
 
     @Test fun `ignores provider observations older than fifteen minutes`() {
         val yahoo = listOf(bar(60, 100.0))
 
         val merged = ProviderBarTailMerger.merge(
-            yahoo, listOf(provider("TRADEGATE", 120, 101.0)), "YAHOO", 1_021
+            yahoo, listOf(provider("TRADEGATE", 120, 101.0)), MarketDataSource.YAHOO, 1_021
         )
 
-        assertEquals("YAHOO", merged.source)
-        assertEquals(yahoo, merged.bars)
+        assertEquals(MarketDataSource.YAHOO, merged.latestSource)
+        assertEquals(yahoo, merged.analysisBars)
     }
 
     private fun provider(provider: String, epoch: Long, price: Double) = ProviderMinuteBar(

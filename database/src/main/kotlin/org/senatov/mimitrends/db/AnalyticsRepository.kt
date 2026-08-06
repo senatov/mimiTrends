@@ -5,6 +5,7 @@ package org.senatov.mimitrends.db
 import org.senatov.mimitrends.log.LogTag
 import org.senatov.mimitrends.model.MinuteBar
 import org.senatov.mimitrends.model.MarketTimeZone
+import org.senatov.mimitrends.model.MarketObservationQuality
 import org.senatov.mimitrends.model.isValidMinuteBar
 import org.senatov.mimitrends.model.ScanResult
 import org.senatov.mimitrends.model.BrokerTrade
@@ -30,6 +31,7 @@ class AnalyticsRepository(
 
     init {
         migrate()
+        recoverInterruptedScans()
         brokerTransactions = BrokerTransactionStore(connection)
         signalCalibration = SignalCalibrationStore(connection)
         signalOutcomes = SignalOutcomeStore(connection)
@@ -85,17 +87,21 @@ class AnalyticsRepository(
         metadata: InstrumentMetadata?,
         corporateActions: Collection<CorporateAction>,
         symbol: String,
-        source: String,
+        historySource: String,
         status: String,
-        bars: List<MinuteBar>
+        bars: List<MinuteBar>,
+        latestObservedEpoch: Long? = bars.lastOrNull()?.minuteEpochSeconds,
+        observedSource: String = historySource,
+        observationQuality: MarketObservationQuality = MarketObservationQuality.FULL_OHLCV
     ) = locked {
         val clean = bars.filter(MinuteBar::isValidMinuteBar).sortedBy(MinuteBar::minuteEpochSeconds)
         transaction {
             metadata?.let(::upsertInstrumentInternal)
             corporateActions.forEach(::upsertCorporateActionInternal)
-            recordDataQualityInternal(symbol, source, status, clean.lastOrNull()?.minuteEpochSeconds, clean.size, null)
+            recordDataQualityInternal(symbol, observedSource, status, latestObservedEpoch, clean.size,
+                observationQuality.name)
             if (clean.isNotEmpty()) {
-                upsertSessions(symbol.uppercase(), clean, source)
+                upsertSessions(symbol.uppercase(), clean, historySource)
                 upsertAggregates(symbol.uppercase(), clean)
                 upsertBaselines(symbol.uppercase(), clean)
                 clean.takeLast(OUTCOME_TRACKING_BARS).forEach {
@@ -176,6 +182,15 @@ class AnalyticsRepository(
         }
     }
 
+    fun abortScan(runId: Long) = locked {
+        connection.prepareStatement("""UPDATE scan_runs SET completed_at=?, status='ABORTED'
+            WHERE id=? AND status='RUNNING'""").use { statement ->
+            statement.setLong(1, Instant.now().epochSecond)
+            statement.setLong(2, runId)
+            statement.executeUpdate()
+        }
+    }
+
     fun loadAggregatedBars(symbol: String, resolutionMinutes: Int, fromEpoch: Long): List<AggregatedBar> = locked {
         connection.prepareStatement("""SELECT bucket_epoch, open, high, low, close, volume FROM aggregate_bars
             WHERE symbol=? AND resolution_minutes=? AND bucket_epoch>=? ORDER BY bucket_epoch""").use { s ->
@@ -215,9 +230,10 @@ class AnalyticsRepository(
 
     fun applyRetention(nowEpoch: Long = Instant.now().epochSecond) = locked {
         connection.prepareStatement("DELETE FROM minute_bars WHERE minute_epoch < ?").use { it.setLong(1, nowEpoch - RAW_RETENTION_DAYS * 86_400L); it.executeUpdate() }
+        connection.prepareStatement("DELETE FROM provider_minute_bars WHERE minute_epoch < ?").use { it.setLong(1, nowEpoch - PROVIDER_RETENTION_DAYS * 86_400L); it.executeUpdate() }
         connection.prepareStatement("DELETE FROM aggregate_bars WHERE bucket_epoch < ?").use { it.setLong(1, nowEpoch - AGGREGATE_RETENTION_DAYS * 86_400L); it.executeUpdate() }
         connection.prepareStatement("DELETE FROM scan_runs WHERE started_at < ?").use { it.setLong(1, nowEpoch - SCAN_RETENTION_DAYS * 86_400L); it.executeUpdate() }
-        connection.prepareStatement("DELETE FROM data_quality WHERE observed_at < ?").use { it.setLong(1, nowEpoch - SCAN_RETENTION_DAYS * 86_400L); it.executeUpdate() }
+        connection.prepareStatement("DELETE FROM data_quality WHERE observed_at < ?").use { it.setLong(1, nowEpoch - DATA_QUALITY_RETENTION_DAYS * 86_400L); it.executeUpdate() }
     }
 
     fun stats(): AnalyticsStats = locked {
@@ -276,6 +292,15 @@ class AnalyticsRepository(
             }
         }
         log.info(LogTag.DB, "analytics schema ready version={}", AnalyticsMigrations.values.maxOf { it.first })
+    }
+
+    private fun recoverInterruptedScans(nowEpoch: Long = Instant.now().epochSecond) = locked {
+        connection.prepareStatement("""UPDATE scan_runs SET completed_at=?, status='ABORTED'
+            WHERE status='RUNNING' AND completed_at IS NULL""").use { statement ->
+            statement.setLong(1, nowEpoch)
+            val recovered = statement.executeUpdate()
+            if (recovered > 0) log.warn(LogTag.DB, "recovered interrupted scan runs count={}", recovered)
+        }
     }
 
     private fun upsertSessions(symbol: String, bars: List<MinuteBar>, source: String) {
@@ -355,8 +380,10 @@ class AnalyticsRepository(
 
     private companion object {
         const val RAW_RETENTION_DAYS = 90
+        const val PROVIDER_RETENTION_DAYS = 90
         const val AGGREGATE_RETENTION_DAYS = 730
         const val SCAN_RETENTION_DAYS = 180
+        const val DATA_QUALITY_RETENTION_DAYS = 30
         const val OUTCOME_TRACKING_BARS = 35
         const val UPSERT_INSTRUMENT = """INSERT INTO instrument_metadata(symbol, name, exchange, currency, timezone, isin, wkn, aliases, tradable, updated_at)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(symbol) DO UPDATE SET name=excluded.name, exchange=excluded.exchange,

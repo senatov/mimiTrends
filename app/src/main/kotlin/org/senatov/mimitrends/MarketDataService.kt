@@ -8,6 +8,7 @@ import org.senatov.mimitrends.log.LogTag
 import org.senatov.mimitrends.marketdata.YahooFinanceClient
 import org.senatov.mimitrends.model.CompanyProfile
 import org.senatov.mimitrends.model.MarketTimeZone
+import org.senatov.mimitrends.model.MarketDataSource
 import org.senatov.mimitrends.model.MinuteBar
 import org.senatov.mimitrends.model.ScanResult
 import org.senatov.mimitrends.model.ScannerCriteria
@@ -77,11 +78,11 @@ internal class MarketDataService(
         val latestLocal = cached.lastOrNull()?.minuteEpochSeconds
         val needsBootstrap = cached.map { it.minuteEpochSeconds / 86_400L }.distinct().size < 2
         val localFresh = !needsBootstrap && latestLocal != null && latestLocal >= now - criteria.scanIntervalSeconds
-        var source = "SQLITE"
+        var source = MarketDataSource.SQLITE
         var metadata: InstrumentMetadata? = null
         var corporateActions = emptyList<CorporateAction>()
         val bars = if (localFresh) cached else {
-            source = "YAHOO"
+            source = MarketDataSource.YAHOO
             val incrementalAfter = if (needsBootstrap) null else latestLocal?.takeIf { it >= now - 7 * 86_400 }
             val series = yahooFinance.loadIntraday(symbol, incrementalAfter)
             series.bars.forEach(repository::upsertMinuteBar)
@@ -96,18 +97,21 @@ internal class MarketDataService(
             repository.loadMinuteBars(symbol, now - 30 * 86_400)
         }
         val completedYahoo = bars.filter { it.minuteEpochSeconds <= now / 60L * 60L - 60L }
-        if (source == "SQLITE") repository.loadCompanyProfile(symbol)?.let { profile ->
+        if (source == MarketDataSource.SQLITE) repository.loadCompanyProfile(symbol)?.let { profile ->
             metadata = InstrumentMetadata(symbol, profile.name, profile.exchange,
                 currency(symbol), MarketTimeZone.forSymbol(symbol).id)
         }
         val declaredStatus = dataStatus(symbol)
-        if (declaredStatus == "LIVE") source = "FINNHUB"
+        if (declaredStatus == "LIVE") source = MarketDataSource.FINNHUB
         val merged = mergeProviderTail(symbol, completedYahoo, source, now)
-        val effectiveStatus = if (merged.source in PROVIDER_SOURCES) merged.source else declaredStatus
-        analytics.recordMarketEvaluation(metadata, corporateActions, symbol, merged.source, effectiveStatus, merged.bars)
-        val primary = scannerEngine.evaluate(symbol, merged.bars, criteria)?.copy(dataStatus = effectiveStatus)
+        val effectiveStatus = if (merged.latestQuality == org.senatov.mimitrends.model.MarketObservationQuality.QUOTE_SNAPSHOT)
+            merged.latestSource.name else declaredStatus
+        analytics.recordMarketEvaluation(metadata, corporateActions, symbol, merged.historySource.name,
+            effectiveStatus, merged.historyBars, merged.latestEpochSeconds, merged.latestSource.name,
+            merged.latestQuality)
+        val primary = scannerEngine.evaluate(symbol, merged.analysisBars, criteria)?.copy(dataStatus = effectiveStatus)
         val fallback = if (primary != null) emptyList() else RELAXATION_LEVELS.map { factor ->
-            scannerEngine.evaluateFallback(symbol, merged.bars, criteria, factor)?.copy(dataStatus = effectiveStatus)
+            scannerEngine.evaluateFallback(symbol, merged.analysisBars, criteria, factor)?.copy(dataStatus = effectiveStatus)
         }
         return ScanEvaluation(primary, fallback)
     }
@@ -124,13 +128,16 @@ internal class MarketDataService(
     private fun mergeProviderTail(
         symbol: String,
         primary: List<MinuteBar>,
-        primarySource: String,
+        primarySource: MarketDataSource,
         nowEpochSeconds: Long
-    ): MergedMarketBars {
-        if (!ProviderBarTailMerger.isEuropeanSymbol(symbol)) return MergedMarketBars(primary, primarySource)
+    ): MarketDataSnapshot {
+        if (!ProviderBarTailMerger.isEuropeanSymbol(symbol)) return MarketDataSnapshot(
+            primary, primary, primarySource, primarySource,
+            org.senatov.mimitrends.model.MarketObservationQuality.FULL_OHLCV
+        )
         val from = maxOf(primary.lastOrNull()?.minuteEpochSeconds?.plus(60L) ?: 0L, nowEpochSeconds - 4 * 3_600L)
         val providerBars = PROVIDER_SOURCES.flatMap { provider ->
-            repository.loadProviderMinuteBars(provider, symbol, from)
+            repository.loadProviderMinuteBars(provider.name, symbol, from)
         }
         return ProviderBarTailMerger.merge(primary, providerBars, primarySource, nowEpochSeconds)
     }
@@ -139,7 +146,7 @@ internal class MarketDataService(
 
     private companion object {
         val RELAXATION_LEVELS = listOf(0.85, 0.70, 0.55)
-        val PROVIDER_SOURCES = listOf("TRADEGATE", "EURONEXT")
+        val PROVIDER_SOURCES = listOf(MarketDataSource.TRADEGATE, MarketDataSource.EURONEXT)
     }
 }
 

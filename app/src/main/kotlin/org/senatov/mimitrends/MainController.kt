@@ -73,6 +73,7 @@ class MainController(
     private val liveTicks = ConcurrentHashMap<String, Long>()
     private val feedStatus = FeedStatusResolver(liveTicks)
     private val marketData = MarketDataService(repository, analytics, scannerEngine, yahooFinance, feedStatus::status)
+    private val scannerBatch = ScannerBatchService(marketData::loadAndEvaluate, analytics, repository, feedStatus::status)
     private val tradegateProvider = TradegatePollingService(repository)
     private val euronextProvider = EuronextPollingService(repository)
     private val recentEvents = RecentEventRetainer()
@@ -216,49 +217,23 @@ class MainController(
                 )
                 return@scan
             }
-            val runId = analytics.beginScan(criteria.marketRegion.name, symbols.size, criteria.scanIntervalSeconds)
             Platform.runLater {
                 scannerPanel.beginScan(1, 1, symbols)
                 setStatus("Finnhub live + Yahoo/SQLite: scanning ${symbols.size} symbols · fresh impulses only")
             }
-            val results = mutableListOf<ScanResult>()
-            val fallbackLevels = List(3) { mutableListOf<ScanResult>() }
-            val errors = mutableListOf<String>()
-            symbols.forEachIndexed { index, symbol ->
-                if (generation != scanGeneration.get()) return@forEachIndexed
-                runCatching { marketData.loadAndEvaluate(symbol, criteria) }
-                    .onSuccess { evaluation ->
-                        val primaryResult = evaluation.primary
-                        val fallbackResults = evaluation.fallback
-                        primaryResult?.let(results::add)
-                        fallbackResults.forEachIndexed { level, result -> result?.let(fallbackLevels[level]::add) }
-                        val bestFallback = fallbackResults.firstNotNullOfOrNull { it }
-                        val status = (primaryResult ?: bestFallback)?.dataStatus ?: feedStatus.status(symbol)
-                        analytics.recordScanCandidate(runId, symbol, primaryResult ?: bestFallback,
-                            if (primaryResult == null && bestFallback == null) "NO_CURRENT_SIGNAL" else null, status)
-                    }
-                    .onFailure { error ->
-                        errors += "$symbol: ${error.message ?: error.javaClass.simpleName}"
-                        if (!closing.get()) analytics.recordScanCandidate(runId, symbol, null,
-                            "ERROR: ${error.message ?: error.javaClass.simpleName}", "UNAVAILABLE")
-                        log.debug(LogTag.API, "scan failed symbol={} cause={}", symbol, error.toString())
-                    }
-                Platform.runLater { setStatus("Yahoo Finance: analyzed ${index + 1}/${symbols.size} · $symbol") }
-            }
-            repository.flushPending()
-            if (closing.get()) return@scan
+            val batch = scannerBatch.execute(symbols, criteria,
+                { generation == scanGeneration.get() && !closing.get() },
+                { completed, symbol -> Platform.runLater {
+                    setStatus("Market data: analyzed $completed/${symbols.size} · $symbol")
+                } }
+            ) ?: return@scan
+            val errors = batch.errors
             if (errors.isNotEmpty()) {
                 log.warn(LogTag.API, "scan completed with failures count={} sample={}", errors.size, errors.take(3).joinToString("; "))
             }
-            val calibratedResults = results.map(analytics::withCalibration)
-            val calibratedFallbacks = fallbackLevels.map { level -> level.map(analytics::withCalibration) }
-            val selection = AdaptiveResultSelector.select(
-                calibratedResults, calibratedFallbacks, criteria.minimumTableResults, criteria.resultLimit
-            )
-            val active = selection.results
+            val active = batch.active
             val displayed = recentEvents.merge(active, System.currentTimeMillis(), criteria.resultLimit)
             priorityScanner.replaceCandidates(active)
-            analytics.completeScan(runId, active.map(ScanResult::symbol), errors.size)
             Platform.runLater {
                 if (generation != scanGeneration.get()) return@runLater
                 if (active.isEmpty() && errors.size == symbols.size && symbols.isNotEmpty()) {
@@ -269,7 +244,7 @@ class MainController(
                     scannerPanel.completeScan(criteria.resultLimit)
                     scannerPanel.showCountdown(criteria.scanIntervalSeconds)
                     val marketState = if (symbols.isEmpty()) "all selected markets closed"
-                        else "${results.size.coerceAtMost(active.size)} strict impulses + ${selection.adaptiveCount} adaptive"
+                        else "${batch.strictCount.coerceAtMost(active.size)} strict impulses + ${batch.adaptiveCount} adaptive"
                     val coolingCount = displayed.size - active.size
                     log.info(LogTag.API, "scan completed: {}", marketState)
                     setStatus(if (active.isEmpty()) "No current signals · $coolingCount recent events cooling"
