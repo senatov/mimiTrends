@@ -109,9 +109,10 @@ internal class MarketDataService(
         analytics.recordMarketEvaluation(metadata, corporateActions, symbol, merged.historySource.name,
             effectiveStatus, merged.historyBars, merged.latestEpochSeconds, merged.latestSource.name,
             merged.latestQuality)
-        val primary = scannerEngine.evaluate(symbol, merged.analysisBars, criteria)?.copy(dataStatus = effectiveStatus)
+        val primary = scannerEngine.evaluate(symbol, merged.analysisBars, criteria)?.forPresentation(merged, effectiveStatus)
         val fallback = if (primary != null) emptyList() else RELAXATION_LEVELS.map { factor ->
-            scannerEngine.evaluateFallback(symbol, merged.analysisBars, criteria, factor)?.copy(dataStatus = effectiveStatus)
+            scannerEngine.evaluateFallback(symbol, merged.analysisBars, criteria, factor)
+                ?.forPresentation(merged, effectiveStatus)
         }
         return ScanEvaluation(primary, fallback)
     }
@@ -143,6 +144,15 @@ internal class MarketDataService(
     }
 
     private fun currency(symbol: String) = if (symbol.contains('.')) "EUR" else "USD"
+
+    private fun ScanResult.forPresentation(snapshot: MarketDataSnapshot, status: String): ScanResult {
+        val observation = snapshot.latestObservation ?: return copy(dataStatus = status)
+        return copy(
+            price = observation.bar.close,
+            updatedAtMillis = observation.bar.minuteEpochSeconds * 1_000L,
+            dataStatus = status
+        )
+    }
 
     private companion object {
         val RELAXATION_LEVELS = listOf(0.85, 0.70, 0.55)

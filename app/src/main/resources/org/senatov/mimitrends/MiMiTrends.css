@@ -431,6 +431,10 @@
 .scanner-table .table-cell.rare-impulse-cell,
 .scanner-table .table-row-cell:selected .table-cell.rare-impulse-cell {
     -fx-background-color: #e8f5e9;
+    -fx-border-color: #08783e;
+    -fx-border-width: 2px;
+    -fx-border-insets: 0;
+    -fx-border-radius: 1px;
     -fx-text-fill: #123a63;
     -fx-font-family: "SF Pro Text", "Helvetica Neue", "System";
     -fx-font-size: 13px;
