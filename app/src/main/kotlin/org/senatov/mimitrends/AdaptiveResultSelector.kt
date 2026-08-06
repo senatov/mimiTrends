@@ -10,7 +10,7 @@ internal object AdaptiveResultSelector {
         requestedLimit: Int
     ): AdaptiveSelection {
         val limit = requestedLimit.coerceIn(MIN_RESULTS, MAX_RESULTS)
-        val target = requestedTarget.coerceIn(MIN_RESULTS, limit)
+        val target = minOf(maxOf(requestedTarget, MIN_TARGET_RESULTS), TARGET_RESULTS, limit)
         val selected = strict.filter { CandidateQualityGate.qualifies(it, adaptive = false) }
             .associateByTo(linkedMapOf(), ScanResult::symbol)
         val adaptiveCandidates = fallbackLevels.flatten()
@@ -27,10 +27,18 @@ internal object AdaptiveResultSelector {
                     selected.putIfAbsent(candidate.symbol, candidate) == null) adaptiveAdded++
             }
         }
+        val watchCandidates = (strict.asSequence() + fallbackLevels.asSequence().flatten())
+            .filter(CandidateQualityGate::qualifiesWatch)
+            .filter { CandidateQualityGate.attentionScore(it) >= MIN_WATCH_ATTENTION_SCORE }
+            .sortedWith(attentionComparator())
+        watchCandidates.forEach { candidate ->
+            if (selected.size < target) selected.putIfAbsent(candidate.symbol, candidate.asWatch())
+        }
         val results = selected.values.sortedWith(attentionComparator()).take(limit)
         val adaptiveCount = results.count {
             it.signalSource.contains("relaxed") || it.signalSource.startsWith("Trend") ||
-                it.signalSource.startsWith("Steady rise") || it.signalSource.startsWith("Recovery")
+                it.signalSource.startsWith("Steady rise") || it.signalSource.startsWith("Recovery") ||
+                it.signalSource.contains("watch")
         }
         return AdaptiveSelection(results, adaptiveCount)
     }
@@ -47,11 +55,17 @@ internal object AdaptiveResultSelector {
             .thenByDescending(CandidateQualityGate::attentionScore)
             .thenByDescending(ScanResult::anomalyScore)
 
+    private fun ScanResult.asWatch(): ScanResult =
+        if (signalSource.contains("watch")) this else copy(signalSource = "$signalSource · watch")
+
     private const val MIN_RESULTS = 5
+    private const val MIN_TARGET_RESULTS = 7
+    private const val TARGET_RESULTS = 8
     private const val MAX_RESULTS = 15
-    private const val MIN_ATTENTION_SCORE = 5.5
+    private const val MIN_ATTENTION_SCORE = 4.5
     private const val MARKET_PERCENTILE_FLOOR = 0.35
     private const val MAX_ADAPTIVE_RESULTS = 2
+    private const val MIN_WATCH_ATTENTION_SCORE = 3.0
 }
 
 internal data class AdaptiveSelection(val results: List<ScanResult>, val adaptiveCount: Int)

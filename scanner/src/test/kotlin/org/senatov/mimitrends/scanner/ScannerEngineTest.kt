@@ -30,7 +30,7 @@ class ScannerEngineTest {
         val bars = normalBars().toMutableList()
         bars += candle(nextMinute(bars), 100.0, 96.0, 2_000.0)
         val result = requireNotNull(engine().evaluate("TEST", bars, criteria()))
-        assertEquals("Impulse ↓", result.signalSource)
+        assertEquals("Impulse ↓ · downside watch", result.signalSource)
         assertTrue(result.windowChangePercent < 0.0)
     }
 

@@ -18,12 +18,12 @@ class CandidateQualityGateTest {
 
     @Test fun `requires a mature efficient trend`() {
         val young = TestScanResult.create(signalSource = "Steady rise ↑").copy(
-            signalWindowLabel = "20m steady", windowChangePercent = 1.0, candleBodyRatio = 0.5
+            signalWindowLabel = "10m steady", windowChangePercent = 0.5, candleBodyRatio = 0.5
         )
-        val mature = young.copy(signalWindowLabel = "30m steady")
+        val mature = young.copy(signalWindowLabel = "15m steady")
 
         assertFalse(CandidateQualityGate.qualifies(young, adaptive = true))
-        assertTrue(CandidateQualityGate.qualifies(mature.copy(anomalyScore = 5.5), adaptive = true))
+        assertTrue(CandidateQualityGate.qualifies(mature.copy(anomalyScore = 3.25), adaptive = true))
     }
 
     @Test fun `requires the eightieth percentile for a calibrated adaptive signal`() {
@@ -47,5 +47,13 @@ class CandidateQualityGateTest {
         val downside = TestScanResult.create(anomalyScore = 12.0, signalSource = "Impulse ↓", symbol = "DROP")
 
         assertTrue(CandidateQualityGate.priorityTier(long) < CandidateQualityGate.priorityTier(downside))
+    }
+
+    @Test fun `accepts a weaker current trend only for the watch tier`() {
+        val watch = TestScanResult.create(anomalyScore = 2.8, signalSource = "Steady rise ↑ · watch")
+            .copy(signalWindowLabel = "10m steady", windowChangePercent = 0.30, candleBodyRatio = 0.18)
+
+        assertFalse(CandidateQualityGate.qualifies(watch, adaptive = false))
+        assertTrue(CandidateQualityGate.qualifiesWatch(watch))
     }
 }

@@ -4,7 +4,9 @@ import org.junit.jupiter.api.Test
 import org.senatov.mimitrends.model.MinuteBar
 import org.senatov.mimitrends.model.ScanResult
 import java.time.ZoneOffset
-import kotlin.test.assertFalse
+import kotlin.test.assertEquals
+import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class LongCandidateSafetyFilterTest {
@@ -16,7 +18,7 @@ class LongCandidateSafetyFilterTest {
             bar(index, price, price + 0.02, 100.0)
         }
 
-        assertFalse(filter.blocks(bars, result("Impulse ↑", 0.8, 5.0)))
+        assertEquals("Impulse ↑", filter.classify(bars, result("Impulse ↑", 0.8, 5.0))?.signalSource)
     }
 
     @Test fun `blocks repeated heavy distribution during the session`() {
@@ -27,12 +29,14 @@ class LongCandidateSafetyFilterTest {
             bar(index, open, price, if (index == 35 || index == 48) 300.0 else 100.0)
         }
 
-        assertTrue(filter.blocks(bars, result("Impulse ↑", 0.8, 5.0)))
+        assertTrue(assertNotNull(filter.classify(bars, result("Impulse ↑", 0.8, 5.0)))
+            .signalSource.endsWith("· watch"))
     }
 
     @Test fun `keeps a truly sharp downside anomaly as a secondary watch`() {
-        assertFalse(filter.blocks(emptyList(), result("Impulse ↓", -1.1, 5.2)))
-        assertTrue(filter.blocks(emptyList(), result("Impulse ↓", -0.5, 5.2)))
+        assertTrue(assertNotNull(filter.classify(emptyList(), result("Impulse ↓", -1.1, 5.2)))
+            .signalSource.endsWith("· downside watch"))
+        assertNull(filter.classify(emptyList(), result("Impulse ↓", -0.5, 5.2)))
     }
 
     private fun bar(index: Int, open: Double, close: Double, volume: Double) = MinuteBar(

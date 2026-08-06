@@ -7,8 +7,14 @@ import java.time.Instant
 import java.time.ZoneId
 
 internal class LongCandidateSafetyFilter(private val zoneOverride: ZoneId? = null) {
-    fun blocks(bars: List<MinuteBar>, result: ScanResult): Boolean {
-        if ('↓' in result.signalSource) return !isSharpDownsideWatch(result)
+    fun classify(bars: List<MinuteBar>, result: ScanResult): ScanResult? {
+        if ('↓' in result.signalSource) {
+            return result.takeIf(::isSharpDownsideWatch)?.asWatch("downside watch")
+        }
+        return if (hasLongRisk(bars)) result.asWatch("watch") else result
+    }
+
+    private fun hasLongRisk(bars: List<MinuteBar>): Boolean {
         val latest = bars.lastOrNull() ?: return true
         val latestDate = local(latest).toLocalDate()
         val session = bars.filter { local(it).toLocalDate() == latestDate }
@@ -20,6 +26,9 @@ internal class LongCandidateSafetyFilter(private val zoneOverride: ZoneId? = nul
             belowVwap(session) || repeatedDrops(recent) >= MAX_SHARP_DROPS ||
             distributionBars(recent) >= MAX_DISTRIBUTION_BARS || lowerStructure(recent)
     }
+
+    private fun ScanResult.asWatch(label: String): ScanResult =
+        if (signalSource.contains("watch")) this else copy(signalSource = "$signalSource · $label")
 
     private fun isSharpDownsideWatch(result: ScanResult): Boolean =
         kotlin.math.abs(result.windowChangePercent) >= MIN_DOWNSIDE_WATCH_MOVE &&
