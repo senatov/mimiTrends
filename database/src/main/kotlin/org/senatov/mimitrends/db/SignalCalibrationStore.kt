@@ -11,8 +11,18 @@ import kotlin.math.sqrt
 internal class SignalCalibrationStore(private val connection: Connection) {
     fun enrich(result: ScanResult, horizonMinutes: Int = DEFAULT_HORIZON_MINUTES): ScanResult {
         val direction = if (result.signalSource.contains('↓')) -1 else 1
-        val samples = loadSamples(family(result.signalSource), direction, horizonMinutes)
-        if (!hasRepresentativeSample(samples)) return result.copy(calibrationSamples = samples.size)
+        val signalFamily = family(result.signalSource)
+        val normalized = result.copy(anomalyScore = normalizedScore(result, signalFamily, direction))
+        val cutoffEpoch = result.signalEpochMillis / 1_000L
+        val cohort = CalibrationCohort(
+            relaxed = result.signalSource.contains("relaxed"),
+            european = result.symbol.contains('.'),
+            realtime = isRealtime(result.dataStatus)
+        )
+        val exactSamples = loadSamples(signalFamily, direction, horizonMinutes, cutoffEpoch, cohort)
+        val samples = if (hasRepresentativeSample(exactSamples)) exactSamples else
+            loadSamples(signalFamily, direction, horizonMinutes, cutoffEpoch, null)
+        if (!hasRepresentativeSample(samples)) return normalized.copy(calibrationSamples = samples.size)
 
         val netReturns = samples.map { direction * it.returnPercent - ASSUMED_FRICTION_PERCENT }
         val wins = netReturns.count { it > 0.0 }
@@ -20,7 +30,7 @@ internal class SignalCalibrationStore(private val connection: Connection) {
         val (lowerBound, upperBound) = wilsonInterval(wins + PRIOR_WINS, samples.size + PRIOR_SAMPLES)
         val favorable = samples.mapNotNull { it.favorableExcursion(direction) }
         val adverse = samples.mapNotNull { it.adverseExcursion(direction) }
-        return result.copy(
+        return normalized.copy(
             continuationProbability = probability,
             calibrationSamples = samples.size,
             calibrationHorizonMinutes = horizonMinutes,
@@ -34,11 +44,22 @@ internal class SignalCalibrationStore(private val connection: Connection) {
         )
     }
 
-    private fun loadSamples(family: String, direction: Int, horizonMinutes: Int): List<OutcomeSample> =
+    private fun loadSamples(
+        family: String,
+        direction: Int,
+        horizonMinutes: Int,
+        cutoffEpoch: Long,
+        cohort: CalibrationCohort?
+    ): List<OutcomeSample> =
         connection.prepareStatement(CALIBRATION_SQL).use { statement ->
             statement.setString(1, family)
             statement.setInt(2, direction)
             statement.setInt(3, horizonMinutes)
+            statement.setLong(4, cutoffEpoch)
+            statement.setInt(5, if (cohort == null) 0 else 1)
+            statement.setInt(6, if (cohort?.relaxed == true) 1 else 0)
+            statement.setInt(7, if (cohort?.european == true) 1 else 0)
+            statement.setInt(8, if (cohort?.realtime == true) 1 else 0)
             statement.executeQuery().use { rows -> buildList {
                 while (rows.next()) add(OutcomeSample(
                     symbol = rows.getString("symbol"),
@@ -49,6 +70,21 @@ internal class SignalCalibrationStore(private val connection: Connection) {
                 ))
             } }
         }
+
+    private fun normalizedScore(result: ScanResult, family: String, direction: Int): Double {
+        val scores = connection.prepareStatement(SCORE_HISTORY_SQL).use { statement ->
+            statement.setString(1, family)
+            statement.setInt(2, direction)
+            statement.setLong(3, result.signalEpochMillis / 1_000L)
+            statement.executeQuery().use { rows -> buildList {
+                while (rows.next()) add(rows.getDouble("score"))
+            } }
+        }
+        if (scores.size < MIN_SCORE_SAMPLES) return result.anomalyScore
+        val below = scores.count { it < result.anomalyScore }
+        val equal = scores.count { it == result.anomalyScore }
+        return SCORE_SCALE * (below + 0.5 * equal) / scores.size
+    }
 
     private fun hasRepresentativeSample(samples: List<OutcomeSample>): Boolean =
         samples.size >= MIN_DISPLAY_SAMPLES &&
@@ -62,6 +98,9 @@ internal class SignalCalibrationStore(private val connection: Connection) {
         source.startsWith("Steady rise") || source.startsWith("Trend") -> "Steady rise"
         else -> "Impulse"
     }
+
+    private fun isRealtime(source: String): Boolean =
+        source.contains("LIVE", ignoreCase = true) || source.contains("RT", ignoreCase = true)
 
     private fun medianOrNaN(values: List<Double>): Double =
         if (values.isEmpty()) Double.NaN else percentile(values, 0.50)
@@ -96,15 +135,23 @@ internal class SignalCalibrationStore(private val connection: Connection) {
             (if (direction > 0) minimumReturnPercent else maximumReturnPercent?.let { -it })?.coerceAtMost(0.0)
     }
 
+    private data class CalibrationCohort(
+        val relaxed: Boolean,
+        val european: Boolean,
+        val realtime: Boolean
+    )
+
     private companion object {
         const val DEFAULT_HORIZON_MINUTES = 10
         const val MIN_DISPLAY_SAMPLES = 12
+        const val MIN_SCORE_SAMPLES = 30
         const val MIN_DISTINCT_SYMBOLS = 5
         const val MIN_DISTINCT_DAYS = 3
         const val ASSUMED_FRICTION_PERCENT = 0.20
         const val PRIOR_WINS = 1.0
         const val PRIOR_SAMPLES = 2.0
         const val Z95 = 1.959963984540054
+        const val SCORE_SCALE = 10.0
         const val CALIBRATION_SQL = """
             WITH classified AS (
                 SELECT c.run_id, c.symbol, c.signal_epoch,
@@ -115,6 +162,9 @@ internal class SignalCalibrationStore(private val connection: Connection) {
                         ELSE 'Impulse'
                     END AS family,
                     CASE WHEN c.signal LIKE '%↓%' THEN -1 ELSE 1 END AS direction,
+                    CASE WHEN c.signal LIKE '%relaxed%' THEN 1 ELSE 0 END AS relaxed,
+                    CASE WHEN instr(c.symbol, '.') > 0 THEN 1 ELSE 0 END AS european,
+                    CASE WHEN upper(c.source) LIKE '%LIVE%' OR upper(c.source) LIKE '%RT%' THEN 1 ELSE 0 END AS realtime,
                     LAG(c.signal_epoch) OVER (
                         PARTITION BY c.symbol,
                             CASE
@@ -136,7 +186,20 @@ internal class SignalCalibrationStore(private val connection: Connection) {
                 o.maximum_return_percent, o.minimum_return_percent
             FROM episodes e
             JOIN signal_outcomes o ON o.run_id=e.run_id AND o.symbol=e.symbol
-            WHERE e.family=? AND e.direction=? AND o.horizon_minutes=?
+            WHERE e.family=? AND e.direction=? AND o.horizon_minutes=? AND e.signal_epoch<?
+                AND (?=0 OR (e.relaxed=? AND e.european=? AND e.realtime=?))
+        """
+        const val SCORE_HISTORY_SQL = """
+            SELECT score FROM scan_candidates
+            WHERE accepted=1 AND score IS NOT NULL
+                AND CASE
+                    WHEN signal LIKE 'V-Reversal%' THEN 'V-Reversal'
+                    WHEN signal LIKE 'Momentum%' THEN 'Momentum'
+                    WHEN signal LIKE 'Steady rise%' OR signal LIKE 'Trend%' THEN 'Steady rise'
+                    ELSE 'Impulse'
+                END=?
+                AND CASE WHEN signal LIKE '%↓%' THEN -1 ELSE 1 END=?
+                AND signal_epoch<?
         """
     }
 }

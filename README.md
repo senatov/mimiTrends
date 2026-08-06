@@ -259,7 +259,19 @@ The scanner's `Outcome` column uses independent ten-minute episodes. Repeated pu
 symbol and signal family within fifteen minutes count as one episode. Directional returns are reduced by a
 conservative 0.20% friction allowance before profitability is assessed, so a negligible move is not counted
 as a useful continuation. The displayed probability uses mild beta smoothing, while its uncertainty range is
-a 95% Wilson interval. A minimum of five independent episodes is required before the metric is displayed.
+a 95% Wilson interval. A minimum of twelve independent episodes, five symbols, and three trading days is
+required before the metric is displayed.
+
+Calibration is walk-forward: a signal can use only outcomes recorded before its own signal time. When enough
+history exists, the first estimate is restricted to a comparable cohort by market region, strict versus
+relaxed detection, and realtime versus non-realtime feed quality. A broader signal-family estimate is used
+only while that cohort is too small. Detector scores are converted to a 0–10 historical percentile after at
+least thirty prior observations from the same signal family and direction, making unlike detectors safer to
+rank in one table.
+
+Adaptive selection is a quality ceiling, not a row quota. It may relax detector criteria gradually, but it
+will not fill the requested table size with candidates below the stricter of the absolute score floor and
+the current market-relative score floor.
 
 While an episode is active, observed candle highs and lows update its maximum favorable excursion (MFE) and
 maximum adverse excursion (MAE). These path metrics describe typical opportunity and drawdown after a signal;
@@ -282,6 +294,11 @@ This apparatus is intended for later empirical work: measuring continuation rate
 ### Yahoo Finance
 
 Yahoo Finance is the default history and fallback provider and does not require an API key. The application bootstraps recent minute history, then requests and upserts the missing tail. Yahoo's public chart endpoint is not a contracted API and may change without notice.
+
+Corrective provider quotes may refresh the displayed current price, but an isolated quote is never treated as
+a minute-bar pattern. A provider tail needs at least five continuous recent minutes before it can extend the
+series used by the detectors. Freshness validation likewise follows the analytical series, so a current
+snapshot cannot disguise stale candle history.
 
 European quotes may be delayed. MiMiTrends labels data as live, delayed, Yahoo, or cached rather than assuming that every last bar is current.
 

@@ -15,6 +15,8 @@ internal data class MarketDataSnapshot(
 ) {
     val latestEpochSeconds: Long?
         get() = latestObservation?.bar?.minuteEpochSeconds ?: analysisBars.lastOrNull()?.minuteEpochSeconds
+    val latestAnalysisEpochSeconds: Long?
+        get() = analysisBars.lastOrNull()?.minuteEpochSeconds
 }
 
 internal object ProviderBarTailMerger {
@@ -43,8 +45,13 @@ internal object ProviderBarTailMerger {
                 .sortedBy { it.bar.minuteEpochSeconds }
         }
         val statisticallyCurrentTails = providerTails.filterValues { tail ->
-            latestObservation.bar.minuteEpochSeconds - tail.last().bar.minuteEpochSeconds <= MAX_ANALYTIC_LAG_SECONDS
+            tail.size >= MIN_ANALYTIC_TAIL_BARS && isContinuous(tail) &&
+                latestObservation.bar.minuteEpochSeconds - tail.last().bar.minuteEpochSeconds <= MAX_ANALYTIC_LAG_SECONDS
         }
+        if (statisticallyCurrentTails.isEmpty()) return MarketDataSnapshot(
+            primary, primary, primarySource, MarketDataSource.valueOf(latestObservation.provider),
+            MarketObservationQuality.QUOTE_SNAPSHOT, latestObservation
+        )
         val selectedProvider = statisticallyCurrentTails.maxWithOrNull(
             compareBy<Map.Entry<String, List<ProviderMinuteBar>>> { it.value.size }
                 .thenBy { entry -> entry.value.last().bar.minuteEpochSeconds - entry.value.first().bar.minuteEpochSeconds }
@@ -70,7 +77,12 @@ internal object ProviderBarTailMerger {
     )
     private fun providerRank(provider: String): Int =
         PROVIDER_PRIORITY.indexOf(provider).let { index -> if (index < 0) Int.MIN_VALUE else -index }
+    private fun isContinuous(tail: List<ProviderMinuteBar>): Boolean = tail.zipWithNext().all { (first, second) ->
+        second.bar.minuteEpochSeconds - first.bar.minuteEpochSeconds in 60L..MAX_ANALYTIC_GAP_SECONDS
+    }
     private val EUROPEAN_SUFFIXES = setOf("DE", "PA", "AS", "MI", "HE")
     private const val MAX_ANALYTIC_LAG_SECONDS = 3 * 60L
+    private const val MAX_ANALYTIC_GAP_SECONDS = 2 * 60L
+    private const val MIN_ANALYTIC_TAIL_BARS = 5
     private const val MAX_PROVIDER_AGE_SECONDS = 15 * 60L
 }

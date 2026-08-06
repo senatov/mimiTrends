@@ -26,6 +26,16 @@ class AdaptiveResultSelectorTest {
         assertEquals("S30", selection.results.first().symbol)
     }
 
+    @Test fun `does not fill the target with weak adaptive candidates`() {
+        val strict = listOf(result("STRICT", 8.0))
+        val weak = (1..12).map { result("W$it", 1.0 + it / 100.0, "Impulse ↑ · relaxed") }
+
+        val selection = AdaptiveResultSelector.select(strict, listOf(weak), 10, 15)
+
+        assertEquals(listOf("STRICT"), selection.results.map { it.symbol })
+        assertEquals(0, selection.adaptiveCount)
+    }
+
     private fun result(symbol: String, score: Double, source: String = "Impulse ↑") =
         TestScanResult.create(score, source, symbol)
 }

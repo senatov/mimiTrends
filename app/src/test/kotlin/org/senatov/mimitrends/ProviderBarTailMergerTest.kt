@@ -8,18 +8,32 @@ import org.senatov.mimitrends.model.VolumeStatus
 import kotlin.test.assertEquals
 
 class ProviderBarTailMergerTest {
-    @Test fun `appends a fresh Tradegate tail after Yahoo history`() {
+    @Test fun `appends a sufficiently dense Tradegate tail after Yahoo history`() {
         val yahoo = listOf(bar(60, 100.0), bar(120, 101.0))
-        val providers = listOf(provider("TRADEGATE", 180, 102.0), provider("TRADEGATE", 240, 103.0))
+        val providers = (3L..7L).map { provider("TRADEGATE", it * 60L, 99.0 + it) }
 
-        val merged = ProviderBarTailMerger.merge(yahoo, providers, MarketDataSource.YAHOO, 300)
+        val merged = ProviderBarTailMerger.merge(yahoo, providers, MarketDataSource.YAHOO, 480)
 
         assertEquals(MarketDataSource.TRADEGATE, merged.latestSource)
-        assertEquals(listOf(60L, 120L, 180L, 240L), merged.analysisBars.map(MinuteBar::minuteEpochSeconds))
+        assertEquals(listOf(60L, 120L, 180L, 240L, 300L, 360L, 420L),
+            merged.analysisBars.map(MinuteBar::minuteEpochSeconds))
         assertEquals(VolumeStatus.MISSING, merged.analysisBars.last().volumeStatus)
     }
 
-    @Test fun `prefers Tradegate and never replaces overlapping Yahoo candles`() {
+    @Test fun `uses a lone provider quote for presentation but not analysis`() {
+        val yahoo = listOf(bar(60, 100.0), bar(120, 101.0))
+
+        val merged = ProviderBarTailMerger.merge(
+            yahoo, listOf(provider("TRADEGATE", 180, 102.0)), MarketDataSource.YAHOO, 240
+        )
+
+        assertEquals(yahoo, merged.analysisBars)
+        assertEquals(180L, merged.latestEpochSeconds)
+        assertEquals(120L, merged.latestAnalysisEpochSeconds)
+        assertEquals(102.0, merged.latestObservation?.bar?.close)
+    }
+
+    @Test fun `never replaces overlapping Yahoo candles with an isolated quote`() {
         val yahoo = listOf(bar(60, 100.0), bar(120, 101.0))
         val providers = listOf(
             provider("EURONEXT", 120, 900.0),
@@ -29,8 +43,9 @@ class ProviderBarTailMergerTest {
 
         val merged = ProviderBarTailMerger.merge(yahoo, providers, MarketDataSource.YAHOO, 240)
 
-        assertEquals(listOf(100.0, 101.0, 102.0), merged.analysisBars.map(MinuteBar::close))
+        assertEquals(listOf(100.0, 101.0), merged.analysisBars.map(MinuteBar::close))
         assertEquals(MarketDataSource.TRADEGATE, merged.latestSource)
+        assertEquals(102.0, merged.latestObservation?.bar?.close)
     }
 
     @Test fun `uses the freshest provider instead of a fixed provider priority`() {
@@ -43,37 +58,32 @@ class ProviderBarTailMergerTest {
         val merged = ProviderBarTailMerger.merge(yahoo, providers, MarketDataSource.YAHOO, 240)
 
         assertEquals(MarketDataSource.TRADEGATE, merged.latestSource)
-        assertEquals(102.0, merged.analysisBars.last().close)
+        assertEquals(yahoo, merged.analysisBars)
+        assertEquals(102.0, merged.latestObservation?.bar?.close)
     }
 
     @Test fun `keeps the denser analytic tail while exposing the freshest quote`() {
         val yahoo = listOf(bar(60, 100.0))
-        val providers = listOf(
-            provider("TRADEGATE", 120, 101.0),
-            provider("TRADEGATE", 180, 102.0),
-            provider("TRADEGATE", 240, 103.0),
-            provider("BNP_PARIBAS", 300, 104.0)
-        )
+        val providers = (2L..6L).map { provider("TRADEGATE", it * 60L, 99.0 + it) } +
+            provider("BNP_PARIBAS", 420, 106.0)
 
-        val merged = ProviderBarTailMerger.merge(yahoo, providers, MarketDataSource.YAHOO, 360)
+        val merged = ProviderBarTailMerger.merge(yahoo, providers, MarketDataSource.YAHOO, 480)
 
-        assertEquals(listOf(60L, 120L, 180L, 240L), merged.analysisBars.map(MinuteBar::minuteEpochSeconds))
+        assertEquals(listOf(60L, 120L, 180L, 240L, 300L, 360L),
+            merged.analysisBars.map(MinuteBar::minuteEpochSeconds))
         assertEquals(MarketDataSource.BNP_PARIBAS, merged.latestSource)
-        assertEquals(300L, merged.latestEpochSeconds)
-        assertEquals(104.0, merged.latestObservation?.bar?.close)
+        assertEquals(420L, merged.latestEpochSeconds)
+        assertEquals(106.0, merged.latestObservation?.bar?.close)
     }
 
     @Test fun `does not analyze a dense tail that ended long before the freshest quote`() {
         val yahoo = listOf(bar(60, 100.0))
-        val providers = listOf(
-            provider("TRADEGATE", 120, 101.0),
-            provider("TRADEGATE", 180, 102.0),
-            provider("BNP_PARIBAS", 600, 104.0)
-        )
+        val providers = (2L..6L).map { provider("TRADEGATE", it * 60L, 99.0 + it) } +
+            provider("BNP_PARIBAS", 600, 106.0)
 
         val merged = ProviderBarTailMerger.merge(yahoo, providers, MarketDataSource.YAHOO, 660)
 
-        assertEquals(listOf(60L, 600L), merged.analysisBars.map(MinuteBar::minuteEpochSeconds))
+        assertEquals(listOf(60L), merged.analysisBars.map(MinuteBar::minuteEpochSeconds))
         assertEquals(MarketDataSource.BNP_PARIBAS, merged.latestSource)
     }
 

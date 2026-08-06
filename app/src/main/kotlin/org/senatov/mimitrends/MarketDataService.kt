@@ -109,9 +109,9 @@ internal class MarketDataService(
         analytics.recordMarketEvaluation(metadata, corporateActions, symbol, merged.historySource.name,
             effectiveStatus, merged.historyBars, merged.latestEpochSeconds, merged.latestSource.name,
             merged.latestQuality)
-        if (!OpenMarketDataFreshness.isUsable(merged.latestEpochSeconds, now)) {
+        if (!OpenMarketDataFreshness.isUsable(merged.latestAnalysisEpochSeconds, now)) {
             log.debug(LogTag.API, "open-market data rejected as stale symbol={} latest={} now={}",
-                symbol, merged.latestEpochSeconds, now)
+                symbol, merged.latestAnalysisEpochSeconds, now)
             return ScanEvaluation(null, emptyList())
         }
         val primary = scannerEngine.evaluate(symbol, merged.analysisBars, criteria)?.forPresentation(merged, effectiveStatus)
