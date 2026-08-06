@@ -60,9 +60,7 @@ internal class BrokerTransactionStore(private val connection: Connection) {
         }
         val providerIsin = metadataIsin ?: providerIsin(normalizedSymbol)
         if (providerIsin != null && metadataIsin == null) persistMapping(normalizedSymbol, providerIsin)
-        val executions = connection.prepareStatement("""SELECT id, occurred_at, description, transaction_type,
-            isin, shares, price, amount, fee, tax, currency FROM broker_transactions
-            WHERE status='Executed' AND transaction_type IN ('Buy','Sell') ORDER BY occurred_at, id""").use { statement ->
+        val executions = connection.prepareStatement(LOAD_DEDUPLICATED_EXECUTIONS).use { statement ->
             statement.executeQuery().use { result -> buildList {
                 while (result.next()) {
                     val execution = BrokerExecution(result.getLong(1), result.getLong(2), result.getString(3),
@@ -121,5 +119,21 @@ internal class BrokerTransactionStore(private val connection: Connection) {
                   AND c.signal_epoch>=trade.occurred_at-3600
                 ORDER BY c.signal_epoch DESC LIMIT 1)
             WHERE trade.linked_run_id IS NULL AND trade.status='Executed'"""
+        const val LOAD_DEDUPLICATED_EXECUTIONS = """
+            WITH ranked AS (
+                SELECT id, occurred_at, description, transaction_type, isin, shares, price, amount,
+                    fee, tax, currency,
+                    ROW_NUMBER() OVER (
+                        PARTITION BY occurred_at, transaction_type, COALESCE(isin, ''), ROUND(shares, 8)
+                        ORDER BY imported_at DESC, id DESC
+                    ) AS temporal_rank
+                FROM broker_transactions
+                WHERE status='Executed' AND transaction_type IN ('Buy','Sell')
+            )
+            SELECT id, occurred_at, description, transaction_type, isin, shares, price, amount,
+                fee, tax, currency
+            FROM ranked WHERE temporal_rank=1
+            ORDER BY occurred_at, id
+        """
     }
 }

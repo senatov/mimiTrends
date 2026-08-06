@@ -1,7 +1,6 @@
 package org.senatov.mimitrends.db
 
 import org.senatov.mimitrends.model.BrokerTrade
-import java.util.ArrayDeque
 
 internal object BrokerTradeMatcher {
     fun matches(description: String, companyName: String): Boolean {
@@ -13,48 +12,47 @@ internal object BrokerTradeMatcher {
     }
 
     fun pair(symbol: String, executions: List<BrokerExecution>): List<BrokerTrade> {
-        val buys = ArrayDeque<OpenLot>()
         val result = mutableListOf<BrokerTrade>()
-        executions.sortedWith(compareBy<BrokerExecution> { it.epochSeconds }.thenBy { it.id }).forEach { execution ->
-            when (execution.type.lowercase()) {
-                "buy" -> buys += OpenLot(execution, execution.shares)
-                "sell" -> {
-                    var remaining = execution.shares
-                    while (remaining > EPSILON && buys.isNotEmpty()) {
-                        val lot = buys.first()
-                        val quantity = minOf(remaining, lot.remaining)
-                        result += completed(symbol, lot.execution, execution, quantity)
-                        lot.remaining -= quantity
-                        remaining -= quantity
-                        if (lot.remaining <= EPSILON) buys.removeFirst()
+        var openBuy: BrokerExecution? = null
+        executions.groupBy(BrokerExecution::epochSeconds).toSortedMap().forEach { (_, sameSecond) ->
+            val pending = sameSecond.sortedBy(BrokerExecution::id).toMutableList()
+            while (pending.isNotEmpty()) {
+                if (openBuy == null) {
+                    val buy = pending.firstOrNull { it.type.equals("Buy", ignoreCase = true) } ?: break
+                    pending.remove(buy)
+                    openBuy = buy
+                } else {
+                    val buy = requireNotNull(openBuy)
+                    val sell = pending.filter { it.type.equals("Sell", ignoreCase = true) }
+                        .minByOrNull { kotlin.math.abs(it.shares - buy.shares) } ?: break
+                    pending.remove(sell)
+                    if (sameQuantity(buy, sell)) {
+                        result += completed(symbol, buy, sell)
+                        openBuy = null
+                    } else {
+                        break
                     }
                 }
             }
         }
-        buys.forEach { lot ->
-            val buy = lot.execution
-            val allocation = lot.remaining / buy.shares
-            result += BrokerTrade(symbol, buy.isin, lot.remaining, buy.epochSeconds, buy.price,
-                null, null, null, null, (buy.fee + buy.tax) * allocation, buy.currency)
+        openBuy?.let { buy ->
+            result += BrokerTrade(symbol, buy.isin, buy.shares, buy.epochSeconds, buy.price,
+                null, null, null, null, buy.fee + buy.tax, buy.currency)
         }
-        return result.sortedBy(BrokerTrade::entryEpochSeconds)
+        return result
     }
 
-    private fun completed(
-        symbol: String,
-        buy: BrokerExecution,
-        sell: BrokerExecution,
-        quantity: Double
-    ): BrokerTrade {
-        val buyAllocation = quantity / buy.shares
-        val sellAllocation = quantity / sell.shares
-        val costs = -buy.amount * buyAllocation + (buy.fee + buy.tax) * buyAllocation
-        val proceeds = sell.amount * sellAllocation - (sell.fee + sell.tax) * sellAllocation
+    private fun completed(symbol: String, buy: BrokerExecution, sell: BrokerExecution): BrokerTrade {
+        val costs = -buy.amount + buy.fee + buy.tax
+        val proceeds = sell.amount - sell.fee - sell.tax
         val profit = proceeds - costs
-        return BrokerTrade(symbol, buy.isin ?: sell.isin, quantity, buy.epochSeconds, buy.price,
+        return BrokerTrade(symbol, buy.isin ?: sell.isin, buy.shares, buy.epochSeconds, buy.price,
             sell.epochSeconds, sell.price, profit, if (costs == 0.0) null else profit / costs * 100.0,
-            (buy.fee + buy.tax) * buyAllocation + (sell.fee + sell.tax) * sellAllocation, buy.currency)
+            buy.fee + buy.tax + sell.fee + sell.tax, buy.currency)
     }
+
+    private fun sameQuantity(buy: BrokerExecution, sell: BrokerExecution): Boolean =
+        kotlin.math.abs(buy.shares - sell.shares) <= EPSILON
 
     private fun normalize(value: String): String = value.lowercase()
         .replace(Regex("[^a-z0-9]+"), " ")
@@ -77,5 +75,3 @@ internal data class BrokerExecution(
     val tax: Double,
     val currency: String
 )
-
-private data class OpenLot(val execution: BrokerExecution, var remaining: Double)
