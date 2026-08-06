@@ -193,7 +193,15 @@ class TrendChartView : StackPane() {
         if (tradesButton.isSelected) tradeAnnotations.render(request.trades, visible, plotted,
             request.priceMultiplier, timeline::displayMillis)
         else tradeAnnotations.clear()
+        refreshAxisRanges()
         chart.fireChartChanged()
+    }
+
+    private fun refreshAxisRanges() {
+        listOf(dateAxis, priceAxis, volumeAxis).forEach { axis ->
+            axis.isAutoRange = false
+            axis.isAutoRange = true
+        }
     }
 
     private fun nearestSignalBar(bars: List<MinuteBar>, signal: ScanResult): MinuteBar? {
