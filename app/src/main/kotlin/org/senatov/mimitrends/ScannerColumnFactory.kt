@@ -48,7 +48,7 @@ internal class ScannerColumnFactory(
                         }
                         val visual = signalVisual(result)
                         text = item
-                        style = "-fx-text-fill: ${visual.color}; -fx-font-weight: ${visual.weight};"
+                        style = "-fx-text-fill: ${visual.color};"
                         tooltip = Tooltip(visual.description).apply { showDelay = Duration.millis(450.0) }
                     }
                 }
@@ -79,7 +79,7 @@ internal class ScannerColumnFactory(
                         style = ""
                         styleClass += RARE_IMPULSE_STYLE_CLASS
                     } else {
-                        style = "-fx-text-fill: ${presentation.color}; -fx-font-weight: ${presentation.weight};"
+                        style = "-fx-text-fill: ${presentation.color};"
                     }
                     tooltip = Tooltip(presentation.details).apply { showDelay = Duration.millis(350.0) }
                 }

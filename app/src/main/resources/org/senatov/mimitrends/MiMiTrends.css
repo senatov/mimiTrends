@@ -415,6 +415,9 @@
 .scanner-table .table-row-cell:hover { -fx-background-color: derive(-mimi-selection, 22%); }
 .scanner-table .table-cell {
     -fx-text-fill: -mimi-table-text;
+    -fx-font-family: "SF Pro Text", "Helvetica Neue", "System";
+    -fx-font-size: 13px;
+    -fx-font-weight: 400;
     -fx-border-color: transparent -mimi-table-grid rgba(156,169,181,0.28) transparent;
     -fx-border-width: 0 1px 1px 0;
     -fx-padding: 3px 7px;
@@ -425,8 +428,8 @@
 .scanner-table .table-row-cell:selected .table-cell.rare-impulse-cell {
     -fx-background-color: #e8f5e9;
     -fx-text-fill: #123a63;
-    -fx-font-family: "SF Pro Display", "Helvetica Neue", "System";
-    -fx-font-size: 14px;
+    -fx-font-family: "SF Pro Text", "Helvetica Neue", "System";
+    -fx-font-size: 13px;
     -fx-font-weight: 400;
 }
 .company-logo { -fx-background-radius: 4px; }
