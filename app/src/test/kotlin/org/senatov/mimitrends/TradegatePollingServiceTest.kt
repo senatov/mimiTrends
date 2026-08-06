@@ -2,10 +2,12 @@ package org.senatov.mimitrends
 
 import org.junit.jupiter.api.Test
 import org.senatov.mimitrends.db.MarketRepository
+import org.senatov.mimitrends.model.ProviderInstrument
 import java.nio.file.Files
 import java.time.Instant
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
+import kotlin.test.assertEquals
 
 class TradegatePollingServiceTest {
     @Test
@@ -17,6 +19,23 @@ class TradegatePollingServiceTest {
         assertTrue(service.isTradingSession(Instant.parse("2026-08-04T06:00:00Z")))
         assertFalse(service.isTradingSession(Instant.parse("2026-08-04T20:00:00Z")))
         assertFalse(service.isTradingSession(Instant.parse("2026-08-08T10:00:00Z")))
+
+        service.close()
+        repository.close()
+    }
+
+    @Test
+    fun `reuses a verified provider isin before searching by company name`() {
+        val repository = MarketRepository(Files.createTempDirectory("mimitrends-tradegate-isin").resolve("test.db"))
+        repository.upsertProviderInstrument(ProviderInstrument(
+            "EURONEXT", "NOKIA.HE", "FI0009000681", "ETLX", "EUR", "NOKIA CORPORATION"
+        ))
+        repository.upsertProviderInstrument(ProviderInstrument(
+            "LANG_SCHWARZ", "NOKIA.HE", "41540", "LSSI", "EUR", "NOKIA CORP."
+        ))
+        val service = TradegatePollingService(repository)
+
+        assertEquals("FI0009000681", service.knownIsin("NOKIA.HE")?.identifier)
 
         service.close()
         repository.close()

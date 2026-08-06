@@ -119,6 +119,10 @@ internal class TradegatePollingService(
         repository.loadProviderInstrument(PROVIDER, symbol)?.takeIf(::isLikelyEquity)?.let { return it }
         val now = System.currentTimeMillis()
         if ((unresolvedUntil[symbol] ?: 0L) > now) return null
+        knownIsin(symbol)?.let { source ->
+            return source.copy(provider = PROVIDER, mic = MIC, currency = CURRENCY, updatedAtMillis = now)
+                .also(repository::upsertProviderInstrument)
+        }
         val query = repository.loadCompanyProfile(symbol)?.name
             ?.let { CompanySearchTerm.from(it, symbol) }
             ?: return null
@@ -129,6 +133,10 @@ internal class TradegatePollingService(
         }
         return ProviderInstrument(PROVIDER, symbol, resolved.isin, MIC, CURRENCY, resolved.name, now)
             .also(repository::upsertProviderInstrument)
+    }
+
+    internal fun knownIsin(symbol: String): ProviderInstrument? = ISIN_PROVIDERS.firstNotNullOfOrNull { provider ->
+        repository.loadProviderInstrument(provider, symbol)?.takeIf { ISIN.matches(it.identifier) }
     }
 
     private fun isLikelyEquity(instrument: ProviderInstrument): Boolean =
@@ -158,5 +166,7 @@ internal class TradegatePollingService(
         val CLOSE: LocalTime = LocalTime.of(22, 0)
         val DEBT_MARKERS = listOf("note", "notes", "nts.", "bond", "anleihe", "flr-", "medium term")
         val PERMANENT_INSTRUMENT_STATUSES = setOf(400, 404)
+        val ISIN = Regex("[A-Z]{2}[A-Z0-9]{9}[0-9]")
+        val ISIN_PROVIDERS = listOf("EURONEXT", "BOERSE_DE", "BNP_PARIBAS", "TRADERFOX")
     }
 }
