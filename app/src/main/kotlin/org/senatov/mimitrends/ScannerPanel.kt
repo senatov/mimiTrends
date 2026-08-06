@@ -1,10 +1,6 @@
 package org.senatov.mimitrends
 
 import javafx.application.Platform
-import javafx.animation.Animation
-import javafx.animation.KeyFrame
-import javafx.animation.ScaleTransition
-import javafx.animation.Timeline
 import javafx.collections.FXCollections
 import javafx.collections.transformation.SortedList
 import javafx.geometry.Pos
@@ -105,12 +101,10 @@ class ScannerPanel(
     }
     private val empty = Label("Waiting for the first local/Yahoo scan…")
     private val cycleStatus = Label()
-    private val scanIndicator = Label()
+    private val scanIndicator = ScanClockIndicator()
     private val stagedRows = linkedMapOf<String, ScanResult>()
     private val observationOverlay = MarketObservationOverlay()
     private var scanning = false
-    private var countdown: Timeline? = null
-    private var hourglass: Timeline? = null
     private val time = DateTimeFormatter.ofPattern("HH:mm:ss").withZone(ZoneId.systemDefault())
     private var currency = DisplayCurrency.EUR
     private var convertPrice: (String, Double) -> Double = { _, value -> value }
@@ -120,7 +114,7 @@ class ScannerPanel(
     init {
         log.debug(LogTag.UI, "init()")
         val header = javafx.scene.layout.HBox(8.0, Label("Anomaly scanner").apply { styleClass += "scanner-title" },
-            scanIndicator.apply { styleClass += "scanner-timer" }, cycleStatus.apply { styleClass += "scanner-cycle" },
+            scanIndicator, cycleStatus.apply { styleClass += "scanner-cycle" },
             javafx.scene.layout.Region().also { javafx.scene.layout.HBox.setHgrow(it, Priority.ALWAYS) })
         sortedRows.comparatorProperty().bind(table.comparatorProperty())
         val freshness = columnFactory.freshness()
@@ -232,33 +226,25 @@ class ScannerPanel(
     fun clear() {
         log.debug(LogTag.UI, "clear()")
         rows.clear(); stagedRows.clear(); scanning = false
-        countdown?.stop(); hourglass?.stop(); scanIndicator.text = ""
+        scanIndicator.clearIndicator()
         marketClosedOverlay.isVisible = false; marketClosedOverlay.isManaged = false
     }
 
     fun beginScan(number: Int, total: Int, symbols: List<String>) {
         if (closing) return
         log.debug(LogTag.UI, "beginScan(number={}, total={}, symbols={})", number, total, symbols.size)
-        countdown?.stop(); stagedRows.clear(); scanning = true
+        stagedRows.clear(); scanning = true
         marketClosedOverlay.isVisible = false; marketClosedOverlay.isManaged = false
         cycleStatus.styleClass.remove("market-closed")
         cycleStatus.text = "Batch $number/$total · ${symbols.size} symbols"
         cycleStatus.tooltip = Tooltip(symbols.joinToString(", "))
-        scanIndicator.text = "⏳ Scanning…"
-        hourglass?.stop()
-        var flipped = false
-        hourglass = Timeline(KeyFrame(Duration.millis(450.0), {
-            flipped = !flipped
-            scanIndicator.text = if (flipped) "⌛ Scanning…" else "⏳ Scanning…"
-        })).apply {
-            cycleCount = Animation.INDEFINITE; play()
-        }
+        scanIndicator.showScanning()
     }
 
     fun completeScan(resultLimit: Int = 50) {
         log.debug(LogTag.UI, "completeScan(results={})", stagedRows.size)
         replaceRows(stagedRows.values.sortedByDescending(ScanResult::anomalyScore).take(resultLimit))
-        stagedRows.clear(); scanning = false; hourglass?.stop()
+        stagedRows.clear(); scanning = false
         autoFitter.request()
     }
 
@@ -281,22 +267,12 @@ class ScannerPanel(
 
     fun abortScan() {
         log.debug(LogTag.UI, "abortScan()")
-        stagedRows.clear(); scanning = false; hourglass?.stop()
+        stagedRows.clear(); scanning = false
     }
 
     fun showCountdown(seconds: Long) {
         log.debug(LogTag.UI, "showCountdown(seconds={})", seconds)
-        countdown?.stop(); hourglass?.stop()
-        var remaining = seconds.coerceAtLeast(0)
-        fun render() { scanIndicator.text = "Next scan  %02d:%02d".format(remaining / 60, remaining % 60) }
-        render()
-        countdown = Timeline(KeyFrame(Duration.seconds(1.0), {
-            remaining = (remaining - 1).coerceAtLeast(0); render()
-            ScaleTransition(Duration.millis(180.0), scanIndicator).apply {
-                fromX = 1.0; fromY = 1.0; toX = 1.05; toY = 1.05
-                cycleCount = 2; isAutoReverse = true; play()
-            }
-        })).apply { cycleCount = seconds.coerceAtMost(Int.MAX_VALUE.toLong()).toInt(); play() }
+        scanIndicator.showCountdown(seconds)
     }
 
     fun showMarketClosed(
@@ -332,9 +308,7 @@ class ScannerPanel(
 
     fun showClosing() {
         closing = true
-        countdown?.stop()
-        hourglass?.stop()
-        scanIndicator.text = ""
+        scanIndicator.clearIndicator()
         cycleStatus.text = "Closing · waiting for current operations"
         marketClosedTitle.text = "APPLICATION IS CLOSING"
         marketClosedSubtitle.text = "Finishing current transactions and saving market data…"

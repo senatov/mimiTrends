@@ -241,7 +241,9 @@ class MainController(
                 log.warn(LogTag.API, "scan completed with failures count={} sample={}", errors.size, errors.take(3).joinToString("; "))
             }
             val active = batch.active
-            val displayed = recentEvents.merge(active, System.currentTimeMillis(), criteria.resultLimit)
+            val retained = recentEvents.merge(active, System.currentTimeMillis(), criteria.resultLimit)
+            val showingSaved = retained.isEmpty()
+            val displayed = if (showingSaved) analytics.loadLatestPublishedResults(criteria.resultLimit) else retained
             tableQuoteProviders.replaceSymbols(displayed.map(ScanResult::symbol))
             priorityScanner.replaceCandidates(active)
             Platform.runLater {
@@ -255,9 +257,11 @@ class MainController(
                     scannerPanel.showCountdown(criteria.scanIntervalSeconds)
                     val marketState = if (symbols.isEmpty()) "all selected markets closed"
                         else "${batch.strictCount.coerceAtMost(active.size)} strict impulses + ${batch.adaptiveCount} adaptive"
-                    val coolingCount = displayed.size - active.size
+                    val coolingCount = if (showingSaved) 0 else displayed.size - active.size
                     log.info(LogTag.API, "scan completed: {}", marketState)
-                    setStatus(if (active.isEmpty()) "No current signals · $coolingCount recent events cooling"
+                    setStatus(if (showingSaved && displayed.isNotEmpty())
+                        "No current signals · showing ${displayed.size} last published results"
+                    else if (active.isEmpty()) "No current signals · $coolingCount recent events cooling"
                     else "Hybrid scan complete · $marketState · $coolingCount cooling · next in ${criteria.scanIntervalSeconds}s")
                 }
             }

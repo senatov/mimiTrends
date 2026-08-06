@@ -368,13 +368,11 @@
     -fx-translate-y: 1px;
     -fx-effect: innershadow(gaussian, rgba(70,80,88,0.22), 4, 0.10, 0, 1);
 }
-.scanner-timer {
-    -fx-text-fill: #17365f;
-    -fx-font-family: "Menlo", "Monospaced";
-    -fx-font-size: 12px;
-    -fx-font-weight: 500;
-    -fx-min-width: 128px;
-}
+.scan-clock { -fx-min-width: 24px; -fx-pref-width: 24px; -fx-max-width: 24px; }
+.scan-clock-face { -fx-fill: #f7fbff; -fx-stroke: #17365f; -fx-stroke-width: 1.5px; }
+.scan-clock-minute-hand { -fx-stroke: #17365f; -fx-stroke-width: 1.8px; -fx-stroke-line-cap: round; }
+.scan-clock-second-hand { -fx-stroke: #08783e; -fx-stroke-width: 1.4px; -fx-stroke-line-cap: round; }
+.scan-clock-center { -fx-fill: #08783e; }
 .scanner-table {
     -mimi-table-text: #1f2933;
     -mimi-row-even: #fafafa;
