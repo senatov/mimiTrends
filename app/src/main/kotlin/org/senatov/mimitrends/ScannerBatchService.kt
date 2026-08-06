@@ -41,7 +41,7 @@ internal class ScannerBatchService(
                     }
                     val accepted = evaluation.primary ?: evaluation.fallback.firstNotNullOfOrNull { it }
                     analytics.recordScanCandidate(runId, symbol, accepted,
-                        if (accepted == null) "NO_CURRENT_SIGNAL" else null,
+                        if (accepted == null) evaluation.rejectionReason ?: "NO_CURRENT_SIGNAL" else null,
                         accepted?.dataStatus ?: fallbackStatus(symbol))
                 }
                 .onFailure { error ->

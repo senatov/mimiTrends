@@ -269,17 +269,18 @@ only while that cohort is too small. Detector scores are converted to a 0–10 h
 least thirty prior observations from the same signal family and direction, making unlike detectors safer to
 rank in one table.
 
-Adaptive selection is a quality ceiling, not a row quota. It may relax detector criteria gradually, but it
-will not fill the requested table size with candidates below the stricter of the absolute score floor and
-the current market-relative score floor.
+Adaptive selection uses three explicit quality tiers. Strict candidates remain first, at most two strong
+adaptive candidates may follow, and the scanner may fill the current list to seven or eight rows with
+structurally valid lower-confidence candidates marked `watch`. The watch tier still rejects stale, cooling,
+and statistically insignificant observations; it is not a blind row quota.
 
 Before publication, every result passes an additional attention-quality gate. Current impulses require a
 meaningful market-specific move, strong price or range deviation, a directional candle body, and either
 volume confirmation or exceptional price evidence when volume is unavailable. Signals older than two
 minutes and cooling context never qualify as current candidates. Trend candidates need at least a 15-minute
 formation window, 0.35% progress, and sufficient path efficiency. Calibrated adaptive results must rank at or above the
-80th historical percentile, and at most two adaptive rows may be published in one scan. Consequently, the
-table may legitimately contain fewer rows than the configured target.
+80th historical percentile, and at most two preferred adaptive rows may be published in one scan. Watch rows
+use a lower score floor and are visibly labelled rather than presented as equivalent recommendations.
 
 The primary tier is intended for roughly thirty-minute long-candidate review. It rejects upward bounces that
 remain inside an intraday distribution regime: negative session structure, material distance below VWAP,
@@ -288,6 +289,12 @@ from the session high. A second, lower-priority downside-watch tier retains only
 falls (at least 0.75% with a price/range Z-score of 4.5 or more). These downside observations are useful for
 watching a possible reversal but are always ranked after qualifying long candidates. During open markets,
 cooling and previously saved rows are no longer used to fill an otherwise empty candidate table.
+
+An `Early recovery ↑ · watch` detector covers a different setup: a material intraday decline followed by
+a base, higher lows, positive recent slope, recovery of at least one quarter of the decline, and a controlled
+pullback from the recovery high. It is deliberately a watch signal because the original decline can resume.
+Rejected scans now retain a diagnostic such as `RECOVERY_TOO_SMALL`, `NO_HIGHER_LOW`, `WEAK_LAST_10M`,
+`RECOVERY_RETRACE`, or `STALE_DATA` instead of collapsing every failure into `NO_CURRENT_SIGNAL`.
 
 While an episode is active, observed candle highs and lows update its maximum favorable excursion (MFE) and
 maximum adverse excursion (MAE). These path metrics describe typical opportunity and drawdown after a signal;

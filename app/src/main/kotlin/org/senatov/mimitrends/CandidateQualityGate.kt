@@ -18,7 +18,8 @@ internal object CandidateQualityGate {
     private fun structuralQuality(result: ScanResult, watch: Boolean): Boolean {
         return when {
             result.signalSource.startsWith("Steady rise") || result.signalSource.startsWith("Recovery") ||
-                result.signalSource.startsWith("Trend") -> trendQuality(result, watch)
+                result.signalSource.startsWith("Trend") || result.signalSource.startsWith("Early recovery") ->
+                trendQuality(result, watch)
             result.signalSource.startsWith("V-Reversal") -> reversalQuality(result, watch)
             else -> impulseQuality(result, watch)
         }
@@ -98,7 +99,7 @@ internal object CandidateQualityGate {
 
     private fun isTrend(result: ScanResult): Boolean =
         result.signalSource.startsWith("Steady rise") || result.signalSource.startsWith("Recovery") ||
-            result.signalSource.startsWith("Trend")
+            result.signalSource.startsWith("Trend") || result.signalSource.startsWith("Early recovery")
 
     private fun minimumMove(result: ScanResult): Double =
         if (result.symbol.contains('.')) MIN_EUROPE_MOVE_PERCENT else MIN_US_MOVE_PERCENT

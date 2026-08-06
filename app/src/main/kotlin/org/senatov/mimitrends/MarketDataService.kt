@@ -112,14 +112,17 @@ internal class MarketDataService(
         if (!OpenMarketDataFreshness.isUsable(merged.latestAnalysisEpochSeconds, now)) {
             log.debug(LogTag.API, "open-market data rejected as stale symbol={} latest={} now={}",
                 symbol, merged.latestAnalysisEpochSeconds, now)
-            return ScanEvaluation(null, emptyList())
+            return ScanEvaluation(null, emptyList(), "STALE_DATA")
         }
         val primary = scannerEngine.evaluate(symbol, merged.analysisBars, criteria)?.forPresentation(merged, effectiveStatus)
         val fallback = if (primary != null) emptyList() else RELAXATION_LEVELS.map { factor ->
             scannerEngine.evaluateFallback(symbol, merged.analysisBars, criteria, factor)
                 ?.forPresentation(merged, effectiveStatus)
         }
-        return ScanEvaluation(primary, fallback)
+        val rejectionReason = if (primary == null && fallback.none { it != null }) {
+            scannerEngine.rejectionReason(merged.analysisBars)
+        } else null
+        return ScanEvaluation(primary, fallback, rejectionReason)
     }
 
     fun loadPriorityResult(symbol: String, criteria: ScannerCriteria): ScanResult? {
@@ -168,4 +171,8 @@ internal class MarketDataService(
     }
 }
 
-internal data class ScanEvaluation(val primary: ScanResult?, val fallback: List<ScanResult?>)
+internal data class ScanEvaluation(
+    val primary: ScanResult?,
+    val fallback: List<ScanResult?>,
+    val rejectionReason: String? = null
+)

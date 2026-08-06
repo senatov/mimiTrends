@@ -21,10 +21,13 @@ class ScannerEngine(private val zoneOverride: ZoneId? = null) {
     private val earlyMomentumDetector = EarlyMomentumDetector(zoneOverride)
     private val vReversalDetector = VReversalDetector(zoneOverride)
     private val steadyRiseDetector = SteadyRiseDetector(zoneOverride)
+    private val earlyRecoveryDetector = EarlyRecoveryDetector(zoneOverride)
     private val longCandidateSafety = LongCandidateSafetyFilter(zoneOverride)
 
     internal fun freshnessWeight(ageMinutes: Double): Double =
         exp(-ln(2.0) * ageMinutes.coerceAtLeast(0.0) / FRESHNESS_HALF_LIFE_MINUTES)
+
+    fun rejectionReason(bars: List<MinuteBar>): String = earlyRecoveryDetector.rejectionReason(bars)
 
     fun evaluate(symbol: String, bars: List<MinuteBar>, criteria: ScannerCriteria): ScanResult? {
         log.debug(LogTag.DB, "evaluate(symbol={}, bars={}, maxAge={}m)", symbol, bars.size, criteria.maxSignalAgeMinutes)
@@ -48,7 +51,10 @@ class ScannerEngine(private val zoneOverride: ZoneId? = null) {
         val reversal = vReversalDetector.detect(sorted, criteria)?.takeUnless {
             RangeRegimeFilter.blocks(sorted, it.latestBar, it.direction)
         }
-        if (signal == null && momentum == null && reversal == null) return null
+        val earlyRecovery = if (signal == null && momentum == null && reversal == null) {
+            earlyRecoveryDetector.detect(symbol, sorted, criteria)
+        } else null
+        if (signal == null && momentum == null && reversal == null && earlyRecovery == null) return null
         val sessionBars = sameSession(sorted, latest)
         val turnover = sessionBars.sumOf { it.close * it.volume }
         if (latest.close < criteria.minPrice || turnover < criteria.minSessionTurnover) return null
@@ -61,7 +67,8 @@ class ScannerEngine(private val zoneOverride: ZoneId? = null) {
             return momentumResult(symbol, latest, sessionBars, turnover, momentum)
                 .let { longCandidateSafety.classify(sorted, it) }
         }
-        val selected = requireNotNull(signal)
+        if (signal == null) return requireNotNull(earlyRecovery)
+        val selected = signal
         return ScanResult(
             symbol = symbol,
             price = latest.close,

@@ -61,4 +61,25 @@ class ScannerBatchServiceTest {
             }
         }
     }
+
+    @Test fun `persists the detector rejection reason`() {
+        val path = Files.createTempDirectory("mimitrends-rejected-batch").resolve("test.db")
+        val repository = MarketRepository(path)
+        val analytics = AnalyticsRepository(path)
+        val service = ScannerBatchService(
+            { _, _ -> ScanEvaluation(null, emptyList(), "NO_HIGHER_LOW") },
+            analytics, repository, { "TEST" }
+        )
+
+        service.execute(listOf("TEST"), ScannerCriteria(), { true }, { _, _ -> })
+
+        analytics.close()
+        repository.close()
+        DriverManager.getConnection("jdbc:sqlite:$path").use { connection ->
+            connection.createStatement().executeQuery("SELECT rejection_reason FROM scan_candidates").use { row ->
+                row.next()
+                assertEquals("NO_HIGHER_LOW", row.getString(1))
+            }
+        }
+    }
 }

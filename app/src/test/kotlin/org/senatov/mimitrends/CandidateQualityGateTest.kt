@@ -56,4 +56,12 @@ class CandidateQualityGateTest {
         assertFalse(CandidateQualityGate.qualifies(watch, adaptive = false))
         assertTrue(CandidateQualityGate.qualifiesWatch(watch))
     }
+
+    @Test fun `accepts an early recovery only for the watch tier`() {
+        val recovery = TestScanResult.create(anomalyScore = 3.0, signalSource = "Early recovery ↑ · watch")
+            .copy(signalWindowLabel = "12m recovery", windowChangePercent = 0.45, candleBodyRatio = 0.30)
+
+        assertFalse(CandidateQualityGate.qualifies(recovery, adaptive = false))
+        assertTrue(CandidateQualityGate.qualifiesWatch(recovery))
+    }
 }
