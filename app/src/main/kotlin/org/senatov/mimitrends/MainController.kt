@@ -228,12 +228,12 @@ class MainController(
                 if (generation != scanGeneration.get()) return@forEachIndexed
                 runCatching { marketData.loadAndEvaluate(symbol, criteria) }
                     .onSuccess { evaluation ->
-                        val status = feedStatus.status(symbol)
-                        val primaryResult = evaluation.primary?.copy(dataStatus = status)
-                        val fallbackResults = evaluation.fallback.map { it?.copy(dataStatus = status) }
+                        val primaryResult = evaluation.primary
+                        val fallbackResults = evaluation.fallback
                         primaryResult?.let(results::add)
                         fallbackResults.forEachIndexed { level, result -> result?.let(fallbackLevels[level]::add) }
                         val bestFallback = fallbackResults.firstNotNullOfOrNull { it }
+                        val status = (primaryResult ?: bestFallback)?.dataStatus ?: feedStatus.status(symbol)
                         analytics.recordScanCandidate(runId, symbol, primaryResult ?: bestFallback,
                             if (primaryResult == null && bestFallback == null) "NO_CURRENT_SIGNAL" else null, status)
                     }

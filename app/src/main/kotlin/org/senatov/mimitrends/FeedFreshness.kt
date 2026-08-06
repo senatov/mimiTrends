@@ -22,7 +22,7 @@ internal object FeedFreshness {
             isStale(updatedAtMillis, status, nowMillis) ->
                 "Stale market data · $age minutes old · expected delay at most $expected minutes"
             expected > 0 -> "Delayed market data · $age minutes old · expected delay $expected minutes"
-            else -> "Current market data · $age minutes old"
+            else -> "Current $status market data · $age minutes old"
         }
     }
 

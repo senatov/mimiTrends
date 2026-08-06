@@ -8,6 +8,7 @@ import org.senatov.mimitrends.log.LogTag
 import org.senatov.mimitrends.marketdata.YahooFinanceClient
 import org.senatov.mimitrends.model.CompanyProfile
 import org.senatov.mimitrends.model.MarketTimeZone
+import org.senatov.mimitrends.model.MinuteBar
 import org.senatov.mimitrends.model.ScanResult
 import org.senatov.mimitrends.model.ScannerCriteria
 import org.senatov.mimitrends.scanner.ScannerEngine
@@ -94,23 +95,19 @@ internal class MarketDataService(
             ) }
             repository.loadMinuteBars(symbol, now - 30 * 86_400)
         }
-        val completed = bars.filter { it.minuteEpochSeconds <= now / 60L * 60L - 60L }
+        val completedYahoo = bars.filter { it.minuteEpochSeconds <= now / 60L * 60L - 60L }
         if (source == "SQLITE") repository.loadCompanyProfile(symbol)?.let { profile ->
             metadata = InstrumentMetadata(symbol, profile.name, profile.exchange,
                 currency(symbol), MarketTimeZone.forSymbol(symbol).id)
         }
-        val status = dataStatus(symbol)
-        if (status == "LIVE") source = "FINNHUB"
-        analytics.recordMarketEvaluation(metadata, corporateActions, symbol, source, status, completed)
-        val latestBarMillis = completed.lastOrNull()?.minuteEpochSeconds?.times(1_000L)
-        if (latestBarMillis == null || FeedFreshness.isStale(latestBarMillis, status, now * 1_000L)) {
-            val age = latestBarMillis?.let { FeedFreshness.ageMinutes(it, now * 1_000L) }
-            log.warn(LogTag.API, "market data rejected as stale symbol={} ageMinutes={} status={}", symbol, age, status)
-            return ScanEvaluation(null, emptyList())
-        }
-        val primary = scannerEngine.evaluate(symbol, completed, criteria)
+        val declaredStatus = dataStatus(symbol)
+        if (declaredStatus == "LIVE") source = "FINNHUB"
+        val merged = mergeProviderTail(symbol, completedYahoo, source, now)
+        val effectiveStatus = if (merged.source in PROVIDER_SOURCES) merged.source else declaredStatus
+        analytics.recordMarketEvaluation(metadata, corporateActions, symbol, merged.source, effectiveStatus, merged.bars)
+        val primary = scannerEngine.evaluate(symbol, merged.bars, criteria)?.copy(dataStatus = effectiveStatus)
         val fallback = if (primary != null) emptyList() else RELAXATION_LEVELS.map { factor ->
-            scannerEngine.evaluateFallback(symbol, completed, criteria, factor)
+            scannerEngine.evaluateFallback(symbol, merged.bars, criteria, factor)?.copy(dataStatus = effectiveStatus)
         }
         return ScanEvaluation(primary, fallback)
     }
@@ -121,14 +118,28 @@ internal class MarketDataService(
             scanIntervalSeconds = PriorityScanCoordinator.PRIORITY_SCAN_INTERVAL_SECONDS
         )
         val evaluation = loadAndEvaluate(symbol, priorityCriteria)
-        return (evaluation.primary ?: evaluation.fallback.firstNotNullOfOrNull { it })
-            ?.copy(dataStatus = dataStatus(symbol))
+        return evaluation.primary ?: evaluation.fallback.firstNotNullOfOrNull { it }
+    }
+
+    private fun mergeProviderTail(
+        symbol: String,
+        primary: List<MinuteBar>,
+        primarySource: String,
+        nowEpochSeconds: Long
+    ): MergedMarketBars {
+        if (!ProviderBarTailMerger.isEuropeanSymbol(symbol)) return MergedMarketBars(primary, primarySource)
+        val from = maxOf(primary.lastOrNull()?.minuteEpochSeconds?.plus(60L) ?: 0L, nowEpochSeconds - 4 * 3_600L)
+        val providerBars = PROVIDER_SOURCES.flatMap { provider ->
+            repository.loadProviderMinuteBars(provider, symbol, from)
+        }
+        return ProviderBarTailMerger.merge(primary, providerBars, primarySource, nowEpochSeconds)
     }
 
     private fun currency(symbol: String) = if (symbol.contains('.')) "EUR" else "USD"
 
     private companion object {
         val RELAXATION_LEVELS = listOf(0.85, 0.70, 0.55)
+        val PROVIDER_SOURCES = listOf("TRADEGATE", "EURONEXT")
     }
 }
 

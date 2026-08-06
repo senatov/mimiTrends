@@ -42,7 +42,7 @@ internal class TradegatePollingService(
         task = null
         generation++
         backoff.success()
-        symbols = criteria.symbols.map(String::uppercase).distinct()
+        symbols = criteria.symbols.map(String::uppercase).filter(ProviderBarTailMerger::isEuropeanSymbol).distinct()
         index = 0
         if (!criteria.tradegateEnabled || symbols.isEmpty()) {
             log.info(LogTag.API, "Tradegate provider disabled")
