@@ -37,7 +37,7 @@ on the corresponding price chart without sending portfolio or transaction data t
 ## Quick start
 
 ```bash
-git clone <repository-url>
+git clone https://github.com/senatov/mimiTrends.git
 cd mimiTrends
 ./gradlew run
 ```
@@ -83,7 +83,8 @@ The primary question is not “What did this stock do over the last year?” but
 - displays quote age in the leading `Delay` column and sorts it numerically, distinguishing current
   observations from stale ones without hiding delayed-but-useful European candidates;
 - provides a signal-focused chart with a full-history fallback;
-- imports Scalable Capital transaction CSV files and overlays matching trades on charts;
+- imports Scalable Capital transaction CSV files and outlines each matching trade interval on the
+  chart with a translucent orange highlighter-style frame;
 - remembers window geometry, divider position, table appearance, columns, and the selected instrument.
 
 ## Reading the scanner table

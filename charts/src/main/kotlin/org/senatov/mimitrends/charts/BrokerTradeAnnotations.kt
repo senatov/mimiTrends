@@ -37,17 +37,14 @@ internal class BrokerTradeAnnotations(private val plot: XYPlot) {
         visible.forEachIndexed { index, trade ->
             val entryX = displayMillis(trade.entryEpochSeconds)
             val exitX = displayMillis(trade.exitEpochSeconds ?: lastEpoch)
-            val entryY = trade.entryPrice
-            val exitY = trade.exitPrice ?: trade.entryPrice
+            val entryY = trade.entryPrice * barPriceMultiplier
+            val exitY = (trade.exitPrice ?: trade.entryPrice) * barPriceMultiplier
             val level = index % MAX_LEVELS
             val lift = priceSpan * (0.10 + level * 0.075)
             val controlX = (entryX + exitX) / 2.0
             val controlY = maxOf(entryY, exitY) + lift
-            val path = Path2D.Double().apply {
-                moveTo(entryX, entryY)
-                quadTo(controlX, controlY, exitX, exitY)
-            }
-            plot.addAnnotation(XYShapeAnnotation(path, MARKER_STROKE, ORANGE))
+            addTradeHighlight(trade, bars, entryX, exitX, timeStep, priceSpan,
+                barPriceMultiplier)
             val entryAlignment = alignToCandle(trade.entryEpochSeconds, trade.entryPrice,
                 bars, timeStep, barPriceMultiplier, displayMillis)
             val exitAlignment = trade.exitEpochSeconds?.let { epoch ->
@@ -60,6 +57,29 @@ internal class BrokerTradeAnnotations(private val plot: XYPlot) {
             addCard(trade, controlX, controlY + priceSpan * 0.025, timeStep, priceSpan,
                 entryAlignment, exitAlignment)
         }
+    }
+
+    private fun addTradeHighlight(
+        trade: BrokerTrade,
+        bars: List<MinuteBar>,
+        entryX: Double,
+        exitX: Double,
+        timeStep: Double,
+        priceSpan: Double,
+        multiplier: Double
+    ) {
+        val exitEpoch = trade.exitEpochSeconds ?: bars.last().minuteEpochSeconds
+        val covered = bars.filter { it.minuteEpochSeconds in trade.entryEpochSeconds..exitEpoch }
+        val exitPrice = trade.exitPrice ?: trade.entryPrice
+        val low = (covered.minOfOrNull(MinuteBar::low) ?: minOf(trade.entryPrice, exitPrice)) * multiplier
+        val high = (covered.maxOfOrNull(MinuteBar::high) ?: maxOf(trade.entryPrice, exitPrice)) * multiplier
+        val padding = priceSpan * HIGHLIGHT_PADDING
+        val left = minOf(entryX, exitX) - timeStep * 0.38
+        val right = maxOf(entryX, exitX) + timeStep * 0.38
+        plot.addAnnotation(XYBoxAnnotation(
+            left, low - padding, right, high + padding,
+            HIGHLIGHT_STROKE, HIGHLIGHT_ORANGE, HIGHLIGHT_FILL
+        ))
     }
 
     fun clear() = plot.clearAnnotations()
@@ -155,9 +175,12 @@ internal class BrokerTradeAnnotations(private val plot: XYPlot) {
 
     private companion object {
         val ORANGE = Color(235, 133, 35, 225)
-        val MARKER_STROKE = BasicStroke(3.2f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND)
+        val HIGHLIGHT_ORANGE = Color(244, 126, 24, 235)
+        val HIGHLIGHT_FILL = Color(255, 153, 51, 25)
+        val HIGHLIGHT_STROKE = BasicStroke(5.5f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND)
         val CONNECTOR_STROKE = BasicStroke(1.3f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND,
             0f, floatArrayOf(5f, 5f), 0f)
+        const val HIGHLIGHT_PADDING = 0.025
         const val MAX_LEVELS = 4
     }
 
