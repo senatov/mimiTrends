@@ -2,37 +2,49 @@
 
 <img src="./Doc/AppIcon-1024.png" alt="MiMiTrends application icon" width="128">
 
-**A local-first desktop scanner for fresh market anomalies and actionable price signals.**
+**A local-first desktop scanner for fresh US and European market anomalies.**
 
-MiMiTrends watches a configurable universe of liquid US and European equities, detects unusual recent price activity, ranks the results, and explains why each instrument was selected. It is intended for signal discovery rather than exhaustive historical chart analysis.
+MiMiTrends watches a configurable universe of US and European equities, detects unusual recent price activity, ranks the results, and explains why each instrument was selected. Adaptive selection drives the result set; configured thresholds are guardrails rather than a fixed checklist that leaves the table empty.
 
 The application is written in Kotlin/JVM and JavaFX. It is designed as a cross-platform desktop application for macOS, Windows, and Linux. **The current builds and user interface have so far been tested only on macOS.** Windows and Linux packaging is implemented, but those distributions should be treated as unverified until they receive platform-specific testing.
 
 MiMiTrends is informational software. It does not place orders, provide investment advice, or guarantee that a detected anomaly will continue.
 
-## Main window
+## At a glance
+
+### Scanner and signal chart
 
 <img src="./Doc/MainWindow.png" alt="MiMiTrends scanner and signal-focused chart" width="900">
 
-*The scanner ranks current anomalies in the upper pane. Selecting an instrument opens a compact
-signal-focused price and volume chart below it, including entry and exit prices, signal age,
-classification, score, relative volume, and exact OHLCV values.*
-
-### Closed-market state
-
-<img src="./Doc/MarketsClosed.png" alt="MiMiTrends closed-market notification over the scanner" width="900">
-
-*When every selected exchange is closed, scanning pauses until the earliest scheduled reopening.
-The dismissible liquid-glass notice keeps the latest cached snapshot visible and states when the
-scanner will resume; cached results are explicitly marked as not live.*
+*Freshness is the first sortable column. The scanner combines current signals with the latest useful
+published context, while the lower pane shows the selected event, minute candles, volume, entry,
+current price, and the exact OHLCV value beneath the cursor.*
 
 ### Scanner settings
 
-<img src="./Doc/ScannerSettings.png" alt="MiMiTrends anomaly scanner settings" width="900">
+<img src="./Doc/ScannerSettings.png" alt="MiMiTrends adaptive anomaly scanner settings" width="900">
 
-*The settings window exposes the statistical detection thresholds in plain language. Signal age,
-jump and range deviation, volume confirmation, relative volume, candle structure, minimum move,
-trend behavior, market universe, and result count can all be adjusted without editing code.*
+*Detection, trend, universe, provider, and appearance controls are grouped in one settings window.
+Each analytical field includes a short explanation of what it changes.*
+
+### Broker CSV import
+
+<img src="./Doc/BrokerCsvImport.png" alt="Importing a Scalable Capital transaction CSV into MiMiTrends" width="900">
+
+*The import action accepts a Scalable Capital transaction export. Imported executions can be shown
+on the corresponding price chart without sending portfolio or transaction data to a remote service.*
+
+## Quick start
+
+```bash
+git clone <repository-url>
+cd mimiTrends
+./gradlew run
+```
+
+Open **Settings**, choose the market universe, and allow the first history bootstrap and scan to
+complete. Select any table row to inspect its chart. No API key is required for the default data
+path; Finnhub is an optional enhancement for supported US symbols.
 
 ## Why it exists
 
@@ -54,19 +66,24 @@ The primary question is not “What did this stock do over the last year?” but
 - confirms candidates using candle structure, relative volume, log-volume anomaly, or immediate continuation;
 - applies a configurable minimum absolute move so tiny changes in quiet stocks do not become misleading signals;
 - supplements a sparse strict result set with relaxed impulses and persistent rising trends;
+- adapts thresholds to retain the strongest defensible candidates instead of treating the configured
+  target as a mandatory quota;
 - ranks completed results atomically instead of changing the visible table while a scan is running;
 - retains recently published events for up to twenty minutes after they stop qualifying, labels them as
   `Cooling`, and decays their ranking score while always giving active signals priority;
 - rechecks published `Strong` and `Extreme` signals every minute in a separate priority task, updating
   their rows immediately and stopping when they fall below `Strong`;
 - stores minute OHLCV history, company profiles, derived statistics, scan runs, and signal outcomes in SQLite;
-- optionally walks the configured universe through Tradegate public EUR quotes one instrument at a time,
-- optionally rotates the universe through delayed Euronext website quotes as a separate provider series,
-  using a persistent cookie session and a configurable conservative request interval;
+- corrects stale European snapshots with timestamped observations from Tradegate, Euronext,
+  Börse.de, BNP Paribas, Lang & Schwarz, and TraderFox where an instrument can be resolved safely;
+- never labels a crawled quote as fresh using its HTTP download time: the provider's own observation
+  timestamp is required;
 - uses exchange-local time zones and market calendars for US, Xetra, Euronext, and Helsinki instruments;
 - pauses scanning while every selected market is closed and resumes after the earliest next opening;
-- identifies cached, delayed, and live data instead of presenting every quote as real-time;
+- displays quote age in the leading `Delay` column and sorts it numerically, distinguishing current
+  observations from stale ones without hiding delayed-but-useful European candidates;
 - provides a signal-focused chart with a full-history fallback;
+- imports Scalable Capital transaction CSV files and overlays matching trades on charts;
 - remembers window geometry, divider position, table appearance, columns, and the selected instrument.
 
 ## Reading the scanner table
@@ -78,17 +95,18 @@ automatically. A rapid opposite V-reversal updates the same visible episode inst
 
 | Column | Meaning |
 | --- | --- |
-| Company / Symbol | Instrument identity and cached company profile. |
+| Delay | Age of the latest provider observation. It is numeric and sortable; the icon distinguishes a current quote from a stale one. |
+| Symbol | Instrument identity and cached company profile. The context menu copies either the ticker or a short search-friendly company name. |
 | Pattern | Detected fresh impulse, relaxed impulse, or persistent trend. It describes observed price action rather than recommending a trade. |
 | Move 10m | Signed price change over the latest ten-minute display window. |
 | Price | Latest completed locally available price in the selected display currency. |
 | Anomaly | Composite anomaly ranking: `Low`, `Moderate`, `High`, or `Very high`. This measures how unusual and well-confirmed the detected move is; it is not a buy/sell recommendation or a prediction that the move will continue. |
 | Outcome | Median directional return after 0.20% estimated friction and the empirically profitable share, such as `+0.08% · 58%`. The tooltip includes the middle 50% range, a 95% uncertainty interval, sample count, and favorable/adverse excursions. |
-| Price action | Human-readable interpretation such as `Strong impulse ↑`, `Steady trend ↑`, or `Volatile / unstable`. |
+| Price action | Human-readable interpretation such as `Rare impulse ↑`, `Steady trend ↑`, or `Volatile / unstable`. Rare impulses receive a dark-green outline. |
 | Volume | `Normal`, `Elevated`, `Strong`, `Extreme`, or `Price-led`, with relative volume when available. |
-| Age | Whether the signal is latest, several minutes old, or a trend window. |
-| Feed | Live, delayed, Yahoo, SQLite cache, or saved closed-market snapshot. |
+| Age | Signal window or retained publication age; this is separate from quote freshness. |
 | Turnover | Approximate current-session traded value. |
+| Updated | Provider observation time rendered in the user's local time zone. |
 
 Hovering the derived columns reveals the exact jump, range, volume Z-scores, RVOL, composite score, and an explanation of the classification. This keeps the normal workflow readable without discarding analytical detail.
 
@@ -170,22 +188,19 @@ All user-facing thresholds can be adjusted in Settings.
 
 ### Additional public providers
 
-The optional Tradegate collector is disabled by default and can be enabled in Settings. It resolves company
-names to strict 12-character ISINs, polls one instrument per request, and stores observations in a separate
-`TRADEGATE`/`XGAT` EUR series. Provider observations never overwrite Yahoo bars or mix currencies. Within a
-provider minute, only a response with a newer server observation time may update the close; high and low are
-expanded monotonically. Quotes currently have `MISSING` volume quality because the public snapshot exposes
-session totals rather than a reliably timestamped per-minute volume.
+European coverage is corrected by independent provider adapters rather than by overwriting the Yahoo series.
+Tradegate and Euronext can be enabled and paced in Settings. The table-result refresher additionally uses
+Börse.de, BNP Paribas, Lang & Schwarz, and TraderFox for resolvable ISINs or WKNs. Lang & Schwarz reads its
+Europe and Euro Stoxx tables in one bounded pass; the other crawlers rotate selected symbols sequentially.
 
-The Euronext collector is independently disabled by default. It uses the public instrument autocomplete to
-resolve an ISIN and market MIC, prefers native Euronext venues and then EuroTLX, and reads the delayed detailed
-quote used by the market-information page. The website's CryptoJS response envelope is decoded locally using
-the key published in that same page. Last-trade timestamps, rather than download time, determine whether an
-observation is newer, so an old or suspended quote cannot create a current minute or replace fresher data.
-Euronext and Tradegate have separate sequential schedulers and request intervals in Settings.
-Both collectors keep one stable browser identity, add a small timing jitter, honor `Retry-After`, and back off
-exponentially after throttling or access errors. Repeated failures can pause a provider for up to six hours,
-and polling is limited to broad weekday trading windows instead of running continuously overnight.
+Every provider observation is stored in its own series with provider, identifier, MIC, currency, and original
+observation time. A quote without an unambiguous provider timestamp is rejected. Newer observations can extend
+the latest analytical tail and refresh a published row, while older responses cannot replace fresh GUI or
+database state. Snapshot-only sources have `MISSING` volume quality and therefore cannot manufacture volume
+confirmation.
+
+These are public website integrations rather than contracted APIs and can change without notice. Failures are
+isolated per provider, logged without cookies or credentials, and do not stop the rest of the scan.
 
 ### Early three-minute momentum
 
@@ -269,6 +284,13 @@ Yahoo Finance is the default history and fallback provider and does not require 
 
 European quotes may be delayed. MiMiTrends labels data as live, delayed, Yahoo, or cached rather than assuming that every last bar is current.
 
+### European quote correction
+
+Timestamped public observations from Tradegate, Euronext, Börse.de, BNP Paribas, Lang & Schwarz,
+and TraderFox can correct the visible tail of European instruments. The leading `Delay` value is
+calculated from the quote timestamp, not from the moment MiMiTrends downloaded the page. A provider
+that returns an old quote therefore remains visibly stale and cannot displace a newer observation.
+
 ### Finnhub
 
 Finnhub is optional. With a user-provided API key, one WebSocket connection subscribes to selected US symbols and aggregates trades into minute OHLCV bars. Finnhub also acts as a company-profile and logo fallback.
@@ -314,6 +336,9 @@ Selecting a scanner row opens its locally stored candles and volume.
 - a `Full history` switch for broader context;
 - pan, zoom, synchronized time/price cursors, and tooltips.
 
+Switching instruments resets all chart ranges after datasets, signal markers, and trade overlays are
+installed. This prevents a high-priced instrument from leaving an unusable price scale on the next chart.
+
 The chart deliberately does not connect separate trading sessions with a continuous close-price line, because such diagonals can suggest price movement during periods when no trading occurred.
 
 ## SQLite database and analytics
@@ -356,6 +381,7 @@ Minute bars use UPSERT semantics, allowing an incomplete or repeated provider ca
 | `provider_instruments` | Persisted provider-specific symbol-to-ISIN mappings, MIC, currency, and resolved name. |
 | `provider_minute_bars` | Venue-specific observations with provider, ISIN, MIC, currency, and monotonic observation time. |
 | `provider_quotes` | Latest provider bid/ask, sizes, session totals, average, executions, range, and previous close. |
+| `broker_transactions` | Locally imported broker executions used for chart overlays and trade context. |
 
 Candidate publication and scan completion occur in one transaction. This prevents a partially completed scan from appearing published. Foreign keys and cascading retention protect referential consistency.
 
@@ -373,7 +399,7 @@ More detail is available in [Analytics storage](Doc/AnalyticsStorage.md).
 ```text
 core/         Domain models, market time-zone resolution, OHLCV validation, logging tags
 database/     SQLite cache, analytics repository, migrations, aggregation, outcome storage
-market-data/  Yahoo Finance HTTP client and response mapping
+market-data/  Yahoo and provider-specific HTTP clients, parsers, and response mapping
 scanner/      Impulse/trend statistics, market calendar, scanner settings
 charts/       Reusable JFreeChart-FX candlestick and volume component
 finnhub-ws/   Optional Finnhub WebSocket client, profiles, and minute aggregation
@@ -425,7 +451,7 @@ org.senatov.mimitrends.LauncherKt
 3. Adjust the watchlist, scan interval, freshness, liquidity, and statistical thresholds if needed.
 4. Optionally configure a Finnhub API key.
 5. Wait for the initial historical bootstrap and completed scan.
-6. Sort the result table by Strength, Price action, Volume, or Move 10m.
+6. Sort by `Delay` to inspect freshness, or by anomaly, price action, volume, and ten-minute move.
 7. Hover derived cells to inspect the exact statistical values.
 8. Select a row to open its signal-focused chart.
 9. Move the cursor across the chart to inspect candle OHLCV values.
@@ -559,9 +585,9 @@ The status bar reports the current operation. A red details button opens the com
 
 | Platform | Packaging | Current validation status |
 | --- | --- | --- |
-| macOS | `.app`, signed/notarized DMG | Implemented and tested (because i've Mac). |
-| Windows | Self-contained EXE installer | Implemented, not yet tested (because i've Mac only) . |
-| Linux | Portable archive and Debian package | Implemented, not yet tested (because i've Mac only). |
+| macOS | `.app`, signed/notarized DMG | Implemented and tested. |
+| Windows | Self-contained EXE installer | Implemented, not yet tested locally 😞 |
+| Linux | Portable archive and Debian package | Implemented, not yet tested locally 😞 |
 
 The codebase and dependency selection are cross-platform, but platform-specific testing is still required before claiming production support outside macOS.
 
