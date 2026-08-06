@@ -89,7 +89,8 @@ class SignalCalibrationStoreTest {
 
             val calibrated = SignalCalibrationStore(connection).enrich(result().copy(anomalyScore = 15.0))
 
-            assertEquals(10.0 * 15.5 / 30.0, calibrated.anomalyScore, 1e-12)
+            assertEquals(15.0, calibrated.anomalyScore, 1e-12)
+            assertEquals(10.0 * 15.5 / 30.0, calibrated.rankingPercentile, 1e-12)
         }
     }
 

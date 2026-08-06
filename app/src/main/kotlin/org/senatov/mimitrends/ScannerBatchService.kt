@@ -62,6 +62,8 @@ internal class ScannerBatchService(
             calibratedStrict, calibratedFallbacks, criteria.minimumTableResults, criteria.resultLimit
         )
         analytics.completeScan(runId, selection.results.map(ScanResult::symbol), errors.size)
-        return ScannerBatchResult(selection.results, strict.size, selection.adaptiveCount, errors)
+        val strictSymbols = calibratedStrict.mapTo(hashSetOf(), ScanResult::symbol)
+        val qualifiedStrictCount = selection.results.count { it.symbol in strictSymbols }
+        return ScannerBatchResult(selection.results, qualifiedStrictCount, selection.adaptiveCount, errors)
     }
 }

@@ -12,7 +12,7 @@ internal class SignalCalibrationStore(private val connection: Connection) {
     fun enrich(result: ScanResult, horizonMinutes: Int = DEFAULT_HORIZON_MINUTES): ScanResult {
         val direction = if (result.signalSource.contains('↓')) -1 else 1
         val signalFamily = family(result.signalSource)
-        val normalized = result.copy(anomalyScore = normalizedScore(result, signalFamily, direction))
+        val normalized = result.copy(rankingPercentile = historicalPercentile(result, signalFamily, direction))
         val cutoffEpoch = result.signalEpochMillis / 1_000L
         val cohort = CalibrationCohort(
             relaxed = result.signalSource.contains("relaxed"),
@@ -71,7 +71,7 @@ internal class SignalCalibrationStore(private val connection: Connection) {
             } }
         }
 
-    private fun normalizedScore(result: ScanResult, family: String, direction: Int): Double {
+    private fun historicalPercentile(result: ScanResult, family: String, direction: Int): Double {
         val scores = connection.prepareStatement(SCORE_HISTORY_SQL).use { statement ->
             statement.setString(1, family)
             statement.setInt(2, direction)
@@ -80,7 +80,7 @@ internal class SignalCalibrationStore(private val connection: Connection) {
                 while (rows.next()) add(rows.getDouble("score"))
             } }
         }
-        if (scores.size < MIN_SCORE_SAMPLES) return result.anomalyScore
+        if (scores.size < MIN_SCORE_SAMPLES) return Double.NaN
         val below = scores.count { it < result.anomalyScore }
         val equal = scores.count { it == result.anomalyScore }
         return SCORE_SCALE * (below + 0.5 * equal) / scores.size

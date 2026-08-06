@@ -273,6 +273,14 @@ Adaptive selection is a quality ceiling, not a row quota. It may relax detector 
 will not fill the requested table size with candidates below the stricter of the absolute score floor and
 the current market-relative score floor.
 
+Before publication, every result passes an additional attention-quality gate. Current impulses require a
+meaningful market-specific move, strong price or range deviation, a directional candle body, and either
+volume confirmation or exceptional price evidence when volume is unavailable. Signals older than two
+minutes and cooling context never qualify as current candidates. Trend candidates need at least a 30-minute
+window, 0.80% progress, and sufficient path efficiency. Calibrated adaptive results must rank at or above the
+80th historical percentile, and at most two adaptive rows may be published in one scan. Consequently, the
+table may legitimately contain fewer rows than the configured target.
+
 While an episode is active, observed candle highs and lows update its maximum favorable excursion (MFE) and
 maximum adverse excursion (MAE). These path metrics describe typical opportunity and drawdown after a signal;
 older outcomes created before this schema was introduced remain usable but have no excursion values.
