@@ -1,6 +1,7 @@
 package org.senatov.mimitrends.charts
 
 import org.jfree.chart.annotations.XYBoxAnnotation
+import org.jfree.chart.annotations.XYAnnotation
 import org.jfree.chart.annotations.XYShapeAnnotation
 import org.jfree.chart.annotations.XYTextAnnotation
 import org.jfree.chart.plot.XYPlot
@@ -12,11 +13,14 @@ import java.awt.Color
 import java.awt.Font
 import java.awt.geom.Ellipse2D
 import java.awt.geom.Path2D
+import java.awt.geom.RoundRectangle2D
 import java.text.DecimalFormat
 import java.text.SimpleDateFormat
 import java.util.Date
 
 internal class BrokerTradeAnnotations(private val plot: XYPlot) {
+    private val annotations = mutableListOf<XYAnnotation>()
+
     fun render(
         trades: List<BrokerTrade>,
         bars: List<MinuteBar>,
@@ -24,13 +28,12 @@ internal class BrokerTradeAnnotations(private val plot: XYPlot) {
         barPriceMultiplier: Double,
         displayMillis: (Long) -> Double = { it * 1_000.0 }
     ) {
-        plot.clearAnnotations()
+        clear()
         if (bars.isEmpty()) return
         val firstEpoch = bars.first().minuteEpochSeconds
         val lastEpoch = bars.last().minuteEpochSeconds
         val visible = trades.filter { trade ->
-            trade.entryEpochSeconds in firstEpoch..lastEpoch ||
-                trade.exitEpochSeconds?.let { it in firstEpoch..lastEpoch } == true
+            trade.entryEpochSeconds <= lastEpoch && (trade.exitEpochSeconds ?: lastEpoch) >= firstEpoch
         }
         val priceSpan = (bars.maxOf { it.high } - bars.minOf { it.low })
             .coerceAtLeast(bars.last().close * 0.02) * barPriceMultiplier
@@ -77,18 +80,22 @@ internal class BrokerTradeAnnotations(private val plot: XYPlot) {
         val padding = priceSpan * HIGHLIGHT_PADDING
         val left = minOf(entryX, exitX) - timeStep * 0.38
         val right = maxOf(entryX, exitX) + timeStep * 0.38
-        plot.addAnnotation(XYBoxAnnotation(
-            left, low - padding, right, high + padding,
-            HIGHLIGHT_STROKE, HIGHLIGHT_ORANGE, HIGHLIGHT_FILL
-        ))
+        val bottom = low - padding
+        val height = high - low + padding * 2.0
+        add(RoundRectangle2D.Double(
+            left, bottom, right - left, height, timeStep * 1.6, priceSpan * 0.09
+        ).let { XYShapeAnnotation(it, HIGHLIGHT_STROKE, HIGHLIGHT_ORANGE, HIGHLIGHT_FILL) })
     }
 
-    fun clear() = plot.clearAnnotations()
+    fun clear() {
+        annotations.forEach(plot::removeAnnotation)
+        annotations.clear()
+    }
 
     private fun addPoint(x: Double, y: Double, timeStep: Double, priceSpan: Double, color: Color) {
         val dot = Ellipse2D.Double(x - timeStep * 0.22, y - priceSpan * 0.007,
             timeStep * 0.44, priceSpan * 0.014)
-        plot.addAnnotation(XYShapeAnnotation(dot, BasicStroke(1.1f), color.darker(), color))
+        add(XYShapeAnnotation(dot, BasicStroke(1.1f), color.darker(), color))
     }
 
     private fun addCard(
@@ -118,10 +125,10 @@ internal class BrokerTradeAnnotations(private val plot: XYPlot) {
         } ?: "Open position · ${formatter.format(trade.quantity)} shares"
         val width = timeStep * 7.5
         val height = priceSpan * 0.105
-        plot.addAnnotation(XYBoxAnnotation(x - width / 2, y, x + width / 2, y + height,
+        add(XYBoxAnnotation(x - width / 2, y, x + width / 2, y + height,
             BasicStroke(0.8f), Color(255, 255, 255, 215), Color(247, 249, 251, 225)))
-        plot.addAnnotation(text(title + sessionNote, x, y + height * 0.68, Color(48, 55, 63), Font.PLAIN))
-        plot.addAnnotation(text(pnl, x, y + height * 0.30, pnlColor(trade), Font.BOLD))
+        add(text(title + sessionNote, x, y + height * 0.68, Color(48, 55, 63), Font.PLAIN))
+        add(text(pnl, x, y + height * 0.30, pnlColor(trade), Font.BOLD))
     }
 
     private fun alignToCandle(
@@ -144,7 +151,12 @@ internal class BrokerTradeAnnotations(private val plot: XYPlot) {
             moveTo(alignment.tradeX, alignment.tradeY)
             lineTo(alignment.candleX, alignment.candleY)
         }
-        plot.addAnnotation(XYShapeAnnotation(line, CONNECTOR_STROKE, Color(219, 126, 35, 150)))
+        add(XYShapeAnnotation(line, CONNECTOR_STROKE, Color(219, 126, 35, 150)))
+    }
+
+    private fun add(annotation: XYAnnotation) {
+        annotations += annotation
+        plot.addAnnotation(annotation)
     }
 
     private fun text(value: String, x: Double, y: Double, color: Color, style: Int) =
@@ -176,9 +188,9 @@ internal class BrokerTradeAnnotations(private val plot: XYPlot) {
 
     private companion object {
         val ORANGE = Color(235, 133, 35, 225)
-        val HIGHLIGHT_ORANGE = Color(244, 126, 24, 235)
-        val HIGHLIGHT_FILL = Color(255, 153, 51, 18)
-        val HIGHLIGHT_STROKE = BasicStroke(3.2f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND)
+        val HIGHLIGHT_ORANGE = Color(238, 126, 18, 205)
+        val HIGHLIGHT_FILL = Color(255, 190, 48, 34)
+        val HIGHLIGHT_STROKE = BasicStroke(5.2f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND)
         val CONNECTOR_STROKE = BasicStroke(1.3f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND,
             0f, floatArrayOf(5f, 5f), 0f)
         const val HIGHLIGHT_PADDING = 0.025

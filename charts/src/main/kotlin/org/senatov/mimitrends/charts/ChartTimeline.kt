@@ -58,20 +58,31 @@ internal class ChartTimeline private constructor(
 
         fun linear(bars: List<MinuteBar>): ChartTimeline = ChartTimeline(bars, bars, false)
 
-        fun focused(bars: List<MinuteBar>, signalEpochSeconds: Long): ChartTimeline {
+        fun focused(
+            bars: List<MinuteBar>,
+            signalEpochSeconds: Long,
+            includedEpochSeconds: Collection<Long> = emptyList()
+        ): ChartTimeline {
             if (bars.isEmpty()) return linear(bars)
             val signalIndex = bars.indices.minByOrNull {
                 kotlin.math.abs(bars[it].minuteEpochSeconds - signalEpochSeconds)
             } ?: bars.lastIndex
             val detailStart = (signalIndex - DETAIL_BEFORE_SIGNAL).coerceAtLeast(0)
-            val contextStart = (detailStart - CONTEXT_BARS).coerceAtLeast(0)
+            val requestedStart = includedEpochSeconds.minOrNull()?.let { epoch ->
+                bars.indices.minByOrNull { kotlin.math.abs(bars[it].minuteEpochSeconds - epoch) }
+            }
+            val contextStart = minOf((detailStart - CONTEXT_BARS).coerceAtLeast(0), requestedStart ?: detailStart)
             val detail = bars.subList(detailStart, bars.size)
             val context = bars.subList(contextStart, detailStart)
             val contextSlots = (detail.size * 2).coerceAtLeast(MIN_CONTEXT_SLOTS)
             val previousSessionClose = previousSessionClose(bars, signalIndex, contextStart)
-            val aggregateSlots = (contextSlots - if (previousSessionClose == null) 0 else 1).coerceAtLeast(1)
-            val selected = listOfNotNull(previousSessionClose) +
-                TrendChartSupport.aggregate(context, aggregateSlots) + detail
+            val requestedStartBar = requestedStart?.takeIf { it < detailStart }?.let(bars::get)
+            val reservedSlots = listOfNotNull(previousSessionClose, requestedStartBar).distinct().size
+            val aggregateSlots = (contextSlots - reservedSlots).coerceAtLeast(1)
+            val selected = (listOfNotNull(previousSessionClose, requestedStartBar) +
+                TrendChartSupport.aggregate(context, aggregateSlots) + detail)
+                .distinctBy(MinuteBar::minuteEpochSeconds)
+                .sortedBy(MinuteBar::minuteEpochSeconds)
             val displayStart = selected.first().minuteEpochSeconds
             val plotted = selected.mapIndexed { index, bar ->
                 bar.copy(minuteEpochSeconds = displayStart + index * DISPLAY_STEP_SECONDS)

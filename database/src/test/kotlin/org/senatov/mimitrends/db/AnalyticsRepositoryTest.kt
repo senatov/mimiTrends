@@ -4,6 +4,7 @@ package org.senatov.mimitrends.db
 
 import org.junit.jupiter.api.Test
 import org.senatov.mimitrends.model.MinuteBar
+import org.senatov.mimitrends.model.ProviderInstrument
 import org.senatov.mimitrends.model.ScanResult
 import java.nio.file.Files
 import java.sql.DriverManager
@@ -116,6 +117,37 @@ class AnalyticsRepositoryTest {
             ).use { result ->
                 assertTrue(result.next())
                 assertEquals("GOOGL", result.getString(1))
+            }
+        }
+    }
+
+    @Test fun `repairs placeholder isin from a provider instrument when loading trades`() {
+        val directory = Files.createTempDirectory("mimitrends-provider-isin")
+        val database = directory.resolve("test.db")
+        val csv = directory.resolve("transactions.csv")
+        Files.writeString(csv, """date;time;status;reference;description;assetType;type;isin;shares;price;amount;fee;tax;currency
+2026-07-31;18:00:00;Executed;BUY-1;Unrelated label;Security;Buy;DE000ENER6Y0;2;100,00;-200,00;0,00;0,00;EUR
+2026-07-31;19:00:00;Executed;SELL-1;Unrelated label;Security;Sell;DE000ENER6Y0;2;110,00;220,00;0,00;0,00;EUR
+""")
+        MarketRepository(database).use { market ->
+            market.upsertProviderInstrument(ProviderInstrument(
+                "TRADEGATE", "ENR.DE", "DE000ENER6Y0", "XGAT", "EUR", "Siemens Energy", 1L
+            ))
+        }
+        AnalyticsRepository(database).use { analytics ->
+            analytics.upsertInstrument(InstrumentMetadata(
+                "ENR.DE", "Siemens Energy AG", "XETRA", "EUR", "Europe/Berlin", isin = "ENR"
+            ))
+            analytics.importScalableTransactions(csv)
+
+            assertEquals(1, analytics.loadBrokerTrades("ENR.DE", "Siemens Energy AG").size)
+        }
+        DriverManager.getConnection("jdbc:sqlite:$database").use { connection ->
+            connection.createStatement().executeQuery(
+                "SELECT isin FROM instrument_metadata WHERE symbol='ENR.DE'"
+            ).use { result ->
+                assertTrue(result.next())
+                assertEquals("DE000ENER6Y0", result.getString(1))
             }
         }
     }

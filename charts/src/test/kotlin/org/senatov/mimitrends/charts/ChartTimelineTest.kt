@@ -62,4 +62,17 @@ class ChartTimelineTest {
 
         assertEquals(1, timeline.actualBars.count { it.minuteEpochSeconds == 0L })
     }
+
+    @Test fun `focus timeline expands compressed context to include an earlier trade`() {
+        val bars = (0 until 1_000).map { index ->
+            MinuteBar("TEST", index * 60L, 100.0, 101.0, 99.0, 100.0, 1_000.0)
+        }
+        val tradeEpoch = bars[100].minuteEpochSeconds
+
+        val timeline = ChartTimeline.focused(bars, bars[950].minuteEpochSeconds, listOf(tradeEpoch))
+
+        assertTrue(timeline.actualBars.first().minuteEpochSeconds <= tradeEpoch)
+        val detailCount = timeline.actualBars.count { it.minuteEpochSeconds >= bars[938].minuteEpochSeconds }
+        assertTrue(detailCount * 3 >= timeline.actualBars.size)
+    }
 }

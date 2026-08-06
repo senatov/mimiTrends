@@ -58,6 +58,8 @@ internal class BrokerTransactionStore(private val connection: Connection) {
                 if (result.next()) result.getString(1)?.takeIf(::isValidIsin) else null
             }
         }
+        val providerIsin = metadataIsin ?: providerIsin(normalizedSymbol)
+        if (providerIsin != null && metadataIsin == null) persistMapping(normalizedSymbol, providerIsin)
         val executions = connection.prepareStatement("""SELECT id, occurred_at, description, transaction_type,
             isin, shares, price, amount, fee, tax, currency FROM broker_transactions
             WHERE status='Executed' AND transaction_type IN ('Buy','Sell') ORDER BY occurred_at, id""").use { statement ->
@@ -66,12 +68,12 @@ internal class BrokerTransactionStore(private val connection: Connection) {
                     val execution = BrokerExecution(result.getLong(1), result.getLong(2), result.getString(3),
                         result.getString(4), result.getString(5), result.getDouble(6), result.getDouble(7),
                         result.getDouble(8), result.getDouble(9), result.getDouble(10), result.getString(11))
-                    if ((metadataIsin != null && execution.isin == metadataIsin) ||
+                    if ((providerIsin != null && execution.isin == providerIsin) ||
                         BrokerTradeMatcher.matches(execution.description, companyName)) add(execution)
                 }
             } }
         }
-        val resolvedIsin = metadataIsin ?: executions.mapNotNull(BrokerExecution::isin).distinct().singleOrNull()
+        val resolvedIsin = providerIsin ?: executions.mapNotNull(BrokerExecution::isin).distinct().singleOrNull()
         if (resolvedIsin != null) persistMapping(normalizedSymbol, resolvedIsin)
         return BrokerTradeMatcher.pair(normalizedSymbol, executions)
     }
@@ -88,6 +90,23 @@ internal class BrokerTransactionStore(private val connection: Connection) {
     }
 
     private fun isValidIsin(value: String): Boolean = value.matches(Regex("[A-Z]{2}[A-Z0-9]{9}[0-9]"))
+
+    private fun providerIsin(symbol: String): String? {
+        val tableExists = connection.prepareStatement(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='provider_instruments'"
+        ).use { statement -> statement.executeQuery().use { it.next() } }
+        if (!tableExists) return null
+        return connection.prepareStatement(
+            "SELECT identifier FROM provider_instruments WHERE symbol=? ORDER BY updated_at DESC"
+        ).use { statement ->
+            statement.setString(1, symbol)
+            statement.executeQuery().use { rows ->
+                buildSet {
+                    while (rows.next()) rows.getString(1)?.takeIf(::isValidIsin)?.let(::add)
+                }.singleOrNull()
+            }
+        }
+    }
 
     private companion object {
         const val INSERT_TRANSACTION = """INSERT OR IGNORE INTO broker_transactions

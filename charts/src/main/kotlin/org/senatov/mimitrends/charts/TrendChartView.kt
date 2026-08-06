@@ -153,7 +153,12 @@ class TrendChartView : StackPane() {
     }
     private fun renderRequest(request: TrendChartRenderRequest) {
         val focused = focusButton.isSelected && request.signal != null
-        val timeline = if (focused) ChartTimeline.focused(request.bars, requireNotNull(request.signal).signalEpochMillis / 1_000L)
+        val tradeEpochs = if (tradesButton.isSelected) request.trades.flatMap { trade ->
+            listOfNotNull(trade.entryEpochSeconds, trade.exitEpochSeconds)
+        } else emptyList()
+        val timeline = if (focused) ChartTimeline.focused(
+            request.bars, requireNotNull(request.signal).signalEpochMillis / 1_000L, tradeEpochs
+        )
         else ChartTimeline.linear(TrendChartSupport.aggregate(request.bars, MAX_CANDLES))
         val visible = timeline.actualBars
         val plotted = timeline.plottedBars
