@@ -432,6 +432,18 @@
     -fx-alignment: center-left;
 }
 .scanner-table .table-row-cell:selected .table-cell { -fx-text-fill: -mimi-table-text; }
+.scanner-table .pattern-content { -fx-padding: 0; }
+.scanner-table .pattern-primary {
+    -fx-font-family: "SF Pro Text", "Helvetica Neue", "System";
+    -fx-font-size: 12.5px;
+    -fx-font-weight: 400;
+}
+.scanner-table .pattern-qualifiers {
+    -fx-font-family: "SF Pro Text", "Helvetica Neue", "System";
+    -fx-font-size: 10.5px;
+    -fx-font-weight: 400;
+    -fx-text-fill: #273746;
+}
 .scanner-table .table-cell.stale-feed-cell,
 .scanner-table .table-row-cell:selected .table-cell.stale-feed-cell {
     -fx-text-fill: #a61f2d;

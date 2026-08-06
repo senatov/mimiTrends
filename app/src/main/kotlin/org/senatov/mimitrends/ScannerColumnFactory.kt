@@ -82,6 +82,39 @@ internal class ScannerColumnFactory(
             configure(115.0, 55.0)
         }
 
+    fun pattern(): TableColumn<ScanResult, String> = TableColumn<ScanResult, String>("Pattern").apply {
+        setCellValueFactory { ReadOnlyObjectWrapper(it.value.signalSource) }
+        setCellFactory {
+            object : TableCell<ScanResult, String>() {
+                override fun updateItem(item: String?, empty: Boolean) {
+                    super.updateItem(item, empty)
+                    val result = tableRow?.item
+                    if (empty || item == null || result == null) {
+                        text = null; graphic = null; tooltip = null
+                        return
+                    }
+                    val visual = signalVisual(result)
+                    val content = SignalPatternText.parse(item)
+                    val primary = Label(content.primary).apply {
+                        styleClass += "pattern-primary"
+                        style = "-fx-text-fill: ${visual.color};"
+                    }
+                    graphic = VBox(0.0).apply {
+                        alignment = Pos.CENTER_LEFT
+                        styleClass += "pattern-content"
+                        children += primary
+                        content.qualifiers?.let { qualifiers ->
+                            children += Label(qualifiers).apply { styleClass += "pattern-qualifiers" }
+                        }
+                    }
+                    text = null
+                    tooltip = Tooltip(visual.description).apply { showDelay = Duration.millis(450.0) }
+                }
+            }
+        }
+        configure(125.0, 75.0)
+    }
+
     fun metric(
         title: String,
         sortValue: (ScanResult) -> Double,

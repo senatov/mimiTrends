@@ -119,7 +119,7 @@ class ScannerPanel(
         sortedRows.comparatorProperty().bind(table.comparatorProperty())
         val freshness = columnFactory.freshness()
         val symbol = columnFactory.symbol()
-        val signal = columnFactory.signal("Pattern", ScanResult::signalSource)
+        val signal = columnFactory.pattern()
         val move = columnFactory.number("Move 10m", ScanResult::windowChangePercent, ::percent)
         val price = columnFactory.number("Price", { convertPrice(it.symbol, it.price) }) { "${currency.symbol}%,.2f".format(it) }
         val scoreColumn = columnFactory.metric("Anomaly", ScanResult::anomalyScore, SignalMetricPresentation::strength)
@@ -132,7 +132,7 @@ class ScannerPanel(
         autoFitter = TableColumnAutoFitter(table, listOf(
             TableColumnAutoFitter.Spec(freshness, { FeedFreshness.ageLabel(it.updatedAtMillis) }, 68.0, 96.0),
             TableColumnAutoFitter.Spec(symbol, columnFactory::companyName, 120.0, 460.0, flexible = true, reserveWidth = 32.0),
-            TableColumnAutoFitter.Spec(signal, ScanResult::signalSource, 74.0, 190.0),
+            TableColumnAutoFitter.Spec(signal, { SignalPatternText.parse(it.signalSource).primary }, 90.0, 165.0),
             TableColumnAutoFitter.Spec(move, { percent(it.windowChangePercent) }, 82.0, 130.0, reserveWidth = 8.0),
             TableColumnAutoFitter.Spec(price, { "${currency.symbol}%,.2f".format(convertPrice(it.symbol, it.price)) }, 72.0, 135.0, reserveWidth = 8.0),
             TableColumnAutoFitter.Spec(scoreColumn, { SignalMetricPresentation.strength(it).label }, 88.0, 140.0),
@@ -151,7 +151,7 @@ class ScannerPanel(
         }
         table.placeholder = empty
         table.columnResizePolicy = TableView.UNCONSTRAINED_RESIZE_POLICY
-        table.fixedCellSize = 30.0
+        table.fixedCellSize = -1.0
         table.setRowFactory {
             TableRow<ScanResult>().apply {
                 setOnMouseClicked { e -> if (!isEmpty && e.button == MouseButton.PRIMARY && e.clickCount == 1) onOpen(item) }
