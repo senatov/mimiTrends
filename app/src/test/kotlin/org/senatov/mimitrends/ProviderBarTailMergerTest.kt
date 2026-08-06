@@ -33,6 +33,19 @@ class ProviderBarTailMergerTest {
         assertEquals(MarketDataSource.TRADEGATE, merged.latestSource)
     }
 
+    @Test fun `uses the freshest provider instead of a fixed provider priority`() {
+        val yahoo = listOf(bar(60, 100.0))
+        val providers = listOf(
+            provider("BOERSE_DE", 120, 101.0),
+            provider("TRADEGATE", 180, 102.0)
+        )
+
+        val merged = ProviderBarTailMerger.merge(yahoo, providers, MarketDataSource.YAHOO, 240)
+
+        assertEquals(MarketDataSource.TRADEGATE, merged.latestSource)
+        assertEquals(102.0, merged.analysisBars.last().close)
+    }
+
     @Test fun `ignores provider observations older than fifteen minutes`() {
         val yahoo = listOf(bar(60, 100.0))
 

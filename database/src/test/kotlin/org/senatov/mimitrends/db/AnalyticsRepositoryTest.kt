@@ -126,7 +126,8 @@ class AnalyticsRepositoryTest {
         analytics.completeScan(run, listOf("TEST"), 0)
         val saved = analytics.loadLatestPublishedResults(10).single()
         assertEquals("TEST", saved.symbol)
-        assertEquals("SAVED SNAPSHOT", saved.dataStatus)
+        assertEquals("TEST", saved.dataStatus)
+        assertEquals(result(signalEpoch).updatedAtMillis, saved.updatedAtMillis)
         analytics.recordSignalOutcomes("TEST", 103.0, signalEpoch + 2 * 60L)
         analytics.recordSignalOutcomes("TEST", 99.0, signalEpoch + 4 * 60L)
         analytics.recordSignalOutcomes("TEST", 102.0, signalEpoch + 5 * 60L)
@@ -145,8 +146,9 @@ class AnalyticsRepositoryTest {
                 statement.executeQuery("SELECT COUNT(*) FROM trading_sessions").use { it.next(); assertTrue(it.getInt(1) > 0) }
                 statement.executeQuery("SELECT COUNT(*) FROM market_calendar_rules").use { it.next(); assertEquals(4, it.getInt(1)) }
                 statement.executeQuery("SELECT published FROM scan_candidates").use { it.next(); assertEquals(1, it.getInt(1)) }
-                statement.executeQuery("SELECT signal_epoch, entry_price FROM scan_candidates").use {
+                statement.executeQuery("SELECT signal_epoch, entry_price, data_epoch FROM scan_candidates").use {
                     it.next(); assertEquals(signalEpoch, it.getLong(1)); assertEquals(100.0, it.getDouble(2))
+                    assertEquals(result(signalEpoch).updatedAtMillis / 1_000L, it.getLong(3))
                 }
                 statement.executeQuery("""SELECT entry_price, observed_price, return_percent, elapsed_minutes,
                     maximum_return_percent, minimum_return_percent FROM signal_outcomes""").use {

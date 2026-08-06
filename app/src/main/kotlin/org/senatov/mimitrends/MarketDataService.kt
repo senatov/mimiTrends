@@ -146,7 +146,9 @@ internal class MarketDataService(
 
     private companion object {
         val RELAXATION_LEVELS = listOf(0.85, 0.70, 0.55)
-        val PROVIDER_SOURCES = listOf(MarketDataSource.TRADEGATE, MarketDataSource.EURONEXT)
+        val PROVIDER_SOURCES = listOf(
+            MarketDataSource.BOERSE_DE, MarketDataSource.TRADEGATE, MarketDataSource.EURONEXT
+        )
     }
 }
 

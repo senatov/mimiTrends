@@ -79,6 +79,7 @@ class MainController(
     private val observationUiBridge = MarketObservationUiBridge(observationBus.observations, ::applyProviderObservation)
     private val tradegateProvider = TradegatePollingService(repository, observationSink = observationBus)
     private val euronextProvider = EuronextPollingService(repository, observationSink = observationBus)
+    private val boerseDeProvider = BoerseDePollingService(repository, observationBus)
     private val recentEvents = RecentEventRetainer()
     private val priorityScanner = PriorityScanCoordinator(
         { symbol -> marketData.loadPriorityResult(symbol, scannerCriteria) },
@@ -166,7 +167,7 @@ class MainController(
         rotationTask?.cancel(false)
         observationUiBridge.close()
         try {
-            ApplicationResourceCloser.close(priorityScanner, tradegateProvider, euronextProvider,
+            ApplicationResourceCloser.close(priorityScanner, tradegateProvider, euronextProvider, boerseDeProvider,
                 { finnhubClient?.close() }, batchScheduler, repository, analytics, log)
         } finally {
             observationBus.close()
@@ -241,6 +242,7 @@ class MainController(
             }
             val active = batch.active
             val displayed = recentEvents.merge(active, System.currentTimeMillis(), criteria.resultLimit)
+            boerseDeProvider.replaceSymbols(displayed.map(ScanResult::symbol))
             priorityScanner.replaceCandidates(active)
             Platform.runLater {
                 if (generation != scanGeneration.get()) return@runLater

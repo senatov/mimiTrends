@@ -28,9 +28,11 @@ internal object ProviderBarTailMerger {
                 it.bar.minuteEpochSeconds <= nowEpochSeconds &&
                 nowEpochSeconds - it.bar.minuteEpochSeconds <= MAX_PROVIDER_AGE_SECONDS
         }
-        val selectedProvider = PROVIDER_PRIORITY.firstOrNull { provider ->
-            usable.any { it.provider == provider }
-        } ?: return MarketDataSnapshot(
+        val selectedProvider = usable.groupBy(ProviderMinuteBar::provider).maxWithOrNull(
+            compareBy<Map.Entry<String, List<ProviderMinuteBar>>> { entry ->
+                entry.value.maxOf(ProviderMinuteBar::observedAtMillis)
+            }.thenBy { entry -> -PROVIDER_PRIORITY.indexOf(entry.key).takeIf { it >= 0 }!! }
+        )?.key ?: return MarketDataSnapshot(
             primary, primary, primarySource, primarySource, MarketObservationQuality.FULL_OHLCV
         )
         val tail = usable.asSequence()
@@ -50,7 +52,7 @@ internal object ProviderBarTailMerger {
 
     fun isEuropeanSymbol(symbol: String): Boolean = symbol.substringAfterLast('.', "").uppercase() in EUROPEAN_SUFFIXES
 
-    private val PROVIDER_PRIORITY = listOf("TRADEGATE", "EURONEXT")
+    private val PROVIDER_PRIORITY = listOf("BOERSE_DE", "TRADEGATE", "EURONEXT")
     private val EUROPEAN_SUFFIXES = setOf("DE", "PA", "AS", "MI", "HE")
     private const val MAX_PROVIDER_AGE_SECONDS = 15 * 60L
 }

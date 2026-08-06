@@ -136,13 +136,14 @@ class AnalyticsRepository(
     fun recordScanCandidate(runId: Long, symbol: String, result: ScanResult?, rejectionReason: String?, source: String) = locked {
         connection.prepareStatement("""INSERT INTO scan_candidates
             (run_id, symbol, evaluated_at, signal_epoch, accepted, published, rejection_reason, signal, score, change_10m,
-             jump_z, range_z, volume_z, rvol, price, entry_price, turnover, source)
-            VALUES (?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             jump_z, range_z, volume_z, rvol, price, entry_price, turnover, source, data_epoch)
+            VALUES (?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(run_id, symbol) DO UPDATE SET signal_epoch=excluded.signal_epoch,
             accepted=excluded.accepted, rejection_reason=excluded.rejection_reason,
             signal=excluded.signal, score=excluded.score, change_10m=excluded.change_10m, jump_z=excluded.jump_z,
             range_z=excluded.range_z, volume_z=excluded.volume_z, rvol=excluded.rvol, price=excluded.price,
-            entry_price=excluded.entry_price, turnover=excluded.turnover, source=excluded.source""").use { s ->
+            entry_price=excluded.entry_price, turnover=excluded.turnover, source=excluded.source,
+            data_epoch=excluded.data_epoch""").use { s ->
             s.setLong(1, runId); s.setString(2, symbol.uppercase()); s.setLong(3, Instant.now().epochSecond)
             fun metric(index: Int, value: Double?) {
                 if (value != null && value.isFinite()) s.setDouble(index, value) else s.setNull(index, Types.REAL)
@@ -152,7 +153,9 @@ class AnalyticsRepository(
             metric(8, result?.anomalyScore); metric(9, result?.windowChangePercent); metric(10, result?.priceAnomaly)
             metric(11, result?.rangeAnomaly); metric(12, result?.volumeAnomaly); metric(13, result?.relativeVolume)
             metric(14, result?.price); metric(15, result?.signalPrice); metric(16, result?.sessionTurnover)
-            s.setString(17, source); s.executeUpdate()
+            s.setString(17, source)
+            if (result != null) s.setLong(18, result.updatedAtMillis / 1_000L) else s.setNull(18, Types.INTEGER)
+            s.executeUpdate()
         }
     }
 
@@ -202,7 +205,7 @@ class AnalyticsRepository(
 
     fun loadLatestPublishedResults(limit: Int): List<ScanResult> = locked {
         connection.prepareStatement("""SELECT symbol, price, entry_price, score, jump_z, range_z, volume_z, rvol,
-            change_10m, turnover, signal, evaluated_at, signal_epoch
+            change_10m, turnover, signal, data_epoch, signal_epoch, source
             FROM scan_candidates
             WHERE run_id=(SELECT MAX(run_id) FROM scan_candidates WHERE published=1) AND published=1
             ORDER BY score DESC LIMIT ?""").use { s ->
@@ -210,7 +213,7 @@ class AnalyticsRepository(
             s.executeQuery().use { result -> buildList {
                 fun nullableMetric(index: Int): Double = result.getDouble(index).let { if (result.wasNull()) Double.NaN else it }
                 while (result.next()) {
-                    val evaluatedAt = result.getLong(12)
+                    val dataEpoch = result.getLong(12)
                     val signalEpoch = result.getLong(13)
                     add(ScanResult(
                         symbol = result.getString(1), price = result.getDouble(2), anomalyScore = result.getDouble(4),
@@ -219,8 +222,8 @@ class AnalyticsRepository(
                         windowChangePercent = result.getDouble(9), windowVolume = 0.0, sessionVolume = 0.0,
                         sessionTurnover = result.getDouble(10),
                         signalAgeMinutes = ((Instant.now().epochSecond - signalEpoch) / 60L).toInt().coerceAtLeast(1),
-                        signalSource = result.getString(11), updatedAtMillis = evaluatedAt * 1_000,
-                        dataStatus = "SAVED SNAPSHOT", signalWindowLabel = "10m saved",
+                        signalSource = result.getString(11), updatedAtMillis = dataEpoch * 1_000,
+                        dataStatus = result.getString(14), signalWindowLabel = "10m saved",
                         signalPrice = result.getDouble(3), signalEpochMillis = signalEpoch * 1_000
                     ))
                 }

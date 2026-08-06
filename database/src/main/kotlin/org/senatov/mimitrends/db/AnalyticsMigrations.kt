@@ -54,6 +54,10 @@ internal object AnalyticsMigrations {
             """CREATE TABLE signal_excursions(run_id INTEGER NOT NULL, symbol TEXT NOT NULL,
                 maximum_return_percent REAL NOT NULL, minimum_return_percent REAL NOT NULL, last_observed_at INTEGER NOT NULL,
                 PRIMARY KEY(run_id, symbol), FOREIGN KEY(run_id, symbol) REFERENCES scan_candidates(run_id, symbol) ON DELETE CASCADE)"""
+        ),
+        6 to listOf(
+            "ALTER TABLE scan_candidates ADD COLUMN data_epoch INTEGER",
+            "UPDATE scan_candidates SET data_epoch=signal_epoch WHERE data_epoch IS NULL"
         )
     )
 }
