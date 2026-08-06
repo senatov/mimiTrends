@@ -81,7 +81,8 @@ internal class BrokerTransactionStore(private val connection: Connection) {
             AND (isin IS NULL OR length(isin) != 12)""").use {
             it.setString(1, isin); it.setString(2, symbol); it.executeUpdate()
         }
-        connection.prepareStatement("UPDATE broker_transactions SET linked_symbol=? WHERE isin=?").use {
+        connection.prepareStatement("""UPDATE broker_transactions SET linked_symbol=?
+            WHERE isin=? AND linked_run_id IS NULL""").use {
             it.setString(1, symbol); it.setString(2, isin); it.executeUpdate()
         }
     }

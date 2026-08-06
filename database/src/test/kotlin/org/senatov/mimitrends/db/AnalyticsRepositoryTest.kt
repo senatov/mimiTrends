@@ -87,6 +87,39 @@ class AnalyticsRepositoryTest {
         }
     }
 
+    @Test fun `does not rewrite the symbol of a transaction already linked to a scan candidate`() {
+        val directory = Files.createTempDirectory("mimitrends-linked-trade")
+        val database = directory.resolve("test.db")
+        val csv = directory.resolve("transactions.csv")
+        Files.writeString(csv, """date;time;status;reference;description;assetType;type;isin;shares;price;amount;fee;tax;currency
+2026-07-31;18:00:00;Executed;BUY-GOOG;Alphabet;Security;Buy;US02079K3059;1;100,00;-100,00;0,00;0,00;EUR
+""")
+        val executionEpoch = ScalableCsvImporter.parse(csv).single().occurredAtEpochSeconds
+        AnalyticsRepository(database).use { analytics ->
+            analytics.upsertInstrument(InstrumentMetadata(
+                "GOOGL", "Alphabet Inc.", "NASDAQ", "USD", "America/New_York", isin = "US02079K3059"
+            ))
+            val run = analytics.beginScan("US", 1, 180)
+            analytics.recordScanCandidate(run, "GOOGL",
+                result(executionEpoch - 60).copy(symbol = "GOOGL"), null, "TEST")
+            analytics.completeScan(run, listOf("GOOGL"), 0)
+            analytics.importScalableTransactions(csv)
+            analytics.upsertInstrument(InstrumentMetadata(
+                "GOOG", "Alphabet Inc.", "NASDAQ", "USD", "America/New_York", isin = "US02079K3059"
+            ))
+
+            analytics.loadBrokerTrades("GOOG", "Alphabet Inc.")
+        }
+        DriverManager.getConnection("jdbc:sqlite:$database").use { connection ->
+            connection.createStatement().executeQuery(
+                "SELECT linked_symbol FROM broker_transactions WHERE reference='BUY-GOOG'"
+            ).use { result ->
+                assertTrue(result.next())
+                assertEquals("GOOGL", result.getString(1))
+            }
+        }
+    }
+
     @Test fun `imports scalable csv idempotently and parses european decimals`() {
         val directory = Files.createTempDirectory("mimitrends-scalable")
         val database = directory.resolve("test.db")
