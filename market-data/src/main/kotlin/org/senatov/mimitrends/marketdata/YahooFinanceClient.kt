@@ -46,20 +46,23 @@ class YahooFinanceClient(
 
     private fun requestSeries(normalized: String, period: String): MarketSeries {
         val encoded = URLEncoder.encode(normalized, StandardCharsets.UTF_8)
-        val uri = URI.create(
-            "https://query1.finance.yahoo.com/v8/finance/chart/$encoded" +
+        val pathAndQuery = "/v8/finance/chart/$encoded" +
                 "?$period&interval=1m&includePrePost=false&events=div%2Csplits"
-        )
-        val request = HttpRequest.newBuilder(uri)
+        var response = sendWithRetry(request(URI.create("https://$PRIMARY_HOST$pathAndQuery")))
+        if (response.statusCode() == 404) {
+            log.debug(LogTag.API, "Yahoo primary host returned 404; retrying alternate host symbol={}", normalized)
+            response = sendWithRetry(request(URI.create("https://$ALTERNATE_HOST$pathAndQuery")))
+        }
+        check(response.statusCode() == 200) { "Yahoo Finance HTTP ${response.statusCode()} for $normalized" }
+        return parse(normalized, response.body())
+    }
+
+    private fun request(uri: URI): HttpRequest = HttpRequest.newBuilder(uri)
             .timeout(Duration.ofSeconds(15))
             .header("User-Agent", USER_AGENT)
             .header("Accept", "application/json")
             .GET()
             .build()
-        val response = sendWithRetry(request)
-        check(response.statusCode() == 200) { "Yahoo Finance HTTP ${response.statusCode()} for $normalized" }
-        return parse(normalized, response.body())
-    }
 
     private fun sendWithRetry(request: HttpRequest): HttpResponse<String> {
         var response = httpClient.send(request, HttpResponse.BodyHandlers.ofString())
@@ -130,6 +133,8 @@ class YahooFinanceClient(
 
     private companion object {
         const val USER_AGENT = "MiMiTrends/1.0 (personal desktop market viewer)"
+        const val PRIMARY_HOST = "query1.finance.yahoo.com"
+        const val ALTERNATE_HOST = "query2.finance.yahoo.com"
         const val MAX_SERVER_RETRIES = 2
         const val RETRY_DELAY_MILLIS = 250L
     }
