@@ -4,6 +4,7 @@ import org.senatov.mimitrends.db.MarketRepository
 import org.senatov.mimitrends.log.LogTag
 import org.senatov.mimitrends.marketdata.BoerseDeMarketDataClient
 import org.senatov.mimitrends.marketdata.BnpParibasMarketDataClient
+import org.senatov.mimitrends.marketdata.TraderFoxMarketDataClient
 import org.senatov.mimitrends.model.MinuteBar
 import org.senatov.mimitrends.model.ProviderInstrument
 import org.senatov.mimitrends.model.ProviderMinuteBar
@@ -20,6 +21,7 @@ internal class TableQuoteProviderGroup(
 ) : AutoCloseable {
     private val boerseClient = BoerseDeMarketDataClient()
     private val bnpClient = BnpParibasMarketDataClient()
+    private val traderFoxClient = TraderFoxMarketDataClient()
     private val langSchwarz = LangSchwarzPollingService(repository, observationSink)
     private val providers = listOf(
         IsinQuotePollingService(repository, observationSink, "BOERSE_DE", "XSTU") { isin ->
@@ -27,6 +29,9 @@ internal class TableQuoteProviderGroup(
         },
         IsinQuotePollingService(repository, observationSink, "BNP_PARIBAS", "BNPP") { isin ->
             bnpClient.loadQuote(isin).let { CrawledQuote(it.last, it.currency, it.observedAtMillis) }
+        },
+        IsinQuotePollingService(repository, observationSink, "TRADERFOX", "TFX") { isin ->
+            traderFoxClient.loadQuote(isin).let { CrawledQuote(it.last, it.currency, it.observedAtMillis) }
         }
     )
 
@@ -112,6 +117,8 @@ private class IsinQuotePollingService(
         repository.loadProviderInstrument(provider, symbol)?.let { return it }
         val source = repository.loadProviderInstrument("TRADEGATE", symbol)
             ?: repository.loadProviderInstrument("EURONEXT", symbol)
+            ?: repository.loadProviderInstrument("BOERSE_DE", symbol)
+            ?: repository.loadProviderInstrument("BNP_PARIBAS", symbol)
             ?: return null
         return source.copy(provider = provider, mic = mic, updatedAtMillis = System.currentTimeMillis())
             .also(repository::upsertProviderInstrument)
