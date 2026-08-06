@@ -119,7 +119,9 @@ internal class TradegatePollingService(
         repository.loadProviderInstrument(PROVIDER, symbol)?.takeIf(::isLikelyEquity)?.let { return it }
         val now = System.currentTimeMillis()
         if ((unresolvedUntil[symbol] ?: 0L) > now) return null
-        val query = repository.loadCompanyProfile(symbol)?.name ?: return null
+        val query = repository.loadCompanyProfile(symbol)?.name
+            ?.let { CompanySearchTerm.from(it, symbol) }
+            ?: return null
         val resolved = client.resolveInstrument(symbol, query)
         if (resolved == null) {
             unresolvedUntil[symbol] = now + UNRESOLVED_RETRY_MILLIS

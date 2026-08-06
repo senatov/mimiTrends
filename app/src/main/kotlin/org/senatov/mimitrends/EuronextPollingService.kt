@@ -117,7 +117,9 @@ internal class EuronextPollingService(
         repository.loadProviderInstrument(PROVIDER, symbol)?.let { return it }
         val now = System.currentTimeMillis()
         if ((unresolvedUntil[symbol] ?: 0L) > now) return null
-        val query = repository.loadCompanyProfile(symbol)?.name ?: symbol.substringBefore('.')
+        val query = repository.loadCompanyProfile(symbol)?.name
+            ?.let { CompanySearchTerm.from(it, symbol) }
+            ?: symbol.substringBefore('.')
         val resolved = client.resolveInstrument(query)
         if (resolved == null) {
             unresolvedUntil[symbol] = now + UNRESOLVED_RETRY_MILLIS

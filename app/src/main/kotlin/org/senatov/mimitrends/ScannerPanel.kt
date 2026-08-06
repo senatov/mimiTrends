@@ -107,6 +107,7 @@ class ScannerPanel(
     private val cycleStatus = Label()
     private val scanIndicator = Label()
     private val stagedRows = linkedMapOf<String, ScanResult>()
+    private val observationOverlay = MarketObservationOverlay()
     private var scanning = false
     private var countdown: Timeline? = null
     private var hourglass: Timeline? = null
@@ -194,13 +195,13 @@ class ScannerPanel(
 
     fun update(result: ScanResult) {
         log.debug(LogTag.UI, "update(symbol={}, score={})", result.symbol, result.anomalyScore)
-        if (scanning) stagedRows[result.symbol] = result
+        if (scanning) stagedRows[result.symbol] = observationOverlay.apply(result)
     }
 
     fun applyPriorityResult(symbol: String, result: ScanResult?) {
         log.debug(LogTag.UI, "applyPriorityResult(symbol={}, present={})", symbol, result != null)
         val target = if (scanning) stagedRows else rows.associateByTo(linkedMapOf(), ScanResult::symbol)
-        if (result == null) target.remove(symbol) else target[symbol] = result
+        if (result == null) target.remove(symbol) else target[symbol] = observationOverlay.apply(result)
         if (!scanning) {
             replaceRows(target.values)
             autoFitter.request()
@@ -208,20 +209,18 @@ class ScannerPanel(
     }
 
     fun applyMarketObservation(symbol: String, price: Double, observedAtMillis: Long, source: String) {
+        observationOverlay.record(symbol, price, observedAtMillis, source)
         val index = rows.indexOfFirst { it.symbol == symbol }
         if (index >= 0) {
             val current = rows[index]
-            if (observedAtMillis > current.updatedAtMillis) {
-                rows[index] = current.copy(price = price, updatedAtMillis = observedAtMillis, dataStatus = source)
+            val updated = observationOverlay.apply(current)
+            if (updated !== current) {
+                rows[index] = updated
                 autoFitter.request()
             }
         }
         stagedRows[symbol]?.let { current ->
-            if (observedAtMillis > current.updatedAtMillis) {
-                stagedRows[symbol] = current.copy(
-                    price = price, updatedAtMillis = observedAtMillis, dataStatus = source
-                )
-            }
+            stagedRows[symbol] = observationOverlay.apply(current)
         }
     }
 
@@ -265,7 +264,7 @@ class ScannerPanel(
 
     private fun replaceRows(replacements: Collection<ScanResult>) {
         val selectedSymbol = table.selectionModel.selectedItem?.symbol
-        rows.setAll(replacements)
+        rows.setAll(replacements.map(observationOverlay::apply))
         table.sort()
         val retainedIndex = selectedSymbol?.let { symbol -> sortedRows.indexOfFirst { it.symbol == symbol } } ?: -1
         if (retainedIndex >= 0) {

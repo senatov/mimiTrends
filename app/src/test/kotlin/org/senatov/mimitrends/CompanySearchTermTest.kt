@@ -9,7 +9,11 @@ class CompanySearchTermTest {
     }
 
     @Test fun `removes legal form and exchange class from a company name`() {
-        assertEquals("BEIERSDORF", CompanySearchTerm.from("BEIERSDORF AG                 I", "BEI.DE"))
+        assertEquals("Beiersdorf", CompanySearchTerm.from("BEIERSDORF AG                 I", "BEI.DE"))
+    }
+
+    @Test fun `removes French share label and preserves brand acronym`() {
+        assertEquals("BNP Paribas", CompanySearchTerm.from("BNP PARIBAS ACT.A", "BNP.PA"))
     }
 
     @Test fun `preserves a multi-word searchable brand name`() {

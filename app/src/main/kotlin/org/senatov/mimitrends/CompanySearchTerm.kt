@@ -7,16 +7,27 @@ internal object CompanySearchTerm {
         val words = normalizeDisplay(companyName).split(WHITESPACE).map { it.trim(*EDGE_PUNCTUATION) }
             .filter { word -> word.any(Char::isLetterOrDigit) }.toMutableList()
         while (words.isNotEmpty() && isRemovableSuffix(words.last())) words.removeLast()
-        return words.joinToString(" ").takeIf(String::isNotBlank) ?: symbol.substringBefore('.').trim()
+        return words.joinToString(" ").takeIf(String::isNotBlank)?.let(::readableCase)
+            ?: symbol.substringBefore('.').trim()
     }
 
     private fun isRemovableSuffix(word: String): Boolean {
         val normalized = word.filter(Char::isLetterOrDigit).uppercase()
-        return normalized in LEGAL_SUFFIXES || normalized.matches(SHARE_CLASS)
+        return normalized in LEGAL_SUFFIXES || normalized.matches(SHARE_CLASS) || normalized.matches(SHARE_LABEL)
+    }
+
+    private fun readableCase(value: String): String {
+        if (value.any(Char::isLowerCase)) return value
+        return value.split(WHITESPACE).joinToString(" ") { word ->
+            if (word.count(Char::isLetter) <= ACRONYM_MAX_LENGTH) word
+            else word.lowercase().replaceFirstChar(Char::uppercase)
+        }
     }
 
     private val WHITESPACE = Regex("\\s+")
     private val SHARE_CLASS = Regex("[A-Z0-9]")
+    private val SHARE_LABEL = Regex("(?:ACT|ACTION|ORD|ORDINARY)[A-Z0-9]?")
+    private const val ACRONYM_MAX_LENGTH = 3
     private val LEGAL_SUFFIXES = setOf(
         "AG", "SE", "INC", "INCORPORATED", "CORP", "CORPORATION", "PLC", "LTD", "LIMITED",
         "SA", "SAS", "SPA", "NV", "BV", "GMBH", "KG", "KGaA", "CO", "COMPANY"
