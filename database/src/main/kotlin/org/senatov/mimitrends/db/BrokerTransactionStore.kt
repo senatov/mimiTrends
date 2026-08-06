@@ -113,8 +113,8 @@ internal class BrokerTransactionStore(private val connection: Connection) {
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"""
 
         const val LINK_TO_SIGNALS = """UPDATE broker_transactions AS trade SET
-            linked_symbol=(SELECT i.symbol FROM instrument_metadata i WHERE i.isin=trade.isin LIMIT 1),
-            linked_run_id=(SELECT c.run_id FROM scan_candidates c JOIN instrument_metadata i ON i.symbol=c.symbol
+            (linked_run_id, linked_symbol)=(SELECT c.run_id, c.symbol
+                FROM scan_candidates c JOIN instrument_metadata i ON i.symbol=c.symbol
                 WHERE i.isin=trade.isin AND c.published=1 AND c.signal_epoch<=trade.occurred_at
                   AND c.signal_epoch>=trade.occurred_at-3600
                 ORDER BY c.signal_epoch DESC LIMIT 1)

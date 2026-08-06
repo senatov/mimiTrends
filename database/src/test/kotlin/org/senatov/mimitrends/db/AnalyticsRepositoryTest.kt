@@ -98,6 +98,9 @@ class AnalyticsRepositoryTest {
         val executionEpoch = ScalableCsvImporter.parse(csv).single().occurredAtEpochSeconds
         AnalyticsRepository(database).use { analytics ->
             analytics.upsertInstrument(InstrumentMetadata(
+                "GOOG", "Alphabet Inc.", "NASDAQ", "USD", "America/New_York", isin = "US02079K3059"
+            ))
+            analytics.upsertInstrument(InstrumentMetadata(
                 "GOOGL", "Alphabet Inc.", "NASDAQ", "USD", "America/New_York", isin = "US02079K3059"
             ))
             val run = analytics.beginScan("US", 1, 180)
@@ -105,9 +108,6 @@ class AnalyticsRepositoryTest {
                 result(executionEpoch - 60).copy(symbol = "GOOGL"), null, "TEST")
             analytics.completeScan(run, listOf("GOOGL"), 0)
             analytics.importScalableTransactions(csv)
-            analytics.upsertInstrument(InstrumentMetadata(
-                "GOOG", "Alphabet Inc.", "NASDAQ", "USD", "America/New_York", isin = "US02079K3059"
-            ))
 
             analytics.loadBrokerTrades("GOOG", "Alphabet Inc.")
         }
