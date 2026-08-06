@@ -68,13 +68,19 @@ internal class ScannerColumnFactory(
             object : TableCell<ScanResult, ScanResult>() {
                 override fun updateItem(item: ScanResult?, empty: Boolean) {
                     super.updateItem(item, empty)
+                    styleClass.remove(RARE_IMPULSE_STYLE_CLASS)
                     if (empty || item == null) {
                         text = null; style = ""; tooltip = null
                         return
                     }
                     val presentation = metric(item)
                     text = presentation.label
-                    style = "-fx-text-fill: ${presentation.color}; -fx-font-weight: ${presentation.weight};"
+                    if (presentation.label.startsWith("Rare impulse", ignoreCase = true)) {
+                        style = ""
+                        styleClass += RARE_IMPULSE_STYLE_CLASS
+                    } else {
+                        style = "-fx-text-fill: ${presentation.color}; -fx-font-weight: ${presentation.weight};"
+                    }
                     tooltip = Tooltip(presentation.details).apply { showDelay = Duration.millis(350.0) }
                 }
             }
@@ -163,19 +169,18 @@ internal class ScannerColumnFactory(
 
     private fun signalVisual(result: ScanResult): SignalVisual {
         val down = result.signalSource.contains('↓')
-        val directionalColor = if (down) "#c43d4b" else "#138a55"
-        val weakColor = if (down) "#a9787d" else "#668b72"
+        val directionalColor = if (down) "#a61f2d" else "#087443"
         return when {
             result.signalSource.contains("· cooling") -> SignalVisual(
-                "#7b8189", 400,
+                TABLE_TEXT_COLOR, 400,
                 "Recent event · no longer qualifies as an active signal · retained briefly for context"
             )
-            result.signalAgeMinutes > 0 -> SignalVisual("#7b8189", 400, "Old signal · ${result.signalAgeMinutes} minute(s) ago")
-            result.signalSource.contains("relaxed", true) -> SignalVisual("#ad7100", 500, "Questionable signal · accepted only by relaxed statistical thresholds")
+            result.signalAgeMinutes > 0 -> SignalVisual(TABLE_TEXT_COLOR, 400, "Old signal · ${result.signalAgeMinutes} minute(s) ago")
+            result.signalSource.contains("relaxed", true) -> SignalVisual("#8a5600", 500, "Questionable signal · accepted only by relaxed statistical thresholds")
             result.signalSource.startsWith("Recovery breakout") ->
-                SignalVisual("#2f7f61", 600, "Fresh breakout after recovery consolidation · earlier decline remains a risk factor")
+                SignalVisual("#087443", 600, "Fresh breakout after recovery consolidation · earlier decline remains a risk factor")
             result.signalSource.startsWith("Recovery rise") ->
-                SignalVisual("#2f7f61", 600, "Continuing recovery rise · earlier decline remains a risk factor")
+                SignalVisual("#087443", 600, "Continuing recovery rise · earlier decline remains a risk factor")
             result.signalSource.startsWith("Steady rise") &&
                 kotlin.math.abs(result.windowChangePercent) < 0.90 ->
                 SignalVisual(STEADY_RISE_COLOR, 500, "Weak current trend · direction is active but close to the minimum threshold")
@@ -184,10 +189,10 @@ internal class ScannerColumnFactory(
             result.signalSource.startsWith("Impulse") ->
                 SignalVisual(IMPULSE_COLOR, 600, "Fresh price impulse · direction is descriptive, not a forecast")
             result.signalSource.startsWith("Trend") && kotlin.math.abs(result.windowChangePercent) < 0.90 ->
-                SignalVisual(weakColor, 500, "Weak current trend · direction is active but close to the minimum threshold")
+                SignalVisual(directionalColor, 500, "Weak current trend · direction is active but close to the minimum threshold")
             result.signalSource.startsWith("Trend") ->
                 SignalVisual(directionalColor, 500, "Directional pattern across the measured window · continuation is not implied")
-            result.anomalyScore < 1.25 -> SignalVisual("#ad7100", 500, "Questionable signal · low composite confidence")
+            result.anomalyScore < 1.25 -> SignalVisual("#8a5600", 500, "Questionable signal · low composite confidence")
             else -> SignalVisual(directionalColor, 600,
                 if (down) "Current downward anomaly · direction is descriptive, not a forecast"
                 else "Current upward anomaly · direction is descriptive, not a forecast")
@@ -231,6 +236,8 @@ internal class ScannerColumnFactory(
     private data class SignalVisual(val color: String, val weight: Int, val description: String)
 
     private companion object {
+        const val RARE_IMPULSE_STYLE_CLASS = "rare-impulse-cell"
+        const val TABLE_TEXT_COLOR = "#1f2933"
         const val STEADY_RISE_COLOR = "#0B5D3B"
         const val IMPULSE_COLOR = "#4B1F6F"
     }

@@ -5,7 +5,7 @@ internal object CompanySearchTerm {
 
     fun from(companyName: String, symbol: String): String {
         val words = normalizeDisplay(companyName).split(WHITESPACE).map { it.trim(*EDGE_PUNCTUATION) }
-            .filter(String::isNotBlank).toMutableList()
+            .filter { word -> word.any(Char::isLetterOrDigit) }.toMutableList()
         while (words.isNotEmpty() && isRemovableSuffix(words.last())) words.removeLast()
         return words.joinToString(" ").takeIf(String::isNotBlank) ?: symbol.substringBefore('.').trim()
     }

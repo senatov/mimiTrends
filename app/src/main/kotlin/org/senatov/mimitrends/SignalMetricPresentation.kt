@@ -30,7 +30,7 @@ internal object SignalMetricPresentation {
 
     fun outcome(result: ScanResult): SignalMetric {
         if (!result.medianNetReturnPercent.isFinite()) {
-            return SignalMetric("Collecting", "#707981", 400,
+            return SignalMetric("Collecting", "#1f2933", 400,
                 "Need at least 5 independent ${result.calibrationHorizonMinutes}-minute episodes; " +
                     "currently ${result.calibrationSamples}. Nearby repeated scans count as one episode.")
         }
@@ -62,7 +62,7 @@ internal object SignalMetricPresentation {
     fun priceAction(result: ScanResult): SignalMetric {
         val arrow = directionArrow(result)
         if (!result.priceAnomaly.isFinite() && !result.rangeAnomaly.isFinite()) {
-            return SignalMetric("Steady trend $arrow", "#3f6682", 500,
+            return SignalMetric("Steady trend $arrow", "#17365f", 500,
                 "Persistent price trend over ${result.signalWindowLabel}; no single exceptional candle.")
         }
         val jump = result.priceAnomaly.finiteOrZero()
@@ -118,7 +118,7 @@ internal object SignalMetricPresentation {
     private enum class Level(val anomalyLabel: String, val volumeLabel: String, val color: String) {
         EXTREME("Very high", "Extreme", "#a92f3d"),
         STRONG("High", "Strong", "#b26012"),
-        NOTABLE("Moderate", "Elevated", "#526f8a"),
-        WATCH("Low", "Normal", "#707981")
+        NOTABLE("Moderate", "Elevated", "#17365f"),
+        WATCH("Low", "Normal", "#1f2933")
     }
 }

@@ -20,6 +20,14 @@ class CompanySearchTermTest {
         assertEquals("Mercedes-Benz Group", CompanySearchTerm.from("Mercedes-Benz Group AG", "MBG.DE"))
     }
 
+    @Test fun `removes a dangling connector after a legal form`() {
+        assertEquals("Henkel", CompanySearchTerm.from("Henkel AG &", "HEN3.DE"))
+    }
+
+    @Test fun `removes compound German legal form`() {
+        assertEquals("Henkel", CompanySearchTerm.from("Henkel AG & Co. KGaA", "HEN3.DE"))
+    }
+
     @Test fun `falls back to ticker when company name is empty`() {
         assertEquals("BMW", CompanySearchTerm.from(" ", "BMW.DE"))
     }
