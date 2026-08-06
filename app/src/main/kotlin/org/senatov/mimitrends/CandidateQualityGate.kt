@@ -28,10 +28,13 @@ internal object CandidateQualityGate {
         }
         val persistence = result.candleBodyRatio.coerceIn(0.0, 1.0)
         val penalty = (if (result.signalSource.contains("relaxed")) 0.10 else 0.0) +
-            (if (!result.volumeAnomaly.isFinite() && !result.relativeVolume.isFinite()) 0.05 else 0.0)
+            (if (!result.volumeAnomaly.isFinite() && !result.relativeVolume.isFinite()) 0.05 else 0.0) +
+            (if (priorityTier(result) > 0) 0.20 else 0.0)
         return 10.0 * (0.35 * historical + 0.25 * movement + 0.15 * freshness +
             0.15 * volume + 0.10 * persistence - penalty)
     }
+
+    fun priorityTier(result: ScanResult): Int = if ('↓' in result.signalSource) DOWNSIDE_WATCH_TIER else LONG_TIER
 
     private fun impulseQuality(result: ScanResult): Boolean {
         val move = abs(result.windowChangePercent)
@@ -78,4 +81,6 @@ internal object CandidateQualityGate {
     private const val MIN_REVERSAL_RECOVERY_RATIO = 0.45
     private const val MIN_ADAPTIVE_PERCENTILE = 8.0
     private const val MIN_UNCALIBRATED_ADAPTIVE_SCORE = 5.0
+    private const val LONG_TIER = 0
+    private const val DOWNSIDE_WATCH_TIER = 1
 }

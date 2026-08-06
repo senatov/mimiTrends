@@ -6,15 +6,13 @@ import kotlin.test.assertTrue
 
 class RecentEventRetainerTest {
     @Test
-    fun `retains inactive event with decayed score and cooling label`() {
-        val retainer = RecentEventRetainer(retentionMillis = 20 * MINUTE, scoreHalfLifeMillis = 10 * MINUTE)
+    fun `does not retain an inactive event as a candidate`() {
+        val retainer = RecentEventRetainer(retentionMillis = 20 * MINUTE)
         retainer.merge(listOf(result("SAP.DE", 8.0)), 0L, 15)
 
-        val cooling = retainer.merge(emptyList(), 10 * MINUTE, 15).single()
+        val displayed = retainer.merge(emptyList(), 10 * MINUTE, 15)
 
-        assertEquals(4.0, cooling.anomalyScore, 0.0001)
-        assertEquals("Cooling · 10m", cooling.signalWindowLabel)
-        assertTrue(cooling.signalSource.endsWith("· cooling"))
+        assertTrue(displayed.isEmpty())
     }
 
     @Test
@@ -50,14 +48,13 @@ class RecentEventRetainerTest {
     }
 
     @Test
-    fun `priority miss starts cooling instead of removing event`() {
-        val retainer = RecentEventRetainer(scoreHalfLifeMillis = 10 * MINUTE)
+    fun `priority miss removes the event`() {
+        val retainer = RecentEventRetainer()
         retainer.merge(listOf(result("SAP.DE", 8.0)), 0L, 15)
 
-        val cooling = requireNotNull(retainer.priorityUpdate("SAP.DE", null, 5 * MINUTE))
+        val displayed = retainer.priorityUpdate("SAP.DE", null, 5 * MINUTE)
 
-        assertEquals("Cooling · 5m", cooling.signalWindowLabel)
-        assertTrue(cooling.anomalyScore < 8.0)
+        assertEquals(null, displayed)
     }
 
     private fun result(symbol: String, score: Double = 4.0, source: String = "Impulse ↑") =

@@ -281,6 +281,14 @@ window, 0.80% progress, and sufficient path efficiency. Calibrated adaptive resu
 80th historical percentile, and at most two adaptive rows may be published in one scan. Consequently, the
 table may legitimately contain fewer rows than the configured target.
 
+The primary tier is intended for roughly thirty-minute long-candidate review. It rejects upward bounces that
+remain inside an intraday distribution regime: negative session structure, material distance below VWAP,
+repeated five-minute drops, repeated high-volume red candles, lower highs/lower lows, or excessive drawdown
+from the session high. A second, lower-priority downside-watch tier retains only genuinely sharp vertical
+falls (at least 0.75% with a price/range Z-score of 4.5 or more). These downside observations are useful for
+watching a possible reversal but are always ranked after qualifying long candidates. During open markets,
+cooling and previously saved rows are no longer used to fill an otherwise empty candidate table.
+
 While an episode is active, observed candle highs and lows update its maximum favorable excursion (MFE) and
 maximum adverse excursion (MAE). These path metrics describe typical opportunity and drawdown after a signal;
 older outcomes created before this schema was introduced remain usable but have no excursion values.

@@ -41,4 +41,11 @@ class CandidateQualityGateTest {
             TestScanResult.create().copy(signalAgeMinutes = 3), adaptive = false
         ))
     }
+
+    @Test fun `places a sharp downside watch after a long candidate`() {
+        val long = TestScanResult.create(symbol = "LONG")
+        val downside = TestScanResult.create(anomalyScore = 12.0, signalSource = "Impulse ↓", symbol = "DROP")
+
+        assertTrue(CandidateQualityGate.priorityTier(long) < CandidateQualityGate.priorityTier(downside))
+    }
 }

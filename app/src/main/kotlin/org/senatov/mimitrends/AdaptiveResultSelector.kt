@@ -43,7 +43,8 @@ internal object AdaptiveResultSelector {
     }
 
     private fun attentionComparator(): Comparator<ScanResult> =
-        compareByDescending<ScanResult>(CandidateQualityGate::attentionScore)
+        compareBy<ScanResult>(CandidateQualityGate::priorityTier)
+            .thenByDescending(CandidateQualityGate::attentionScore)
             .thenByDescending(ScanResult::anomalyScore)
 
     private const val MIN_RESULTS = 5

@@ -21,6 +21,7 @@ class ScannerEngine(private val zoneOverride: ZoneId? = null) {
     private val earlyMomentumDetector = EarlyMomentumDetector(zoneOverride)
     private val vReversalDetector = VReversalDetector(zoneOverride)
     private val steadyRiseDetector = SteadyRiseDetector(zoneOverride)
+    private val longCandidateSafety = LongCandidateSafetyFilter(zoneOverride)
 
     internal fun freshnessWeight(ageMinutes: Double): Double =
         exp(-ln(2.0) * ageMinutes.coerceAtLeast(0.0) / FRESHNESS_HALF_LIFE_MINUTES)
@@ -54,9 +55,11 @@ class ScannerEngine(private val zoneOverride: ZoneId? = null) {
         val impulseScore = signal?.score ?: Double.NEGATIVE_INFINITY
         if (reversal != null && reversal.score >= max(impulseScore, momentum?.score ?: Double.NEGATIVE_INFINITY)) {
             return reversalResult(symbol, latest, sessionBars, turnover, reversal)
+                .takeUnless { longCandidateSafety.blocks(sorted, it) }
         }
         if (momentum != null && momentum.score > impulseScore) {
             return momentumResult(symbol, latest, sessionBars, turnover, momentum)
+                .takeUnless { longCandidateSafety.blocks(sorted, it) }
         }
         val selected = requireNotNull(signal)
         return ScanResult(
@@ -82,7 +85,7 @@ class ScannerEngine(private val zoneOverride: ZoneId? = null) {
             },
             signalPrice = selected.feature.bar.close,
             signalEpochMillis = selected.feature.bar.minuteEpochSeconds * 1_000
-        )
+        ).takeUnless { longCandidateSafety.blocks(sorted, it) }
     }
 
     private fun momentumResult(
@@ -158,6 +161,7 @@ class ScannerEngine(private val zoneOverride: ZoneId? = null) {
             return impulse.copy(signalSource = "${impulse.signalSource} · relaxed", anomalyScore = impulse.anomalyScore * factor)
         }
         return steadyRiseDetector.detect(symbol, bars, relaxed)
+            ?.takeUnless { longCandidateSafety.blocks(bars, it) }
     }
 
     private fun score(

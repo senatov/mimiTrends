@@ -49,17 +49,14 @@ class ScannerEngineTest {
         assertTrue(result.anomalyScore >= 4.0)
     }
 
-    @Test fun `detects an early three minute fall symmetrically`() {
+    @Test fun `does not publish a mild three minute fall as a downside watch`() {
         val bars = normalBars().toMutableList()
         var minute = nextMinute(bars)
         bars += candle(minute++, 100.0, 99.83, 900.0)
         bars += candle(minute++, 99.83, 99.66, 1_100.0)
         bars += candle(minute, 99.66, 99.49, 1_300.0)
 
-        val result = requireNotNull(engine().evaluate("TEST", bars, criteria()))
-
-        assertEquals("Momentum 3m ↓", result.signalSource)
-        assertTrue(result.windowChangePercent <= -0.50)
+        assertNull(engine().evaluate("TEST", bars, criteria()))
     }
 
     @Test fun `drops early momentum after ten flat minutes`() {
@@ -99,7 +96,7 @@ class ScannerEngineTest {
         assertTrue(result.priceAnomaly >= 3.0)
     }
 
-    @Test fun `detects a bearish V reversal symmetrically`() {
+    @Test fun `does not publish a mild bearish reversal as a downside watch`() {
         val bars = normalBars().toMutableList()
         var minute = nextMinute(bars)
         bars += candle(minute++, 100.0, 100.14, 600.0)
@@ -108,10 +105,7 @@ class ScannerEngineTest {
         bars += candle(minute++, 100.20, 100.09, 1_000.0)
         bars += candle(minute, 100.09, 99.99, 1_100.0)
 
-        val result = requireNotNull(engine().evaluate("TEST", bars, criteria()))
-
-        assertEquals("V-Reversal ↓", result.signalSource)
-        assertTrue(result.windowChangePercent <= -0.25)
+        assertNull(engine().evaluate("TEST", bars, criteria()))
     }
 
     @Test fun `does not call an unrecovered fall a V reversal`() {
