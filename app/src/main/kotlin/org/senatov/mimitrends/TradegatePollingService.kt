@@ -22,8 +22,9 @@ import java.util.concurrent.TimeUnit
 
 internal class TradegatePollingService(
     private val repository: MarketRepository,
-    private val client: TradegateMarketDataClient = TradegateMarketDataClient()
-) : AutoCloseable {
+    private val client: TradegateMarketDataClient = TradegateMarketDataClient(),
+    private val observationSink: MarketObservationSink = MarketObservationSink {}
+) : MarketObservationSource {
     private val log = LoggerFactory.getLogger(javaClass)
     private val scheduler = Executors.newSingleThreadScheduledExecutor { task ->
         Thread(task, "mimitrends-tradegate-provider").apply { isDaemon = true }
@@ -37,7 +38,7 @@ internal class TradegatePollingService(
     private var task: ScheduledFuture<*>? = null
 
     @Synchronized
-    fun configure(criteria: ScannerCriteria) {
+    override fun configure(criteria: ScannerCriteria) {
         task?.cancel(false)
         task = null
         generation++
@@ -103,11 +104,15 @@ internal class TradegatePollingService(
         ))
         val minute = quote.observedAtMillis / 60_000L * 60L
         val bar = MinuteBar(symbol, minute, quote.last, quote.last, quote.last, quote.last, 0.0, VolumeStatus.MISSING)
-        val stored = repository.upsertProviderMinuteBar(
-            ProviderMinuteBar(PROVIDER, symbol, instrument.identifier, MIC, CURRENCY, bar, quote.observedAtMillis)
+        val observation = ProviderMinuteBar(
+            PROVIDER, symbol, instrument.identifier, MIC, CURRENCY, bar, quote.observedAtMillis
         )
-        if (stored) log.debug(LogTag.DB, "Tradegate quote stored symbol={} isin={} minute={} price={}",
-            symbol, instrument.identifier, minute, quote.last)
+        val stored = repository.upsertProviderMinuteBar(observation)
+        if (stored) {
+            observationSink.publish(observation)
+            log.debug(LogTag.DB, "Tradegate quote stored symbol={} isin={} minute={} price={}",
+                symbol, instrument.identifier, minute, quote.last)
+        }
     }
 
     private fun resolve(symbol: String): ProviderInstrument? {

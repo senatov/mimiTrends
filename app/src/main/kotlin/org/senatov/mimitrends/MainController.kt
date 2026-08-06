@@ -10,6 +10,7 @@ import org.senatov.mimitrends.db.AnalyticsRepository
 import org.senatov.mimitrends.log.LogTag
 import org.senatov.mimitrends.model.MinuteBar
 import org.senatov.mimitrends.model.MarketRegion
+import org.senatov.mimitrends.model.ProviderMinuteBar
 import org.senatov.mimitrends.model.ScannerCriteria
 import org.senatov.mimitrends.model.ScanResult
 import org.senatov.mimitrends.scanner.ScannerEngine
@@ -74,8 +75,10 @@ class MainController(
     private val feedStatus = FeedStatusResolver(liveTicks)
     private val marketData = MarketDataService(repository, analytics, scannerEngine, yahooFinance, feedStatus::status)
     private val scannerBatch = ScannerBatchService(marketData::loadAndEvaluate, analytics, repository, feedStatus::status)
-    private val tradegateProvider = TradegatePollingService(repository)
-    private val euronextProvider = EuronextPollingService(repository)
+    private val observationBus = MarketObservationBus()
+    private val observationUiBridge = MarketObservationUiBridge(observationBus.observations, ::applyProviderObservation)
+    private val tradegateProvider = TradegatePollingService(repository, observationSink = observationBus)
+    private val euronextProvider = EuronextPollingService(repository, observationSink = observationBus)
     private val recentEvents = RecentEventRetainer()
     private val priorityScanner = PriorityScanCoordinator(
         { symbol -> marketData.loadPriorityResult(symbol, scannerCriteria) },
@@ -161,8 +164,13 @@ class MainController(
         if (!closing.compareAndSet(false, true)) return
         scanGeneration.incrementAndGet()
         rotationTask?.cancel(false)
-        ApplicationResourceCloser.close(priorityScanner, tradegateProvider, euronextProvider,
-            { finnhubClient?.close() }, batchScheduler, repository, analytics, log)
+        observationUiBridge.close()
+        try {
+            ApplicationResourceCloser.close(priorityScanner, tradegateProvider, euronextProvider,
+                { finnhubClient?.close() }, batchScheduler, repository, analytics, log)
+        } finally {
+            observationBus.close()
+        }
     }
 
     fun selectedSymbol(): String = currentSymbol.ifEmpty { "AAPL" }
@@ -269,6 +277,21 @@ class MainController(
                 MarketRegion.US -> !european
                 MarketRegion.EUROPE -> european
             }
+        }
+    }
+
+    private fun applyProviderObservation(observation: ProviderMinuteBar) {
+        scannerPanel.applyMarketObservation(
+            observation.symbol, observation.bar.close, observation.observedAtMillis, observation.provider
+        )
+        currentSignal?.takeIf {
+            it.symbol == observation.symbol && observation.observedAtMillis > it.updatedAtMillis
+        }?.let { signal ->
+            currentSignal = signal.copy(
+                price = observation.bar.close,
+                updatedAtMillis = observation.observedAtMillis,
+                dataStatus = observation.provider
+            )
         }
     }
 

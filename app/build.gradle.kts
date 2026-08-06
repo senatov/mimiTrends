@@ -68,6 +68,7 @@ dependencies {
     implementation("org.openjfx:javafx-graphics:$javafxVersion:$javafxPlatform")
     implementation("org.openjfx:javafx-controls:$javafxVersion:$javafxPlatform")
     implementation("io.github.mkpaz:atlantafx-base:2.1.0")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.10.2")
     implementation(platform("org.apache.logging.log4j:log4j-bom:2.26.1"))
     implementation("org.apache.logging.log4j:log4j-api")
     implementation("org.apache.logging.log4j:log4j-core")

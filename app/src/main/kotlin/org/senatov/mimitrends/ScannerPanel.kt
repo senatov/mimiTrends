@@ -207,6 +207,24 @@ class ScannerPanel(
         }
     }
 
+    fun applyMarketObservation(symbol: String, price: Double, observedAtMillis: Long, source: String) {
+        val index = rows.indexOfFirst { it.symbol == symbol }
+        if (index >= 0) {
+            val current = rows[index]
+            if (observedAtMillis > current.updatedAtMillis) {
+                rows[index] = current.copy(price = price, updatedAtMillis = observedAtMillis, dataStatus = source)
+                autoFitter.request()
+            }
+        }
+        stagedRows[symbol]?.let { current ->
+            if (observedAtMillis > current.updatedAtMillis) {
+                stagedRows[symbol] = current.copy(
+                    price = price, updatedAtMillis = observedAtMillis, dataStatus = source
+                )
+            }
+        }
+    }
+
     fun showSnapshot(results: Collection<ScanResult>, resultLimit: Int) {
         replaceRows(results.sortedByDescending(ScanResult::anomalyScore).take(resultLimit))
         autoFitter.request()

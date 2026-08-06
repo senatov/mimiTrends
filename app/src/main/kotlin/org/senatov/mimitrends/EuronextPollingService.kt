@@ -22,8 +22,9 @@ import java.time.ZoneId
 
 internal class EuronextPollingService(
     private val repository: MarketRepository,
-    private val client: EuronextMarketDataClient = EuronextMarketDataClient()
-) : AutoCloseable {
+    private val client: EuronextMarketDataClient = EuronextMarketDataClient(),
+    private val observationSink: MarketObservationSink = MarketObservationSink {}
+) : MarketObservationSource {
     private val log = LoggerFactory.getLogger(javaClass)
     private val scheduler = Executors.newSingleThreadScheduledExecutor { task ->
         Thread(task, "mimitrends-euronext-provider").apply { isDaemon = true }
@@ -37,7 +38,7 @@ internal class EuronextPollingService(
     private var task: ScheduledFuture<*>? = null
 
     @Synchronized
-    fun configure(criteria: ScannerCriteria) {
+    override fun configure(criteria: ScannerCriteria) {
         task?.cancel(false)
         task = null
         generation++
@@ -101,11 +102,15 @@ internal class EuronextPollingService(
         ))
         val minute = quote.observedAtMillis / 60_000L * 60L
         val bar = MinuteBar(symbol, minute, quote.last, quote.last, quote.last, quote.last, 0.0, VolumeStatus.MISSING)
-        val stored = repository.upsertProviderMinuteBar(
-            ProviderMinuteBar(PROVIDER, symbol, instrument.identifier, instrument.mic, quote.currency, bar, quote.observedAtMillis)
+        val observation = ProviderMinuteBar(
+            PROVIDER, symbol, instrument.identifier, instrument.mic, quote.currency, bar, quote.observedAtMillis
         )
-        if (stored) log.debug(LogTag.DB, "Euronext quote stored symbol={} isin={} mic={} minute={} price={}",
-            symbol, instrument.identifier, instrument.mic, minute, quote.last)
+        val stored = repository.upsertProviderMinuteBar(observation)
+        if (stored) {
+            observationSink.publish(observation)
+            log.debug(LogTag.DB, "Euronext quote stored symbol={} isin={} mic={} minute={} price={}",
+                symbol, instrument.identifier, instrument.mic, minute, quote.last)
+        }
     }
 
     private fun resolve(symbol: String): ProviderInstrument? {
