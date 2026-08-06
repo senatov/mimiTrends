@@ -95,7 +95,7 @@ data class MarketEvent(
 )
 
 enum class DisplayCurrency(val symbol: String) { EUR("€"), USD("$") }
-enum class MarketDataSource { SQLITE, YAHOO, FINNHUB, TRADEGATE, EURONEXT, BOERSE_DE }
+enum class MarketDataSource { SQLITE, YAHOO, FINNHUB, TRADEGATE, EURONEXT, BOERSE_DE, BNP_PARIBAS }
 enum class MarketObservationQuality { FULL_OHLCV, QUOTE_SNAPSHOT }
 enum class AnomalyWindow(val label: String, val seconds: Long?) {
     MINUTE("1 minute", 60), HOUR("1 hour", 3_600), SESSION("Current session", null);

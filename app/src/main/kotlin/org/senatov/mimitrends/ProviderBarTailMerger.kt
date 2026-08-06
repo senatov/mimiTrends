@@ -52,7 +52,7 @@ internal object ProviderBarTailMerger {
 
     fun isEuropeanSymbol(symbol: String): Boolean = symbol.substringAfterLast('.', "").uppercase() in EUROPEAN_SUFFIXES
 
-    private val PROVIDER_PRIORITY = listOf("BOERSE_DE", "TRADEGATE", "EURONEXT")
+    private val PROVIDER_PRIORITY = listOf("BOERSE_DE", "BNP_PARIBAS", "TRADEGATE", "EURONEXT")
     private val EUROPEAN_SUFFIXES = setOf("DE", "PA", "AS", "MI", "HE")
     private const val MAX_PROVIDER_AGE_SECONDS = 15 * 60L
 }
