@@ -13,7 +13,7 @@ class PublishedResultComposerTest {
             TestScanResult.create(symbol = "ENR.DE")
         )
 
-        val displayed = PublishedResultComposer.compose(current, saved, 3)
+        val displayed = PublishedResultComposer.compose(current, saved, 3, nowEpochSeconds = 1)
 
         assertEquals(listOf("NOKIA.HE", "SAP.DE", "ENR.DE"), displayed.map { it.symbol })
         assertEquals(current.single().price, displayed.first().price)
@@ -23,6 +23,19 @@ class PublishedResultComposerTest {
     fun `does not exceed the display limit`() {
         val saved = (1..10).map { TestScanResult.create(symbol = "TEST$it.DE") }
 
-        assertEquals(5, PublishedResultComposer.compose(emptyList(), saved, 5).size)
+        assertEquals(5, PublishedResultComposer.compose(emptyList(), saved, 5, nowEpochSeconds = 1).size)
+    }
+
+    @Test
+    fun `excludes stale saved results from an open-market table`() {
+        val current = TestScanResult.create(symbol = "LIVE").copy(updatedAtMillis = 10_000_000)
+        val recent = TestScanResult.create(symbol = "RECENT").copy(updatedAtMillis = 9_100_000)
+        val stale = TestScanResult.create(symbol = "STALE").copy(updatedAtMillis = 8_700_000)
+
+        val displayed = PublishedResultComposer.compose(
+            listOf(current), listOf(recent, stale), 5, nowEpochSeconds = 10_000
+        )
+
+        assertEquals(listOf("LIVE", "RECENT"), displayed.map { it.symbol })
     }
 }

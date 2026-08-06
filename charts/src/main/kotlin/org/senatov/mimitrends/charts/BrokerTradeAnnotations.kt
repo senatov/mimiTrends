@@ -29,7 +29,8 @@ internal class BrokerTradeAnnotations(private val plot: XYPlot) {
         val firstEpoch = bars.first().minuteEpochSeconds
         val lastEpoch = bars.last().minuteEpochSeconds
         val visible = trades.filter { trade ->
-            trade.entryEpochSeconds <= lastEpoch && (trade.exitEpochSeconds ?: lastEpoch) >= firstEpoch
+            trade.entryEpochSeconds in firstEpoch..lastEpoch ||
+                trade.exitEpochSeconds?.let { it in firstEpoch..lastEpoch } == true
         }
         val priceSpan = (bars.maxOf { it.high } - bars.minOf { it.low })
             .coerceAtLeast(bars.last().close * 0.02) * barPriceMultiplier
@@ -176,8 +177,8 @@ internal class BrokerTradeAnnotations(private val plot: XYPlot) {
     private companion object {
         val ORANGE = Color(235, 133, 35, 225)
         val HIGHLIGHT_ORANGE = Color(244, 126, 24, 235)
-        val HIGHLIGHT_FILL = Color(255, 153, 51, 25)
-        val HIGHLIGHT_STROKE = BasicStroke(5.5f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND)
+        val HIGHLIGHT_FILL = Color(255, 153, 51, 18)
+        val HIGHLIGHT_STROKE = BasicStroke(3.2f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND)
         val CONNECTOR_STROKE = BasicStroke(1.3f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND,
             0f, floatArrayOf(5f, 5f), 0f)
         const val HIGHLIGHT_PADDING = 0.025
