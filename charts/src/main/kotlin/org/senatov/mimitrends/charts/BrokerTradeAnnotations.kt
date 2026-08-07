@@ -20,6 +20,10 @@ import java.util.Date
 
 internal class BrokerTradeAnnotations(private val plot: XYPlot) {
     private val annotations = mutableListOf<XYAnnotation>()
+    private val cardPositions = mutableMapOf<TradeKey, NormalizedPoint>()
+    private val renderedCards = mutableListOf<RenderedCard>()
+    private var activeDrag: ActiveDrag? = null
+    private var lastRender: RenderInput? = null
 
     fun render(
         trades: List<BrokerTrade>,
@@ -28,7 +32,18 @@ internal class BrokerTradeAnnotations(private val plot: XYPlot) {
         barPriceMultiplier: Double,
         displayMillis: (Long) -> Double = { it * 1_000.0 }
     ) {
-        clear()
+        lastRender = RenderInput(trades, bars, displayBars, barPriceMultiplier, displayMillis)
+        renderLast()
+    }
+
+    private fun renderLast() {
+        val input = lastRender ?: return
+        val trades = input.trades
+        val bars = input.bars
+        val displayBars = input.displayBars
+        val barPriceMultiplier = input.barPriceMultiplier
+        val displayMillis = input.displayMillis
+        clearAnnotations()
         if (bars.isEmpty()) return
         val firstEpoch = bars.first().minuteEpochSeconds
         val lastEpoch = bars.last().minuteEpochSeconds
@@ -41,16 +56,14 @@ internal class BrokerTradeAnnotations(private val plot: XYPlot) {
         val domainMin = displayBars.first().minuteEpochSeconds * 1_000.0
         val domainMax = displayBars.last().minuteEpochSeconds * 1_000.0
         val rangeMin = bars.minOf { it.low } * barPriceMultiplier
-        val rangeMax = bars.maxOf { it.high } * barPriceMultiplier
+        val candleRangeMax = bars.maxOf { it.high } * barPriceMultiplier
+        val rangeMax = candleRangeMax + priceSpan * CARD_LANE_SHARE
         visible.forEachIndexed { index, trade ->
             val entryX = displayMillis(trade.entryEpochSeconds)
             val exitX = displayMillis(trade.exitEpochSeconds ?: lastEpoch)
             val entryY = trade.entryPrice * barPriceMultiplier
             val exitY = (trade.exitPrice ?: trade.entryPrice) * barPriceMultiplier
-            val level = index % MAX_LEVELS
-            val lift = priceSpan * (0.10 + level * 0.075)
             val controlX = (entryX + exitX) / 2.0
-            val controlY = maxOf(entryY, exitY) + lift
             addTradeHighlight(trade, bars, entryX, exitX, timeStep, priceSpan,
                 barPriceMultiplier)
             val entryAlignment = alignToCandle(trade.entryEpochSeconds, trade.entryPrice,
@@ -62,10 +75,40 @@ internal class BrokerTradeAnnotations(private val plot: XYPlot) {
             exitAlignment?.let(::addConnector)
             addPoint(entryX, entryY, timeStep, priceSpan, ORANGE)
             addPoint(exitX, exitY, timeStep, priceSpan, if (trade.isOpen) ORANGE else pnlColor(trade))
-            addCard(trade, controlX, controlY + priceSpan * CARD_GAP, timeStep, priceSpan,
+            val key = TradeKey(trade.symbol, trade.entryEpochSeconds, trade.exitEpochSeconds)
+            val stored = cardPositions[key]
+            val preferredX = stored?.let { domainMin + (it.x * (domainMax - domainMin)) } ?: controlX
+            val preferredBottom = stored?.let { rangeMin + (it.y * (rangeMax - rangeMin)) }
+                ?: (candleRangeMax + (priceSpan * (CARD_GAP + ((index % MAX_LEVELS) * CARD_LEVEL_GAP))))
+            addCard(key, trade, preferredX, preferredBottom, timeStep, priceSpan,
                 domainMin, domainMax, rangeMin, rangeMax, entryAlignment, exitAlignment)
         }
     }
+
+    fun beginDrag(domain: Double, range: Double): Boolean {
+        activeDrag = renderedCards.asReversed().firstOrNull { it.bounds.contains(domain, range) }?.let { card ->
+            ActiveDrag(card.key, domain - card.bounds.centerX, range - card.bounds.bottom)
+        }
+        return activeDrag != null
+    }
+
+    fun dragTo(domain: Double, range: Double) {
+        val drag = activeDrag ?: return
+        val card = renderedCards.firstOrNull { it.key == drag.key } ?: return
+        val domainSpan = (card.domainMax - card.domainMin).coerceAtLeast(1.0)
+        val rangeSpan = (card.rangeMax - card.rangeMin).coerceAtLeast(0.000_001)
+        cardPositions[drag.key] = NormalizedPoint(
+            ((domain - drag.domainOffset - card.domainMin) / domainSpan).coerceIn(0.0, 1.0),
+            ((range - drag.rangeOffset - card.rangeMin) / rangeSpan).coerceIn(0.0, 1.0)
+        )
+        renderLast()
+    }
+
+    fun endDrag() {
+        activeDrag = null
+    }
+
+    internal fun renderedCardBounds(): List<CardBounds> = renderedCards.map(RenderedCard::bounds)
 
     private fun addTradeHighlight(
         trade: BrokerTrade,
@@ -92,8 +135,15 @@ internal class BrokerTradeAnnotations(private val plot: XYPlot) {
     }
 
     fun clear() {
+        lastRender = null
+        activeDrag = null
+        clearAnnotations()
+    }
+
+    private fun clearAnnotations() {
         annotations.forEach(plot::removeAnnotation)
         annotations.clear()
+        renderedCards.clear()
     }
 
     private fun addPoint(x: Double, y: Double, timeStep: Double, priceSpan: Double, color: Color) {
@@ -103,6 +153,7 @@ internal class BrokerTradeAnnotations(private val plot: XYPlot) {
     }
 
     private fun addCard(
+        key: TradeKey,
         trade: BrokerTrade,
         x: Double,
         y: Double,
@@ -132,6 +183,7 @@ internal class BrokerTradeAnnotations(private val plot: XYPlot) {
             "$sign$symbol$absolute$percent"
         } ?: "Open position · ${formatter.format(trade.quantity)} shares"
         val bounds = cardBounds(x, y, timeStep, priceSpan, domainMin, domainMax, rangeMin, rangeMax)
+        renderedCards += RenderedCard(key, bounds, domainMin, domainMax, rangeMin, rangeMax)
         add(XYBoxAnnotation(bounds.left, bounds.bottom, bounds.right, bounds.top,
             BasicStroke(1.1f), Color(255, 255, 255, 225), Color(247, 249, 251, 238)))
         add(text(title + sessionNote, bounds.centerX, bounds.bottom + bounds.height * 0.68,
@@ -235,6 +287,8 @@ internal class BrokerTradeAnnotations(private val plot: XYPlot) {
         const val CARD_WIDTH_BARS = 10.0
         const val CARD_HEIGHT_SHARE = 0.14
         const val CARD_GAP = 0.035
+        const val CARD_LANE_SHARE = 0.24
+        const val CARD_LEVEL_GAP = 0.012
         const val CARD_FLIP_GAP = 0.04
         const val CARD_EDGE_PADDING_BARS = 0.5
         const val CARD_EDGE_PADDING_SHARE = 0.02
@@ -253,5 +307,25 @@ internal class BrokerTradeAnnotations(private val plot: XYPlot) {
     internal data class CardBounds(val left: Double, val bottom: Double, val right: Double, val top: Double) {
         val centerX: Double get() = (left + right) / 2.0
         val height: Double get() = top - bottom
+        fun contains(x: Double, y: Double): Boolean = x in left..right && y in bottom..top
     }
+
+    private data class TradeKey(val symbol: String, val entryEpoch: Long, val exitEpoch: Long?)
+    private data class ActiveDrag(val key: TradeKey, val domainOffset: Double, val rangeOffset: Double)
+    private data class NormalizedPoint(val x: Double, val y: Double)
+    private data class RenderedCard(
+        val key: TradeKey,
+        val bounds: CardBounds,
+        val domainMin: Double,
+        val domainMax: Double,
+        val rangeMin: Double,
+        val rangeMax: Double
+    )
+    private data class RenderInput(
+        val trades: List<BrokerTrade>,
+        val bars: List<MinuteBar>,
+        val displayBars: List<MinuteBar>,
+        val barPriceMultiplier: Double,
+        val displayMillis: (Long) -> Double
+    )
 }

@@ -8,7 +8,6 @@ import kotlin.test.assertTrue
 
 class FocusedSignalRefresherTest {
     @Test fun `publishes one focused refresh and observes cooldown`() {
-        val now = 20_000L
         var evaluations = 0
         val completed = CountDownLatch(1)
         val loading = mutableListOf<Boolean>()
@@ -18,7 +17,7 @@ class FocusedSignalRefresherTest {
             onResult = { _, _ -> completed.countDown() },
             onError = { _, error -> throw error },
             cooldownMillis = 15_000L,
-            nowMillis = { now }
+            nowMillis = { 20_000L }
         ).use { refresher ->
             refresher.request("test")
             assertTrue(completed.await(2, TimeUnit.SECONDS))

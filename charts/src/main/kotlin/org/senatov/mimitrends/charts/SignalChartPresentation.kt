@@ -6,6 +6,11 @@ import java.text.SimpleDateFormat
 import java.util.Date
 
 internal object SignalChartPresentation {
+    fun nearestBar(bars: List<MinuteBar>, signal: ScanResult): MinuteBar? {
+        val epoch = signal.signalEpochMillis / 1_000L
+        return bars.minByOrNull { kotlin.math.abs(it.minuteEpochSeconds - epoch) }
+    }
+
     fun summary(
         signal: ScanResult,
         signalBar: MinuteBar?,
