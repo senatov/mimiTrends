@@ -21,6 +21,7 @@ internal class BrokerTradeAnnotations(private val plot: XYPlot) {
     private val annotations = mutableListOf<XYAnnotation>()
     private val cardPositions = mutableMapOf<TradeKey, NormalizedPoint>()
     private val renderedCards = mutableListOf<RenderedCard>()
+    private val renderedTradePoints = mutableListOf<TradePoint>()
     private var activeDrag: ActiveDrag? = null
     private var lastRender: RenderInput? = null
 
@@ -60,8 +61,8 @@ internal class BrokerTradeAnnotations(private val plot: XYPlot) {
         visible.forEachIndexed { index, trade ->
             val entryX = displayMillis(trade.entryEpochSeconds)
             val exitX = displayMillis(trade.exitEpochSeconds ?: lastEpoch)
-            val entryY = trade.entryPrice * barPriceMultiplier
-            val exitY = (trade.exitPrice ?: trade.entryPrice) * barPriceMultiplier
+            val entryY = trade.entryPrice
+            val exitY = trade.exitPrice ?: trade.entryPrice
             val controlX = (entryX + exitX) / 2.0
             val highlight = addTradeHighlight(trade, bars, entryX, exitX, timeStep, priceSpan,
                 barPriceMultiplier)
@@ -108,6 +109,7 @@ internal class BrokerTradeAnnotations(private val plot: XYPlot) {
     }
 
     internal fun renderedCardBounds(): List<CardBounds> = renderedCards.map(RenderedCard::bounds)
+    internal fun renderedTradePoints(): List<TradePoint> = renderedTradePoints.toList()
 
     private fun addTradeHighlight(
         trade: BrokerTrade,
@@ -121,8 +123,10 @@ internal class BrokerTradeAnnotations(private val plot: XYPlot) {
         val exitEpoch = trade.exitEpochSeconds ?: bars.last().minuteEpochSeconds
         val covered = bars.filter { it.minuteEpochSeconds in trade.entryEpochSeconds..exitEpoch }
         val exitPrice = trade.exitPrice ?: trade.entryPrice
-        val low = (covered.minOfOrNull(MinuteBar::low) ?: minOf(trade.entryPrice, exitPrice)) * multiplier
-        val high = (covered.maxOfOrNull(MinuteBar::high) ?: maxOf(trade.entryPrice, exitPrice)) * multiplier
+        val low = covered.minOfOrNull(MinuteBar::low)?.times(multiplier)
+            ?: minOf(trade.entryPrice, exitPrice)
+        val high = covered.maxOfOrNull(MinuteBar::high)?.times(multiplier)
+            ?: maxOf(trade.entryPrice, exitPrice)
         val padding = priceSpan * HIGHLIGHT_PADDING
         val left = minOf(entryX, exitX) - timeStep * 0.38
         val right = maxOf(entryX, exitX) + timeStep * 0.38
@@ -144,9 +148,11 @@ internal class BrokerTradeAnnotations(private val plot: XYPlot) {
         annotations.forEach(plot::removeAnnotation)
         annotations.clear()
         renderedCards.clear()
+        renderedTradePoints.clear()
     }
 
     private fun addPoint(x: Double, y: Double, timeStep: Double, priceSpan: Double, color: Color) {
+        renderedTradePoints += TradePoint(x, y)
         val dot = Ellipse2D.Double(x - timeStep * 0.30, y - priceSpan * 0.010,
             timeStep * 0.60, priceSpan * 0.020)
         add(XYShapeAnnotation(dot, BasicStroke(1.6f), color.darker(), color))
@@ -338,6 +344,8 @@ internal class BrokerTradeAnnotations(private val plot: XYPlot) {
         val height: Double get() = top - bottom
         fun contains(x: Double, y: Double): Boolean = x in left..right && y in bottom..top
     }
+
+    internal data class TradePoint(val x: Double, val y: Double)
 
     private data class TradeKey(val symbol: String, val entryEpoch: Long, val exitEpoch: Long?)
     private data class HighlightAnchor(val left: Double, val bottom: Double, val right: Double, val top: Double)

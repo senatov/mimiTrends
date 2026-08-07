@@ -76,4 +76,19 @@ class BrokerTradeAnnotationsTest {
         assertEquals(9, plot.annotations.count { it is XYShapeAnnotation })
         assertEquals(2, plot.annotations.count { it is XYTextAnnotation })
     }
+
+    @Test fun `does not convert trades that already use display currency`() {
+        val renderer = BrokerTradeAnnotations(XYPlot())
+        val bars = (0L..10L).map { minute ->
+            MinuteBar("COP", minute * 60L, 116.0, 119.0, 114.0, 117.0, 1_000.0)
+        }
+        val trade = BrokerTrade(
+            "COP", null, 1.0, 120L, 103.20, 480L, 103.80,
+            0.60, 0.58, 0.0, "EUR"
+        )
+
+        renderer.render(listOf(trade), bars, bars, 0.875)
+
+        assertEquals(listOf(103.20, 103.80), renderer.renderedTradePoints().map { it.y })
+    }
 }
