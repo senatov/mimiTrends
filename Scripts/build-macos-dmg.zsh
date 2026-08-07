@@ -7,6 +7,7 @@ readonly SCRIPT_NAME="${0:t}"
 readonly PROJECT_DIR="${SCRIPT_DIR:h}"
 readonly GRADLEW="${PROJECT_DIR}/gradlew"
 readonly OUTPUT_DIR="${PROJECT_DIR}/app/build/distributions/native/macos"
+readonly VERSION_BUMPER="${SCRIPT_DIR}/bump-app-version.zsh"
 
 notarize=false
 notary_profile="${APPLE_NOTARY_PROFILE:-MiMiNotary}"
@@ -58,6 +59,7 @@ done
 
 [[ "$(uname -s)" == "Darwin" ]] || fail "DMG packages can only be built on macOS"
 [[ -x "$GRADLEW" ]] || fail "Gradle wrapper is missing or not executable: $GRADLEW"
+[[ -x "$VERSION_BUMPER" ]] || fail "Version bumper is missing or not executable: $VERSION_BUMPER"
 command -v security >/dev/null || fail "macOS security tool is unavailable"
 command -v xcrun >/dev/null || fail "Xcode Command Line Tools are required"
 
@@ -85,14 +87,16 @@ print "  Identity: Developer ID Application: $signing_identity"
 print "  Mode:     $($notarize && print 'signed + notarized' || print 'signed')"
 
 cd "$PROJECT_DIR"
+readonly app_version="$($VERSION_BUMPER)"
+print "  Version:  $app_version"
 
 if $notarize; then
   APPLE_NOTARY_PROFILE="$notary_profile" \
   MAC_SIGNING_KEY_USER_NAME="$signing_identity" \
-    "$GRADLEW" :app:packageNotarizedMacDmg
+    "$GRADLEW" -PappVersion="$app_version" -PdmgVersionBumped=true :app:packageNotarizedMacDmg
 else
   MAC_SIGNING_KEY_USER_NAME="$signing_identity" \
-    "$GRADLEW" :app:packageMacDmg
+    "$GRADLEW" -PappVersion="$app_version" -PdmgVersionBumped=true :app:packageMacDmg
 fi
 
 dmg_files=("$OUTPUT_DIR"/*.dmg(N.om))

@@ -1,6 +1,5 @@
 package org.senatov.mimitrends.charts
 
-import org.jfree.chart.annotations.XYBoxAnnotation
 import org.jfree.chart.annotations.XYShapeAnnotation
 import org.jfree.chart.annotations.XYTextAnnotation
 import org.jfree.chart.plot.XYPlot
@@ -74,7 +73,7 @@ class BrokerTradeAnnotationsTest {
         renderer.render(listOf(trade), bars, bars.filterIndexed { index, _ -> index % 2 == 0 }, 1.0)
 
         assertTrue(renderer.renderedCardBounds().single().centerX > initial.centerX)
-        assertEquals(1, plot.annotations.count { it is XYBoxAnnotation })
+        assertEquals(5, plot.annotations.count { it is XYShapeAnnotation })
         assertEquals(2, plot.annotations.count { it is XYTextAnnotation })
     }
 }

@@ -10,7 +10,7 @@ plugins {
     kotlin("jvm") version "2.4.0"
 }
 
-val appVersion = providers.gradleProperty("appVersion").getOrElse("0.0.0.1")
+val appVersion = providers.gradleProperty("appVersion").get()
 version = appVersion
 val buildTime = ZonedDateTime.now().format(DateTimeFormatter.ofPattern("yyyy.MM.dd HH:mm:ss z"))
 val buildNumber = providers.environmentVariable("BUILD_NUMBER")
@@ -179,10 +179,20 @@ val cleanLinuxDeb = tasks.register<Delete>("cleanLinuxDebPackage") {
     description = "Removes previously packaged Debian archives."
     delete(fileTree(linuxOut) { include("*.deb") })
 }
+val validateDmgVersionBump = tasks.register("validateDmgVersionBump") {
+    group = "verification"
+    description = "Requires the version-bumping DMG wrapper to be used."
+    inputs.property("dmgVersionBumped", providers.gradleProperty("dmgVersionBumped").map { it == "true" }.orElse(false))
+    doLast {
+        check(inputs.properties["dmgVersionBumped"] == true) {
+            "Build DMGs through Scripts/build-macos-dmg.zsh so the application version is incremented first"
+        }
+    }
+}
 val signMacNativeJars = tasks.register<Exec>("signMacNativeJars") {
     group = "distribution"
     description = "Signs Mach-O libraries embedded in runtime JARs before jpackage runs."
-    dependsOn(prepareJpackageInput)
+    dependsOn(prepareJpackageInput, validateDmgVersionBump)
     onlyIf("signMacNativeJars requires macOS") { System.getProperty("os.name").lowercase().contains("mac") }
     val signingIdentity = providers.environmentVariable("MAC_SIGNING_KEY_USER_NAME").orNull
     doFirst {

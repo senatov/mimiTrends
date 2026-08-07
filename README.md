@@ -16,9 +16,10 @@ MiMiTrends is informational software. It does not place orders, provide investme
 
 <img src="./Doc/MainWindow.png" alt="MiMiTrends scanner and signal-focused chart" width="900">
 
-*Freshness is the first sortable column. The scanner combines current signals with the latest useful
-published context, while the lower pane shows the selected event, minute candles, volume, entry,
-current price, and the exact OHLCV value beneath the cursor.*
+*Freshness is the first sortable column. The scanner combines current signals with defensible
+long-term growth candidates, while the lower pane shows the selected event, minute candles, volume,
+entry, current price, and executed trades. Rounded trade cards can be dragged away from the candles;
+curved purple leaders keep every explanation associated with its orange trade interval.*
 
 ### Scanner settings
 
@@ -32,7 +33,9 @@ Each analytical field includes a short explanation of what it changes.*
 <img src="./Doc/BrokerCsvImport.png" alt="Importing a Scalable Capital transaction CSV into MiMiTrends" width="900">
 
 *The import action accepts a Scalable Capital transaction export. Imported executions can be shown
-on the corresponding price chart without sending portfolio or transaction data to a remote service.*
+on the corresponding price chart without sending portfolio or transaction data to a remote service.
+Rows marked `Cancelled` or `Cancel` are ignored, and legacy cancelled rows are removed from the local
+transaction table during import.*
 
 ## Quick start
 
@@ -82,9 +85,10 @@ The primary question is not “What did this stock do over the last year?” but
 - pauses scanning while every selected market is closed and resumes after the earliest next opening;
 - displays quote age in the leading `Delay` column and sorts it numerically, distinguishing current
   observations from stale ones without hiding delayed-but-useful European candidates;
-- provides a signal-focused chart with a full-history fallback;
+- provides a signal-focused chart with a consistently styled full-history fallback;
 - imports Scalable Capital transaction CSV files and outlines each matching trade interval on the
-  chart with a translucent orange highlighter-style frame;
+  chart with a translucent orange highlighter-style frame, a draggable rounded explanation card,
+  and a curved purple leader that keeps multiple trades identifiable;
 - remembers window geometry, divider position, table appearance, columns, and the selected instrument.
 
 ## Reading the scanner table
@@ -375,7 +379,14 @@ Selecting a scanner row opens its locally stored candles and volume.
 - real OHLC, candle return, and volume for the candle nearest the cursor;
 - stronger background grid lines for accurate visual comparison;
 - a `Full history` switch for broader context;
+- a `Trades` overlay with translucent rounded cards, clear borders, curved purple leaders, and
+  preserved drag positions in both chart modes;
 - pan, zoom, synchronized time/price cursors, and tooltips.
+
+Holding the pointer over a scanner row for five seconds performs one bounded focused refresh while
+the market is open. The row's `Delay` cell shows an hourglass during the request. The refreshed
+signal, statistics, provider tail, and chart are applied only to the currently relevant symbol, and
+a per-symbol cooldown prevents repeated provider polling while the pointer remains nearby.
 
 Switching instruments resets all chart ranges after datasets, signal markers, and trade overlays are
 installed. This prevents a high-priced instrument from leaving an unusable price scale on the next chart.
@@ -494,9 +505,11 @@ org.senatov.mimitrends.LauncherKt
 5. Wait for the initial historical bootstrap and completed scan.
 6. Sort by `Delay` to inspect freshness, or by anomaly, price action, volume, and ten-minute move.
 7. Hover derived cells to inspect the exact statistical values.
-8. Select a row to open its signal-focused chart.
-9. Move the cursor across the chart to inspect candle OHLCV values.
-10. Switch to `Full history` only when broader context is needed.
+8. Hold the pointer over a row for five seconds to request a focused online refresh; the `Delay`
+   cell shows an hourglass until it completes.
+9. Select a row to open its signal-focused chart.
+10. Move the cursor across the chart to inspect candle OHLCV values, or drag a trade card to uncover candles.
+11. Switch to `Full history` when broader context is needed; trade-card styling and positions are preserved.
 
 Settings and UI state are stored beside the database under:
 
@@ -523,6 +536,10 @@ separate JDK installation.
 The script requires Xcode Command Line Tools and a `Developer ID Application` certificate in the
 login Keychain. It automatically selects the first matching certificate, signs the application and
 embedded native libraries, builds the DMG, verifies it, and prints its location and SHA-256 hash.
+Before every DMG attempt it atomically increments the application patch version in
+`gradle.properties`. Decimal carry is intentional: `1.0.9` becomes `1.1.0`. The same value is then
+used for the title bar, About dialog, JAR manifest, generated build metadata, package metadata, and
+DMG filename.
 Use an explicit identity when more than one suitable certificate is installed:
 
 ```bash

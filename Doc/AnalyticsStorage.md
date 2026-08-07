@@ -26,6 +26,9 @@ foreign keys, and independent tests.
 | `signal_excursions`     | In-progress high/low return tracking for active published signals.                      |
 | `broker_transactions`   | Deduplicated Scalable operations with optional links to saved scanner signals.           |
 
+Scalable imports discard rows whose status is `Cancelled` or `Cancel` (case-insensitive) and remove
+previously stored cancelled rows before matching executions into chart trades.
+
 ## Data flow
 
 1. Yahoo or Finnhub bars are UPSERTed into `minute_bars`.

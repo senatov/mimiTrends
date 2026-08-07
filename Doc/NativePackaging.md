@@ -23,13 +23,12 @@ The project wrapper builds a signed DMG and automatically selects the first avai
 ./Scripts/build-macos-dmg.zsh
 ```
 
-A Developer ID signed DMG:
+A Developer ID signed DMG is built through the same wrapper with an explicit identity:
 
 ```zsh
 security find-identity -v -p codesigning
 
-MAC_SIGNING_KEY_USER_NAME="Iakov Senatov (G2V9T9AD95)" \
-  ./gradlew :app:packageMacDmg
+./Scripts/build-macos-dmg.zsh --identity "Iakov Senatov (G2V9T9AD95)"
 ```
 
 Before `jpackage` runs, the Gradle pipeline extracts dependency JARs containing macOS native
@@ -57,9 +56,9 @@ xcrun notarytool store-credentials "MiMiNotary" \
 Then build, sign, submit to Apple, wait for acceptance, staple the ticket, and validate it:
 
 ```zsh
-APPLE_NOTARY_PROFILE="MiMiNotary" \
-MAC_SIGNING_KEY_USER_NAME="Iakov Senatov (G2V9T9AD95)" \
-  ./gradlew :app:packageNotarizedMacDmg
+./Scripts/build-macos-dmg.zsh --notarize \
+  --identity "Iakov Senatov (G2V9T9AD95)" \
+  --profile "MiMiNotary"
 ```
 
 The equivalent shorter command is:
@@ -73,10 +72,16 @@ CI may use App Store Connect API credentials instead of a keychain profile by se
 Output:
 
 ```text
-app/build/distributions/native/macos/MiMiTrends-1.0.1.dmg
+app/build/distributions/native/macos/MiMiTrends-<version>.dmg
 ```
 
-The package task deliberately fails when `MAC_SIGNING_KEY_USER_NAME` is absent. This prevents an ad-hoc signed application from being mistaken for a distributable Developer ID build.
+The wrapper increments `appVersion` in `gradle.properties` before every DMG attempt and passes that
+exact version to Gradle. Version components carry at ten (`1.0.9` becomes `1.1.0`). The application
+label, About dialog, generated build information, JAR manifest, `jpackage` metadata, and DMG filename
+therefore use one value. Calling the DMG Gradle task without the wrapper is rejected, preventing a
+package from being created without its required version increment.
+
+The package task also deliberately fails when `MAC_SIGNING_KEY_USER_NAME` is absent. This prevents an ad-hoc signed application from being mistaken for a distributable Developer ID build.
 
 ## Windows
 
@@ -106,7 +111,7 @@ Use `--portable-only` or `--deb-only` when only one Linux format is needed.
 
 This creates:
 
-- a portable `MiMiTrends-1.0.1-linux-<arch>.tar.gz` containing an executable and private runtime;
+- a portable `MiMiTrends-<version>-linux-<arch>.tar.gz` containing an executable and private runtime;
 - a Debian/Ubuntu `.deb` package with a desktop-menu entry.
 
 Files are written below:
@@ -117,6 +122,8 @@ app/build/distributions/native/linux/
 
 ## Versions and secrets
 
-The user-facing project version begins at `0.0.0.1`. The native package version is normalized to `1.0.1`, because `jpackage` accepts at most three numeric components and macOS package versions require a positive first component. Build IDs remain independently generated and appear in the title bar and About dialog.
+The repository stores one three-component `appVersion` in `gradle.properties`. DMG builds advance
+the patch digit automatically, carrying into minor and major digits as necessary. Build IDs remain
+independently generated and appear alongside the application version in the title bar and About dialog.
 
 Certificates, Apple passwords, API private keys, and notarization profiles are never stored in the repository. Pass only identity names or environment variables to Gradle.
