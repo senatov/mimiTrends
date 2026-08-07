@@ -1,6 +1,5 @@
 package org.senatov.mimitrends.charts
 
-import org.jfree.chart.annotations.XYBoxAnnotation
 import org.jfree.chart.annotations.XYAnnotation
 import org.jfree.chart.annotations.XYShapeAnnotation
 import org.jfree.chart.annotations.XYTextAnnotation
@@ -64,7 +63,7 @@ internal class BrokerTradeAnnotations(private val plot: XYPlot) {
             val entryY = trade.entryPrice * barPriceMultiplier
             val exitY = (trade.exitPrice ?: trade.entryPrice) * barPriceMultiplier
             val controlX = (entryX + exitX) / 2.0
-            addTradeHighlight(trade, bars, entryX, exitX, timeStep, priceSpan,
+            val highlight = addTradeHighlight(trade, bars, entryX, exitX, timeStep, priceSpan,
                 barPriceMultiplier)
             val entryAlignment = alignToCandle(trade.entryEpochSeconds, trade.entryPrice,
                 bars, timeStep, barPriceMultiplier, displayMillis)
@@ -80,7 +79,7 @@ internal class BrokerTradeAnnotations(private val plot: XYPlot) {
             val preferredX = stored?.let { domainMin + (it.x * (domainMax - domainMin)) } ?: controlX
             val preferredBottom = stored?.let { rangeMin + (it.y * (rangeMax - rangeMin)) }
                 ?: (candleRangeMax + (priceSpan * (CARD_GAP + ((index % MAX_LEVELS) * CARD_LEVEL_GAP))))
-            addCard(key, trade, preferredX, preferredBottom, timeStep, priceSpan,
+            addCard(key, trade, highlight, preferredX, preferredBottom, timeStep, priceSpan,
                 domainMin, domainMax, rangeMin, rangeMax, entryAlignment, exitAlignment)
         }
     }
@@ -118,7 +117,7 @@ internal class BrokerTradeAnnotations(private val plot: XYPlot) {
         timeStep: Double,
         priceSpan: Double,
         multiplier: Double
-    ) {
+    ): HighlightAnchor {
         val exitEpoch = trade.exitEpochSeconds ?: bars.last().minuteEpochSeconds
         val covered = bars.filter { it.minuteEpochSeconds in trade.entryEpochSeconds..exitEpoch }
         val exitPrice = trade.exitPrice ?: trade.entryPrice
@@ -132,6 +131,7 @@ internal class BrokerTradeAnnotations(private val plot: XYPlot) {
         add(RoundRectangle2D.Double(
             left, bottom, right - left, height, timeStep * 1.6, priceSpan * 0.09
         ).let { XYShapeAnnotation(it, HIGHLIGHT_STROKE, HIGHLIGHT_ORANGE, HIGHLIGHT_FILL) })
+        return HighlightAnchor((left + right) / 2.0, bottom, bottom + height)
     }
 
     fun clear() {
@@ -155,6 +155,7 @@ internal class BrokerTradeAnnotations(private val plot: XYPlot) {
     private fun addCard(
         key: TradeKey,
         trade: BrokerTrade,
+        highlight: HighlightAnchor,
         x: Double,
         y: Double,
         timeStep: Double,
@@ -184,11 +185,41 @@ internal class BrokerTradeAnnotations(private val plot: XYPlot) {
         } ?: "Open position · ${formatter.format(trade.quantity)} shares"
         val bounds = cardBounds(x, y, timeStep, priceSpan, domainMin, domainMax, rangeMin, rangeMax)
         renderedCards += RenderedCard(key, bounds, domainMin, domainMax, rangeMin, rangeMax)
-        add(XYBoxAnnotation(bounds.left, bounds.bottom, bounds.right, bounds.top,
-            BasicStroke(1.1f), Color(255, 255, 255, 225), Color(247, 249, 251, 238)))
+        addCardConnector(highlight, bounds, timeStep)
+        val cardShape = RoundRectangle2D.Double(
+            bounds.left,
+            bounds.bottom,
+            bounds.width,
+            bounds.height,
+            timeStep * CARD_CORNER_BARS,
+            bounds.height * CARD_CORNER_HEIGHT_SHARE
+        )
+        add(XYShapeAnnotation(cardShape, CARD_STROKE, CARD_BORDER, CARD_FILL))
         add(text(title + sessionNote, bounds.centerX, bounds.bottom + bounds.height * 0.68,
             Color(48, 55, 63), Font.PLAIN))
         add(text(pnl, bounds.centerX, bounds.bottom + bounds.height * 0.30, pnlColor(trade), Font.BOLD))
+    }
+
+    private fun addCardConnector(highlight: HighlightAnchor, card: CardBounds, timeStep: Double) {
+        val cardIsAbove = card.bottom >= highlight.top
+        val startY = if (cardIsAbove) highlight.top else highlight.bottom
+        val endY = if (cardIsAbove) card.bottom else card.top
+        val endX = card.centerX
+        val direction = if (cardIsAbove) 1.0 else -1.0
+        val bend = (endX - highlight.centerX).coerceIn(-timeStep * 3.0, timeStep * 3.0)
+        val verticalDistance = kotlin.math.abs(endY - startY)
+        val path = Path2D.Double().apply {
+            moveTo(highlight.centerX, startY)
+            curveTo(
+                highlight.centerX + bend * 0.15,
+                startY + direction * verticalDistance * 0.45,
+                endX - bend * 0.25,
+                endY - direction * verticalDistance * 0.35,
+                endX,
+                endY
+            )
+        }
+        add(XYShapeAnnotation(path, CARD_CONNECTOR_STROKE, CARD_CONNECTOR))
     }
 
     internal fun cardBounds(
@@ -281,6 +312,11 @@ internal class BrokerTradeAnnotations(private val plot: XYPlot) {
         val HIGHLIGHT_ORANGE = Color(238, 126, 18, 205)
         val HIGHLIGHT_FILL = Color(255, 190, 48, 34)
         val HIGHLIGHT_STROKE = BasicStroke(7.0f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND)
+        val CARD_BORDER = Color(88, 69, 126, 235)
+        val CARD_FILL = Color(247, 249, 251, 205)
+        val CARD_CONNECTOR = Color(112, 78, 160, 205)
+        val CARD_STROKE = BasicStroke(1.6f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND)
+        val CARD_CONNECTOR_STROKE = BasicStroke(1.35f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND)
         val CONNECTOR_STROKE = BasicStroke(1.3f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND,
             0f, floatArrayOf(5f, 5f), 0f)
         const val HIGHLIGHT_PADDING = 0.035
@@ -289,6 +325,8 @@ internal class BrokerTradeAnnotations(private val plot: XYPlot) {
         const val CARD_GAP = 0.035
         const val CARD_LANE_SHARE = 0.24
         const val CARD_LEVEL_GAP = 0.012
+        const val CARD_CORNER_BARS = 1.2
+        const val CARD_CORNER_HEIGHT_SHARE = 0.42
         const val CARD_FLIP_GAP = 0.04
         const val CARD_EDGE_PADDING_BARS = 0.5
         const val CARD_EDGE_PADDING_SHARE = 0.02
@@ -306,11 +344,13 @@ internal class BrokerTradeAnnotations(private val plot: XYPlot) {
 
     internal data class CardBounds(val left: Double, val bottom: Double, val right: Double, val top: Double) {
         val centerX: Double get() = (left + right) / 2.0
+        val width: Double get() = right - left
         val height: Double get() = top - bottom
         fun contains(x: Double, y: Double): Boolean = x in left..right && y in bottom..top
     }
 
     private data class TradeKey(val symbol: String, val entryEpoch: Long, val exitEpoch: Long?)
+    private data class HighlightAnchor(val centerX: Double, val bottom: Double, val top: Double)
     private data class ActiveDrag(val key: TradeKey, val domainOffset: Double, val rangeOffset: Double)
     private data class NormalizedPoint(val x: Double, val y: Double)
     private data class RenderedCard(
