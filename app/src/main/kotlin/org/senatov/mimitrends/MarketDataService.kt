@@ -133,7 +133,7 @@ internal class MarketDataService(
             scanIntervalSeconds = PriorityScanCoordinator.PRIORITY_SCAN_INTERVAL_SECONDS
         )
         val evaluation = loadAndEvaluate(symbol, priorityCriteria)
-        return evaluation.primary ?: evaluation.fallback.firstNotNullOfOrNull { it }
+        return evaluation.primary ?: evaluation.fallback.firstNotNullOfOrNull { it } ?: evaluation.longTerm
     }
 
     private fun mergeProviderTail(

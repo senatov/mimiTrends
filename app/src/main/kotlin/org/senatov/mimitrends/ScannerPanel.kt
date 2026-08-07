@@ -34,6 +34,7 @@ class ScannerPanel(
     private val onOpen: (ScanResult) -> Unit,
     private val loadProfile: ((String) -> CompletableFuture<CompanyProfile>)? = null
 ) : VBox(7.0) {
+    internal var onInspect: (ScanResult) -> Unit = {}
     private val log = LoggerFactory.getLogger(javaClass)
     private val rows = FXCollections.observableArrayList<ScanResult>()
     private val sortedRows = SortedList(rows)
@@ -103,6 +104,7 @@ class ScannerPanel(
     private val cycleStatus = Label()
     private val scanIndicator = ScanClockIndicator()
     private val stagedRows = linkedMapOf<String, ScanResult>()
+    private val refreshingStatuses = mutableMapOf<String, String>()
     private val observationOverlay = MarketObservationOverlay()
     private var scanning = false
     private val time = DateTimeFormatter.ofPattern("HH:mm:ss").withZone(ZoneId.systemDefault())
@@ -154,7 +156,21 @@ class ScannerPanel(
         table.fixedCellSize = -1.0
         table.setRowFactory {
             TableRow<ScanResult>().apply {
-                setOnMouseClicked { e -> if (!isEmpty && e.button == MouseButton.PRIMARY && e.clickCount == 1) onOpen(item) }
+                val hoverDelay = javafx.animation.PauseTransition(Duration.seconds(5.0)).apply {
+                    setOnFinished {
+                        val hovered = item
+                        if (isHover && !isEmpty && hovered != null) onInspect(hovered)
+                    }
+                }
+                setOnMouseEntered { if (!isEmpty) hoverDelay.playFromStart() }
+                setOnMouseExited { hoverDelay.stop() }
+                setOnMouseClicked { e ->
+                    if (!isEmpty && e.button == MouseButton.PRIMARY && e.clickCount == 1) {
+                        hoverDelay.stop()
+                        onOpen(item)
+                        onInspect(item)
+                    }
+                }
                 contextMenu = ContextMenu(
                     MenuItem("Copy search keyword").apply { setOnAction { item?.let { copySearchKeyword(it) } } },
                     MenuItem("Copy ticker").apply { setOnAction { item?.let { copyText(it.symbol) } } }
@@ -194,12 +210,27 @@ class ScannerPanel(
 
     fun applyPriorityResult(symbol: String, result: ScanResult?) {
         log.debug(LogTag.UI, "applyPriorityResult(symbol={}, present={})", symbol, result != null)
+        refreshingStatuses.remove(symbol)
         val target = if (scanning) stagedRows else rows.associateByTo(linkedMapOf(), ScanResult::symbol)
         if (result == null) target.remove(symbol) else target[symbol] = observationOverlay.apply(result)
         if (!scanning) {
             replaceRows(target.values)
             autoFitter.request()
         }
+    }
+
+    fun setRefreshing(symbol: String, refreshing: Boolean) {
+        val target = if (scanning) stagedRows else rows.associateByTo(linkedMapOf(), ScanResult::symbol)
+        val current = target[symbol] ?: return
+        if (refreshing) {
+            refreshingStatuses.putIfAbsent(symbol, current.dataStatus)
+            target[symbol] = current.copy(dataStatus = "REFRESHING")
+        } else if (current.dataStatus == "REFRESHING") {
+            target[symbol] = current.copy(dataStatus = refreshingStatuses.remove(symbol) ?: "CACHE")
+        } else {
+            refreshingStatuses.remove(symbol)
+        }
+        if (!scanning) replaceRows(target.values)
     }
 
     fun applyMarketObservation(symbol: String, price: Double, observedAtMillis: Long, source: String) {
@@ -225,7 +256,7 @@ class ScannerPanel(
 
     fun clear() {
         log.debug(LogTag.UI, "clear()")
-        rows.clear(); stagedRows.clear(); scanning = false
+        rows.clear(); stagedRows.clear(); refreshingStatuses.clear(); scanning = false
         scanIndicator.clearIndicator()
         marketClosedOverlay.isVisible = false; marketClosedOverlay.isManaged = false
     }

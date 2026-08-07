@@ -23,4 +23,9 @@ class FeedAgeTest {
         assertEquals(true, FeedFreshness.isStale(1_000_000L, "DELAYED 15m", now))
         assertEquals("⚠", FeedFreshness.icon(1_000_000L, "DELAYED 15m", now))
     }
+
+    @Test fun `shows an hourglass while focused data is refreshing`() {
+        assertEquals("⌛", FeedFreshness.icon(1_000_000L, FeedFreshness.REFRESHING, 9_000_000L))
+        assertEquals(false, FeedFreshness.isStale(1_000_000L, FeedFreshness.REFRESHING, 9_000_000L))
+    }
 }

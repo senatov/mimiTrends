@@ -49,7 +49,8 @@ internal class ScannerColumnFactory(
                     }
                     val now = System.currentTimeMillis()
                     val stale = FeedFreshness.isStale(result.updatedAtMillis, result.dataStatus, now)
-                    text = "${FeedFreshness.icon(result.updatedAtMillis, result.dataStatus, now)} " +
+                    text = if (result.dataStatus == FeedFreshness.REFRESHING) "⌛ refreshing"
+                    else "${FeedFreshness.icon(result.updatedAtMillis, result.dataStatus, now)} " +
                         FeedFreshness.ageLabel(result.updatedAtMillis, now)
                     tooltip = Tooltip(FeedFreshness.tooltip(result.updatedAtMillis, result.dataStatus, now))
                     styleClass.remove("stale-feed-cell")

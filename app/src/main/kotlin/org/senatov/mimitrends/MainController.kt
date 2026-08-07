@@ -58,11 +58,17 @@ class MainController(
     private var profileService = CompanyProfileService(
         repository, apiKey?.let(::FinnhubProfileClient), CompanyLogoClient()
     )
-    private val scannerPanel = ScannerPanel(::openScannerResult) { symbol -> profileService.load(symbol) }
+    private val scannerPanel = ScannerPanel(
+        onOpen = ::openScannerResult,
+        loadProfile = { symbol -> profileService.load(symbol) }
+    )
     private val batchScheduler = Executors.newSingleThreadScheduledExecutor { task ->
         Thread(task, "mimitrends-scanner-rotation").apply { isDaemon = true }
     }
     private val scalableImport = ScalableImportAction(analytics, batchScheduler)
+    private val scalableImportResults = ScalableImportResultHandler(
+        importTradesButton, ::setStatus, requestStatus::formatError, log
+    )
     private var rotationTask: ScheduledFuture<*>? = null
     private val scanGeneration = AtomicLong()
     private val closing = AtomicBoolean()
@@ -88,9 +94,22 @@ class MainController(
             Platform.runLater { scannerPanel.applyPriorityResult(symbol, retained) }
         }
     )
+    private val focusedSignals = FocusedSignalController(
+        evaluate = { symbol -> marketData.loadPriorityResult(symbol, scannerCriteria) },
+        panel = scannerPanel,
+        isMarketOpen = MarketCalendar::isOpen,
+        onSelectedResult = ::applyFocusedSelection,
+        setStatus = ::setStatus,
+        formatError = requestStatus::formatError,
+        log = log
+    )
     private val liveAggregator = FinnhubMinuteAggregator { bar ->
         repository.upsertMinuteBar(bar)
         liveTicks[bar.symbol] = System.currentTimeMillis()
+    }
+
+    init {
+        scannerPanel.onInspect = focusedSignals::request
     }
 
     fun createView(): Parent {
@@ -138,23 +157,7 @@ class MainController(
     }
 
     private fun handleScalableImport(event: ScalableImportEvent) {
-        when (event) {
-            is ScalableImportEvent.Started -> {
-                importTradesButton.isDisable = true
-                setStatus("Importing Scalable transactions from ${event.fileName}")
-            }
-            is ScalableImportEvent.Completed -> {
-                importTradesButton.isDisable = false
-                val result = event.result
-                setStatus("Scalable import: ${result.imported} new · ${result.duplicates} duplicates skipped · ${result.linkedToSignals} linked to saved signals")
-            }
-            is ScalableImportEvent.Failed -> {
-                importTradesButton.isDisable = false
-                log.warn(LogTag.DB, "Scalable CSV import failed path={}", event.path, event.error)
-                setStatus("Scalable import failed: ${event.error.message}", true,
-                    requestStatus.formatError("Import ${event.path}", event.error))
-            }
-        }
+        scalableImportResults.handle(event)
     }
 
     fun showClosing() {
@@ -167,7 +170,7 @@ class MainController(
         rotationTask?.cancel(false)
         observationUiBridge.close()
         try {
-            ApplicationResourceCloser.close(priorityScanner, tradegateProvider, euronextProvider, tableQuoteProviders,
+            ApplicationResourceCloser.close(focusedSignals, priorityScanner, tradegateProvider, euronextProvider, tableQuoteProviders,
                 { finnhubClient?.close() }, batchScheduler, repository, analytics, log)
         } finally {
             observationBus.close()
@@ -289,6 +292,12 @@ class MainController(
     private fun openScannerResult(result: ScanResult) {
         log.debug(LogTag.UI, "openScannerResult(symbol={}, age={})", result.symbol, result.signalAgeMinutes)
         currentSymbol = result.symbol
+        currentSignal = result
+        loadLocalChart(result.symbol)
+    }
+
+    private fun applyFocusedSelection(result: ScanResult) {
+        if (currentSymbol != result.symbol || closing.get()) return
         currentSignal = result
         loadLocalChart(result.symbol)
     }

@@ -9,6 +9,7 @@ import java.util.concurrent.TimeUnit
 
 internal object ApplicationResourceCloser {
     fun close(
+        focusedSignalRefresher: AutoCloseable,
         priorityScanner: AutoCloseable,
         tradegateProvider: AutoCloseable,
         euronextProvider: AutoCloseable,
@@ -19,6 +20,7 @@ internal object ApplicationResourceCloser {
         analytics: AnalyticsRepository,
         log: Logger
     ) {
+        focusedSignalRefresher.close()
         priorityScanner.close()
         tradegateProvider.close()
         euronextProvider.close()

@@ -10,10 +10,12 @@ internal object FeedFreshness {
     }
 
     fun isStale(updatedAtMillis: Long, status: String, nowMillis: Long = System.currentTimeMillis()): Boolean =
+        status != REFRESHING &&
         (nowMillis - updatedAtMillis).coerceAtLeast(0L) >
             (expectedDelayMinutes(status) + STALE_GRACE_MINUTES) * 60_000L
 
     fun icon(updatedAtMillis: Long, status: String, nowMillis: Long = System.currentTimeMillis()): String = when {
+        status == REFRESHING -> "⌛"
         isStale(updatedAtMillis, status, nowMillis) -> "⚠"
         expectedDelayMinutes(status) > 0 -> "◷"
         else -> "●"
@@ -23,6 +25,7 @@ internal object FeedFreshness {
         val age = ageLabel(updatedAtMillis, nowMillis)
         val expected = expectedDelayMinutes(status)
         return when {
+            status == REFRESHING -> "Refreshing the selected signal and its latest market data"
             isStale(updatedAtMillis, status, nowMillis) ->
                 "Stale market data · $age old · expected delay at most $expected minutes"
             expected > 0 -> "Delayed market data · $age old · expected delay $expected minutes"
@@ -34,5 +37,6 @@ internal object FeedFreshness {
         DELAY_MINUTES.find(status)?.groupValues?.get(1)?.toLongOrNull() ?: 0L
 
     private val DELAY_MINUTES = Regex("(\\d+)m", RegexOption.IGNORE_CASE)
+    const val REFRESHING = "REFRESHING"
     private const val STALE_GRACE_MINUTES = 5L
 }
