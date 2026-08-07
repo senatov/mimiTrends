@@ -15,8 +15,8 @@ class TradeCardConnectorTest {
         assertEquals(trade.top, geometry.start.y)
         assertTrue(geometry.end.x in card.left..card.right)
         assertEquals(card.bottom, geometry.end.y)
-        assertTrue(geometry.control1.y in 90.0..150.0)
-        assertTrue(geometry.control2.y in 90.0..150.0)
+        assertTrue(geometry.control1.y in 96.0..128.0)
+        assertTrue(geometry.control2.y in 96.0..128.0)
     }
 
     @Test fun `connector geometry scales consistently across chart units`() {

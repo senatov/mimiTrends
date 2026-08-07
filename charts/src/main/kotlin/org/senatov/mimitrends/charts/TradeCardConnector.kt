@@ -9,7 +9,6 @@ import java.awt.geom.Path2D
 import kotlin.math.abs
 import kotlin.math.hypot
 import kotlin.math.max
-import kotlin.math.min
 
 internal object TradeCardConnector {
     fun create(
@@ -52,19 +51,21 @@ internal object TradeCardConnector {
         val distance = hypot(dx, dy).coerceAtLeast(0.000_001)
         val normalX = -dy / distance
         val normalY = dx / distance
-        val curve = min(MAX_CURVE_UNITS, max(MIN_CURVE_UNITS, distance * CURVE_SHARE))
         val curveSign = if (dx < 0.0) -1.0 else 1.0
-        val offsetX = normalX * curve * curveSign
-        val offsetY = normalY * curve * curveSign
+        val curve = distance * CURVE_SHARE * curveSign
+        val offsetX = (normalX * curve * safeDomainUnit)
+            .coerceIn(-safeDomainUnit * MAX_DOMAIN_BEND_UNITS, safeDomainUnit * MAX_DOMAIN_BEND_UNITS)
+        val offsetY = (normalY * curve * safeRangeUnit)
+            .coerceIn(-safeRangeUnit * MAX_RANGE_BEND_SHARE, safeRangeUnit * MAX_RANGE_BEND_SHARE)
         return Geometry(
             start,
             Point(
-                start.x + ((dx * CONTROL_NEAR + offsetX) * safeDomainUnit),
-                start.y + ((dy * CONTROL_NEAR + offsetY) * safeRangeUnit)
+                start.x + (dx * CONTROL_NEAR * safeDomainUnit) + offsetX,
+                start.y + (dy * CONTROL_NEAR * safeRangeUnit) + offsetY
             ),
             Point(
-                start.x + ((dx * CONTROL_FAR + offsetX) * safeDomainUnit),
-                start.y + ((dy * CONTROL_FAR + offsetY) * safeRangeUnit)
+                start.x + (dx * CONTROL_FAR * safeDomainUnit) + offsetX,
+                start.y + (dy * CONTROL_FAR * safeRangeUnit) + offsetY
             ),
             end,
             safeDomainUnit,
@@ -136,9 +137,9 @@ internal object TradeCardConnector {
     private val FASTENER_STROKE = BasicStroke(1.0f)
     private const val CONTROL_NEAR = 0.24
     private const val CONTROL_FAR = 0.76
-    private const val CURVE_SHARE = 0.36
-    private const val MIN_CURVE_UNITS = 0.8
-    private const val MAX_CURVE_UNITS = 4.0
+    private const val CURVE_SHARE = 0.24
+    private const val MAX_DOMAIN_BEND_UNITS = 2.0
+    private const val MAX_RANGE_BEND_SHARE = 0.04
     private const val FASTENER_DOMAIN_SIZE = 0.42
     private const val FASTENER_RANGE_SIZE = 0.026
 }
