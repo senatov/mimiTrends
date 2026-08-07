@@ -64,4 +64,13 @@ class CandidateQualityGateTest {
         assertFalse(CandidateQualityGate.qualifies(recovery, adaptive = false))
         assertTrue(CandidateQualityGate.qualifiesWatch(recovery))
     }
+
+    @Test fun `does not present an extended trend as an active entry`() {
+        val extended = TestScanResult.create(
+            anomalyScore = 4.0, signalSource = "Steady rise ↑ · extended · wait for pullback"
+        ).copy(signalWindowLabel = "60m steady", windowChangePercent = 1.2, candleBodyRatio = 0.45)
+
+        assertFalse(CandidateQualityGate.qualifies(extended, adaptive = true))
+        assertTrue(CandidateQualityGate.qualifiesWatch(extended))
+    }
 }

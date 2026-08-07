@@ -305,7 +305,7 @@ class ScannerEngineTest {
         assertEquals("Steady rise ↑", result.signalSource)
     }
 
-    @Test fun `recommends a clean recent staircase rise`() {
+    @Test fun `marks a mature staircase rise after a flat baseline as extended`() {
         val bars = normalBars().toMutableList()
         var minute = nextMinute(bars)
         var previous = 100.0
@@ -317,7 +317,7 @@ class ScannerEngineTest {
 
         val result = requireNotNull(engine().evaluateFallback("TEST", bars, criteria()))
 
-        assertEquals("Steady rise ↑", result.signalSource)
+        assertEquals("Steady rise ↑ · extended · wait for pullback", result.signalSource)
         assertTrue(result.candleBodyRatio >= 0.80)
         assertTrue(result.anomalyScore >= 3.0)
     }

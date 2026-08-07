@@ -61,6 +61,11 @@ internal object SignalMetricPresentation {
 
     fun priceAction(result: ScanResult): SignalMetric {
         val arrow = directionArrow(result)
+        if (result.signalSource.contains("wait for pullback")) {
+            return SignalMetric("Wait for pullback", "#9a6717", 600,
+                "The rising structure remains valid, but price is extended above its earlier path or has stalled near a local high. " +
+                    "Entry timing is currently unfavorable; this is a watch state, not a buy signal.")
+        }
         if (!result.priceAnomaly.isFinite() && !result.rangeAnomaly.isFinite()) {
             return SignalMetric("Steady trend $arrow", "#17365f", 500,
                 "Persistent price trend over ${result.signalWindowLabel}; no single exceptional candle.")

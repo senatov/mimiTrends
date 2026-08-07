@@ -56,4 +56,13 @@ class SignalMetricPresentationTest {
 
         assertEquals("Rare impulse ↑", SignalMetricPresentation.priceAction(result).label)
     }
+
+    @Test fun `presents an extended rise as a wait state`() {
+        val result = TestScanResult.create(signalSource = "Steady rise ↑ · extended · wait for pullback")
+
+        val metric = SignalMetricPresentation.priceAction(result)
+
+        assertEquals("Wait for pullback", metric.label)
+        assertTrue(metric.details.contains("not a buy signal"))
+    }
 }

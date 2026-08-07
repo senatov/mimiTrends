@@ -7,11 +7,14 @@ import java.time.Instant
 import java.time.ZoneId
 
 internal class LongCandidateSafetyFilter(private val zoneOverride: ZoneId? = null) {
+    private val entryTiming = EntryTimingClassifier(zoneOverride)
+
     fun classify(bars: List<MinuteBar>, result: ScanResult): ScanResult? {
         if ('↓' in result.signalSource) {
             return result.takeIf(::isSharpDownsideWatch)?.asWatch("downside watch")
         }
-        return if (hasLongRisk(bars)) result.asWatch("watch") else result
+        val safetyClassified = if (hasLongRisk(bars)) result.asWatch("watch") else result
+        return entryTiming.classify(bars, safetyClassified)
     }
 
     private fun hasLongRisk(bars: List<MinuteBar>): Boolean {

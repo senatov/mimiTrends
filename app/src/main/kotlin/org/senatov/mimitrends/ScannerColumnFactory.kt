@@ -234,6 +234,10 @@ internal class ScannerColumnFactory(
                 TABLE_TEXT_COLOR, 400,
                 "Recent event · no longer qualifies as an active signal · retained briefly for context"
             )
+            result.signalSource.contains("wait for pullback") -> SignalVisual(
+                "#9a6717", 600,
+                "Extended rise · entry timing is unfavorable · wait for consolidation or a controlled pullback"
+            )
             result.signalAgeMinutes > 0 -> SignalVisual(TABLE_TEXT_COLOR, 400, "Old signal · ${result.signalAgeMinutes} minute(s) ago")
             result.signalSource.contains("relaxed", true) -> SignalVisual("#8a5600", 500, "Questionable signal · accepted only by relaxed statistical thresholds")
             result.signalSource.startsWith("Recovery breakout") ->

@@ -5,7 +5,7 @@ import kotlin.math.abs
 
 internal object CandidateQualityGate {
     fun qualifies(result: ScanResult, adaptive: Boolean): Boolean {
-        if (!isCurrent(result) || result.signalSource.contains("watch")) return false
+        if (!isCurrent(result) || result.signalSource.contains("watch") || isExtended(result)) return false
         if (adaptive && !adaptiveQuality(result)) return false
         return structuralQuality(result, watch = false)
     }
@@ -43,6 +43,7 @@ internal object CandidateQualityGate {
         val penalty = (if (result.signalSource.contains("relaxed")) 0.10 else 0.0) +
             (if (!result.volumeAnomaly.isFinite() && !result.relativeVolume.isFinite()) 0.05 else 0.0) +
             (if (result.signalSource.contains("watch")) 0.15 else 0.0) +
+            (if (isExtended(result)) 0.25 else 0.0) +
             (if ('↓' in result.signalSource) 0.20 else 0.0)
         return 10.0 * (0.35 * historical + 0.25 * movement + 0.15 * freshness +
             0.15 * volume + 0.10 * persistence - penalty)
@@ -50,6 +51,7 @@ internal object CandidateQualityGate {
 
     fun priorityTier(result: ScanResult): Int = when {
         result.signalSource.contains("downside watch") -> DOWNSIDE_WATCH_TIER
+        isExtended(result) -> EXTENDED_TIER
         result.signalSource.contains("watch") -> WATCH_TIER
         '↓' in result.signalSource -> DOWNSIDE_WATCH_TIER
         else -> LONG_TIER
@@ -104,6 +106,8 @@ internal object CandidateQualityGate {
         result.signalSource.startsWith("Steady rise") || result.signalSource.startsWith("Recovery") ||
             result.signalSource.startsWith("Trend") || result.signalSource.startsWith("Early recovery")
 
+    private fun isExtended(result: ScanResult): Boolean = result.signalSource.contains("wait for pullback")
+
     private fun minimumMove(result: ScanResult): Double =
         if (result.symbol.contains('.')) MIN_EUROPE_MOVE_PERCENT else MIN_US_MOVE_PERCENT
 
@@ -137,4 +141,5 @@ internal object CandidateQualityGate {
     private const val LONG_TIER = 0
     private const val WATCH_TIER = 1
     private const val DOWNSIDE_WATCH_TIER = 2
+    private const val EXTENDED_TIER = 2
 }
