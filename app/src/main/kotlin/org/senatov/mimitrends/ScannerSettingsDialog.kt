@@ -7,6 +7,7 @@ import javafx.scene.layout.HBox
 import javafx.scene.layout.Priority
 import javafx.scene.layout.Region
 import javafx.scene.layout.VBox
+import javafx.geometry.Side
 import javafx.stage.Window
 import org.senatov.mimitrends.model.ScannerCriteria
 import org.senatov.mimitrends.model.DisplayCurrency
@@ -25,6 +26,7 @@ class ScannerSettingsDialog(
     finnhubConfigured: Boolean
 ) {
     private val dialog = Dialog<ScannerSettingsResult>()
+    private val restoreDefaults = ButtonType("Restore Defaults", ButtonBar.ButtonData.LEFT)
     private val geometry = WindowGeometryService("settings", DEFAULT_WIDTH, DEFAULT_HEIGHT)
     private val marketRegion = ComboBox(FXCollections.observableArrayList(MarketRegion.entries)).apply { value = current.marketRegion }
     private val scanInterval = Spinner<Int>(60, 3_600, current.scanIntervalSeconds.toInt(), 30).apply { isEditable = true }
@@ -76,20 +78,26 @@ class ScannerSettingsDialog(
         dialog.dialogPane.styleClass += "glass-settings-dialog"
 
         val scanner = VBox(14.0,
-            section("Signal detection",
+            section("Result selection",
+                settingRow("Target table results", "The scanner relaxes thresholds gradually when necessary to fill approximately this many rows.", minimumResults),
+                settingRow("Maximum results", "Hard display limit. Candidates below the limit are ranked by quality; extra weak rows are not appended.", resultLimit),
                 settingRow("Maximum signal age", "Only the latest candle and this many preceding minutes are eligible.", signalAge),
+                settingRow("Market universe", "Select US listings, European listings, or both.", marketRegion)
+            ),
+            section("Price signal",
+                settingRow("Minimum absolute move", "Minimum percentage movement required before statistical anomalies are considered.", absoluteMove),
                 settingRow("Minimum jump Z", "Return deviation measured in robust local standard deviations.", jumpZ),
                 settingRow("Minimum range Z", "High–low range deviation that can independently identify an impulse.", rangeZ),
+                settingRow("Minimum candle body", "Body divided by candle range. Higher values reject wick-heavy and indecisive candles.", bodyRatio)
+            ),
+            section("Persistent growth",
+                settingRow("Trend window", "Minutes used to find sustained growth rather than a single short impulse.", trendWindow),
+                settingRow("Minimum trend return", "Minimum net percentage growth required across the trend window.", trendReturn),
+                settingRow("Trend efficiency", "Net progress divided by total travelled path. Higher values require a smoother rise.", trendEfficiency)
+            ),
+            section("Confirmation and data quality",
                 settingRow("Volume confirmation Z", "Unusual log-volume confirmation; price movement remains mandatory.", volumeZ),
                 settingRow("Relative volume", "Current candle volume divided by its robust local median.", relativeVolume),
-                settingRow("Minimum candle body", "Body/range ratio; 0.55 rejects weak wicks and random ticks.", bodyRatio),
-                settingRow("Minimum absolute move", "Hard percentage floor; prevents tiny low-volatility noise from qualifying by Z-score alone.", absoluteMove),
-                settingRow("Target table results", "Adapt thresholds gradually to retain about this many current candidates (5–15).", minimumResults),
-                settingRow("Trend window", "Minutes used to recognize persistent half-session growth with tolerable pullbacks.", trendWindow),
-                settingRow("Minimum trend return", "Required net growth over the trend window, in percent.", trendReturn),
-                settingRow("Trend efficiency", "Net progress divided by total path length; lower values permit deeper pullbacks.", trendEfficiency),
-                settingRow("Market universe", "Select US listings, European listings, or both.", marketRegion),
-                settingRow("Maximum results", "Hard display cap between 5 and 15; weaker rows are never added beyond the target.", resultLimit),
                 settingRow("Minimum source price", "Low-priced instruments below this value are ignored.", price),
                 settingRow("Minimum session turnover", "Set to zero to keep the broadest statistical candidate base.", turnover),
                 settingRow("Historical sessions", "Local sessions used to establish each instrument's normal behaviour.", sessions)
@@ -100,10 +108,9 @@ class ScannerSettingsDialog(
                 settingRow("Finnhub live feed", "Optional. A new key is stored locally; blank keeps the existing configuration.", finnhubApiKey)
             ),
             section("Candidate universe",
-                Label("Comma-separated Yahoo symbols. The default universe contains 256 liquid US and European listings.").apply {
-                    isWrapText = true; styleClass += "settings-help"
-                },
-                symbols.apply { prefRowCount = 5; maxHeight = 130.0 }
+                settingRow("Yahoo symbols",
+                    "Comma-separated tickers scanned by Yahoo. Restore Defaults reinstates the standard liquid US and European universe.",
+                    symbols.apply { prefRowCount = 5; maxHeight = 130.0 })
             ),
             Label("Only fresh directional price impulses are ranked. Volume alone cannot qualify a symbol. Historical Yahoo bars and live Finnhub bars are retained in SQLite.").apply {
                 isWrapText = true; styleClass += "settings-footnote"
@@ -150,7 +157,11 @@ class ScannerSettingsDialog(
         )
         dialog.dialogPane.prefWidth = DEFAULT_WIDTH
         dialog.dialogPane.prefHeight = DEFAULT_HEIGHT
-        dialog.dialogPane.buttonTypes += listOf(ButtonType.CANCEL, ButtonType("Save", ButtonBar.ButtonData.OK_DONE))
+        dialog.dialogPane.buttonTypes += listOf(restoreDefaults, ButtonType.CANCEL, ButtonType("Save", ButtonBar.ButtonData.OK_DONE))
+        dialog.dialogPane.lookupButton(restoreDefaults).addEventFilter(javafx.event.ActionEvent.ACTION) { event ->
+            event.consume()
+            applyDefaults()
+        }
         dialog.setResultConverter { if (it.buttonData == ButtonBar.ButtonData.OK_DONE) parse() else null }
         geometry.attach(dialog)
     }
@@ -161,16 +172,72 @@ class ScannerSettingsDialog(
         children += content
     }
 
-    private fun settingRow(title: String, detail: String, control: Control): HBox = HBox(18.0).apply {
+    private fun settingRow(title: String, detail: String, control: Control): HBox = HBox(12.0).apply {
         alignment = javafx.geometry.Pos.CENTER_LEFT
-        val description = VBox(2.0,
+        val description = HBox(6.0,
             Label(title).apply { styleClass += "settings-row-title" },
-            Label(detail).apply { isWrapText = true; styleClass += "settings-row-detail" }
-        ).apply { minWidth = 330.0; prefWidth = 390.0; maxWidth = 440.0 }
+            helpButton(title, detail)
+        ).apply {
+            alignment = javafx.geometry.Pos.CENTER_LEFT
+            minWidth = 260.0; prefWidth = 300.0; maxWidth = 330.0
+        }
         control.minWidth = 180.0
         control.maxWidth = Double.MAX_VALUE
         HBox.setHgrow(control, Priority.ALWAYS)
         children += listOf(description, control)
+    }
+
+    private fun helpButton(title: String, detail: String): Button = Button("i").apply {
+        styleClass += "settings-info-button"
+        isFocusTraversable = false
+        tooltip = Tooltip(detail)
+        accessibleText = "$title information"
+        setOnAction {
+            val anchor = this
+            val message = Label(detail).apply {
+                isWrapText = true
+                maxWidth = 300.0
+                styleClass += "settings-info-content"
+            }
+            ContextMenu(CustomMenuItem(message, false)).apply {
+                styleClass += "settings-info-popup"
+                show(anchor, Side.BOTTOM, 0.0, 4.0)
+            }
+        }
+    }
+
+    private fun applyDefaults() {
+        val defaults = ScannerCriteria()
+        marketRegion.value = defaults.marketRegion
+        scanInterval.valueFactory.value = defaults.scanIntervalSeconds.toInt()
+        resultLimit.valueFactory.value = defaults.resultLimit
+        price.valueFactory.value = defaults.minPrice
+        turnover.valueFactory.value = defaults.minSessionTurnover
+        sessions.valueFactory.value = defaults.baselineSessions
+        signalAge.valueFactory.value = defaults.maxSignalAgeMinutes
+        jumpZ.valueFactory.value = defaults.minJumpZ
+        rangeZ.valueFactory.value = defaults.minRangeZ
+        volumeZ.valueFactory.value = defaults.minVolumeZ
+        relativeVolume.valueFactory.value = defaults.minRelativeVolume
+        bodyRatio.valueFactory.value = defaults.minBodyRatio
+        absoluteMove.valueFactory.value = defaults.minAbsoluteMovePercent
+        minimumResults.valueFactory.value = defaults.minimumTableResults
+        trendWindow.valueFactory.value = defaults.trendWindowMinutes
+        trendReturn.valueFactory.value = defaults.minTrendReturnPercent
+        trendEfficiency.valueFactory.value = defaults.minTrendEfficiency
+        currency.value = defaults.displayCurrency
+        tradegateEnabled.isSelected = defaults.tradegateEnabled
+        tradegateInterval.valueFactory.value = defaults.tradegateRequestIntervalMillis.toInt()
+        euronextEnabled.isSelected = defaults.euronextEnabled
+        euronextInterval.valueFactory.value = defaults.euronextRequestIntervalMillis.toInt()
+        symbols.text = defaults.symbols.joinToString(", ")
+        fontFamily.value = defaults.tableAppearance.fontFamily
+        fontSize.valueFactory.value = defaults.tableAppearance.fontSize
+        textColor.value = Color.web(defaults.tableAppearance.textColor)
+        evenRowColor.value = Color.web(defaults.tableAppearance.evenRowColor)
+        oddRowColor.value = Color.web(defaults.tableAppearance.oddRowColor)
+        selectionColor.value = Color.web(defaults.tableAppearance.selectionColor)
+        gridColor.value = Color.web(defaults.tableAppearance.gridColor)
     }
 
     fun showAndWait(): ScannerSettingsResult? = dialog.showAndWait().orElse(null)
