@@ -17,7 +17,7 @@ internal class ChartTimeline private constructor(
     }
 
     fun displayMillis(actualEpochSeconds: Long): Double {
-        if (actualBars.isEmpty()) return actualEpochSeconds * 1_000.0
+        if (!isNonLinear || actualBars.isEmpty()) return actualEpochSeconds * 1_000.0
         val index = actualBars.indices.minByOrNull {
             kotlin.math.abs(actualBars[it].minuteEpochSeconds - actualEpochSeconds)
         } ?: 0

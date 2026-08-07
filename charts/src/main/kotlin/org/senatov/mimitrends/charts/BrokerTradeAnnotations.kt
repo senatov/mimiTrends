@@ -131,7 +131,7 @@ internal class BrokerTradeAnnotations(private val plot: XYPlot) {
         add(RoundRectangle2D.Double(
             left, bottom, right - left, height, timeStep * 1.6, priceSpan * 0.09
         ).let { XYShapeAnnotation(it, HIGHLIGHT_STROKE, HIGHLIGHT_ORANGE, HIGHLIGHT_FILL) })
-        return HighlightAnchor((left + right) / 2.0, bottom, bottom + height)
+        return HighlightAnchor(left, bottom, right, bottom + height)
     }
 
     fun clear() {
@@ -185,7 +185,7 @@ internal class BrokerTradeAnnotations(private val plot: XYPlot) {
         } ?: "Open position · ${formatter.format(trade.quantity)} shares"
         val bounds = cardBounds(x, y, timeStep, priceSpan, domainMin, domainMax, rangeMin, rangeMax)
         renderedCards += RenderedCard(key, bounds, domainMin, domainMax, rangeMin, rangeMax)
-        addCardConnector(highlight, bounds, timeStep)
+        addCardConnector(highlight, bounds, timeStep, priceSpan)
         val cardShape = RoundRectangle2D.Double(
             bounds.left,
             bounds.bottom,
@@ -200,26 +200,18 @@ internal class BrokerTradeAnnotations(private val plot: XYPlot) {
         add(text(pnl, bounds.centerX, bounds.bottom + bounds.height * 0.30, pnlColor(trade), Font.BOLD))
     }
 
-    private fun addCardConnector(highlight: HighlightAnchor, card: CardBounds, timeStep: Double) {
-        val cardIsAbove = card.bottom >= highlight.top
-        val startY = if (cardIsAbove) highlight.top else highlight.bottom
-        val endY = if (cardIsAbove) card.bottom else card.top
-        val endX = card.centerX
-        val direction = if (cardIsAbove) 1.0 else -1.0
-        val bend = (endX - highlight.centerX).coerceIn(-timeStep * 3.0, timeStep * 3.0)
-        val verticalDistance = kotlin.math.abs(endY - startY)
-        val path = Path2D.Double().apply {
-            moveTo(highlight.centerX, startY)
-            curveTo(
-                highlight.centerX + bend * 0.15,
-                startY + direction * verticalDistance * 0.45,
-                endX - bend * 0.25,
-                endY - direction * verticalDistance * 0.35,
-                endX,
-                endY
-            )
-        }
-        add(XYShapeAnnotation(path, CARD_CONNECTOR_STROKE, CARD_CONNECTOR))
+    private fun addCardConnector(
+        highlight: HighlightAnchor,
+        card: CardBounds,
+        timeStep: Double,
+        priceSpan: Double
+    ) {
+        TradeCardConnector.create(
+            TradeCardConnector.Bounds(highlight.left, highlight.bottom, highlight.right, highlight.top),
+            TradeCardConnector.Bounds(card.left, card.bottom, card.right, card.top),
+            timeStep,
+            priceSpan
+        ).forEach(::add)
     }
 
     internal fun cardBounds(
@@ -314,9 +306,7 @@ internal class BrokerTradeAnnotations(private val plot: XYPlot) {
         val HIGHLIGHT_STROKE = BasicStroke(7.0f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND)
         val CARD_BORDER = Color(88, 69, 126, 235)
         val CARD_FILL = Color(247, 249, 251, 205)
-        val CARD_CONNECTOR = Color(112, 78, 160, 205)
         val CARD_STROKE = BasicStroke(1.6f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND)
-        val CARD_CONNECTOR_STROKE = BasicStroke(1.35f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND)
         val CONNECTOR_STROKE = BasicStroke(1.3f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND,
             0f, floatArrayOf(5f, 5f), 0f)
         const val HIGHLIGHT_PADDING = 0.035
@@ -350,7 +340,7 @@ internal class BrokerTradeAnnotations(private val plot: XYPlot) {
     }
 
     private data class TradeKey(val symbol: String, val entryEpoch: Long, val exitEpoch: Long?)
-    private data class HighlightAnchor(val centerX: Double, val bottom: Double, val top: Double)
+    private data class HighlightAnchor(val left: Double, val bottom: Double, val right: Double, val top: Double)
     private data class ActiveDrag(val key: TradeKey, val domainOffset: Double, val rangeOffset: Double)
     private data class NormalizedPoint(val x: Double, val y: Double)
     private data class RenderedCard(
