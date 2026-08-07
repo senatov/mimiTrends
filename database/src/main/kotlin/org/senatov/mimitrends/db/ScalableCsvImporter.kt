@@ -35,11 +35,18 @@ object ScalableCsvImporter {
                         LocalDateTime.parse("${value("date")} ${value("time")}", DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"))
                             .atZone(zoneId).toEpochSecond()
                     }.getOrElse { error("Invalid Scalable date/time on CSV row ${index + 2}") },
-                    status = value("status"), description = value("description"), assetType = value("assetType"),
-                    type = value("type"), isin = value("isin").ifBlank { null }, shares = decimal(value("shares"), index),
-                    price = decimal(value("price"), index), amount = decimal(value("amount"), index),
-                    fee = decimal(value("fee"), index), tax = decimal(value("tax"), index), currency = value("currency")
+                    status = canonical(value("status")), description = value("description"),
+                    assetType = canonical(value("assetType")), type = canonical(value("type")),
+                    isin = value("isin").uppercase().ifBlank { null },
+                    shares = decimal(value("shares"), index, "shares", nonNegative = true),
+                    price = decimal(value("price"), index, "price", nonNegative = true),
+                    amount = decimal(value("amount"), index, "amount"),
+                    fee = decimal(value("fee"), index, "fee", nonNegative = true),
+                    tax = decimal(value("tax"), index, "tax", nonNegative = true),
+                    currency = value("currency").uppercase()
                 )
+            }.distinctBy { transaction ->
+                transaction.reference?.let { "reference:$it" } ?: "fingerprint:${transaction.fingerprint}"
             }.toList()
         }
     }
@@ -47,9 +54,20 @@ object ScalableCsvImporter {
     internal fun isCancelled(status: String): Boolean =
         status.trim().equals("Cancelled", ignoreCase = true) || status.trim().equals("Cancel", ignoreCase = true)
 
-    private fun decimal(value: String, zeroBasedRow: Int): Double = runCatching {
+    private fun canonical(value: String): String = value.trim().lowercase().replaceFirstChar(Char::uppercase)
+
+    private fun decimal(
+        value: String,
+        zeroBasedRow: Int,
+        field: String,
+        nonNegative: Boolean = false
+    ): Double = runCatching {
         if (value.isBlank()) 0.0 else value.replace(".", "").replace(',', '.').toDouble()
-    }.getOrElse { error("Invalid number '$value' on Scalable CSV row ${zeroBasedRow + 2}") }
+    }.getOrElse { error("Invalid $field '$value' on Scalable CSV row ${zeroBasedRow + 2}") }.also { parsed ->
+        require(parsed.isFinite() && (!nonNegative || parsed >= 0.0)) {
+            "Invalid $field '$value' on Scalable CSV row ${zeroBasedRow + 2}"
+        }
+    }
 
     internal fun parseLine(line: String): List<String> {
         val result = mutableListOf<String>()

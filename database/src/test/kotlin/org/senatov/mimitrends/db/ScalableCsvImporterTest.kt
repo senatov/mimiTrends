@@ -16,6 +16,7 @@ class ScalableCsvImporterTest {
                     "2026-08-03;21:43:14;Cancelled;cancelled;SoFi Technologies;Security;Sell;US83406F1021;220;15,500;3.410,00;0,00;0,00;EUR\n" +
                     "2026-08-03;21:43:14;Executed;buy-5;\"SoFi; Technologies\";Security;Buy;US83406F1021;5;15,594;-77,97;0,99;0,00;EUR\n" +
                     "2026-08-03;21:43:14;Executed;sell-225;SoFi Technologies;Security;Sell;US83406F1021;225;15,508;3.489,30;0,00;0,00;EUR\n"
+                    + "2026-08-03;21:43:14;executed;sell-225;SoFi Technologies;security;sell;us83406f1021;225;15,508;3.489,30;0,00;0,00;eur\n"
             )
 
             val transactions = ScalableCsvImporter.parse(csv, ZoneId.of("Europe/Berlin"))
@@ -24,6 +25,9 @@ class ScalableCsvImporterTest {
             assertEquals(-3420.12, transactions.first().amount, 0.000_001)
             assertEquals("SoFi; Technologies", transactions[1].description)
             assertEquals(0.99, transactions[1].fee, 0.000_001)
+            assertEquals("Executed", transactions.last().status)
+            assertEquals("Sell", transactions.last().type)
+            assertEquals("US83406F1021", transactions.last().isin)
         } finally {
             Files.deleteIfExists(csv)
         }

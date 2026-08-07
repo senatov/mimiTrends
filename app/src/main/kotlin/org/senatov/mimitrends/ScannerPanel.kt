@@ -134,7 +134,9 @@ class ScannerPanel(
         autoFitter = TableColumnAutoFitter(table, listOf(
             TableColumnAutoFitter.Spec(freshness, { FeedFreshness.ageLabel(it.updatedAtMillis) }, 68.0, 96.0),
             TableColumnAutoFitter.Spec(symbol, columnFactory::companyName, 120.0, 460.0, flexible = true, reserveWidth = 32.0),
-            TableColumnAutoFitter.Spec(signal, { SignalPatternText.parse(it.signalSource).primary }, 90.0, 165.0),
+            TableColumnAutoFitter.Spec(signal, {
+                "${it.signalSource} ${WatchScorePresentation.calculate(it).label}"
+            }, 105.0, 190.0),
             TableColumnAutoFitter.Spec(move, { percent(it.windowChangePercent) }, 82.0, 130.0, reserveWidth = 8.0),
             TableColumnAutoFitter.Spec(price, { "${currency.symbol}%,.2f".format(convertPrice(it.symbol, it.price)) }, 72.0, 135.0, reserveWidth = 8.0),
             TableColumnAutoFitter.Spec(scoreColumn, { SignalMetricPresentation.strength(it).label }, 88.0, 140.0),

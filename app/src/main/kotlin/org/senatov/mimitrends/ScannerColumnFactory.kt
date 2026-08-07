@@ -96,20 +96,31 @@ internal class ScannerColumnFactory(
                     }
                     val visual = signalVisual(result)
                     val content = SignalPatternText.parse(item)
+                    val watchScore = WatchScorePresentation.calculate(result)
                     val primary = Label(content.primary).apply {
                         styleClass += "pattern-primary"
                         style = "-fx-text-fill: ${visual.color};"
                     }
+                    val score = Label(watchScore.label).apply {
+                        styleClass += "pattern-watch-score"
+                        style = "-fx-text-fill: ${watchScore.color};"
+                    }
                     graphic = VBox(0.0).apply {
                         alignment = Pos.CENTER_LEFT
                         styleClass += "pattern-content"
-                        children += primary
-                        content.qualifiers?.let { qualifiers ->
-                            children += Label(qualifiers).apply { styleClass += "pattern-qualifiers" }
+                        if (content.qualifiers == null) {
+                            children += HBox(5.0, primary, score).apply { alignment = Pos.CENTER_LEFT }
+                        } else {
+                            children += primary
+                            children += HBox(5.0, Label(content.qualifiers).apply {
+                                styleClass += "pattern-qualifiers"
+                            }, score).apply { alignment = Pos.CENTER_LEFT }
                         }
                     }
                     text = null
-                    tooltip = Tooltip(visual.description).apply { showDelay = Duration.millis(450.0) }
+                    tooltip = Tooltip("${visual.description}\n${watchScore.details}").apply {
+                        showDelay = Duration.millis(450.0)
+                    }
                 }
             }
         }
