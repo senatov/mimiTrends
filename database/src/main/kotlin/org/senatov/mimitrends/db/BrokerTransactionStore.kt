@@ -32,11 +32,16 @@ internal class BrokerTransactionStore(private val connection: Connection) {
             }
         }
         linkExecutedTransactionsToSignals()
+        val reconciliation = reconcileExecutions()
         return BrokerImportResult(
             parsed = transactions.size,
             imported = imported,
             duplicates = transactions.size - imported,
-            linkedToSignals = linkedTransactionCount()
+            linkedToSignals = linkedTransactionCount(),
+            closedPositions = reconciliation.closedPositions,
+            openPositions = reconciliation.openPositions,
+            correctedOrder = reconciliation.correctedOrder,
+            unmatchedSells = reconciliation.unmatchedSells
         )
     }
 
@@ -55,6 +60,24 @@ internal class BrokerTransactionStore(private val connection: Connection) {
         }
     }
 
+    private fun reconcileExecutions(): ImportReconciliation {
+        val executions = connection.prepareStatement(LOAD_EXECUTIONS).use { statement ->
+            statement.executeQuery().use { result -> buildList {
+                while (result.next()) add(BrokerExecution(result.getLong(1), result.getLong(2), result.getString(3),
+                    result.getString(4), result.getString(5), result.getDouble(6), result.getDouble(7),
+                    result.getDouble(8), result.getDouble(9), result.getDouble(10), result.getString(11)))
+            } }
+        }
+        val reconciliations = executions.groupBy { it.isin ?: "description:${it.description}" }
+            .values.map { BrokerTradeMatcher.reconcile("", it) }
+        return ImportReconciliation(
+            closedPositions = reconciliations.sumOf { value -> value.trades.count { !it.isOpen } },
+            openPositions = reconciliations.sumOf { value -> value.trades.count(BrokerTrade::isOpen) },
+            correctedOrder = reconciliations.sumOf { it.correctedOrder },
+            unmatchedSells = reconciliations.sumOf { it.unmatchedSells }
+        )
+    }
+
     fun loadTrades(symbol: String, companyName: String): List<BrokerTrade> {
         val normalizedSymbol = symbol.uppercase()
         val metadataIsin = connection.prepareStatement("SELECT isin FROM instrument_metadata WHERE symbol=?").use { statement ->
@@ -65,7 +88,7 @@ internal class BrokerTransactionStore(private val connection: Connection) {
         }
         val providerIsin = metadataIsin ?: providerIsin(normalizedSymbol)
         if (providerIsin != null && metadataIsin == null) persistMapping(normalizedSymbol, providerIsin)
-        val executions = connection.prepareStatement(LOAD_DEDUPLICATED_EXECUTIONS).use { statement ->
+        val executions = connection.prepareStatement(LOAD_EXECUTIONS).use { statement ->
             statement.executeQuery().use { result -> buildList {
                 while (result.next()) {
                     val execution = BrokerExecution(result.getLong(1), result.getLong(2), result.getString(3),
@@ -126,21 +149,19 @@ internal class BrokerTransactionStore(private val connection: Connection) {
                   AND c.signal_epoch>=trade.occurred_at-3600
                 ORDER BY c.signal_epoch DESC LIMIT 1)
             WHERE trade.linked_run_id IS NULL AND trade.status='Executed'"""
-        const val LOAD_DEDUPLICATED_EXECUTIONS = """
-            WITH ranked AS (
-                SELECT id, occurred_at, description, transaction_type, isin, shares, price, amount,
-                    fee, tax, currency,
-                    ROW_NUMBER() OVER (
-                        PARTITION BY occurred_at, transaction_type, COALESCE(isin, ''), ROUND(shares, 8)
-                        ORDER BY imported_at DESC, id DESC
-                    ) AS temporal_rank
-                FROM broker_transactions
-                WHERE status='Executed' AND transaction_type IN ('Buy','Sell')
-            )
+        const val LOAD_EXECUTIONS = """
             SELECT id, occurred_at, description, transaction_type, isin, shares, price, amount,
                 fee, tax, currency
-            FROM ranked WHERE temporal_rank=1
+            FROM broker_transactions
+            WHERE lower(trim(status))='executed' AND lower(trim(transaction_type)) IN ('buy','sell')
             ORDER BY occurred_at, id
         """
     }
+
+    private data class ImportReconciliation(
+        val closedPositions: Int,
+        val openPositions: Int,
+        val correctedOrder: Int,
+        val unmatchedSells: Int
+    )
 }

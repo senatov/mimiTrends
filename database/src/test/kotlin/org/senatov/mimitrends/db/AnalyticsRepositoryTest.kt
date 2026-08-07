@@ -152,13 +152,14 @@ class AnalyticsRepositoryTest {
         }
     }
 
-    @Test fun `ignores repeated executions with the same timestamp side isin and quantity`() {
+    @Test fun `retains distinct referenced executions with the same timestamp side isin and quantity`() {
         val directory = Files.createTempDirectory("mimitrends-temporal-duplicate")
         val database = directory.resolve("test.db")
         val csv = directory.resolve("transactions.csv")
         Files.writeString(csv, """date;time;status;reference;description;assetType;type;isin;shares;price;amount;fee;tax;currency
 2026-07-31;18:00:00;Executed;BUY-1;Apple;Security;Buy;US0378331005;2;100,00;-200,00;0,00;0,00;EUR
 2026-07-31;19:00:00;Executed;SELL-OLD;Apple;Security;Sell;US0378331005;2;109,00;218,00;0,00;0,00;EUR
+2026-07-31;19:00:00;Executed;BUY-2;Apple;Security;Buy;US0378331005;2;109,50;-219,00;0,00;0,00;EUR
 2026-07-31;19:00:00;Executed;SELL-LATEST;Apple;Security;Sell;US0378331005;2;110,00;220,00;0,00;0,00;EUR
 """)
         AnalyticsRepository(database).use { analytics ->
@@ -167,8 +168,9 @@ class AnalyticsRepositoryTest {
             ))
             analytics.importScalableTransactions(csv)
 
-            val trade = analytics.loadBrokerTrades("AAPL", "Apple Inc.").single()
-            assertEquals(110.0, requireNotNull(trade.exitPrice), 0.000_001)
+            val trades = analytics.loadBrokerTrades("AAPL", "Apple Inc.")
+            assertEquals(2, trades.size)
+            assertEquals(listOf(109.0, 110.0), trades.map { it.exitPrice })
         }
     }
 

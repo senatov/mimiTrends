@@ -19,8 +19,12 @@ internal class ScalableImportResultHandler(
             is ScalableImportEvent.Completed -> {
                 button.isDisable = false
                 val result = event.result
+                val reconciliation = "${result.closedPositions} closed · ${result.openPositions} open" +
+                    if (result.correctedOrder == 0) "" else " · ${result.correctedOrder} order corrected" +
+                    if (result.unmatchedSells == 0) "" else " · ${result.unmatchedSells} unmatched sells"
                 setStatus("Scalable import: ${result.imported} new · ${result.duplicates} duplicates skipped · " +
-                    "${result.linkedToSignals} linked to saved signals", false, null)
+                    "${result.linkedToSignals} linked to saved signals · $reconciliation",
+                    result.unmatchedSells > 0, null)
             }
             is ScalableImportEvent.Failed -> {
                 button.isDisable = false

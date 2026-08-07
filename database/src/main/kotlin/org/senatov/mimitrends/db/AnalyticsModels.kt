@@ -67,5 +67,9 @@ data class BrokerImportResult(
     val parsed: Int,
     val imported: Int,
     val duplicates: Int,
-    val linkedToSignals: Int
+    val linkedToSignals: Int,
+    val closedPositions: Int,
+    val openPositions: Int,
+    val correctedOrder: Int,
+    val unmatchedSells: Int
 )
