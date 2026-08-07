@@ -8,6 +8,7 @@ import org.senatov.mimitrends.model.BrokerTrade
 
 internal class BrokerTransactionStore(private val connection: Connection) {
     fun import(transactions: List<BrokerTransaction>): BrokerImportResult {
+        removeCancelledTransactions()
         var imported = 0
         connection.prepareStatement(INSERT_TRANSACTION).use { statement ->
             transactions.forEach { value ->
@@ -37,6 +38,10 @@ internal class BrokerTransactionStore(private val connection: Connection) {
             duplicates = transactions.size - imported,
             linkedToSignals = linkedTransactionCount()
         )
+    }
+
+    private fun removeCancelledTransactions() {
+        connection.createStatement().use { it.executeUpdate(DELETE_CANCELLED_TRANSACTIONS) }
     }
 
     private fun linkExecutedTransactionsToSignals() {
@@ -107,6 +112,8 @@ internal class BrokerTransactionStore(private val connection: Connection) {
     }
 
     private companion object {
+        const val DELETE_CANCELLED_TRANSACTIONS = """DELETE FROM broker_transactions
+            WHERE lower(trim(status)) IN ('cancelled', 'cancel')"""
         const val INSERT_TRANSACTION = """INSERT OR IGNORE INTO broker_transactions
             (source, reference, fingerprint, occurred_at, status, description, asset_type, transaction_type,
              isin, shares, price, amount, fee, tax, currency, imported_at)

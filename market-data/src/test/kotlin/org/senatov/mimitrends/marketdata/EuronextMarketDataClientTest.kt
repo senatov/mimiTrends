@@ -10,6 +10,20 @@ class EuronextMarketDataClientTest {
     private val client = EuronextMarketDataClient()
 
     @Test
+    fun `selects an equity instead of a similarly named index`() {
+        val selected = client.selectInstrument("""
+            [
+              {"isin":"FRIX00006976","mic":"XPAR","name":"EN G IN190525 D034",
+               "link":"/en/product/indices/FRIX00006976-XPAR"},
+              {"isin":"IT0000072618","mic":"MTAH","name":"INTESA SANPAOLO",
+               "link":"/en/product/equities/IT0000072618-MTAH"}
+            ]
+        """.trimIndent())
+
+        assertEquals(EuronextInstrument("IT0000072618", "MTAH", "INTESA SANPAOLO"), selected)
+    }
+
+    @Test
     fun `decrypts the website CryptoJS envelope`() {
         val decrypted = client.decryptEnvelope(
             "YOBUDMmRjsilgZr7cJgcpE2iaiqT1NL1yK+ECtrIKAw=",

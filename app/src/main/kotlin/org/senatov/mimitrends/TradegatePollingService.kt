@@ -116,7 +116,10 @@ internal class TradegatePollingService(
     }
 
     private fun resolve(symbol: String): ProviderInstrument? {
-        repository.loadProviderInstrument(PROVIDER, symbol)?.takeIf(::isLikelyEquity)?.let { return it }
+        repository.loadProviderInstrument(PROVIDER, symbol)?.let { cached ->
+            if (isLikelyEquity(cached)) return cached
+            repository.deleteProviderInstrument(PROVIDER, symbol)
+        }
         val now = System.currentTimeMillis()
         if ((unresolvedUntil[symbol] ?: 0L) > now) return null
         knownIsin(symbol)?.let { source ->
@@ -136,11 +139,12 @@ internal class TradegatePollingService(
     }
 
     internal fun knownIsin(symbol: String): ProviderInstrument? = ISIN_PROVIDERS.firstNotNullOfOrNull { provider ->
-        repository.loadProviderInstrument(provider, symbol)?.takeIf { ISIN.matches(it.identifier) }
+        repository.loadProviderInstrument(provider, symbol)?.takeIf(::isLikelyEquity)
     }
 
     private fun isLikelyEquity(instrument: ProviderInstrument): Boolean =
-        !instrument.identifier.startsWith("XS") && DEBT_MARKERS.none {
+        !instrument.identifier.startsWith("XS") && !instrument.identifier.startsWith("FRIX") &&
+            ISIN.matches(instrument.identifier) && DEBT_MARKERS.none {
             instrument.resolvedName.contains(it, ignoreCase = true)
         }
 

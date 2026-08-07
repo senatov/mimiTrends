@@ -114,7 +114,12 @@ internal class EuronextPollingService(
     }
 
     private fun resolve(symbol: String): ProviderInstrument? {
-        repository.loadProviderInstrument(PROVIDER, symbol)?.let { return it }
+        repository.loadProviderInstrument(PROVIDER, symbol)?.let { cached ->
+            if (!cached.identifier.startsWith(INDEX_ISIN_PREFIX)) return cached
+            repository.deleteProviderInstrument(PROVIDER, symbol)
+            log.info(LogTag.API, "discarded non-equity Euronext instrument symbol={} identifier={}",
+                symbol, cached.identifier)
+        }
         val now = System.currentTimeMillis()
         if ((unresolvedUntil[symbol] ?: 0L) > now) return null
         val query = repository.loadCompanyProfile(symbol)?.name
@@ -137,6 +142,7 @@ internal class EuronextPollingService(
 
     private companion object {
         const val PROVIDER = "EURONEXT"
+        const val INDEX_ISIN_PREFIX = "FRIX"
         const val UNRESOLVED_RETRY_MILLIS = 24 * 60 * 60_000L
         val EURONEXT_ZONE: ZoneId = ZoneId.of("Europe/Paris")
         val OPEN: LocalTime = LocalTime.of(7, 0)

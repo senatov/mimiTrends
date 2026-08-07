@@ -19,7 +19,8 @@ internal class SteadyRiseDetector(private val zoneOverride: ZoneId? = null) {
         val session = sorted.filter { local(it).toLocalDate() == local(latest).toLocalDate() }
         val candidates = WINDOW_MINUTES.filter { it <= criteria.trendWindowMinutes }
             .mapNotNull { minutes -> evaluateWindow(session, minutes, criteria) }
-        val best = candidates.maxByOrNull { it.score } ?: return null
+        val confirmed = candidates.maxByOrNull { it.score } ?: return null
+        val best = refineStart(session, confirmed, criteria)
         val turnover = session.sumOf { it.close * it.volume }
         if (latest.close < criteria.minPrice || turnover < criteria.minSessionTurnover) return null
         return ScanResult(
@@ -97,6 +98,39 @@ internal class SteadyRiseDetector(private val zoneOverride: ZoneId? = null) {
         if (preceding.size < MIN_CONSOLIDATION_SAMPLES) return false
         val rangePercent = percent(preceding.minOf { it.low }, preceding.maxOf { it.high })
         return rangePercent <= MAX_CONSOLIDATION_RANGE_PERCENT && regression(preceding).rSquared < MAX_CONSOLIDATION_R_SQUARED
+    }
+
+    /** Extends an already confirmed rise without weakening the conditions used to emit the signal. */
+    private fun refineStart(session: List<MinuteBar>, confirmed: RiseWindow, criteria: ScannerCriteria): RiseWindow {
+        val latestEpoch = confirmed.bars.last().minuteEpochSeconds
+        val earliestEpoch = latestEpoch - criteria.trendWindowMinutes.coerceAtMost(MAX_REFINED_MINUTES) * 60L
+        val preceding = session.asReversed().asSequence()
+            .filter { it.minuteEpochSeconds < confirmed.bars.first().minuteEpochSeconds }
+            .takeWhile { it.minuteEpochSeconds >= earliestEpoch }
+        var refinedBars = confirmed.bars
+        for (bar in preceding) {
+            if (refinedBars.first().minuteEpochSeconds - bar.minuteEpochSeconds > MAX_GAP_MINUTES * 60L) break
+            val expanded = listOf(bar) + refinedBars
+            if (!belongsToSameRise(expanded, confirmed)) break
+            refinedBars = expanded
+        }
+        val changes = refinedBars.zipWithNext { first, second -> percent(first.close, second.close) }
+        val returnPercent = percent(refinedBars.first().close, refinedBars.last().close)
+        val efficiency = returnPercent / changes.sumOf { abs(it) }.coerceAtLeast(Double.MIN_VALUE)
+        val minutes = ((refinedBars.last().minuteEpochSeconds - refinedBars.first().minuteEpochSeconds) / 60L).toInt()
+        return confirmed.copy(minutes = minutes, bars = refinedBars, returnPercent = returnPercent, efficiency = efficiency)
+    }
+
+    private fun belongsToSameRise(bars: List<MinuteBar>, confirmed: RiseWindow): Boolean {
+        val changes = bars.zipWithNext { first, second -> percent(first.close, second.close) }
+        val totalReturn = percent(bars.first().close, bars.last().close)
+        if (totalReturn <= 0.0 || changes.isEmpty()) return false
+        val efficiency = totalReturn / changes.sumOf { abs(it) }.coerceAtLeast(Double.MIN_VALUE)
+        if (efficiency < max(REFINED_MIN_EFFICIENCY, confirmed.efficiency * REFINED_EFFICIENCY_SHARE)) return false
+        val fit = regression(bars)
+        if (fit.slope <= 0.0 || fit.rSquared < REFINED_MIN_R_SQUARED) return false
+        if (changes.count { it >= 0.0 }.toDouble() / changes.size < REFINED_MIN_POSITIVE_STEP_RATIO) return false
+        return maximumDrawdownPercent(bars) <= max(MAX_DRAWDOWN_PERCENT, totalReturn * MAX_DRAWDOWN_SHARE)
     }
 
     private fun maximumDrawdownPercent(bars: List<MinuteBar>): Double {
@@ -182,6 +216,11 @@ internal class SteadyRiseDetector(private val zoneOverride: ZoneId? = null) {
         const val MIN_SAMPLE_RATIO = 0.55
         const val MIN_WINDOW_SAMPLES = 6
         const val MAX_GAP_MINUTES = 5
+        const val MAX_REFINED_MINUTES = 180
+        const val REFINED_MIN_EFFICIENCY = 0.35
+        const val REFINED_EFFICIENCY_SHARE = 0.70
+        const val REFINED_MIN_R_SQUARED = 0.45
+        const val REFINED_MIN_POSITIVE_STEP_RATIO = 0.50
         const val RECOVERY_SCORE_WEIGHT = 0.85
         const val CONSOLIDATION_MINUTES = 10
         const val MIN_CONSOLIDATION_SAMPLES = 6

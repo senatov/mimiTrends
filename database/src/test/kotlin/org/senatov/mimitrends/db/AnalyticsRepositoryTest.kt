@@ -184,12 +184,12 @@ class AnalyticsRepositoryTest {
         val analytics = AnalyticsRepository(database)
         val first = analytics.importScalableTransactions(csv)
         val second = analytics.importScalableTransactions(csv)
-        assertEquals(3, first.parsed)
-        assertEquals(3, first.imported)
+        assertEquals(2, first.parsed)
+        assertEquals(2, first.imported)
         assertEquals(0, first.duplicates)
         assertEquals(0, second.imported)
-        assertEquals(3, second.duplicates)
-        assertEquals(3, analytics.stats().brokerTransactions)
+        assertEquals(2, second.duplicates)
+        assertEquals(2, analytics.stats().brokerTransactions)
         analytics.close()
 
         DriverManager.getConnection("jdbc:sqlite:$database").use { connection ->
@@ -203,6 +203,31 @@ class AnalyticsRepositoryTest {
                     assertEquals(2000.0, it.getDouble(3)); assertEquals(0.0, it.getDouble(4))
                 }
             }
+        }
+    }
+
+    @Test fun `filters cancelled rows and removes previously imported cancellations`() {
+        val directory = Files.createTempDirectory("mimitrends-cancelled-transactions")
+        val database = directory.resolve("test.db")
+        val csv = directory.resolve("transactions.csv")
+        Files.writeString(csv, """date;time;status;reference;description;assetType;type;isin;shares;price;amount;fee;tax;currency
+2026-07-31;18:00:00;cancel;CANCEL-NEW;Apple;Security;Buy;US0378331005;1;100,00;-100,00;0,00;0,00;EUR
+2026-07-31;19:00:00;Executed;BUY-1;Apple;Security;Buy;US0378331005;1;100,00;-100,00;0,00;0,00;EUR
+""")
+        AnalyticsRepository(database).use { analytics ->
+            DriverManager.getConnection("jdbc:sqlite:$database").use { connection ->
+                connection.createStatement().executeUpdate("""INSERT INTO broker_transactions
+                    (source, reference, fingerprint, occurred_at, status, description, asset_type, transaction_type,
+                     shares, price, amount, fee, tax, currency, imported_at)
+                    VALUES ('SCALABLE', 'CANCEL-OLD', 'cancel-old', 1, ' Cancelled ', 'Apple', 'Security', 'Buy',
+                        0, 0, 0, 0, 0, 'EUR', 1)""")
+            }
+
+            val result = analytics.importScalableTransactions(csv)
+
+            assertEquals(1, result.parsed)
+            assertEquals(1, result.imported)
+            assertEquals(1, analytics.stats().brokerTransactions)
         }
     }
 

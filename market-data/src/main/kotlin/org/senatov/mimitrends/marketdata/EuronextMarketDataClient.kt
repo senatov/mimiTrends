@@ -44,11 +44,18 @@ class EuronextMarketDataClient(
         if (response.statusCode() != 200) {
             throw ProviderHttpException.from(response.statusCode(), response.headers(), "Euronext instrument search")
         }
-        val choices = mapper.readTree(response.body()).mapNotNull { node ->
+        return selectInstrument(response.body())
+    }
+
+    internal fun selectInstrument(json: String): EuronextInstrument? {
+        val choices = mapper.readTree(json).mapNotNull { node ->
             val isin = node.path("isin").asText()
             val mic = node.path("mic").asText()
             val name = node.path("name").asText()
-            if (isin.matches(VALID_ISIN) && mic.matches(VALID_MIC)) EuronextInstrument(isin, mic, name) else null
+            val link = node.path("link").asText()
+            if (isin.matches(VALID_ISIN) && mic.matches(VALID_MIC) && EQUITY_LINK.containsMatchIn(link)) {
+                EuronextInstrument(isin, mic, name)
+            } else null
         }
         return choices.minByOrNull { MIC_PRIORITY.indexOf(it.mic).takeIf { rank -> rank >= 0 } ?: Int.MAX_VALUE }
     }
@@ -147,6 +154,7 @@ class EuronextMarketDataClient(
             "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
         val VALID_ISIN = Regex("[A-Z]{2}[A-Z0-9]{9}[0-9]")
         val VALID_MIC = Regex("[A-Z0-9]{4}")
+        val EQUITY_LINK = Regex("/product/equities/", RegexOption.IGNORE_CASE)
         val MIC_PRIORITY = listOf("XPAR", "XAMS", "XBRU", "XLIS", "XOSL", "ETLX", "MTAH", "BGEM")
         val LAST_TRADE_TIME = Regex("last-price-date-time[^>]*>\\s*([0-9]{2}/[0-9]{2}/[0-9]{4}\\s*-\\s*[0-9]{2}:[0-9]{2})")
         val QUOTE_TIME: DateTimeFormatter = DateTimeFormatter.ofPattern("dd/MM/yyyy - HH:mm")

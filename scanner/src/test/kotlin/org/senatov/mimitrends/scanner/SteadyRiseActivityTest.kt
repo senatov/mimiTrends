@@ -1,6 +1,7 @@
 package org.senatov.mimitrends.scanner
 
 import org.junit.jupiter.api.Assertions.assertNull
+import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
 import org.senatov.mimitrends.model.MinuteBar
 import org.senatov.mimitrends.model.ScannerCriteria
@@ -8,6 +9,22 @@ import org.senatov.mimitrends.model.VolumeStatus
 import java.time.ZoneId
 
 class SteadyRiseActivityTest {
+    @Test fun `shows the observed rise start between configured window sizes`() {
+        val bars = historicalBars().toMutableList()
+        var minute = 3 * 1_440
+        var previous = 100.0
+        repeat(25) {
+            val close = previous + 0.03
+            bars += candle(minute++, previous, close)
+            previous = close
+        }
+
+        val result = SteadyRiseDetector(ZoneId.of("UTC"))
+            .detect("TEST", bars, ScannerCriteria(minPrice = 0.0))
+
+        assertEquals("24m steady", result?.signalWindowLabel)
+    }
+
     @Test fun `stops calling a recovery active when its tail turns flat`() {
         val bars = historicalBars().toMutableList()
         var minute = 3 * 1_440

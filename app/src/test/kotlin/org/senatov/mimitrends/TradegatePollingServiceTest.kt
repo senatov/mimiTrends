@@ -8,6 +8,7 @@ import java.time.Instant
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 import kotlin.test.assertEquals
+import kotlin.test.assertNull
 
 class TradegatePollingServiceTest {
     @Test
@@ -36,6 +37,20 @@ class TradegatePollingServiceTest {
         val service = TradegatePollingService(repository)
 
         assertEquals("FI0009000681", service.knownIsin("NOKIA.HE")?.identifier)
+
+        service.close()
+        repository.close()
+    }
+
+    @Test
+    fun `does not reuse an Euronext index as an equity isin`() {
+        val repository = MarketRepository(Files.createTempDirectory("mimitrends-tradegate-index").resolve("test.db"))
+        repository.upsertProviderInstrument(ProviderInstrument(
+            "EURONEXT", "ISP.MI", "FRIX00006976", "XPAR", "EUR", "EN G IN190525 D034"
+        ))
+        val service = TradegatePollingService(repository)
+
+        assertNull(service.knownIsin("ISP.MI"))
 
         service.close()
         repository.close()

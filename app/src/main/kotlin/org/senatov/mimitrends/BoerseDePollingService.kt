@@ -5,6 +5,8 @@ import org.senatov.mimitrends.log.LogTag
 import org.senatov.mimitrends.marketdata.BoerseDeMarketDataClient
 import org.senatov.mimitrends.marketdata.BnpParibasMarketDataClient
 import org.senatov.mimitrends.marketdata.TraderFoxMarketDataClient
+import org.senatov.mimitrends.marketdata.ProviderDataUnavailableException
+import org.senatov.mimitrends.marketdata.ProviderHttpException
 import org.senatov.mimitrends.model.MinuteBar
 import org.senatov.mimitrends.model.ProviderInstrument
 import org.senatov.mimitrends.model.ProviderMinuteBar
@@ -63,6 +65,8 @@ private class IsinQuotePollingService(
     private var index = 0
     private var generation = 0L
     private var task: ScheduledFuture<*>? = null
+    private val unavailableUntil = mutableMapOf<String, Long>()
+    private val backoff = ProviderBackoff()
 
     @Synchronized
     fun replaceSymbols(values: Collection<String>) {
@@ -81,15 +85,38 @@ private class IsinQuotePollingService(
                 if (symbols.isEmpty() || generation != expectedGeneration) return
                 symbols[index].also { index = (index + 1) % symbols.size }
             }
-            runCatching { poll(symbol) }.onFailure { error ->
-                if (error !is InterruptedException) {
-                    log.warn(LogTag.API, "table quote unavailable provider={} symbol={} cause={}",
-                        provider, symbol, error.toString())
-                }
-            }
+            if ((unavailableUntil[symbol] ?: 0L) > System.currentTimeMillis() || !backoff.canRequest()) return
+            runCatching { poll(symbol) }
+                .onSuccess { backoff.success() }
+                .onFailure { error -> handleFailure(symbol, error) }
         } finally {
             synchronized(this) {
-                if (symbols.isNotEmpty() && generation == expectedGeneration) scheduleNext(INTERVAL_MILLIS, expectedGeneration)
+                if (symbols.isNotEmpty() && generation == expectedGeneration) {
+                    scheduleNext(backoff.jitteredDelay(INTERVAL_MILLIS), expectedGeneration)
+                }
+            }
+        }
+    }
+
+    private fun handleFailure(symbol: String, error: Throwable) {
+        when {
+            error is InterruptedException -> return
+            error is ProviderDataUnavailableException -> {
+                backoff.success()
+                log.debug(LogTag.API, "table quote has no current price provider={} symbol={} cause={}",
+                    provider, symbol, error.message)
+            }
+            error is ProviderHttpException && error.statusCode in PERMANENT_INSTRUMENT_STATUSES -> {
+                repository.deleteProviderInstrument(provider, symbol)
+                unavailableUntil[symbol] = System.currentTimeMillis() + UNAVAILABLE_RETRY_MILLIS
+                backoff.success()
+                log.warn(LogTag.API, "table quote instrument disabled provider={} symbol={} status={} retryIn={}h",
+                    provider, symbol, error.statusCode, TimeUnit.MILLISECONDS.toHours(UNAVAILABLE_RETRY_MILLIS))
+            }
+            else -> {
+                val delay = backoff.failure(error)
+                log.warn(LogTag.API, "table quote provider paused provider={} symbol={} delay={}ms cause={}",
+                    provider, symbol, delay, error.toString())
             }
         }
     }
@@ -114,15 +141,21 @@ private class IsinQuotePollingService(
     }
 
     private fun resolveInstrument(symbol: String): ProviderInstrument? {
-        repository.loadProviderInstrument(provider, symbol)?.let { return it }
-        val source = repository.loadProviderInstrument("TRADEGATE", symbol)
-            ?: repository.loadProviderInstrument("EURONEXT", symbol)
-            ?: repository.loadProviderInstrument("BOERSE_DE", symbol)
-            ?: repository.loadProviderInstrument("BNP_PARIBAS", symbol)
+        repository.loadProviderInstrument(provider, symbol)?.let { cached ->
+            if (isEquityIdentifier(cached.identifier)) return cached
+            repository.deleteProviderInstrument(provider, symbol)
+        }
+        val source = listOf("TRADEGATE", "EURONEXT", "BOERSE_DE", "BNP_PARIBAS", "TRADERFOX")
+            .asSequence().filter { it != provider }
+            .mapNotNull { repository.loadProviderInstrument(it, symbol) }
+            .firstOrNull { isEquityIdentifier(it.identifier) }
             ?: return null
         return source.copy(provider = provider, mic = mic, updatedAtMillis = System.currentTimeMillis())
             .also(repository::upsertProviderInstrument)
     }
+
+    private fun isEquityIdentifier(identifier: String): Boolean =
+        ISIN.matches(identifier) && !identifier.startsWith("FRIX") && !identifier.startsWith("XS")
 
     override fun close() {
         synchronized(this) { generation++; task?.cancel(false); task = null; symbols = emptyList() }
@@ -132,5 +165,8 @@ private class IsinQuotePollingService(
 
     private companion object {
         const val INTERVAL_MILLIS = 5_000L
+        const val UNAVAILABLE_RETRY_MILLIS = 24 * 60 * 60_000L
+        val PERMANENT_INSTRUMENT_STATUSES = setOf(400, 404)
+        val ISIN = Regex("[A-Z]{2}[A-Z0-9]{9}[0-9]")
     }
 }

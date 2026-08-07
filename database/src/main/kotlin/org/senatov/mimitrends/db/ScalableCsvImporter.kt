@@ -22,9 +22,10 @@ object ScalableCsvImporter {
                 "This is not a supported Scalable transactions CSV (missing: ${requiredHeaders - headers.toSet()})"
             }
             val positions = headers.withIndex().associate { it.value to it.index }
-            return reader.lineSequence().filter(String::isNotBlank).mapIndexed { index, line ->
+            return reader.lineSequence().filter(String::isNotBlank).mapIndexedNotNull { index, line ->
                 val values = parseLine(line)
                 fun value(name: String): String = values.getOrNull(positions.getValue(name))?.trim().orEmpty()
+                if (isCancelled(value("status"))) return@mapIndexedNotNull null
                 val canonical = headers.joinToString("\u001f") { value(it) }
                 BrokerTransaction(
                     source = "SCALABLE",
@@ -42,6 +43,9 @@ object ScalableCsvImporter {
             }.toList()
         }
     }
+
+    internal fun isCancelled(status: String): Boolean =
+        status.trim().equals("Cancelled", ignoreCase = true) || status.trim().equals("Cancel", ignoreCase = true)
 
     private fun decimal(value: String, zeroBasedRow: Int): Double = runCatching {
         if (value.isBlank()) 0.0 else value.replace(".", "").replace(',', '.').toDouble()
