@@ -119,10 +119,12 @@ internal class MarketDataService(
             scannerEngine.evaluateFallback(symbol, merged.analysisBars, criteria, factor)
                 ?.forPresentation(merged, effectiveStatus)
         }
-        val rejectionReason = if (primary == null && fallback.none { it != null }) {
+        val longTerm = scannerEngine.evaluateLongTerm(symbol, merged.analysisBars, criteria)
+            ?.forPresentation(merged, effectiveStatus)
+        val rejectionReason = if (primary == null && fallback.none { it != null } && longTerm == null) {
             scannerEngine.rejectionReason(merged.analysisBars)
         } else null
-        return ScanEvaluation(primary, fallback, rejectionReason)
+        return ScanEvaluation(primary, fallback, rejectionReason, longTerm)
     }
 
     fun loadPriorityResult(symbol: String, criteria: ScannerCriteria): ScanResult? {
@@ -174,5 +176,6 @@ internal class MarketDataService(
 internal data class ScanEvaluation(
     val primary: ScanResult?,
     val fallback: List<ScanResult?>,
-    val rejectionReason: String? = null
+    val rejectionReason: String? = null,
+    val longTerm: ScanResult? = null
 )

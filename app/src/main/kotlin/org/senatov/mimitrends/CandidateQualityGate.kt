@@ -15,6 +15,9 @@ internal object CandidateQualityGate {
         return structuralQuality(result, watch = true)
     }
 
+    fun qualifiesLongTerm(result: ScanResult): Boolean =
+        result.signalSource.contains("long-term") && isCurrent(result) && trendQuality(result, watch = true)
+
     private fun structuralQuality(result: ScanResult, watch: Boolean): Boolean {
         return when {
             result.signalSource.startsWith("Steady rise") || result.signalSource.startsWith("Recovery") ||

@@ -171,6 +171,10 @@ class ScannerEngine(private val zoneOverride: ZoneId? = null) {
             ?.let { longCandidateSafety.classify(bars, it) }
     }
 
+    fun evaluateLongTerm(symbol: String, bars: List<MinuteBar>, criteria: ScannerCriteria): ScanResult? =
+        steadyRiseDetector.detectLongTerm(symbol, bars, criteria)
+            ?.let { longCandidateSafety.classify(bars, it) }
+
     private fun score(
         candidate: Feature,
         all: List<Feature>,

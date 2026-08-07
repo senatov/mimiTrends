@@ -29,4 +29,24 @@ class BrokerTradeAnnotationsTest {
         renderer.clear()
         assertEquals(listOf(foreign), plot.annotations)
     }
+
+    @Test fun `keeps a large trade card inside the visible chart edges`() {
+        val renderer = BrokerTradeAnnotations(XYPlot())
+
+        val bounds = renderer.cardBounds(
+            preferredX = 0.0,
+            preferredBottom = 109.0,
+            timeStep = 60_000.0,
+            priceSpan = 10.0,
+            domainMin = 0.0,
+            domainMax = 1_200_000.0,
+            rangeMin = 100.0,
+            rangeMax = 110.0
+        )
+
+        assertTrue(bounds.left >= 0.0)
+        assertTrue(bounds.right <= 1_200_000.0)
+        assertTrue(bounds.bottom >= 100.0)
+        assertTrue(bounds.top <= 110.0)
+    }
 }

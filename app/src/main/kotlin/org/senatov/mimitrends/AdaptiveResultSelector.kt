@@ -7,7 +7,8 @@ internal object AdaptiveResultSelector {
         strict: Collection<ScanResult>,
         fallbackLevels: List<Collection<ScanResult>>,
         requestedTarget: Int,
-        requestedLimit: Int
+        requestedLimit: Int,
+        longTerm: Collection<ScanResult> = emptyList()
     ): AdaptiveSelection {
         val limit = requestedLimit.coerceIn(MIN_RESULTS, MAX_RESULTS)
         val target = minOf(maxOf(requestedTarget, MIN_TARGET_RESULTS), TARGET_RESULTS, limit)
@@ -34,6 +35,12 @@ internal object AdaptiveResultSelector {
         watchCandidates.forEach { candidate ->
             if (selected.size < target) selected.putIfAbsent(candidate.symbol, candidate.asWatch())
         }
+        longTerm.asSequence()
+            .filter(CandidateQualityGate::qualifiesLongTerm)
+            .sortedWith(attentionComparator())
+            .forEach { candidate ->
+                if (selected.size < target) selected.putIfAbsent(candidate.symbol, candidate)
+            }
         val results = selected.values.sortedWith(attentionComparator()).take(limit)
         val adaptiveCount = results.count {
             it.signalSource.contains("relaxed") || it.signalSource.startsWith("Trend") ||

@@ -2,6 +2,7 @@ package org.senatov.mimitrends.scanner
 
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Test
 import org.senatov.mimitrends.model.MinuteBar
 import org.senatov.mimitrends.model.ScannerCriteria
@@ -29,14 +30,16 @@ class SteadyRiseActivityTest {
         val bars = historicalBars().toMutableList()
         var minute = 3 * 1_440
         var previous = 100.0
-        repeat(12) {
-            val close = previous + 0.06
+        repeat(65) {
+            val close = previous + 0.015
             bars += candle(minute++, previous, close)
             previous = close
         }
         repeat(4) { bars += candle(minute++, previous, previous) }
 
-        assertNull(SteadyRiseDetector(ZoneId.of("UTC")).detect("TEST", bars, ScannerCriteria(minPrice = 0.0)))
+        val detector = SteadyRiseDetector(ZoneId.of("UTC"))
+        assertNull(detector.detect("TEST", bars, ScannerCriteria(minPrice = 0.0)))
+        assertNotNull(detector.detectLongTerm("TEST", bars, ScannerCriteria(minPrice = 0.0)))
     }
 
     private fun historicalBars() = (0 until 3).flatMap { day ->

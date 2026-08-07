@@ -62,6 +62,21 @@ class AdaptiveResultSelectorTest {
         assertEquals(6, selection.results.count { it.signalSource.endsWith("· watch") })
     }
 
+    @Test fun `fills quiet markets with the best long term rises`() {
+        val longTerm = (1..10).map { index ->
+            result("L$index", 4.0 - index / 10.0, "Steady rise ↑ · long-term")
+                .copy(signalWindowLabel = "120m steady", windowChangePercent = 1.2, candleBodyRatio = 0.35)
+        }
+
+        val selection = AdaptiveResultSelector.select(
+            strict = emptyList(), fallbackLevels = emptyList(), requestedTarget = 7,
+            requestedLimit = 15, longTerm = longTerm
+        )
+
+        assertEquals(7, selection.results.size)
+        assertTrue(selection.results.all { it.signalSource.contains("long-term") })
+    }
+
     private fun result(symbol: String, score: Double, source: String = "Impulse ↑") =
         TestScanResult.create(score, source, symbol)
 }

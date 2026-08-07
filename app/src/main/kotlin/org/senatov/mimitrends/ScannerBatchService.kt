@@ -27,6 +27,7 @@ internal class ScannerBatchService(
         val runId = analytics.beginScan(criteria.marketRegion.name, symbols.size, criteria.scanIntervalSeconds)
         val strict = mutableListOf<ScanResult>()
         val fallbackLevels = List(3) { mutableListOf<ScanResult>() }
+        val longTerm = mutableListOf<ScanResult>()
         val errors = mutableListOf<String>()
         symbols.forEachIndexed { index, symbol ->
             if (!isCurrent()) {
@@ -39,7 +40,9 @@ internal class ScannerBatchService(
                     evaluation.fallback.forEachIndexed { level, result ->
                         result?.let(fallbackLevels[level]::add)
                     }
+                    evaluation.longTerm?.let(longTerm::add)
                     val accepted = evaluation.primary ?: evaluation.fallback.firstNotNullOfOrNull { it }
+                        ?: evaluation.longTerm
                     analytics.recordScanCandidate(runId, symbol, accepted,
                         if (accepted == null) evaluation.rejectionReason ?: "NO_CURRENT_SIGNAL" else null,
                         accepted?.dataStatus ?: fallbackStatus(symbol))
@@ -58,8 +61,10 @@ internal class ScannerBatchService(
         }
         val calibratedStrict = strict.map(analytics::withCalibration)
         val calibratedFallbacks = fallbackLevels.map { level -> level.map(analytics::withCalibration) }
+        val calibratedLongTerm = longTerm.map(analytics::withCalibration)
         val selection = AdaptiveResultSelector.select(
-            calibratedStrict, calibratedFallbacks, criteria.minimumTableResults, criteria.resultLimit
+            calibratedStrict, calibratedFallbacks, criteria.minimumTableResults, criteria.resultLimit,
+            calibratedLongTerm
         )
         analytics.completeScan(runId, selection.results.map(ScanResult::symbol), errors.size)
         val strictSymbols = calibratedStrict.mapTo(hashSetOf(), ScanResult::symbol)

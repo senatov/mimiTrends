@@ -13,12 +13,23 @@ import kotlin.math.sqrt
 
 internal class SteadyRiseDetector(private val zoneOverride: ZoneId? = null) {
     fun detect(symbol: String, bars: List<MinuteBar>, criteria: ScannerCriteria): ScanResult? {
+        return detect(symbol, bars, criteria, longTerm = false)
+    }
+
+    fun detectLongTerm(symbol: String, bars: List<MinuteBar>, criteria: ScannerCriteria): ScanResult? {
+        return detect(symbol, bars, criteria, longTerm = true)
+    }
+
+    private fun detect(
+        symbol: String, bars: List<MinuteBar>, criteria: ScannerCriteria, longTerm: Boolean
+    ): ScanResult? {
         val sorted = bars.filter(MinuteBar::isValidMinuteBar).sortedBy(MinuteBar::minuteEpochSeconds)
         val latest = sorted.lastOrNull() ?: return null
         if (sorted.map { local(it).toLocalDate() }.distinct().size < MIN_SESSIONS) return null
         val session = sorted.filter { local(it).toLocalDate() == local(latest).toLocalDate() }
-        val candidates = WINDOW_MINUTES.filter { it <= criteria.trendWindowMinutes }
-            .mapNotNull { minutes -> evaluateWindow(session, minutes, criteria) }
+        val windows = if (longTerm) LONG_TERM_WINDOW_MINUTES else WINDOW_MINUTES
+        val candidates = windows.filter { it <= criteria.trendWindowMinutes }
+            .mapNotNull { minutes -> evaluateWindow(session, minutes, criteria, requireActiveTail = !longTerm) }
         val confirmed = candidates.maxByOrNull { it.score } ?: return null
         val best = refineStart(session, confirmed, criteria)
         val turnover = session.sumOf { it.close * it.volume }
@@ -38,9 +49,10 @@ internal class SteadyRiseDetector(private val zoneOverride: ZoneId? = null) {
             sessionTurnover = turnover,
             signalAgeMinutes = 0,
             signalSource = when (best.phase) {
-                RisePhase.STEADY -> "Steady rise ↑"
-                RisePhase.RECOVERY -> "Recovery rise ↑"
-                RisePhase.RECOVERY_BREAKOUT -> "Recovery breakout ↑"
+                RisePhase.STEADY -> if (longTerm) "Steady rise ↑ · long-term" else "Steady rise ↑"
+                RisePhase.RECOVERY -> if (longTerm) "Recovery rise ↑ · long-term" else "Recovery rise ↑"
+                RisePhase.RECOVERY_BREAKOUT ->
+                    if (longTerm) "Recovery breakout ↑ · long-term" else "Recovery breakout ↑"
             },
             updatedAtMillis = latest.minuteEpochSeconds * 1_000,
             signalWindowLabel = "${best.minutes}m steady",
@@ -49,7 +61,9 @@ internal class SteadyRiseDetector(private val zoneOverride: ZoneId? = null) {
         )
     }
 
-    private fun evaluateWindow(session: List<MinuteBar>, minutes: Int, criteria: ScannerCriteria): RiseWindow? {
+    private fun evaluateWindow(
+        session: List<MinuteBar>, minutes: Int, criteria: ScannerCriteria, requireActiveTail: Boolean
+    ): RiseWindow? {
         val latestEpoch = session.lastOrNull()?.minuteEpochSeconds ?: return null
         val bars = session.filter { it.minuteEpochSeconds >= latestEpoch - minutes * 60L }
         val coveredMinutes = (bars.lastOrNull()?.minuteEpochSeconds ?: return null) - bars.first().minuteEpochSeconds
@@ -75,11 +89,14 @@ internal class SteadyRiseDetector(private val zoneOverride: ZoneId? = null) {
                 percent(contextBars.first().close, contextBars.last().close) <= 0.0
         }
         val latestBars = bars.filter { it.minuteEpochSeconds >= latestEpoch - LATEST_MINUTES * 60L }
-        if (latestBars.size < MIN_LATEST_SAMPLES) return null
-        val latestReturn = percent(latestBars.first().close, latestBars.last().close)
-        if (latestReturn < max(MIN_LATEST_RETURN_PERCENT, totalReturn * MIN_CONTINUATION_SHARE)) return null
-        val tailBars = latestBars.filter { it.minuteEpochSeconds >= latestEpoch - TAIL_MINUTES * 60L }
-        if (tailBars.size < MIN_TAIL_SAMPLES || !hasAcceptableTail(tailBars, changes)) return null
+        val latestReturn = latestBars.takeIf { it.size >= MIN_LATEST_SAMPLES }
+            ?.let { percent(it.first().close, it.last().close) } ?: 0.0
+        if (requireActiveTail) {
+            if (latestBars.size < MIN_LATEST_SAMPLES ||
+                latestReturn < max(MIN_LATEST_RETURN_PERCENT, totalReturn * MIN_CONTINUATION_SHARE)) return null
+            val tailBars = latestBars.filter { it.minuteEpochSeconds >= latestEpoch - TAIL_MINUTES * 60L }
+            if (tailBars.size < MIN_TAIL_SAMPLES || !hasAcceptableTail(tailBars, changes)) return null
+        }
         if (maximumDrawdownPercent(bars) > max(MAX_DRAWDOWN_PERCENT, totalReturn * MAX_DRAWDOWN_SHARE)) return null
         val contextWeight = if (recovery) RECOVERY_SCORE_WEIGHT else 1.0
         val score = (1.25 + totalReturn * 1.20 + regression.rSquared * 1.25 + efficiency) * contextWeight
@@ -196,6 +213,7 @@ internal class SteadyRiseDetector(private val zoneOverride: ZoneId? = null) {
 
     private companion object {
         val WINDOW_MINUTES = listOf(10, 15, 20, 30, 45, 60, 90, 120, 180)
+        val LONG_TERM_WINDOW_MINUTES = listOf(60, 90, 120, 180)
         const val MIN_SESSIONS = 2
         const val MIN_RETURN_PERCENT = 0.30
         const val MIN_EFFICIENCY = 0.45
