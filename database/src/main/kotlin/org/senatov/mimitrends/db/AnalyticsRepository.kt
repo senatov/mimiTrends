@@ -14,7 +14,6 @@ import org.slf4j.LoggerFactory
 import java.nio.file.Path
 import java.sql.Connection
 import java.sql.Statement
-import java.sql.Types
 import java.time.Instant
 import kotlin.math.abs
 import kotlin.math.ln1p
@@ -30,6 +29,7 @@ class AnalyticsRepository(
     private val signalCalibration: SignalCalibrationStore
     private val signalOutcomes: SignalOutcomeStore
     private val researchSamples: ResearchSampleStore
+    private val scanCandidates: ScanCandidateStore
 
     init {
         migrate()
@@ -38,6 +38,7 @@ class AnalyticsRepository(
         signalCalibration = SignalCalibrationStore(connection)
         signalOutcomes = SignalOutcomeStore(connection)
         researchSamples = ResearchSampleStore(connection)
+        scanCandidates = ScanCandidateStore(connection, researchSamples)
     }
 
     fun upsertInstrument(value: InstrumentMetadata) = locked { upsertInstrumentInternal(value) }
@@ -136,7 +137,6 @@ class AnalyticsRepository(
             s.executeUpdate(); s.generatedKeys.use { keys -> check(keys.next()); keys.getLong(1) }
         }
     }
-
     fun recordScanCandidate(
         runId: Long,
         symbol: String,
@@ -144,32 +144,7 @@ class AnalyticsRepository(
         rejectionReason: String?,
         source: String,
         researchFeatures: ResearchFeatures? = null
-    ) = locked {
-        connection.prepareStatement("""INSERT INTO scan_candidates
-            (run_id, symbol, evaluated_at, signal_epoch, accepted, published, rejection_reason, signal, score, change_10m,
-             jump_z, range_z, volume_z, rvol, price, entry_price, turnover, source, data_epoch)
-            VALUES (?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ON CONFLICT(run_id, symbol) DO UPDATE SET signal_epoch=excluded.signal_epoch,
-            accepted=excluded.accepted, rejection_reason=excluded.rejection_reason,
-            signal=excluded.signal, score=excluded.score, change_10m=excluded.change_10m, jump_z=excluded.jump_z,
-            range_z=excluded.range_z, volume_z=excluded.volume_z, rvol=excluded.rvol, price=excluded.price,
-            entry_price=excluded.entry_price, turnover=excluded.turnover, source=excluded.source,
-            data_epoch=excluded.data_epoch""").use { s ->
-            s.setLong(1, runId); s.setString(2, symbol.uppercase()); s.setLong(3, Instant.now().epochSecond)
-            fun metric(index: Int, value: Double?) {
-                if (value != null && value.isFinite()) s.setDouble(index, value) else s.setNull(index, Types.REAL)
-            }
-            if (result != null) s.setLong(4, result.signalEpochMillis / 1_000L) else s.setNull(4, Types.INTEGER)
-            s.setInt(5, if (result != null) 1 else 0); s.setString(6, rejectionReason); s.setString(7, result?.signalSource)
-            metric(8, result?.anomalyScore); metric(9, result?.windowChangePercent); metric(10, result?.priceAnomaly)
-            metric(11, result?.rangeAnomaly); metric(12, result?.volumeAnomaly); metric(13, result?.relativeVolume)
-            metric(14, result?.price); metric(15, result?.signalPrice); metric(16, result?.sessionTurnover)
-            s.setString(17, source)
-            if (result != null) s.setLong(18, result.updatedAtMillis / 1_000L) else s.setNull(18, Types.INTEGER)
-            s.executeUpdate()
-        }
-        researchFeatures?.let { researchSamples.record(runId, symbol, result, it, source) }
-    }
+    ) = locked { scanCandidates.record(runId, symbol, result, rejectionReason, source, researchFeatures) }
 
     fun recordSignalOutcomes(symbol: String, currentPrice: Double, observedEpoch: Long,
         highPrice: Double = currentPrice, lowPrice: Double = currentPrice

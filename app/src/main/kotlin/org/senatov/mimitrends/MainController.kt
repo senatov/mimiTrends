@@ -66,6 +66,7 @@ class MainController(
         Thread(task, "mimitrends-scanner-rotation").apply { isDaemon = true }
     }
     private val scalableImport = ScalableImportAction(analytics, batchScheduler)
+    private val researchReport = ResearchReportAction(analytics, batchScheduler, ::setStatus)
     private val scalableImportResults = ScalableImportResultHandler(
         importTradesButton, ::setStatus, requestStatus::formatError, log
     )
@@ -111,7 +112,6 @@ class MainController(
     init {
         scannerPanel.onInspect = focusedSignals::request
     }
-
     fun createView(): Parent {
         log.debug(LogTag.UI, "createView()")
         scannerPanel.setCurrency(scannerCriteria.displayCurrency, ::displayPrice)
@@ -126,9 +126,10 @@ class MainController(
         aboutButton.setOnAction { AboutDialog.show(aboutButton.scene?.window) }
         ToolbarIconButton.configure(importTradesButton, "Import Scalable transactions CSV")
         importTradesButton.setOnAction { scalableImport.chooseAndImport(importTradesButton.scene?.window, ::handleScalableImport) }
+        researchReport.configure()
 
         val appLayers = MainViewFactory.create(refreshButton, settingsButton, importTradesButton,
-            aboutButton, scannerPanel, trendChart, contentSplitPane, requestStatus, initialDivider)
+            researchReport.button, aboutButton, scannerPanel, trendChart, contentSplitPane, requestStatus, initialDivider)
 
         apiKey?.takeIf(String::isNotBlank)?.let(::restartFinnhubLive)
         analytics.applyRetention()
@@ -161,7 +162,8 @@ class MainController(
     }
 
     fun showClosing() {
-        ClosingPresentation.show(scannerPanel, listOf(refreshButton, settingsButton, aboutButton, importTradesButton))
+        ClosingPresentation.show(scannerPanel,
+            listOf(refreshButton, settingsButton, researchReport.button, aboutButton, importTradesButton))
     }
     fun close() {
         log.debug(LogTag.UI, "close()")

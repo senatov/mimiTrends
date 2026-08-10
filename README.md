@@ -332,6 +332,8 @@ trend efficiency, detector score, anomaly metrics, source quality, and acceptanc
 trading days only. It reports predicted and actual win rates, Brier score, average friction-adjusted return,
 and sample/day counts by signal family and direction. This is an evaluation foundation, not an assertion of
 predictive edge; model fitting and user-facing research reports can build on the same point-in-time dataset.
+The prediction-research toolbar action shows these metrics for the 5-, 10-, and 30-minute horizons and can
+export the complete locale-independent report as CSV without blocking market-data collection.
 
 ## Market data
 
