@@ -80,6 +80,16 @@ data class ResearchBackfillSample(
     val outcomes: List<ResearchBackfillOutcome>
 )
 
+data class PredictiveTrainingResult(
+    val horizonMinutes: Int,
+    val status: String,
+    val trainingSamples: Int,
+    val validationSamples: Int,
+    val modelBrier: Double,
+    val baselineBrier: Double,
+    val reason: String? = null
+)
+
 data class BrokerTransaction(
     val source: String,
     val reference: String?,

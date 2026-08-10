@@ -8,6 +8,15 @@ import java.sql.Connection
 import java.sql.Types
 
 internal class ResearchSampleStore(private val connection: Connection) {
+    fun needsHistoricalBackfill(): Boolean = connection.createStatement().use { statement ->
+        statement.executeQuery("""SELECT
+            (SELECT COUNT(DISTINCT date(minute_epoch, 'unixepoch')) FROM minute_bars),
+            (SELECT COUNT(DISTINCT date(observed_epoch, 'unixepoch')) FROM research_samples WHERE source='HISTORICAL')""").use {
+            it.next()
+            it.getInt(2) < (it.getInt(1) - REQUIRED_BASELINE_DAYS).coerceAtLeast(0)
+        }
+    }
+
     fun record(runId: Long, symbol: String, result: ScanResult?, features: ResearchFeatures, source: String) {
         if (!features.entryPrice.isFinite() || features.entryPrice <= 0.0) return
         val family = result?.let { family(it.signalSource) } ?: CONTROL_FAMILY
@@ -158,6 +167,7 @@ internal class ResearchSampleStore(private val connection: Connection) {
     private companion object {
         const val CONTROL_FAMILY = "Control"
         const val HISTORICAL_SOURCE = "HISTORICAL"
+        const val REQUIRED_BASELINE_DAYS = 5
         const val EPISODE_SECONDS = 15 * 60L
         const val MAX_TRACKING_MINUTES = 34
         const val OUTCOME_LAG_MINUTES = 4

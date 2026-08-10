@@ -176,7 +176,11 @@ data class ScanResult(
     val upperQuartileNetReturnPercent: Double = Double.NaN,
     val medianFavorableExcursionPercent: Double = Double.NaN,
     val medianAdverseExcursionPercent: Double = Double.NaN,
-    val rankingPercentile: Double = Double.NaN
+    val rankingPercentile: Double = Double.NaN,
+    val predictionSource: String = "BETA",
+    val predictionModelVersion: Long = 0,
+    val predictionSamples: Int = 0,
+    val empiricalContinuationProbability: Double = Double.NaN
 )
 
 data class CompanyProfile(

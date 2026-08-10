@@ -2,9 +2,26 @@ package org.senatov.mimitrends
 
 import org.junit.jupiter.api.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class SignalMetricPresentationTest {
+    @Test fun `shows validated model metadata instead of beta interval`() {
+        val result = TestScanResult.create().copy(
+            continuationProbability = 0.64,
+            predictionSource = "LOGISTIC",
+            predictionModelVersion = 7,
+            predictionSamples = 420
+        )
+
+        val metric = SignalMetricPresentation.outcome(result)
+
+        assertEquals("Model 64%", metric.label)
+        assertTrue(metric.details.contains("model #7", ignoreCase = true))
+        assertTrue(metric.details.contains("420"))
+        assertFalse(metric.details.contains("95% interval"))
+    }
+
     @Test fun `high anomaly is not presented as a trading recommendation`() {
         val metric = SignalMetricPresentation.strength(TestScanResult.create(anomalyScore = 4.2))
 

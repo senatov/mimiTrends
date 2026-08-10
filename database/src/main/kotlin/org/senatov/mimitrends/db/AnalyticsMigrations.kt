@@ -80,6 +80,18 @@ internal object AnalyticsMigrations {
                 sample_id INTEGER PRIMARY KEY REFERENCES research_samples(id) ON DELETE CASCADE,
                 maximum_return_percent REAL NOT NULL, minimum_return_percent REAL NOT NULL,
                 last_observed_at INTEGER NOT NULL)"""
+        ),
+        8 to listOf(
+            """CREATE TABLE predictive_models(
+                id INTEGER PRIMARY KEY AUTOINCREMENT, horizon_minutes INTEGER NOT NULL,
+                feature_version INTEGER NOT NULL, trained_at INTEGER NOT NULL, training_cutoff INTEGER NOT NULL,
+                training_samples INTEGER NOT NULL, validation_samples INTEGER NOT NULL,
+                validation_days INTEGER NOT NULL, model_brier REAL NOT NULL, baseline_brier REAL NOT NULL,
+                average_net_return REAL NOT NULL, top_quartile_net_return REAL NOT NULL,
+                means TEXT NOT NULL, scales TEXT NOT NULL, weights TEXT NOT NULL,
+                status TEXT NOT NULL, rejection_reason TEXT)""",
+            "CREATE INDEX idx_predictive_models_horizon_time ON predictive_models(horizon_minutes, trained_at DESC)",
+            "CREATE UNIQUE INDEX idx_predictive_models_active ON predictive_models(horizon_minutes) WHERE status='ACTIVE'"
         )
     )
 }

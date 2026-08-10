@@ -339,6 +339,19 @@ detector invocation receives only bars available at that historical instant; 5/1
 attached afterward from the same session. Backfill runs on a dedicated worker, is safe to repeat, and leaves
 the live scanner executor available.
 
+Prediction maintenance is automatic. Thirty seconds after startup, and then every six hours, a dedicated
+research worker checks historical coverage, fills missing retained history, and considers regularized
+logistic models for the 5-, 10-, and 30-minute horizons. Training requires at least 300 completed samples
+across seven trading days. The latest two days are held out chronologically; a candidate becomes active only
+when its Brier score improves on the smoothed signal-family baseline and its highest-probability quartile does
+not underperform the validation population. Models are versioned in SQLite, unchanged datasets are skipped,
+and rejected candidates never replace the active model.
+
+An active model uses detector metrics available identically in historical and live paths. Its validated
+probability replaces the displayed beta probability, while historical return/excursion statistics remain
+visible. The UI identifies the logistic source, model id, and training sample count. If no validated model is
+available, the existing walk-forward beta calibration remains the automatic fallback.
+
 ## Market data
 
 ### Yahoo Finance

@@ -26,19 +26,19 @@ class AnalyticsRepository(
     private val log = LoggerFactory.getLogger(javaClass)
     private val connection: Connection = database.connection
     private val brokerTransactions: BrokerTransactionStore
-    private val signalCalibration: SignalCalibrationStore
     private val signalOutcomes: SignalOutcomeStore
     private val researchSamples: ResearchSampleStore
     private val scanCandidates: ScanCandidateStore
+    private val predictionAnalytics: PredictionAnalyticsStore
 
     init {
         migrate()
         recoverInterruptedScans()
         brokerTransactions = BrokerTransactionStore(connection)
-        signalCalibration = SignalCalibrationStore(connection)
         signalOutcomes = SignalOutcomeStore(connection)
         researchSamples = ResearchSampleStore(connection)
         scanCandidates = ScanCandidateStore(connection, researchSamples)
+        predictionAnalytics = PredictionAnalyticsStore(connection)
     }
 
     fun upsertInstrument(value: InstrumentMetadata) = locked { upsertInstrumentInternal(value) }
@@ -160,12 +160,13 @@ class AnalyticsRepository(
         }
     } }
 
-    fun withCalibration(result: ScanResult): ScanResult = locked { signalCalibration.enrich(result) }
+    fun withCalibration(result: ScanResult): ScanResult = locked { predictionAnalytics.enrich(result) }
+    fun trainPredictiveModels(): List<PredictiveTrainingResult> = locked { transaction { predictionAnalytics.train() } }
 
-    fun walkForwardResearchReport(
-        horizonMinutes: Int = 10,
-        frictionPercent: Double = 0.20
-    ): WalkForwardResearchReport = locked { WalkForwardResearchEvaluator(connection).evaluate(horizonMinutes, frictionPercent) }
+    fun needsResearchBackfill(): Boolean = locked { researchSamples.needsHistoricalBackfill() }
+
+    fun walkForwardResearchReport(horizonMinutes: Int = 10, frictionPercent: Double = 0.20): WalkForwardResearchReport =
+        locked { predictionAnalytics.report(horizonMinutes, frictionPercent) }
 
     fun recordResearchBackfill(symbol: String, samples: Collection<ResearchBackfillSample>) = locked {
         transaction { samples.forEach { researchSamples.recordHistorical(symbol, it.result, it.features, it.outcomes) } }

@@ -22,13 +22,30 @@ internal class ResearchReportAction(
     val button = Button("∿")
     private val log = LoggerFactory.getLogger(javaClass)
     private val backfill = ResearchBackfillService(marketRepository, analytics, scanner)
-    private val executor = Executors.newSingleThreadExecutor { task ->
+    private val executor = Executors.newSingleThreadScheduledExecutor { task ->
         Thread(task, "mimitrends-research").apply { isDaemon = true }
     }
 
     fun configure() {
         ToolbarIconButton.configure(button, "Prediction research and CSV export")
         button.setOnAction { load() }
+        executor.scheduleWithFixedDelay(::automaticMaintenance, 30, 6 * 60 * 60, TimeUnit.SECONDS)
+    }
+
+    private fun automaticMaintenance() {
+        runCatching {
+            if (analytics.needsResearchBackfill()) {
+                val result = backfill.run(criteria()) { _, _, _ -> }
+                log.info(LogTag.DB, "automatic research backfill completed symbols={} samples={}",
+                    result.symbols, result.samples)
+            }
+            analytics.trainPredictiveModels()
+        }.onSuccess { results ->
+            results.forEach { result -> log.info(LogTag.DB,
+                "predictive training horizon={}m status={} training={} validation={} modelBrier={} baselineBrier={} reason={}",
+                result.horizonMinutes, result.status, result.trainingSamples, result.validationSamples,
+                result.modelBrier, result.baselineBrier, result.reason) }
+        }.onFailure { error -> log.warn(LogTag.DB, "automatic predictive maintenance failed", error) }
     }
 
     private fun load() {
@@ -73,12 +90,16 @@ internal class ResearchReportAction(
         button.isDisable = true
         setStatus("Backfilling point-in-time research history")
         executor.execute {
-            runCatching { backfill.run(criteria()) { completed, total, symbol ->
+            runCatching {
+                val backfillResult = backfill.run(criteria()) { completed, total, symbol ->
                 Platform.runLater { setStatus("Research backfill: $completed/$total · $symbol") }
-            } }.onSuccess { result ->
+                }
+                backfillResult to analytics.trainPredictiveModels()
+            }.onSuccess { (result, training) ->
                 Platform.runLater {
                     button.isDisable = false
-                    setStatus("Research backfill complete · ${result.samples} samples from ${result.symbols} symbols")
+                    setStatus("Research backfill complete · ${result.samples} samples · " +
+                        "${training.count { it.status == "ACTIVE" }} active models")
                     load()
                 }
             }.onFailure { error ->
