@@ -4,6 +4,7 @@ import org.junit.jupiter.api.Test
 import org.senatov.mimitrends.model.MinuteBar
 import org.senatov.mimitrends.model.ScannerCriteria
 import java.time.ZoneOffset
+import kotlin.math.abs
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
@@ -20,6 +21,18 @@ class EarlyRecoveryDetectorTest {
         assertEquals("Early recovery ↑ · watch", result.signalSource)
         assertTrue(result.windowChangePercent >= 0.35)
         assertTrue(result.signalWindowLabel.endsWith("m recovery"))
+    }
+
+    @Test fun `reports the latest ten minute move instead of the entire recovery`() {
+        val bars = historicalBars() + recoverySession()
+
+        val result = assertNotNull(detector.detect("TEST", bars, criteria()))
+
+        val recovery = bars.takeLast(17)
+        val expectedTenMinuteMove = percent(recovery[6].close, recovery.last().close)
+        val entireRecovery = percent(recovery.first().low, recovery.last().close)
+        assertTrue(abs(result.windowChangePercent - expectedTenMinuteMove) < 0.000_001)
+        assertTrue(abs(result.windowChangePercent - entireRecovery) > 0.10)
     }
 
     @Test fun `rejects a rebound that returns to the session low`() {
@@ -67,4 +80,6 @@ class EarlyRecoveryDetectorTest {
     )
 
     private fun criteria() = ScannerCriteria(minPrice = 0.0, minSessionTurnover = 0.0)
+
+    private fun percent(first: Double, last: Double) = (last / first - 1.0) * 100.0
 }

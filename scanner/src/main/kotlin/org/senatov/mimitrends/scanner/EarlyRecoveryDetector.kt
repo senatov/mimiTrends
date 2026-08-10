@@ -66,7 +66,7 @@ internal class EarlyRecoveryDetector(private val zoneOverride: ZoneId? = null) {
             rangeAnomaly = Double.NaN,
             relativeVolume = Double.NaN,
             candleBodyRatio = efficiency,
-            windowChangePercent = recovery,
+            windowChangePercent = recentReturn(recoveryBars),
             windowVolume = recoveryBars.sumOf(MinuteBar::volume),
             sessionVolume = session.sumOf(MinuteBar::volume),
             sessionTurnover = turnover,
@@ -104,7 +104,9 @@ internal class EarlyRecoveryDetector(private val zoneOverride: ZoneId? = null) {
     }
 
     private fun recentReturn(bars: List<MinuteBar>): Double {
-        val recent = bars.takeLast(RECENT_MINUTES)
+        val latest = bars.last()
+        val cutoff = latest.minuteEpochSeconds - RECENT_MINUTES * 60L
+        val recent = bars.dropWhile { it.minuteEpochSeconds < cutoff }
         return percent(recent.first().close, recent.last().close)
     }
 
