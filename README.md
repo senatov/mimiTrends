@@ -334,6 +334,10 @@ and sample/day counts by signal family and direction. This is an evaluation foun
 predictive edge; model fitting and user-facing research reports can build on the same point-in-time dataset.
 The prediction-research toolbar action shows these metrics for the 5-, 10-, and 30-minute horizons and can
 export the complete locale-independent report as CSV without blocking market-data collection.
+Its `Backfill history` action replays retained minute bars at fifteen-minute observation intervals. Each
+detector invocation receives only bars available at that historical instant; 5/10/30-minute outcomes are
+attached afterward from the same session. Backfill runs on a dedicated worker, is safe to repeat, and leaves
+the live scanner executor available.
 
 ## Market data
 

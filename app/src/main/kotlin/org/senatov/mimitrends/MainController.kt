@@ -66,7 +66,9 @@ class MainController(
         Thread(task, "mimitrends-scanner-rotation").apply { isDaemon = true }
     }
     private val scalableImport = ScalableImportAction(analytics, batchScheduler)
-    private val researchReport = ResearchReportAction(analytics, batchScheduler, ::setStatus)
+    private val researchReport = ResearchReportAction(
+        analytics, repository, scannerEngine, { scannerCriteria }, ::setStatus
+    )
     private val scalableImportResults = ScalableImportResultHandler(
         importTradesButton, ::setStatus, requestStatus::formatError, log
     )
@@ -127,10 +129,8 @@ class MainController(
         ToolbarIconButton.configure(importTradesButton, "Import Scalable transactions CSV")
         importTradesButton.setOnAction { scalableImport.chooseAndImport(importTradesButton.scene?.window, ::handleScalableImport) }
         researchReport.configure()
-
         val appLayers = MainViewFactory.create(refreshButton, settingsButton, importTradesButton,
             researchReport.button, aboutButton, scannerPanel, trendChart, contentSplitPane, requestStatus, initialDivider)
-
         apiKey?.takeIf(String::isNotBlank)?.let(::restartFinnhubLive)
         analytics.applyRetention()
         DatabaseStartupMaintenance.schedule(analytics, batchScheduler, log)
@@ -156,7 +156,6 @@ class MainController(
         })
         return appLayers
     }
-
     private fun handleScalableImport(event: ScalableImportEvent) {
         scalableImportResults.handle(event)
     }
@@ -170,6 +169,7 @@ class MainController(
         if (!closing.compareAndSet(false, true)) return
         scanGeneration.incrementAndGet()
         rotationTask?.cancel(false)
+        researchReport.close()
         observationUiBridge.close()
         try {
             ApplicationResourceCloser.close(focusedSignals, priorityScanner, tradegateProvider, euronextProvider, tableQuoteProviders,

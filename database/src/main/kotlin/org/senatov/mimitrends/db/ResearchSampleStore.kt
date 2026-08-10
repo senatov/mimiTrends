@@ -39,6 +39,32 @@ internal class ResearchSampleStore(private val connection: Connection) {
         }
     }
 
+    fun recordHistorical(
+        symbol: String,
+        result: ScanResult?,
+        features: ResearchFeatures,
+        outcomes: Collection<ResearchBackfillOutcome>
+    ) {
+        record(0L, symbol, result, features, HISTORICAL_SOURCE)
+        val family = result?.let { family(it.signalSource) } ?: CONTROL_FAMILY
+        val direction = result?.let { if (it.signalSource.contains('↓')) -1 else 1 } ?: 1
+        val sampleId = sampleId(symbol, features.observedEpochSeconds, family, direction) ?: return
+        connection.prepareStatement(HISTORICAL_OUTCOME_SQL).use { statement ->
+            outcomes.forEach { outcome ->
+                statement.setLong(1, sampleId)
+                statement.setInt(2, outcome.horizonMinutes)
+                statement.setDouble(3, outcome.observedPrice)
+                statement.setDouble(4, outcome.returnPercent)
+                statement.setDouble(5, outcome.elapsedMinutes)
+                statement.setDouble(6, outcome.maximumReturnPercent)
+                statement.setDouble(7, outcome.minimumReturnPercent)
+                statement.setLong(8, outcome.observedEpochSeconds)
+                statement.addBatch()
+            }
+            statement.executeBatch()
+        }
+    }
+
     fun markPublished(runId: Long, symbols: Collection<String>) {
         if (symbols.isEmpty()) return
         connection.prepareStatement("UPDATE research_samples SET published=1 WHERE run_id=? AND symbol=?").use { statement ->
@@ -59,12 +85,23 @@ internal class ResearchSampleStore(private val connection: Connection) {
 
     private fun hasRecentEpisode(symbol: String, family: String, direction: Int, epoch: Long): Boolean =
         connection.prepareStatement("""SELECT 1 FROM research_samples WHERE symbol=? AND family=? AND direction=?
-            AND observed_epoch>? ORDER BY observed_epoch DESC LIMIT 1""").use { statement ->
+            AND observed_epoch>? AND observed_epoch<=? ORDER BY observed_epoch DESC LIMIT 1""").use { statement ->
             statement.setString(1, symbol.uppercase())
             statement.setString(2, family)
             statement.setInt(3, direction)
             statement.setLong(4, epoch - EPISODE_SECONDS)
+            statement.setLong(5, epoch)
             statement.executeQuery().use { it.next() }
+        }
+
+    private fun sampleId(symbol: String, epoch: Long, family: String, direction: Int): Long? =
+        connection.prepareStatement("""SELECT id FROM research_samples
+            WHERE symbol=? AND observed_epoch=? AND family=? AND direction=?""").use { statement ->
+            statement.setString(1, symbol.uppercase())
+            statement.setLong(2, epoch)
+            statement.setString(3, family)
+            statement.setInt(4, direction)
+            statement.executeQuery().use { result -> if (result.next()) result.getLong(1) else null }
         }
 
     private fun updateExcursions(symbol: String, high: Double, low: Double, epoch: Long) {
@@ -120,6 +157,7 @@ internal class ResearchSampleStore(private val connection: Connection) {
 
     private companion object {
         const val CONTROL_FAMILY = "Control"
+        const val HISTORICAL_SOURCE = "HISTORICAL"
         const val EPISODE_SECONDS = 15 * 60L
         const val MAX_TRACKING_MINUTES = 34
         const val OUTCOME_LAG_MINUTES = 4
@@ -130,5 +168,9 @@ internal class ResearchSampleStore(private val connection: Connection) {
             return_30m, return_60m, range_10m, volatility_30m, vwap_distance, session_high_distance,
             session_low_distance, volume_ratio_10m, trend_efficiency_10m)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"""
+        const val HISTORICAL_OUTCOME_SQL = """INSERT OR IGNORE INTO research_outcomes(
+            sample_id, horizon_minutes, observed_price, return_percent, elapsed_minutes,
+            maximum_return_percent, minimum_return_percent, observed_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)"""
     }
 }

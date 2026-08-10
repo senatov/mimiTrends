@@ -64,6 +64,22 @@ data class WalkForwardMetric(
     val averageNetReturnPercent: Double
 )
 
+data class ResearchBackfillOutcome(
+    val horizonMinutes: Int,
+    val observedPrice: Double,
+    val returnPercent: Double,
+    val elapsedMinutes: Double,
+    val maximumReturnPercent: Double,
+    val minimumReturnPercent: Double,
+    val observedEpochSeconds: Long
+)
+
+data class ResearchBackfillSample(
+    val result: org.senatov.mimitrends.model.ScanResult?,
+    val features: org.senatov.mimitrends.model.ResearchFeatures,
+    val outcomes: List<ResearchBackfillOutcome>
+)
+
 data class BrokerTransaction(
     val source: String,
     val reference: String?,

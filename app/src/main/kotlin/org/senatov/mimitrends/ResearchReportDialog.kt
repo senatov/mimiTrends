@@ -19,19 +19,23 @@ import java.util.Locale
 
 internal object ResearchReportDialog {
     private val exportButton = ButtonType("Export CSV…", ButtonBar.ButtonData.APPLY)
+    private val backfillButton = ButtonType("Backfill history", ButtonBar.ButtonData.OTHER)
 
-    fun show(owner: Window?, reports: List<WalkForwardResearchReport>): Boolean {
+    fun show(owner: Window?, reports: List<WalkForwardResearchReport>): ResearchReportChoice {
         val dialog = Dialog<ButtonType>().apply {
             owner?.let(::initOwner)
             title = "Prediction research"
             dialogPane.headerText = "Walk-forward signal evaluation"
-            dialogPane.buttonTypes.setAll(exportButton, ButtonType.CLOSE)
+            dialogPane.buttonTypes.setAll(backfillButton, exportButton, ButtonType.CLOSE)
             dialogPane.styleClass += "glass-settings-dialog"
             dialogPane.content = content(reports)
             isResizable = true
         }
         WindowGeometryService("research-report", 900.0, 600.0).attach(dialog)
-        return dialog.showAndWait().orElse(ButtonType.CLOSE) == exportButton
+        val selected = dialog.showAndWait().orElse(null)
+        return if (selected == exportButton) ResearchReportChoice.EXPORT
+        else if (selected == backfillButton) ResearchReportChoice.BACKFILL
+        else ResearchReportChoice.CLOSE
     }
 
     private fun content(reports: List<WalkForwardResearchReport>) = VBox(10.0,
@@ -93,3 +97,5 @@ internal object ResearchReportDialog {
     private fun signedPercent(value: Double) = String.format(Locale.ROOT, "%+.3f%%", value)
     private fun decimal(value: Double) = String.format(Locale.ROOT, "%.3f", value)
 }
+
+internal enum class ResearchReportChoice { CLOSE, EXPORT, BACKFILL }

@@ -8,6 +8,8 @@ import java.time.ZoneOffset
 
 internal class WalkForwardResearchEvaluator(private val connection: Connection) {
     fun evaluate(horizonMinutes: Int, frictionPercent: Double): WalkForwardResearchReport {
+        require(horizonMinutes in setOf(5, 10, 30)) { "Unsupported research horizon: $horizonMinutes" }
+        require(frictionPercent.isFinite() && frictionPercent >= 0.0) { "Friction must be finite and non-negative" }
         val rows = loadRows(horizonMinutes).sortedBy(Row::epoch)
         val evaluated = rows.mapNotNull { row ->
             val day = day(row.epoch)

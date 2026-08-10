@@ -165,12 +165,11 @@ class AnalyticsRepository(
     fun walkForwardResearchReport(
         horizonMinutes: Int = 10,
         frictionPercent: Double = 0.20
-    ): WalkForwardResearchReport = locked {
-        require(horizonMinutes in setOf(5, 10, 30)) { "Unsupported research horizon: $horizonMinutes" }
-        require(frictionPercent.isFinite() && frictionPercent >= 0.0) { "Friction must be finite and non-negative" }
-        WalkForwardResearchEvaluator(connection).evaluate(horizonMinutes, frictionPercent)
-    }
+    ): WalkForwardResearchReport = locked { WalkForwardResearchEvaluator(connection).evaluate(horizonMinutes, frictionPercent) }
 
+    fun recordResearchBackfill(symbol: String, samples: Collection<ResearchBackfillSample>) = locked {
+        transaction { samples.forEach { researchSamples.recordHistorical(symbol, it.result, it.features, it.outcomes) } }
+    }
     fun completeScan(runId: Long, publishedSymbols: Collection<String>, failures: Int) = locked {
         transaction {
             researchSamples.markPublished(runId, publishedSymbols)

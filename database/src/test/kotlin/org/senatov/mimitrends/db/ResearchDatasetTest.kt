@@ -11,6 +11,27 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 class ResearchDatasetTest {
+    @Test fun `historical backfill is idempotent`() {
+        val path = Files.createTempDirectory("mimitrends-research-backfill").resolve("test.db")
+        val epoch = 1_800_000_000L
+        val outcome = ResearchBackfillOutcome(10, 101.0, 1.0, 10.0, 1.2, -0.2, epoch + 600L)
+        AnalyticsRepository(path).use { analytics ->
+            val sample = ResearchBackfillSample(result("TEST", epoch), features(epoch), listOf(outcome))
+            repeat(2) { analytics.recordResearchBackfill("TEST", listOf(sample)) }
+        }
+
+        DriverManager.getConnection("jdbc:sqlite:$path").use { connection ->
+            connection.createStatement().use { statement ->
+                statement.executeQuery("SELECT COUNT(*) FROM research_samples").use { row ->
+                    row.next(); assertEquals(1, row.getInt(1))
+                }
+                statement.executeQuery("SELECT COUNT(*) FROM research_outcomes").use { row ->
+                    row.next(); assertEquals(1, row.getInt(1))
+                }
+            }
+        }
+    }
+
     @Test fun `records rejected controls and their future outcomes`() {
         val path = Files.createTempDirectory("mimitrends-research-control").resolve("test.db")
         AnalyticsRepository(path).use { analytics ->
