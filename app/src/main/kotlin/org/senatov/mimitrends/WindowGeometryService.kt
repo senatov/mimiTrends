@@ -22,8 +22,14 @@ internal class WindowGeometryService(
     private val log = LoggerFactory.getLogger(javaClass)
 
     fun attach(dialog: Dialog<*>) {
-        dialog.setOnShown { restore(dialog.dialogPane.scene.window) }
-        dialog.setOnHidden { save(dialog.dialogPane.scene.window) }
+        var attachedWindow: Window? = null
+        dialog.setOnShown {
+            dialog.dialogPane.scene?.window?.let { window ->
+                attachedWindow = window
+                restore(window)
+            }
+        }
+        dialog.setOnHidden { attachedWindow?.let(::save) }
     }
 
     internal fun loadBounds(): WindowBounds? {
