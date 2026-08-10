@@ -45,7 +45,7 @@ internal class ScannerBatchService(
                         ?: evaluation.longTerm
                     analytics.recordScanCandidate(runId, symbol, accepted,
                         if (accepted == null) evaluation.rejectionReason ?: "NO_CURRENT_SIGNAL" else null,
-                        accepted?.dataStatus ?: fallbackStatus(symbol))
+                        accepted?.dataStatus ?: fallbackStatus(symbol), evaluation.researchFeatures)
                 }
                 .onFailure { error ->
                     errors += "$symbol: ${error.message ?: error.javaClass.simpleName}"

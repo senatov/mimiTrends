@@ -58,6 +58,28 @@ internal object AnalyticsMigrations {
         6 to listOf(
             "ALTER TABLE scan_candidates ADD COLUMN data_epoch INTEGER",
             "UPDATE scan_candidates SET data_epoch=signal_epoch WHERE data_epoch IS NULL"
+        ),
+        7 to listOf(
+            """CREATE TABLE research_samples(
+                id INTEGER PRIMARY KEY AUTOINCREMENT, run_id INTEGER NOT NULL, symbol TEXT NOT NULL,
+                observed_epoch INTEGER NOT NULL, entry_price REAL NOT NULL, family TEXT NOT NULL,
+                direction INTEGER NOT NULL, accepted INTEGER NOT NULL, published INTEGER NOT NULL DEFAULT 0,
+                source TEXT NOT NULL, score REAL, jump_z REAL, range_z REAL, volume_z REAL, rvol REAL,
+                return_1m REAL, return_3m REAL, return_5m REAL, return_10m REAL, return_30m REAL, return_60m REAL,
+                range_10m REAL, volatility_30m REAL, vwap_distance REAL, session_high_distance REAL,
+                session_low_distance REAL, volume_ratio_10m REAL, trend_efficiency_10m REAL,
+                UNIQUE(symbol, observed_epoch, family, direction))""",
+            "CREATE INDEX idx_research_samples_symbol_time ON research_samples(symbol, observed_epoch)",
+            "CREATE INDEX idx_research_samples_family_time ON research_samples(family, direction, observed_epoch)",
+            """CREATE TABLE research_outcomes(
+                sample_id INTEGER NOT NULL REFERENCES research_samples(id) ON DELETE CASCADE,
+                horizon_minutes INTEGER NOT NULL, observed_price REAL NOT NULL, return_percent REAL NOT NULL,
+                elapsed_minutes REAL NOT NULL, maximum_return_percent REAL, minimum_return_percent REAL,
+                observed_at INTEGER NOT NULL, PRIMARY KEY(sample_id, horizon_minutes))""",
+            """CREATE TABLE research_excursions(
+                sample_id INTEGER PRIMARY KEY REFERENCES research_samples(id) ON DELETE CASCADE,
+                maximum_return_percent REAL NOT NULL, minimum_return_percent REAL NOT NULL,
+                last_observed_at INTEGER NOT NULL)"""
         )
     )
 }

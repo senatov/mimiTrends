@@ -6,9 +6,10 @@ import org.senatov.mimitrends.log.LogTag
 import org.senatov.mimitrends.model.MinuteBar
 import org.senatov.mimitrends.model.MarketTimeZone
 import org.senatov.mimitrends.model.MarketObservationQuality
-import org.senatov.mimitrends.model.isValidMinuteBar
-import org.senatov.mimitrends.model.ScanResult
+import org.senatov.mimitrends.model.ResearchFeatures
 import org.senatov.mimitrends.model.BrokerTrade
+import org.senatov.mimitrends.model.ScanResult
+import org.senatov.mimitrends.model.isValidMinuteBar
 import org.slf4j.LoggerFactory
 import java.nio.file.Path
 import java.sql.Connection
@@ -28,6 +29,7 @@ class AnalyticsRepository(
     private val brokerTransactions: BrokerTransactionStore
     private val signalCalibration: SignalCalibrationStore
     private val signalOutcomes: SignalOutcomeStore
+    private val researchSamples: ResearchSampleStore
 
     init {
         migrate()
@@ -35,6 +37,7 @@ class AnalyticsRepository(
         brokerTransactions = BrokerTransactionStore(connection)
         signalCalibration = SignalCalibrationStore(connection)
         signalOutcomes = SignalOutcomeStore(connection)
+        researchSamples = ResearchSampleStore(connection)
     }
 
     fun upsertInstrument(value: InstrumentMetadata) = locked { upsertInstrumentInternal(value) }
@@ -106,6 +109,7 @@ class AnalyticsRepository(
                 upsertBaselines(symbol.uppercase(), clean)
                 clean.takeLast(OUTCOME_TRACKING_BARS).forEach {
                     signalOutcomes.record(symbol, it.close, it.high, it.low, it.minuteEpochSeconds)
+                    researchSamples.recordOutcomes(symbol, it.close, it.high, it.low, it.minuteEpochSeconds)
                 }
             }
         }
@@ -133,7 +137,14 @@ class AnalyticsRepository(
         }
     }
 
-    fun recordScanCandidate(runId: Long, symbol: String, result: ScanResult?, rejectionReason: String?, source: String) = locked {
+    fun recordScanCandidate(
+        runId: Long,
+        symbol: String,
+        result: ScanResult?,
+        rejectionReason: String?,
+        source: String,
+        researchFeatures: ResearchFeatures? = null
+    ) = locked {
         connection.prepareStatement("""INSERT INTO scan_candidates
             (run_id, symbol, evaluated_at, signal_epoch, accepted, published, rejection_reason, signal, score, change_10m,
              jump_z, range_z, volume_z, rvol, price, entry_price, turnover, source, data_epoch)
@@ -157,22 +168,37 @@ class AnalyticsRepository(
             if (result != null) s.setLong(18, result.updatedAtMillis / 1_000L) else s.setNull(18, Types.INTEGER)
             s.executeUpdate()
         }
+        researchFeatures?.let { researchSamples.record(runId, symbol, result, it, source) }
     }
 
     fun recordSignalOutcomes(symbol: String, currentPrice: Double, observedEpoch: Long,
         highPrice: Double = currentPrice, lowPrice: Double = currentPrice
-    ) = locked { transaction { signalOutcomes.record(symbol, currentPrice, highPrice, lowPrice, observedEpoch) } }
+    ) = locked { transaction {
+        signalOutcomes.record(symbol, currentPrice, highPrice, lowPrice, observedEpoch)
+        researchSamples.recordOutcomes(symbol, currentPrice, highPrice, lowPrice, observedEpoch)
+    } }
 
     fun recordSignalOutcomes(symbol: String, bars: List<MinuteBar>) = locked { transaction {
         bars.takeLast(OUTCOME_TRACKING_BARS).forEach {
             signalOutcomes.record(symbol, it.close, it.high, it.low, it.minuteEpochSeconds)
+            researchSamples.recordOutcomes(symbol, it.close, it.high, it.low, it.minuteEpochSeconds)
         }
     } }
 
     fun withCalibration(result: ScanResult): ScanResult = locked { signalCalibration.enrich(result) }
 
+    fun walkForwardResearchReport(
+        horizonMinutes: Int = 10,
+        frictionPercent: Double = 0.20
+    ): WalkForwardResearchReport = locked {
+        require(horizonMinutes in setOf(5, 10, 30)) { "Unsupported research horizon: $horizonMinutes" }
+        require(frictionPercent.isFinite() && frictionPercent >= 0.0) { "Friction must be finite and non-negative" }
+        WalkForwardResearchEvaluator(connection).evaluate(horizonMinutes, frictionPercent)
+    }
+
     fun completeScan(runId: Long, publishedSymbols: Collection<String>, failures: Int) = locked {
         transaction {
+            researchSamples.markPublished(runId, publishedSymbols)
             if (publishedSymbols.isNotEmpty()) connection.prepareStatement(
                 "UPDATE scan_candidates SET published=1 WHERE run_id=? AND symbol=?"
             ).use { s -> publishedSymbols.forEach { s.setLong(1, runId); s.setString(2, it.uppercase()); s.addBatch() }; s.executeBatch() }

@@ -10,8 +10,10 @@ import org.senatov.mimitrends.model.CompanyProfile
 import org.senatov.mimitrends.model.MarketTimeZone
 import org.senatov.mimitrends.model.MarketDataSource
 import org.senatov.mimitrends.model.MinuteBar
+import org.senatov.mimitrends.model.ResearchFeatures
 import org.senatov.mimitrends.model.ScanResult
 import org.senatov.mimitrends.model.ScannerCriteria
+import org.senatov.mimitrends.scanner.ResearchFeatureExtractor
 import org.senatov.mimitrends.scanner.ScannerEngine
 import org.slf4j.LoggerFactory
 
@@ -124,7 +126,8 @@ internal class MarketDataService(
         val rejectionReason = if (primary == null && fallback.none { it != null } && longTerm == null) {
             scannerEngine.rejectionReason(merged.analysisBars)
         } else null
-        return ScanEvaluation(primary, fallback, rejectionReason, longTerm)
+        return ScanEvaluation(primary, fallback, rejectionReason, longTerm,
+            ResearchFeatureExtractor.extract(merged.analysisBars))
     }
 
     fun loadPriorityResult(symbol: String, criteria: ScannerCriteria): ScanResult? {
@@ -177,5 +180,6 @@ internal data class ScanEvaluation(
     val primary: ScanResult?,
     val fallback: List<ScanResult?>,
     val rejectionReason: String? = null,
-    val longTerm: ScanResult? = null
+    val longTerm: ScanResult? = null,
+    val researchFeatures: ResearchFeatures? = null
 )

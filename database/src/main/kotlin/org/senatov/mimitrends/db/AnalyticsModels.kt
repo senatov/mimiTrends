@@ -45,6 +45,25 @@ data class AnalyticsStats(
     val linkedBrokerTransactions: Long
 )
 
+data class WalkForwardResearchReport(
+    val horizonMinutes: Int,
+    val frictionPercent: Double,
+    val outcomeSamples: Int,
+    val evaluatedSamples: Int,
+    val metrics: List<WalkForwardMetric>
+)
+
+data class WalkForwardMetric(
+    val family: String,
+    val direction: Int,
+    val samples: Int,
+    val distinctDays: Int,
+    val predictedWinRate: Double,
+    val actualWinRate: Double,
+    val brierScore: Double,
+    val averageNetReturnPercent: Double
+)
+
 data class BrokerTransaction(
     val source: String,
     val reference: String?,

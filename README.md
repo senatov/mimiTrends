@@ -316,6 +316,23 @@ The database stores both the target horizon and the actual elapsed time. This av
 
 This apparatus is intended for later empirical work: measuring continuation rates, evaluating thresholds, comparing signal classes, and detecting whether an apparently strong score has predictive value. The application does not yet present these records as a backtest or claim a validated trading edge.
 
+### Research dataset and walk-forward evaluation
+
+The analytics database also keeps an episode-sampled research dataset independent of the table publication
+decision. At most one sample per symbol, signal family, and direction is stored within fifteen minutes.
+Rejected evaluations become long-direction control samples, allowing detector outcomes to be compared with
+ordinary market observations instead of only with other published signals.
+
+Each sample captures only information available at observation time: trailing 1/3/5/10/30/60-minute
+returns, recent range and realized volatility, VWAP and session-extreme distances, relative recent volume,
+trend efficiency, detector score, anomaly metrics, source quality, and acceptance/publication state. Future
+5/10/30-minute returns and favorable/adverse excursions are written later to separate outcome records.
+
+`AnalyticsRepository.walkForwardResearchReport` evaluates historical probability estimates using earlier
+trading days only. It reports predicted and actual win rates, Brier score, average friction-adjusted return,
+and sample/day counts by signal family and direction. This is an evaluation foundation, not an assertion of
+predictive edge; model fitting and user-facing research reports can build on the same point-in-time dataset.
+
 ## Market data
 
 ### Yahoo Finance
