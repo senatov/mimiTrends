@@ -125,12 +125,12 @@ class MainController(
         ToolbarIconButton.configure(settingsButton, "Scanner and currency settings")
         settingsButton.setOnAction { showScannerSettings() }
         ToolbarIconButton.configure(aboutButton, "About MiMiTrends")
-        aboutButton.setOnAction { AboutDialog.show(aboutButton.scene?.window) }
+        aboutButton.setOnAction { AboutDialog.show(aboutButton.scene?.window) { researchReport.show(aboutButton.scene?.window) } }
         ToolbarIconButton.configure(importTradesButton, "Import Scalable transactions CSV")
         importTradesButton.setOnAction { scalableImport.chooseAndImport(importTradesButton.scene?.window, ::handleScalableImport) }
-        researchReport.configure()
+        researchReport.start()
         val appLayers = MainViewFactory.create(refreshButton, settingsButton, importTradesButton,
-            researchReport.button, aboutButton, scannerPanel, trendChart, contentSplitPane, requestStatus, initialDivider)
+            aboutButton, scannerPanel, trendChart, contentSplitPane, requestStatus, initialDivider)
         apiKey?.takeIf(String::isNotBlank)?.let(::restartFinnhubLive)
         analytics.applyRetention()
         DatabaseStartupMaintenance.schedule(analytics, batchScheduler, log)
@@ -162,7 +162,7 @@ class MainController(
 
     fun showClosing() {
         ClosingPresentation.show(scannerPanel,
-            listOf(refreshButton, settingsButton, researchReport.button, aboutButton, importTradesButton))
+            listOf(refreshButton, settingsButton, aboutButton, importTradesButton))
     }
     fun close() {
         log.debug(LogTag.UI, "close()")

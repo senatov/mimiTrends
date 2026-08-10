@@ -1,7 +1,7 @@
 package org.senatov.mimitrends
 
 import javafx.application.Platform
-import javafx.scene.control.Button
+import javafx.stage.Window
 import org.senatov.mimitrends.db.AnalyticsRepository
 import org.senatov.mimitrends.db.MarketRepository
 import org.senatov.mimitrends.db.WalkForwardResearchReport
@@ -19,18 +19,17 @@ internal class ResearchReportAction(
     private val criteria: () -> ScannerCriteria,
     private val setStatus: (String) -> Unit
 ) : AutoCloseable {
-    val button = Button("∿")
     private val log = LoggerFactory.getLogger(javaClass)
     private val backfill = ResearchBackfillService(marketRepository, analytics, scanner)
     private val executor = Executors.newSingleThreadScheduledExecutor { task ->
         Thread(task, "mimitrends-research").apply { isDaemon = true }
     }
 
-    fun configure() {
-        ToolbarIconButton.configure(button, "Prediction research and CSV export")
-        button.setOnAction { load() }
+    fun start() {
         executor.scheduleWithFixedDelay(::automaticMaintenance, 30, 6 * 60 * 60, TimeUnit.SECONDS)
     }
+
+    fun show(owner: Window?) = load(owner)
 
     private fun automaticMaintenance() {
         runCatching {
@@ -48,34 +47,31 @@ internal class ResearchReportAction(
         }.onFailure { error -> log.warn(LogTag.DB, "automatic predictive maintenance failed", error) }
     }
 
-    private fun load() {
-        button.isDisable = true
+    private fun load(owner: Window?) {
         setStatus("Building walk-forward research report")
         executor.execute {
             runCatching { listOf(5, 10, 30).map(analytics::walkForwardResearchReport) }
-                .onSuccess { reports -> Platform.runLater { show(reports) } }
+                .onSuccess { reports -> Platform.runLater { show(owner, reports) } }
                 .onFailure { error ->
                     log.warn(LogTag.DB, "walk-forward research report failed", error)
                     Platform.runLater {
-                        button.isDisable = false
                         setStatus("Research report failed: ${error.message ?: "unknown error"}")
                     }
                 }
         }
     }
 
-    private fun show(reports: List<WalkForwardResearchReport>) {
-        button.isDisable = false
+    private fun show(owner: Window?, reports: List<WalkForwardResearchReport>) {
         setStatus("Research report ready · ${reports.sumOf(WalkForwardResearchReport::evaluatedSamples)} evaluated outcomes")
-        when (ResearchReportDialog.show(button.scene?.window, reports)) {
-            ResearchReportChoice.BACKFILL -> runBackfill()
-            ResearchReportChoice.EXPORT -> export(reports)
+        when (ResearchReportDialog.show(owner, reports)) {
+            ResearchReportChoice.BACKFILL -> runBackfill(owner)
+            ResearchReportChoice.EXPORT -> export(owner, reports)
             ResearchReportChoice.CLOSE -> Unit
         }
     }
 
-    private fun export(reports: List<WalkForwardResearchReport>) {
-        val path = ResearchReportExport.choose(button.scene?.window) ?: return
+    private fun export(owner: Window?, reports: List<WalkForwardResearchReport>) {
+        val path = ResearchReportExport.choose(owner) ?: return
         executor.execute {
             runCatching { ResearchReportExport.write(path, reports) }
                 .onSuccess { Platform.runLater { setStatus("Exported prediction research: ${path.fileName}") } }
@@ -86,8 +82,7 @@ internal class ResearchReportAction(
         }
     }
 
-    private fun runBackfill() {
-        button.isDisable = true
+    private fun runBackfill(owner: Window?) {
         setStatus("Backfilling point-in-time research history")
         executor.execute {
             runCatching {
@@ -97,15 +92,13 @@ internal class ResearchReportAction(
                 backfillResult to analytics.trainPredictiveModels()
             }.onSuccess { (result, training) ->
                 Platform.runLater {
-                    button.isDisable = false
                     setStatus("Research backfill complete · ${result.samples} samples · " +
                         "${training.count { it.status == "ACTIVE" }} active models")
-                    load()
+                    load(owner)
                 }
             }.onFailure { error ->
                 log.warn(LogTag.DB, "research backfill failed", error)
                 Platform.runLater {
-                    button.isDisable = false
                     setStatus("Research backfill failed: ${error.message ?: "unknown error"}")
                 }
             }

@@ -332,7 +332,7 @@ trend efficiency, detector score, anomaly metrics, source quality, and acceptanc
 trading days only. It reports predicted and actual win rates, Brier score, average friction-adjusted return,
 and sample/day counts by signal family and direction. This is an evaluation foundation, not an assertion of
 predictive edge; model fitting and user-facing research reports can build on the same point-in-time dataset.
-The prediction-research toolbar action shows these metrics for the 5-, 10-, and 30-minute horizons and can
+The `About` dialog's `Prediction diagnostics` action shows these metrics for the 5-, 10-, and 30-minute horizons and can
 export the complete locale-independent report as CSV without blocking market-data collection.
 Its `Backfill history` action replays retained minute bars at fifteen-minute observation intervals. Each
 detector invocation receives only bars available at that historical instant; 5/10/30-minute outcomes are
@@ -340,7 +340,7 @@ attached afterward from the same session. Backfill runs on a dedicated worker, i
 the live scanner executor available.
 
 Prediction maintenance is automatic. Thirty seconds after startup, and then every six hours, a dedicated
-research worker checks historical coverage, fills missing retained history, and considers regularized
+research worker checks historical coverage, fills missing retained history, and trains Smile regularized
 logistic models for the 5-, 10-, and 30-minute horizons. Training requires at least 300 completed samples
 across seven trading days. The latest two days are held out chronologically; a candidate becomes active only
 when its Brier score improves on the smoothed signal-family baseline and its highest-probability quartile does

@@ -1,5 +1,6 @@
 package org.senatov.mimitrends.db
 
+import smile.classification.LogisticRegression
 import kotlin.math.exp
 import kotlin.math.sqrt
 
@@ -37,29 +38,26 @@ internal data class LogisticPredictionModel(
                 val variance = values.sumOf { (it - means[index]) * (it - means[index]) } / values.size.coerceAtLeast(1)
                 sqrt(variance).coerceAtLeast(MIN_SCALE)
             }
-            val weights = DoubleArray(size + 1)
-            repeat(ITERATIONS) { iteration ->
-                val gradient = DoubleArray(weights.size)
-                samples.forEach { sample ->
-                    val normalized = DoubleArray(size) { index ->
-                        ((sample.rawFeatures[index].takeIf(Double::isFinite) ?: means[index]) - means[index]) / scales[index]
-                    }
-                    val prediction = sigmoid(weights[0] + normalized.indices.sumOf { weights[it + 1] * normalized[it] })
-                    val error = prediction - sample.target
-                    gradient[0] += error
-                    normalized.indices.forEach { gradient[it + 1] += error * normalized[it] }
+            val features = samples.map { sample ->
+                DoubleArray(size) { index ->
+                    ((sample.rawFeatures[index].takeIf(Double::isFinite) ?: means[index]) - means[index]) / scales[index]
                 }
-                val rate = INITIAL_RATE / (1.0 + iteration / 200.0)
-                weights[0] -= rate * gradient[0] / samples.size
-                for (index in 1..weights.lastIndex) {
-                    weights[index] -= rate * (gradient[index] / samples.size + L2 * weights[index])
-                }
+            }.toTypedArray()
+            val targets = samples.map { it.target.toInt() }.toIntArray()
+            val coefficients = LogisticRegression.binomial(
+                features,
+                targets,
+                LogisticRegression.Options(L2, TOLERANCE, MAX_ITERATIONS)
+            ).coefficients()
+            val weights = DoubleArray(size + 1).also { converted ->
+                converted[0] = coefficients.last()
+                coefficients.copyInto(converted, destinationOffset = 1, endIndex = size)
             }
             return LogisticPredictionModel(means, scales, weights)
         }
 
-        private const val ITERATIONS = 800
-        private const val INITIAL_RATE = 0.08
+        private const val MAX_ITERATIONS = 800
+        private const val TOLERANCE = 1e-5
         private const val L2 = 0.02
         private const val MIN_SCALE = 1e-6
     }

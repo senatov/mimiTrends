@@ -10,11 +10,12 @@ import javafx.scene.image.ImageView
 import javafx.stage.Window
 
 internal object AboutDialog {
-    fun show(owner: Window?) {
-        Dialog<ButtonType>().apply {
+    fun show(owner: Window?, onPredictionDiagnostics: () -> Unit) {
+        val diagnostics = ButtonType("Prediction diagnostics")
+        val dialog = Dialog<ButtonType>().apply {
             owner?.let(::initOwner)
             title = "About MiMiTrends"
-            dialogPane.buttonTypes.setAll(ButtonType.OK)
+            dialogPane.buttonTypes.setAll(diagnostics, ButtonType.OK)
             dialogPane.headerText = "MiMiTrends ${BuildInfo.displayVersion}"
             javaClass.getResourceAsStream("/icons/icon_128x128.png")?.use { stream ->
                 dialogPane.graphic = ImageView(Image(stream)).apply {
@@ -42,6 +43,7 @@ internal object AboutDialog {
                     JFreeChart 1.5.6 — LGPL 2.1 or later
                     JFreeChart-FX 2.0.2 — LGPL 2.1 or later
                     SQLite JDBC 3.50.3.0 — Apache License 2.0
+                    Smile Core 6.2.5 — Apache License 2.0
                     Jackson Databind 2.22.1 — Apache License 2.0
                     SLF4J API 2.0.17 — MIT License
                     Apache Log4j 2.26.1 — Apache License 2.0
@@ -65,7 +67,8 @@ internal object AboutDialog {
             dialogPane.prefWidth = 680.0
             dialogPane.prefHeight = 520.0
             isResizable = true
-        }.showAndWait()
+        }
+        if (dialog.showAndWait().orElse(null) == diagnostics) onPredictionDiagnostics()
     }
 
     private fun tab(title: String, text: String) = Tab(title, TextArea(text).apply {

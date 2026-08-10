@@ -41,7 +41,21 @@ class PredictiveModelStoreTest {
         }
     }
 
-    private fun seedSeparableHistory(path: String) {
+    @Test fun `does not train a classifier without both outcome classes`() {
+        val path = Files.createTempDirectory("mimitrends-predictive-one-class").resolve("test.db")
+        AnalyticsRepository(path).close()
+        seedSeparableHistory(path.toString(), allWins = true)
+
+        AnalyticsRepository(path).use { analytics ->
+            val results = analytics.trainPredictiveModels()
+
+            assertTrue(results.all { it.status == "INSUFFICIENT" })
+            assertTrue(results.all { it.reason?.contains("wins and losses") == true })
+            assertTrue(analytics.withCalibration(result(score = 2.0)).predictionSource != "LOGISTIC")
+        }
+    }
+
+    private fun seedSeparableHistory(path: String, allWins: Boolean = false) {
         DriverManager.getConnection("jdbc:sqlite:$path").use { connection ->
             connection.autoCommit = false
             connection.prepareStatement("""INSERT INTO research_samples(id, run_id, symbol, observed_epoch,
@@ -52,7 +66,7 @@ class PredictiveModelStoreTest {
                     var id = 1L
                     repeat(8) { day -> repeat(50) { index ->
                         val epoch = 1_800_000_000L + day * 86_400L + index * 900L
-                        val wins = index % 2 == 0
+                        val wins = allWins || index % 2 == 0
                         sample.setLong(1, id); sample.setString(2, "S$id"); sample.setLong(3, epoch)
                         sample.setDouble(4, if (wins) 2.0 else -2.0); sample.addBatch()
                         listOf(5, 10, 30).forEach { horizon ->

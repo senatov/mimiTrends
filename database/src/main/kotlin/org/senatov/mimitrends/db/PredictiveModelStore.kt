@@ -48,6 +48,14 @@ internal class PredictiveModelStore(private val connection: Connection) {
             return PredictiveTrainingResult(horizon, "INSUFFICIENT", training.size, validation.size,
                 Double.NaN, Double.NaN, "temporal split is too small")
         }
+        if (!hasClassBalance(training, MIN_TRAINING_CLASS_SAMPLES)) {
+            return PredictiveTrainingResult(horizon, "INSUFFICIENT", training.size, validation.size,
+                Double.NaN, Double.NaN, "training outcomes do not contain enough wins and losses")
+        }
+        if (!hasClassBalance(validation, MIN_VALIDATION_CLASS_SAMPLES)) {
+            return PredictiveTrainingResult(horizon, "INSUFFICIENT", training.size, validation.size,
+                Double.NaN, Double.NaN, "validation outcomes do not contain enough wins and losses")
+        }
         val model = LogisticPredictionModel.fit(training)
         val modelBrier = brier(validation) { model.predict(it.rawFeatures) }
         val cohorts = training.groupBy { it.family to it.direction }
@@ -140,6 +148,10 @@ internal class PredictiveModelStore(private val connection: Connection) {
 
     private fun brier(samples: List<PredictiveSample>, probability: (PredictiveSample) -> Double): Double =
         samples.map { val error = probability(it) - it.target; error * error }.average()
+    private fun hasClassBalance(samples: List<PredictiveSample>, minimum: Int): Boolean {
+        val wins = samples.count { it.target > 0.5 }
+        return wins >= minimum && samples.size - wins >= minimum
+    }
     private fun day(epoch: Long) = Instant.ofEpochSecond(epoch).atZone(ZoneOffset.UTC).toLocalDate()
     private fun encode(values: DoubleArray) = values.joinToString(",")
     private fun decode(value: String) = value.split(',').map(String::toDouble).toDoubleArray()
@@ -148,11 +160,13 @@ internal class PredictiveModelStore(private val connection: Connection) {
 
     private companion object {
         const val DEFAULT_HORIZON = 10
-        const val FEATURE_VERSION = 1
+        const val FEATURE_VERSION = 2
         const val FRICTION_PERCENT = 0.20
         const val MIN_TOTAL_SAMPLES = 300
         const val MIN_TRAINING_SAMPLES = 200
         const val MIN_VALIDATION_SAMPLES = 50
+        const val MIN_TRAINING_CLASS_SAMPLES = 20
+        const val MIN_VALIDATION_CLASS_SAMPLES = 10
         const val MIN_DAYS = 7
         const val VALIDATION_DAYS = 2
         const val MIN_BRIER_IMPROVEMENT = 0.001
