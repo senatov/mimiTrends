@@ -64,8 +64,7 @@ internal class BrokerTradeAnnotations(private val plot: XYPlot) {
             val entryY = trade.entryPrice
             val exitY = trade.exitPrice ?: trade.entryPrice
             val controlX = (entryX + exitX) / 2.0
-            val highlight = addTradeHighlight(trade, bars, entryX, exitX, timeStep, priceSpan,
-                barPriceMultiplier)
+            addTradeHighlight(trade, bars, entryX, exitX, timeStep, priceSpan, barPriceMultiplier)
             val entryAlignment = alignToCandle(trade.entryEpochSeconds, trade.entryPrice,
                 bars, timeStep, barPriceMultiplier, displayMillis)
             val exitAlignment = trade.exitEpochSeconds?.let { epoch ->
@@ -80,7 +79,11 @@ internal class BrokerTradeAnnotations(private val plot: XYPlot) {
             val preferredX = stored?.let { domainMin + (it.x * (domainMax - domainMin)) } ?: controlX
             val preferredBottom = stored?.let { rangeMin + (it.y * (rangeMax - rangeMin)) }
                 ?: (candleRangeMax + (priceSpan * (CARD_GAP + ((index % MAX_LEVELS) * CARD_LEVEL_GAP))))
-            addCard(key, trade, highlight, preferredX, preferredBottom, timeStep, priceSpan,
+            val connectorPoints = listOfNotNull(
+                entryAlignment?.candlePoint,
+                exitAlignment?.candlePoint
+            ).ifEmpty { listOf(TradePoint(entryX, entryY), TradePoint(exitX, exitY)) }
+            addCard(key, trade, connectorPoints, preferredX, preferredBottom, timeStep, priceSpan,
                 domainMin, domainMax, rangeMin, rangeMax, entryAlignment, exitAlignment)
         }
     }
@@ -119,7 +122,7 @@ internal class BrokerTradeAnnotations(private val plot: XYPlot) {
         timeStep: Double,
         priceSpan: Double,
         multiplier: Double
-    ): HighlightAnchor {
+    ) {
         val exitEpoch = trade.exitEpochSeconds ?: bars.last().minuteEpochSeconds
         val covered = bars.filter { it.minuteEpochSeconds in trade.entryEpochSeconds..exitEpoch }
         val exitPrice = trade.exitPrice ?: trade.entryPrice
@@ -135,7 +138,6 @@ internal class BrokerTradeAnnotations(private val plot: XYPlot) {
         add(RoundRectangle2D.Double(
             left, bottom, right - left, height, timeStep * 1.6, priceSpan * 0.09
         ).let { XYShapeAnnotation(it, HIGHLIGHT_STROKE, HIGHLIGHT_ORANGE, HIGHLIGHT_FILL) })
-        return HighlightAnchor(left, bottom, right, bottom + height)
     }
 
     fun clear() {
@@ -161,7 +163,7 @@ internal class BrokerTradeAnnotations(private val plot: XYPlot) {
     private fun addCard(
         key: TradeKey,
         trade: BrokerTrade,
-        highlight: HighlightAnchor,
+        connectorPoints: List<TradePoint>,
         x: Double,
         y: Double,
         timeStep: Double,
@@ -191,7 +193,7 @@ internal class BrokerTradeAnnotations(private val plot: XYPlot) {
         } ?: "Open position · ${formatter.format(trade.quantity)} shares"
         val bounds = cardBounds(x, y, timeStep, priceSpan, domainMin, domainMax, rangeMin, rangeMax)
         renderedCards += RenderedCard(key, bounds, domainMin, domainMax, rangeMin, rangeMax)
-        addCardConnector(highlight, bounds, timeStep, priceSpan)
+        addCardConnector(connectorPoints, bounds, timeStep, priceSpan)
         val cardShape = RoundRectangle2D.Double(
             bounds.left,
             bounds.bottom,
@@ -207,18 +209,30 @@ internal class BrokerTradeAnnotations(private val plot: XYPlot) {
     }
 
     private fun addCardConnector(
-        highlight: HighlightAnchor,
+        points: List<TradePoint>,
         card: CardBounds,
         timeStep: Double,
         priceSpan: Double
     ) {
+        val anchor = connectorAnchor(points, card, timeStep, priceSpan)
         TradeCardConnector.create(
-            TradeCardConnector.Bounds(highlight.left, highlight.bottom, highlight.right, highlight.top),
+            TradeCardConnector.Bounds(anchor.x, anchor.y, anchor.x, anchor.y),
             TradeCardConnector.Bounds(card.left, card.bottom, card.right, card.top),
             timeStep,
             priceSpan
         ).forEach(::add)
     }
+
+    internal fun connectorAnchor(
+        points: List<TradePoint>,
+        card: CardBounds,
+        timeStep: Double,
+        priceSpan: Double
+    ): TradePoint = points.minBy { point ->
+            val dx = (point.x - card.centerX) / timeStep.coerceAtLeast(1.0)
+            val dy = (point.y - card.centerY) / priceSpan.coerceAtLeast(0.000_001)
+            dx * dx + dy * dy
+        }
 
     internal fun cardBounds(
         preferredX: Double,
@@ -336,10 +350,13 @@ internal class BrokerTradeAnnotations(private val plot: XYPlot) {
         val tradeY: Double,
         val candleX: Double,
         val candleY: Double
-    )
+    ) {
+        val candlePoint: TradePoint get() = TradePoint(candleX, candleY)
+    }
 
     internal data class CardBounds(val left: Double, val bottom: Double, val right: Double, val top: Double) {
         val centerX: Double get() = (left + right) / 2.0
+        val centerY: Double get() = (bottom + top) / 2.0
         val width: Double get() = right - left
         val height: Double get() = top - bottom
         fun contains(x: Double, y: Double): Boolean = x in left..right && y in bottom..top
@@ -348,7 +365,6 @@ internal class BrokerTradeAnnotations(private val plot: XYPlot) {
     internal data class TradePoint(val x: Double, val y: Double)
 
     private data class TradeKey(val symbol: String, val entryEpoch: Long, val exitEpoch: Long?)
-    private data class HighlightAnchor(val left: Double, val bottom: Double, val right: Double, val top: Double)
     private data class ActiveDrag(val key: TradeKey, val domainOffset: Double, val rangeOffset: Double)
     private data class NormalizedPoint(val x: Double, val y: Double)
     private data class RenderedCard(

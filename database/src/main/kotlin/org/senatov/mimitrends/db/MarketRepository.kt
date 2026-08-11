@@ -290,7 +290,7 @@ class MarketRepository(
                         "UPDATE minute_bars SET volume_status = CASE WHEN volume > 0 THEN 'REPORTED' ELSE 'MISSING' END"
                     )
                 }
-                statement.executeUpdate("CREATE INDEX IF NOT EXISTS idx_minute_symbol_time ON minute_bars(symbol, minute_epoch)")
+                statement.executeUpdate("DROP INDEX IF EXISTS idx_minute_symbol_time")
                 val removedSnapshots = statement.executeUpdate(
                     "DELETE FROM minute_bars WHERE minute_epoch % 60 != 0 AND volume <= 0"
                 )

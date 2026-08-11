@@ -73,13 +73,15 @@ class MarketRepositoryTest {
     }
 
     @Test fun `stores and updates minute bars`() {
-        val repository = MarketRepository(Files.createTempDirectory("mimitrends-db").resolve("test.db"))
+        val database = Files.createTempDirectory("mimitrends-db").resolve("test.db")
+        val repository = MarketRepository(database)
         repository.upsertMinuteBar(MinuteBar("SAP.DE", 60, 100.0, 102.0, 99.0, 101.0, 500.0))
         repository.upsertMinuteBar(MinuteBar("SAP.DE", 60, 100.0, 103.0, 99.0, 102.0, 750.0))
         val bars = repository.loadMinuteBars("SAP.DE", 0)
         assertEquals(1, bars.size); assertEquals(102.0, bars.single().close); assertEquals(750.0, bars.single().volume)
         assertEquals(listOf("SAP.DE"), repository.listSymbols())
         repository.close()
+        assertFalse(indexExists(database.toString(), "idx_minute_symbol_time"))
     }
 
     @Test fun `persists explicit volume quality`() {
@@ -124,4 +126,12 @@ class MarketRepositoryTest {
         assertContentEquals(logo, stored.logoBytes)
         repository.close()
     }
+
+    private fun indexExists(database: String, name: String): Boolean =
+        DriverManager.getConnection("jdbc:sqlite:$database").use { connection ->
+            connection.prepareStatement("SELECT 1 FROM sqlite_schema WHERE type='index' AND name=?").use { statement ->
+                statement.setString(1, name)
+                statement.executeQuery().use { it.next() }
+            }
+        }
 }

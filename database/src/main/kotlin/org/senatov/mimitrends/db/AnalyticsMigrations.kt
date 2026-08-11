@@ -92,6 +92,10 @@ internal object AnalyticsMigrations {
                 status TEXT NOT NULL, rejection_reason TEXT)""",
             "CREATE INDEX idx_predictive_models_horizon_time ON predictive_models(horizon_minutes, trained_at DESC)",
             "CREATE UNIQUE INDEX idx_predictive_models_active ON predictive_models(horizon_minutes) WHERE status='ACTIVE'"
+        ),
+        9 to listOf(
+            "DROP INDEX IF EXISTS idx_minute_symbol_time",
+            "DROP INDEX IF EXISTS idx_aggregate_symbol_time"
         )
     )
 }

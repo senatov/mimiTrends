@@ -91,4 +91,18 @@ class BrokerTradeAnnotationsTest {
 
         assertEquals(listOf(103.20, 103.80), renderer.renderedTradePoints().map { it.y })
     }
+
+    @Test fun `anchors a trade card to the nearest plotted candle point`() {
+        val renderer = BrokerTradeAnnotations(XYPlot())
+        val card = BrokerTradeAnnotations.CardBounds(0.0, 110.0, 600_000.0, 114.0)
+        val entryCandle = BrokerTradeAnnotations.TradePoint(120_000.0, 100.0)
+        val exitCandle = BrokerTradeAnnotations.TradePoint(1_200_000.0, 102.0)
+
+        val anchor = renderer.connectorAnchor(
+            listOf(entryCandle, exitCandle), card, timeStep = 60_000.0, priceSpan = 10.0
+        )
+
+        assertEquals(entryCandle, anchor)
+        assertTrue(anchor.y > 99.0, "connector must terminate on the candle, not the chart floor")
+    }
 }

@@ -10,9 +10,24 @@ import java.nio.file.Files
 import java.sql.DriverManager
 import java.time.Instant
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class AnalyticsRepositoryTest {
+    @Test fun `removes the redundant aggregate primary key index`() {
+        val path = Files.createTempDirectory("mimitrends-index-migration").resolve("test.db")
+
+        AnalyticsRepository(path).close()
+
+        DriverManager.getConnection("jdbc:sqlite:$path").use { connection ->
+            connection.prepareStatement(
+                "SELECT 1 FROM sqlite_schema WHERE type='index' AND name='idx_aggregate_symbol_time'"
+            ).use { statement ->
+                statement.executeQuery().use { assertFalse(it.next()) }
+            }
+        }
+    }
+
     @Test fun `loads the latest published result for each symbol across scan runs`() {
         val path = Files.createTempDirectory("mimitrends-published").resolve("test.db")
         MarketRepository(path).close()
