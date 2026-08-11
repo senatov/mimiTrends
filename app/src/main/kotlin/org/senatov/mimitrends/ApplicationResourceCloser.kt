@@ -14,6 +14,7 @@ internal object ApplicationResourceCloser {
         tradegateProvider: AutoCloseable,
         euronextProvider: AutoCloseable,
         boerseDeProvider: AutoCloseable,
+        arivaReferences: AutoCloseable,
         closeFinnhub: () -> Unit,
         batchScheduler: ExecutorService,
         repository: MarketRepository,
@@ -25,6 +26,7 @@ internal object ApplicationResourceCloser {
         tradegateProvider.close()
         euronextProvider.close()
         boerseDeProvider.close()
+        arivaReferences.close()
         closeFinnhub()
         batchScheduler.shutdownNow()
         awaitTermination(batchScheduler, log)

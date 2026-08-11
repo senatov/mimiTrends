@@ -89,6 +89,7 @@ class MainController(
     private val tradegateProvider = TradegatePollingService(repository, observationSink = observationBus)
     private val euronextProvider = EuronextPollingService(repository, observationSink = observationBus)
     private val tableQuoteProviders = TableQuoteProviderGroup(repository, observationBus)
+    private val arivaReferences = ArivaReferenceService(repository)
     private val recentEvents = RecentEventRetainer()
     private val priorityScanner = PriorityScanCoordinator(
         { symbol -> marketData.loadPriorityResult(symbol, scannerCriteria) },
@@ -172,7 +173,8 @@ class MainController(
         researchReport.close()
         observationUiBridge.close()
         try {
-            ApplicationResourceCloser.close(focusedSignals, priorityScanner, tradegateProvider, euronextProvider, tableQuoteProviders,
+            ApplicationResourceCloser.close(focusedSignals, priorityScanner, tradegateProvider, euronextProvider,
+                tableQuoteProviders, arivaReferences,
                 { finnhubClient?.close() }, batchScheduler, repository, analytics, log)
         } finally {
             observationBus.close()
@@ -250,6 +252,7 @@ class MainController(
             val retained = recentEvents.merge(active, System.currentTimeMillis(), criteria.resultLimit)
             val displayed = retained
             tableQuoteProviders.replaceSymbols(displayed.map(ScanResult::symbol))
+            arivaReferences.replaceSymbols(displayed.map(ScanResult::symbol))
             priorityScanner.replaceCandidates(active)
             Platform.runLater {
                 if (generation != scanGeneration.get()) return@runLater

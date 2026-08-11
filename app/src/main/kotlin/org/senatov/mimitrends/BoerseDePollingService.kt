@@ -172,7 +172,7 @@ private class IsinQuotePollingService(
         const val INTERVAL_MILLIS = 5_000L
         const val UNAVAILABLE_RETRY_MILLIS = 24 * 60 * 60_000L
         val PERMANENT_INSTRUMENT_STATUSES = setOf(400, 404)
-        val SOURCE_PROVIDERS = listOf("TRADEGATE", "EURONEXT", "BOERSE_DE", "BNP_PARIBAS", "TRADERFOX")
+        val SOURCE_PROVIDERS = listOf("ARIVA", "TRADEGATE", "EURONEXT", "BOERSE_DE", "BNP_PARIBAS", "TRADERFOX")
         val ISIN = Regex("[A-Z]{2}[A-Z0-9]{9}[0-9]")
     }
 }
