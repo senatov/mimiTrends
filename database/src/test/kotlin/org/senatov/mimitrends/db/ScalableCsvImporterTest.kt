@@ -32,4 +32,20 @@ class ScalableCsvImporterTest {
             Files.deleteIfExists(csv)
         }
     }
+
+    @Test fun `accepts a negative tax adjustment exported by scalable`() {
+        val csv = Files.createTempFile("scalable-tax-adjustment", ".csv")
+        try {
+            csv.writeText(
+                "date;time;status;reference;description;assetType;type;isin;shares;price;amount;fee;tax;currency\n" +
+                    "2026-08-10;10:19:36;Executed;sell-tax;Leonardo;Security;Sell;IT0003856405;56;58,21;3.259,76;0,00;-6,53;EUR\n"
+            )
+
+            val transaction = ScalableCsvImporter.parse(csv, ZoneId.of("Europe/Berlin")).single()
+
+            assertEquals(-6.53, transaction.tax, 0.000_001)
+        } finally {
+            Files.deleteIfExists(csv)
+        }
+    }
 }

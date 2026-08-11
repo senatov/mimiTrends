@@ -42,7 +42,7 @@ object ScalableCsvImporter {
                     price = decimal(value("price"), index, "price", nonNegative = true),
                     amount = decimal(value("amount"), index, "amount"),
                     fee = decimal(value("fee"), index, "fee", nonNegative = true),
-                    tax = decimal(value("tax"), index, "tax", nonNegative = true),
+                    tax = decimal(value("tax"), index, "tax"),
                     currency = value("currency").uppercase()
                 )
             }.distinctBy { transaction ->
