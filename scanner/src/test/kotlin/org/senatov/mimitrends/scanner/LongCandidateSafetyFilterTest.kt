@@ -21,7 +21,7 @@ class LongCandidateSafetyFilterTest {
         assertEquals("Impulse ↑", filter.classify(bars, result("Impulse ↑", 0.8, 5.0))?.signalSource)
     }
 
-    @Test fun `blocks repeated heavy distribution during the session`() {
+    @Test fun `rejects repeated heavy distribution during the session`() {
         var price = 100.0
         val bars = (0 until 60).map { index ->
             val open = price
@@ -29,8 +29,33 @@ class LongCandidateSafetyFilterTest {
             bar(index, open, price, if (index == 35 || index == 48) 300.0 else 100.0)
         }
 
-        assertTrue(assertNotNull(filter.classify(bars, result("Impulse ↑", 0.8, 5.0)))
-            .signalSource.endsWith("· watch"))
+        assertNull(filter.classify(bars, result("Impulse ↑", 0.8, 5.0)))
+    }
+
+    @Test fun `rejects a rise whose recent slope has broken`() {
+        var price = 100.0
+        val bars = (0 until 60).map { index ->
+            val open = price
+            price += if (index < 54) 0.03 else -0.05
+            bar(index, open, price, 100.0)
+        }
+
+        assertNull(filter.classify(bars, result("Steady rise ↑", 1.2, 5.0)))
+    }
+
+    @Test fun `rejects a stalled tail after a strong recent climb`() {
+        var price = 100.0
+        val bars = (0 until 60).map { index ->
+            val open = price
+            price += when {
+                index < 50 -> 0.01
+                index < 55 -> 0.06
+                else -> 0.0
+            }
+            bar(index, open, price, 100.0)
+        }
+
+        assertNull(filter.classify(bars, result("Steady rise ↑", 1.0, 5.0)))
     }
 
     @Test fun `keeps a truly sharp downside anomaly as a secondary watch`() {

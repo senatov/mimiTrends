@@ -13,8 +13,8 @@ class AdaptiveResultSelectorTest {
 
         val selection = AdaptiveResultSelector.select(strict, listOf(mild, balanced, broad), 6, 15)
 
-        assertEquals(3, selection.results.size)
-        assertEquals(2, selection.adaptiveCount)
+        assertEquals(2, selection.results.size)
+        assertEquals(1, selection.adaptiveCount)
         assertTrue(selection.results.none { it.symbol.startsWith("W") })
     }
 
@@ -37,7 +37,7 @@ class AdaptiveResultSelectorTest {
         assertEquals(0, selection.adaptiveCount)
     }
 
-    @Test fun `publishes additional qualified trends as watch candidates`() {
+    @Test fun `does not relabel additional qualified trends as watch candidates`() {
         val trends = (1..4).map { index ->
             result("T$index", 3.6 - index / 10.0, "Steady rise ↑")
                 .copy(signalWindowLabel = "30m steady", windowChangePercent = 0.6)
@@ -45,15 +45,27 @@ class AdaptiveResultSelectorTest {
 
         val selection = AdaptiveResultSelector.select(emptyList(), listOf(trends), 10, 15)
 
-        assertEquals(4, selection.results.size)
-        assertEquals(4, selection.adaptiveCount)
+        assertEquals(2, selection.results.size)
+        assertTrue(selection.results.none { it.signalSource.contains("watch") })
     }
 
-    @Test fun `fills the list to at least seven with explicitly labelled watch candidates`() {
+    @Test fun `does not fill the list by converting weaker trends to watch candidates`() {
         val strict = listOf(result("STRICT", 8.0))
         val watch = (1..10).map { index ->
             result("W$index", 2.8 + index / 100.0, "Steady rise ↑")
                 .copy(signalWindowLabel = "10m steady", windowChangePercent = 0.30, candleBodyRatio = 0.18)
+        }
+
+        val selection = AdaptiveResultSelector.select(strict, listOf(watch), 5, 15)
+
+        assertEquals(listOf("STRICT"), selection.results.map { it.symbol })
+    }
+
+    @Test fun `can fill the list with candidates already classified as watch`() {
+        val strict = listOf(result("STRICT", 8.0))
+        val watch = (1..10).map { index ->
+            result("W$index", 4.0 + index / 100.0, "Steady rise ↑ · watch")
+                .copy(signalWindowLabel = "20m steady", windowChangePercent = 0.60, candleBodyRatio = 0.30)
         }
 
         val selection = AdaptiveResultSelector.select(strict, listOf(watch), 5, 15)

@@ -29,11 +29,12 @@ internal object AdaptiveResultSelector {
             }
         }
         val watchCandidates = (strict.asSequence() + fallbackLevels.asSequence().flatten())
+            .filter { it.signalSource.contains("watch") }
             .filter(CandidateQualityGate::qualifiesWatch)
             .filter { CandidateQualityGate.attentionScore(it) >= MIN_WATCH_ATTENTION_SCORE }
             .sortedWith(attentionComparator())
         watchCandidates.forEach { candidate ->
-            if (selected.size < target) selected.putIfAbsent(candidate.symbol, candidate.asWatch())
+            if (selected.size < target) selected.putIfAbsent(candidate.symbol, candidate)
         }
         longTerm.asSequence()
             .filter(CandidateQualityGate::qualifiesLongTerm)
@@ -61,9 +62,6 @@ internal object AdaptiveResultSelector {
         compareBy<ScanResult>(CandidateQualityGate::priorityTier)
             .thenByDescending(CandidateQualityGate::attentionScore)
             .thenByDescending(ScanResult::anomalyScore)
-
-    private fun ScanResult.asWatch(): ScanResult =
-        if (signalSource.contains("watch")) this else copy(signalSource = "$signalSource · watch")
 
     private const val MIN_RESULTS = 5
     private const val MIN_TARGET_RESULTS = 7
