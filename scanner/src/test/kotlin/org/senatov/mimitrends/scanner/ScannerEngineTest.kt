@@ -59,6 +59,22 @@ class ScannerEngineTest {
         assertNull(engine().evaluate("TEST", bars, criteria()))
     }
 
+    @Test fun `publishes a sustained exceptional selloff as an unconfirmed oversold watch`() {
+        val bars = normalBars().toMutableList()
+        var minute = nextMinute(bars)
+        var previous = 100.0
+        repeat(8) {
+            val close = previous - 0.35
+            bars += candle(minute++, previous, close, 700.0)
+            previous = close
+        }
+
+        val result = requireNotNull(engine().evaluate("TEST", bars, criteria()))
+
+        assertTrue(result.signalSource.startsWith("Oversold decline ↓"))
+        assertTrue(result.signalSource.contains("bottom unconfirmed"))
+    }
+
     @Test fun `drops early momentum after ten flat minutes`() {
         val bars = normalBars().toMutableList()
         var minute = nextMinute(bars)

@@ -23,6 +23,7 @@ class ScannerEngine(private val zoneOverride: ZoneId? = null) {
     private val steadyRiseDetector = SteadyRiseDetector(zoneOverride)
     private val multiSessionRiseDetector = MultiSessionRiseDetector(zoneOverride)
     private val earlyRecoveryDetector = EarlyRecoveryDetector(zoneOverride)
+    private val oversoldWatchDetector = OversoldWatchDetector(zoneOverride)
     private val longCandidateSafety = LongCandidateSafetyFilter(zoneOverride)
 
     internal fun freshnessWeight(ageMinutes: Double): Double =
@@ -55,10 +56,18 @@ class ScannerEngine(private val zoneOverride: ZoneId? = null) {
         val earlyRecovery = if (signal == null && momentum == null && reversal == null) {
             earlyRecoveryDetector.detect(symbol, sorted, criteria)
         } else null
-        if (signal == null && momentum == null && reversal == null && earlyRecovery == null) return null
+        val hasBullishSignal = (signal?.feature?.returnPercent ?: 0.0) > 0.0 ||
+            (momentum?.returnPercent ?: 0.0) > 0.0 || (reversal?.direction ?: 0) > 0 || earlyRecovery != null
+        val oversoldWatch = if (!hasBullishSignal) {
+            oversoldWatchDetector.detect(symbol, sorted, criteria)
+        } else null
+        if (signal == null && momentum == null && reversal == null && earlyRecovery == null && oversoldWatch == null) {
+            return null
+        }
         val sessionBars = sameSession(sorted, latest)
         val turnover = sessionBars.sumOf { it.close * it.volume }
         if (latest.close < criteria.minPrice || turnover < criteria.minSessionTurnover) return null
+        if (oversoldWatch != null) return oversoldWatch
         val impulseScore = signal?.score ?: Double.NEGATIVE_INFINITY
         if (reversal != null && reversal.score >= max(impulseScore, momentum?.score ?: Double.NEGATIVE_INFINITY)) {
             return reversalResult(symbol, latest, sessionBars, turnover, reversal)
@@ -68,7 +77,7 @@ class ScannerEngine(private val zoneOverride: ZoneId? = null) {
             return momentumResult(symbol, latest, sessionBars, turnover, momentum)
                 .let { longCandidateSafety.classify(sorted, it) }
         }
-        if (signal == null) return requireNotNull(earlyRecovery)
+        if (signal == null) return earlyRecovery ?: requireNotNull(oversoldWatch)
         val selected = signal
         return ScanResult(
             symbol = symbol,

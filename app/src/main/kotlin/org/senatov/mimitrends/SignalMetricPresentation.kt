@@ -75,6 +75,10 @@ internal object SignalMetricPresentation {
 
     fun priceAction(result: ScanResult): SignalMetric {
         val arrow = directionArrow(result)
+        if (result.signalSource.startsWith("Oversold decline")) {
+            return SignalMetric("Oversold watch ↓", "#9a6717", 600,
+                "Exceptional selloff near its current low. A bottom has not been confirmed; wait for a higher low and positive recovery slope.")
+        }
         if (result.signalSource.contains("wait for pullback")) {
             return SignalMetric("Wait for pullback", "#9a6717", 600,
                 "The rising structure remains valid, but price is extended above its earlier path or has stalled near a local high. " +

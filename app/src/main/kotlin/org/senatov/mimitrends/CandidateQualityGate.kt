@@ -20,6 +20,7 @@ internal object CandidateQualityGate {
 
     private fun structuralQuality(result: ScanResult, watch: Boolean): Boolean {
         return when {
+            result.signalSource.startsWith("Oversold decline") -> oversoldQuality(result)
             result.signalSource.startsWith("Steady rise") || result.signalSource.startsWith("Recovery") ||
                 result.signalSource.startsWith("Trend") || result.signalSource.startsWith("Early recovery") ->
                 trendQuality(result, watch)
@@ -93,7 +94,11 @@ internal object CandidateQualityGate {
             abs(result.windowChangePercent) >= minimumMove(result) *
             (if (watch) WATCH_THRESHOLD_FACTOR else 1.0) &&
             result.candleBodyRatio >=
-            (if (watch) WATCH_MIN_REVERSAL_RECOVERY_RATIO else MIN_REVERSAL_RECOVERY_RATIO)
+                (if (watch) WATCH_MIN_REVERSAL_RECOVERY_RATIO else MIN_REVERSAL_RECOVERY_RATIO)
+
+    private fun oversoldQuality(result: ScanResult): Boolean =
+        result.signalSource.contains("watch") && abs(result.windowChangePercent) >= MIN_OVERSOLD_DECLINE_PERCENT &&
+            result.candleBodyRatio >= MIN_OVERSOLD_EFFICIENCY && result.anomalyScore >= MIN_OVERSOLD_SCORE
 
     private fun watchRankingQuality(result: ScanResult): Boolean =
         result.rankingPercentile.takeIf(Double::isFinite)?.let { it >= MIN_WATCH_PERCENTILE }
@@ -130,6 +135,9 @@ internal object CandidateQualityGate {
     private const val MIN_TREND_RETURN_PERCENT = 0.35
     private const val MIN_TREND_EFFICIENCY = 0.20
     private const val MIN_REVERSAL_RECOVERY_RATIO = 0.45
+    private const val MIN_OVERSOLD_DECLINE_PERCENT = 2.0
+    private const val MIN_OVERSOLD_EFFICIENCY = 0.35
+    private const val MIN_OVERSOLD_SCORE = 3.5
     private const val MIN_ADAPTIVE_PERCENTILE = 8.0
     private const val MIN_UNCALIBRATED_ADAPTIVE_SCORE = 5.0
     private const val MIN_UNCALIBRATED_TREND_SCORE = 3.25

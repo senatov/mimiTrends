@@ -81,4 +81,13 @@ class CandidateQualityGateTest {
 
         assertTrue(CandidateQualityGate.qualifiesLongTerm(result))
     }
+
+    @Test fun `accepts an exceptional decline only in the watch tier`() {
+        val result = TestScanResult.create(
+            anomalyScore = 4.2, signalSource = "Oversold decline ↓ · watch · bottom unconfirmed"
+        ).copy(windowChangePercent = -3.0, candleBodyRatio = 0.55)
+
+        assertFalse(CandidateQualityGate.qualifies(result, adaptive = false))
+        assertTrue(CandidateQualityGate.qualifiesWatch(result))
+    }
 }
