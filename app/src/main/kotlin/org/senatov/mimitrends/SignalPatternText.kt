@@ -1,10 +1,22 @@
 package org.senatov.mimitrends
 
-internal data class SignalPatternText(val primary: String, val qualifiers: String?) {
+internal data class SignalPatternText(val primary: String, val qualifiers: String?, val watchLabel: String?) {
     companion object {
         fun parse(source: String): SignalPatternText {
             val parts = source.split(" · ").map(String::trim).filter(String::isNotEmpty)
-            return SignalPatternText(parts.firstOrNull().orEmpty(), parts.drop(1).takeIf { it.isNotEmpty() }?.joinToString(" · "))
+            val primary = parts.firstOrNull().orEmpty()
+            val hasWatch = parts.drop(1).any { it.contains("watch", ignoreCase = true) }
+            val qualifiers = parts.drop(1).filterNot { it.contains("watch", ignoreCase = true) }
+                .takeIf(List<String>::isNotEmpty)?.joinToString(" · ")
+            return SignalPatternText(primary, qualifiers, if (hasWatch) watchLabel(primary, parts) else null)
+        }
+
+        private fun watchLabel(primary: String, parts: List<String>): String = when {
+            primary.startsWith("Early recovery", ignoreCase = true) ||
+                primary.startsWith("Recovery", ignoreCase = true) -> "* Recovery watch *"
+            primary.startsWith("Oversold", ignoreCase = true) -> "* Oversold watch *"
+            parts.any { it.contains("downside watch", ignoreCase = true) } -> "* Downside watch *"
+            else -> "* Watch *"
         }
     }
 }

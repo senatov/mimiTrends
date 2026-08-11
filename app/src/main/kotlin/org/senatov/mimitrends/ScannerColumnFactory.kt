@@ -105,10 +105,19 @@ internal class ScannerColumnFactory(
                         styleClass += "pattern-watch-score"
                         style = "-fx-text-fill: ${watchScore.color};"
                     }
+                    val watchBadge = content.watchLabel?.let { label ->
+                        Label(label).apply { styleClass += "pattern-watch-badge" }
+                    }
                     graphic = VBox(0.0).apply {
                         alignment = Pos.CENTER_LEFT
                         styleClass += "pattern-content"
-                        if (content.qualifiers == null) {
+                        if (watchBadge != null) {
+                            children += primary
+                            children += HBox(5.0, watchBadge, score).apply { alignment = Pos.CENTER_LEFT }
+                            content.qualifiers?.let { qualifiers ->
+                                children += Label(qualifiers).apply { styleClass += "pattern-qualifiers" }
+                            }
+                        } else if (content.qualifiers == null) {
                             children += HBox(5.0, primary, score).apply { alignment = Pos.CENTER_LEFT }
                         } else {
                             children += primary
@@ -124,7 +133,7 @@ internal class ScannerColumnFactory(
                 }
             }
         }
-        configure(125.0, 75.0)
+        configure(145.0, 90.0)
     }
 
     fun metric(
