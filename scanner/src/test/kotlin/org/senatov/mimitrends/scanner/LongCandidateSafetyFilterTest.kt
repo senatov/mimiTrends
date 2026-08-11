@@ -58,6 +58,32 @@ class LongCandidateSafetyFilterTest {
         assertNull(filter.classify(bars, result("Steady rise ↑", 1.0, 5.0)))
     }
 
+    @Test fun `rejects a breakout that hides a volatile whipsaw`() {
+        var price = 100.0
+        val changes = List(50) { 0.01 } +
+            listOf(0.45, -0.40, 0.38, -0.46, 0.42, -0.36, 0.60, 0.60)
+        val bars = changes.mapIndexed { index, change ->
+            val open = price
+            price += change
+            bar(index, open, price, 100.0)
+        }
+
+        assertNull(filter.classify(bars, result("Impulse ↑", 1.2, 5.0)))
+    }
+
+    @Test fun `allows a tight consolidation followed by a clean breakout`() {
+        var price = 100.0
+        val changes = List(50) { 0.01 } +
+            listOf(0.01, -0.01, 0.01, -0.01, 0.01, -0.01, 0.30, 0.30)
+        val bars = changes.mapIndexed { index, change ->
+            val open = price
+            price += change
+            bar(index, open, price, 100.0)
+        }
+
+        assertNotNull(filter.classify(bars, result("Impulse ↑", 0.8, 5.0)))
+    }
+
     @Test fun `keeps a truly sharp downside anomaly as a secondary watch`() {
         assertTrue(assertNotNull(filter.classify(emptyList(), result("Impulse ↓", -1.1, 5.2)))
             .signalSource.endsWith("· downside watch"))
