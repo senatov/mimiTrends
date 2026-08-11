@@ -252,6 +252,39 @@ class ScannerEngineTest {
         assertTrue(result.windowChangePercent >= 0.30)
     }
 
+    @Test fun `finds an orderly rise across two trading sessions`() {
+        val bars = mutableListOf<MinuteBar>()
+        var previous = 100.0
+        (0 until 2).forEach { day ->
+            repeat(90) { minute ->
+                val close = previous + 0.012
+                bars += candle(day * 1_440 + minute, previous, close, 200.0)
+                previous = close
+            }
+        }
+
+        val result = requireNotNull(engine().evaluateLongTerm("TEST", bars, criteria()))
+
+        assertEquals("2 sessions steady", result.signalWindowLabel)
+        assertTrue(result.signalSource.contains("2 sessions"))
+        assertTrue(result.windowChangePercent >= 2.0)
+    }
+
+    @Test fun `rejects a two session rise with a deep interruption`() {
+        val bars = mutableListOf<MinuteBar>()
+        var previous = 100.0
+        (0 until 2).forEach { day ->
+            repeat(90) { minute ->
+                val change = if (day == 1 && minute == 45) -1.5 else 0.025
+                val close = previous + change
+                bars += candle(day * 1_440 + minute, previous, close, 200.0)
+                previous = close
+            }
+        }
+
+        assertNull(MultiSessionRiseDetector(java.time.ZoneId.of("UTC")).detect("TEST", bars, criteria()))
+    }
+
     @Test fun `rejects an old trend that is flat now`() {
         val bars = mutableListOf<MinuteBar>()
         (0 until 2).forEach { day ->

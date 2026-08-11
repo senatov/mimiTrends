@@ -77,11 +77,16 @@ internal object CandidateQualityGate {
     }
 
     private fun trendQuality(result: ScanResult, watch: Boolean): Boolean =
-        result.signalWindowLabel.filter(Char::isDigit).toIntOrNull()?.let {
-            it >= if (watch) WATCH_MIN_TREND_MINUTES else MIN_TREND_MINUTES
-        } == true && abs(result.windowChangePercent) >=
+        hasSufficientTrendWindow(result, watch) && abs(result.windowChangePercent) >=
             (if (watch) WATCH_MIN_TREND_RETURN_PERCENT else MIN_TREND_RETURN_PERCENT) &&
             result.candleBodyRatio >= (if (watch) WATCH_MIN_TREND_EFFICIENCY else MIN_TREND_EFFICIENCY)
+
+    private fun hasSufficientTrendWindow(result: ScanResult, watch: Boolean): Boolean {
+        if (result.signalWindowLabel.contains("sessions")) return true
+        return result.signalWindowLabel.filter(Char::isDigit).toIntOrNull()?.let {
+            it >= if (watch) WATCH_MIN_TREND_MINUTES else MIN_TREND_MINUTES
+        } == true
+    }
 
     private fun reversalQuality(result: ScanResult, watch: Boolean): Boolean =
         result.priceAnomaly >= (if (watch) WATCH_MIN_JUMP_Z else MIN_JUMP_Z) &&

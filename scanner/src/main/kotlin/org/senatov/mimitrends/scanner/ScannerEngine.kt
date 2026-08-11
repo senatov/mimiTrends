@@ -21,6 +21,7 @@ class ScannerEngine(private val zoneOverride: ZoneId? = null) {
     private val earlyMomentumDetector = EarlyMomentumDetector(zoneOverride)
     private val vReversalDetector = VReversalDetector(zoneOverride)
     private val steadyRiseDetector = SteadyRiseDetector(zoneOverride)
+    private val multiSessionRiseDetector = MultiSessionRiseDetector(zoneOverride)
     private val earlyRecoveryDetector = EarlyRecoveryDetector(zoneOverride)
     private val longCandidateSafety = LongCandidateSafetyFilter(zoneOverride)
 
@@ -172,7 +173,8 @@ class ScannerEngine(private val zoneOverride: ZoneId? = null) {
     }
 
     fun evaluateLongTerm(symbol: String, bars: List<MinuteBar>, criteria: ScannerCriteria): ScanResult? =
-        steadyRiseDetector.detectLongTerm(symbol, bars, criteria)
+        (multiSessionRiseDetector.detect(symbol, bars, criteria)
+            ?: steadyRiseDetector.detectLongTerm(symbol, bars, criteria))
             ?.let { longCandidateSafety.classify(bars, it) }
 
     private fun score(

@@ -73,4 +73,12 @@ class CandidateQualityGateTest {
         assertFalse(CandidateQualityGate.qualifies(extended, adaptive = true))
         assertTrue(CandidateQualityGate.qualifiesWatch(extended))
     }
+
+    @Test fun `accepts a qualified two session trend as long term`() {
+        val result = TestScanResult.create(
+            anomalyScore = 4.0, signalSource = "Steady rise ↑ · 2 sessions · long-term"
+        ).copy(signalWindowLabel = "2 sessions steady", windowChangePercent = 1.1, candleBodyRatio = 0.35)
+
+        assertTrue(CandidateQualityGate.qualifiesLongTerm(result))
+    }
 }
