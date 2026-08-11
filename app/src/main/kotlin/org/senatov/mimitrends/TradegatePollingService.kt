@@ -116,8 +116,10 @@ internal class TradegatePollingService(
     }
 
     private fun resolve(symbol: String): ProviderInstrument? {
+        val companyName = repository.loadCompanyProfile(symbol)?.name
         repository.loadProviderInstrument(PROVIDER, symbol)?.let { cached ->
-            if (isLikelyEquity(cached)) return cached
+            if (isLikelyEquity(cached) &&
+                ProviderInstrumentSelector.matchesCompany(symbol, companyName, cached.resolvedName)) return cached
             repository.deleteProviderInstrument(PROVIDER, symbol)
         }
         val now = System.currentTimeMillis()
@@ -126,7 +128,7 @@ internal class TradegatePollingService(
             return source.copy(provider = PROVIDER, mic = MIC, currency = CURRENCY, updatedAtMillis = now)
                 .also(repository::upsertProviderInstrument)
         }
-        val query = repository.loadCompanyProfile(symbol)?.name
+        val query = companyName
             ?.let { CompanySearchTerm.from(it, symbol) }
             ?: return null
         val resolved = client.resolveInstrument(symbol, query)
@@ -138,8 +140,10 @@ internal class TradegatePollingService(
             .also(repository::upsertProviderInstrument)
     }
 
-    internal fun knownIsin(symbol: String): ProviderInstrument? = ISIN_PROVIDERS.firstNotNullOfOrNull { provider ->
-        repository.loadProviderInstrument(provider, symbol)?.takeIf(::isLikelyEquity)
+    internal fun knownIsin(symbol: String): ProviderInstrument? {
+        val companyName = repository.loadCompanyProfile(symbol)?.name
+        val candidates = ISIN_PROVIDERS.mapNotNull { repository.loadProviderInstrument(it, symbol) }
+        return ProviderInstrumentSelector.select(symbol, companyName, candidates, ::isLikelyEquity)
     }
 
     private fun isLikelyEquity(instrument: ProviderInstrument): Boolean =

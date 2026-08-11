@@ -55,4 +55,24 @@ class TradegatePollingServiceTest {
         service.close()
         repository.close()
     }
+
+    @Test
+    fun `prefers the company matching listing over an unrelated cached isin`() {
+        val repository = MarketRepository(Files.createTempDirectory("mimitrends-tradegate-company").resolve("test.db"))
+        repository.upsertCompanyProfile(org.senatov.mimitrends.model.CompanyProfile(
+            "CPR.MI", "CAMPARI", "Milan", null, null, 1L
+        ))
+        repository.upsertProviderInstrument(ProviderInstrument(
+            "BOERSE_DE", "CPR.MI", "CA75888V1004", "XSTU", "EUR", "REGEN III Corp."
+        ))
+        repository.upsertProviderInstrument(ProviderInstrument(
+            "EURONEXT", "CPR.MI", "NL0015435975", "MTAH", "EUR", "CAMPARI"
+        ))
+        val service = TradegatePollingService(repository)
+
+        assertEquals("NL0015435975", service.knownIsin("CPR.MI")?.identifier)
+
+        service.close()
+        repository.close()
+    }
 }

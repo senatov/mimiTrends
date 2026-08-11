@@ -141,14 +141,19 @@ private class IsinQuotePollingService(
     }
 
     private fun resolveInstrument(symbol: String): ProviderInstrument? {
+        val companyName = repository.loadCompanyProfile(symbol)?.name
         repository.loadProviderInstrument(provider, symbol)?.let { cached ->
-            if (isEquityIdentifier(cached.identifier)) return cached
+            if (isEquityIdentifier(cached.identifier) &&
+                ProviderInstrumentSelector.matchesCompany(symbol, companyName, cached.resolvedName)) return cached
             repository.deleteProviderInstrument(provider, symbol)
+            log.info(LogTag.API, "discarded mismatched table quote instrument provider={} symbol={} name={}",
+                provider, symbol, cached.resolvedName)
         }
-        val source = listOf("TRADEGATE", "EURONEXT", "BOERSE_DE", "BNP_PARIBAS", "TRADERFOX")
-            .asSequence().filter { it != provider }
-            .mapNotNull { repository.loadProviderInstrument(it, symbol) }
-            .firstOrNull { isEquityIdentifier(it.identifier) }
+        val candidates = SOURCE_PROVIDERS.asSequence().filter { it != provider }
+            .mapNotNull { repository.loadProviderInstrument(it, symbol) }.toList()
+        val source = ProviderInstrumentSelector.select(symbol, companyName, candidates) {
+            isEquityIdentifier(it.identifier)
+        }
             ?: return null
         return source.copy(provider = provider, mic = mic, updatedAtMillis = System.currentTimeMillis())
             .also(repository::upsertProviderInstrument)
@@ -167,6 +172,7 @@ private class IsinQuotePollingService(
         const val INTERVAL_MILLIS = 5_000L
         const val UNAVAILABLE_RETRY_MILLIS = 24 * 60 * 60_000L
         val PERMANENT_INSTRUMENT_STATUSES = setOf(400, 404)
+        val SOURCE_PROVIDERS = listOf("TRADEGATE", "EURONEXT", "BOERSE_DE", "BNP_PARIBAS", "TRADERFOX")
         val ISIN = Regex("[A-Z]{2}[A-Z0-9]{9}[0-9]")
     }
 }
