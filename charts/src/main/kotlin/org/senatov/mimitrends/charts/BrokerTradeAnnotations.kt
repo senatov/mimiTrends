@@ -64,10 +64,11 @@ internal class BrokerTradeAnnotations(private val plot: XYPlot) {
             val exitY = trade.exitPrice ?: trade.entryPrice
             val controlX = (entryX + exitX) / 2.0
             addTradeHighlight(trade, bars, entryX, exitX, timeStep, priceSpan, barPriceMultiplier)
-            val entryAlignment = alignToCandle(trade.entryEpochSeconds,
+            val entryAlignment = alignToCandle(trade.entryEpochSeconds, trade.entryPrice,
                 bars, timeStep, barPriceMultiplier, displayMillis)
             val exitAlignment = trade.exitEpochSeconds?.let { epoch ->
-                alignToCandle(epoch, bars, timeStep, barPriceMultiplier, displayMillis)
+                alignToCandle(epoch, requireNotNull(trade.exitPrice), bars,
+                    timeStep, barPriceMultiplier, displayMillis)
             }
             val entryPoint = entryAlignment?.candlePoint ?: TradePoint(entryX, entryY)
             val exitPoint = exitAlignment?.candlePoint ?: TradePoint(exitX, exitY)
@@ -251,6 +252,7 @@ internal class BrokerTradeAnnotations(private val plot: XYPlot) {
 
     private fun alignToCandle(
         epochSeconds: Long,
+        tradePrice: Double,
         bars: List<MinuteBar>,
         timeStep: Double,
         multiplier: Double,
@@ -258,7 +260,13 @@ internal class BrokerTradeAnnotations(private val plot: XYPlot) {
     ): CandleAlignment? {
         val nearest = bars.minByOrNull { kotlin.math.abs(it.minuteEpochSeconds - epochSeconds) } ?: return null
         val candleX = displayMillis(nearest.minuteEpochSeconds)
-        if (kotlin.math.abs(nearest.minuteEpochSeconds - epochSeconds) <= timeStep / 1_000.0 * 1.5) return null
+        val closeInTime = kotlin.math.abs(nearest.minuteEpochSeconds - epochSeconds) <= timeStep / 1_000.0 * 1.5
+        val candleLow = nearest.low * multiplier
+        val candleHigh = nearest.high * multiplier
+        val priceTolerance = maxOf((candleHigh - candleLow) * PRICE_TOLERANCE_SHARE,
+            nearest.close * multiplier * MIN_PRICE_TOLERANCE_SHARE)
+        val closeInPrice = tradePrice in (candleLow - priceTolerance)..(candleHigh + priceTolerance)
+        if (closeInTime && closeInPrice) return null
         return CandleAlignment(candleX, nearest.close * multiplier)
     }
 
@@ -304,6 +312,8 @@ internal class BrokerTradeAnnotations(private val plot: XYPlot) {
         val CARD_STROKE = BasicStroke(1.35f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND)
         const val HIGHLIGHT_PADDING = 0.035
         const val HIGHLIGHT_CORNER_SHARE = 0.72
+        const val PRICE_TOLERANCE_SHARE = 0.25
+        const val MIN_PRICE_TOLERANCE_SHARE = 0.002
         const val CARD_GAP = 0.035
         const val CARD_LANE_SHARE = 0.24
         const val CARD_CORNER_WIDTH_SHARE = 0.08

@@ -121,6 +121,21 @@ class BrokerTradeAnnotationsTest {
         assertTrue(renderer.renderedTradePoints().all { it.y in 31.5..32.5 })
     }
 
+    @Test fun `does not trust a matching timestamp when trade price is outside candle OHLC`() {
+        val renderer = BrokerTradeAnnotations(XYPlot())
+        val bars = (0L..10L).map { minute ->
+            MinuteBar("TEST", minute * 60L, 31.0, 31.4, 30.8, 31.1, 1_000.0)
+        }
+        val trade = BrokerTrade(
+            "TEST", null, 1.0, 0L, 27.15, 600L, 31.1,
+            3.95, 14.55, 0.0, "EUR"
+        )
+
+        renderer.render(listOf(trade), bars, bars, 1.0)
+
+        assertEquals(31.1, renderer.renderedTradePoints().first().y, 0.000_001)
+    }
+
     @Test fun `keeps nearby trade cards readable and separated on a long range`() {
         val renderer = BrokerTradeAnnotations(XYPlot())
         val bars = (0L..1_000L).map { minute ->
