@@ -146,20 +146,21 @@ class ScannerPanel(
         columnLayout = TableColumnLayout(table, savedColumns).also(TableColumnLayout<ScanResult>::install)
         autoFitter = TableColumnAutoFitter(table, listOf(
             TableColumnAutoFitter.Spec(freshness, { FeedFreshness.ageLabel(it.updatedAtMillis) }, 68.0, 96.0),
-            TableColumnAutoFitter.Spec(symbol, columnFactory::companyName, 120.0, 460.0, flexible = true, reserveWidth = 32.0),
+            TableColumnAutoFitter.Spec(symbol, columnFactory::companyName, 145.0, 360.0, flexible = true, reserveWidth = 32.0),
             TableColumnAutoFitter.Spec(signal, {
-                "${it.signalSource} ${WatchScorePresentation.calculate(it).label}"
-            }, 105.0, 190.0),
-            TableColumnAutoFitter.Spec(move, { percent(it.windowChangePercent) }, 82.0, 130.0, reserveWidth = 8.0),
-            TableColumnAutoFitter.Spec(price, { "${currency.symbol}%,.2f".format(convertPrice(it.symbol, it.price)) }, 72.0, 135.0, reserveWidth = 8.0),
-            TableColumnAutoFitter.Spec(scoreColumn, { SignalMetricPresentation.strength(it).label }, 88.0, 140.0),
-            TableColumnAutoFitter.Spec(outcome, { SignalMetricPresentation.outcome(it).label }, 105.0, 165.0),
-            TableColumnAutoFitter.Spec(priceAction, { SignalMetricPresentation.priceAction(it).label }, 78.0, 110.0),
-            TableColumnAutoFitter.Spec(volume, { SignalMetricPresentation.volume(it).label }, 82.0, 160.0),
+                SignalPatternText.parse(it.signalSource)
+                    .measurementText(WatchScorePresentation.calculate(it).label)
+            }, 105.0, 175.0),
+            TableColumnAutoFitter.Spec(move, { percent(it.windowChangePercent) }, 62.0, 105.0, reserveWidth = 4.0),
+            TableColumnAutoFitter.Spec(price, { "${currency.symbol}%,.2f".format(convertPrice(it.symbol, it.price)) }, 62.0, 110.0, reserveWidth = 4.0),
+            TableColumnAutoFitter.Spec(scoreColumn, { SignalMetricPresentation.strength(it).label }, 68.0, 115.0),
+            TableColumnAutoFitter.Spec(outcome, { SignalMetricPresentation.outcome(it).label }, 78.0, 135.0),
+            TableColumnAutoFitter.Spec(priceAction, { SignalMetricPresentation.priceAction(it).label }, 72.0, 100.0),
+            TableColumnAutoFitter.Spec(volume, { SignalMetricPresentation.volume(it).label }, 64.0, 125.0),
             TableColumnAutoFitter.Spec(age, { SignalAgePresentation.label(it.signalWindowLabel) }, 52.0, 90.0),
             TableColumnAutoFitter.Spec(turnover, { compactMoney(convertPrice(it.symbol, it.sessionTurnover)) }, 88.0, 145.0, reserveWidth = 8.0),
             TableColumnAutoFitter.Spec(updated, { time.format(Instant.ofEpochMilli(it.updatedAtMillis)) }, 88.0, 125.0, reserveWidth = 8.0)
-        ), columnLayout.savedWidths())
+        ), columnLayout.savedWidths(), columnLayout.manuallySizedColumnIds())
         columnFactory.onContentChanged = autoFitter::request
         scoreColumn.sortType = TableColumn.SortType.DESCENDING
         table.sortOrder += scoreColumn
@@ -198,7 +199,7 @@ class ScannerPanel(
         maxHeight = Double.MAX_VALUE
     }
 
-    fun savedColumnLayout(): String = columnLayout.capture()
+    fun savedColumnLayout(): String = columnLayout.capture(autoFitter.manuallySizedColumnIds())
 
     fun tableDividerPosition(): Double = tableSplit.dividers.firstOrNull()?.position ?: 0.68
 

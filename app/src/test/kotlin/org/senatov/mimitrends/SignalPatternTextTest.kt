@@ -5,6 +5,14 @@ import kotlin.test.assertEquals
 import kotlin.test.assertNull
 
 class SignalPatternTextTest {
+    @Test
+    fun `measurement follows rendered pattern rows`() {
+        val parsed = SignalPatternText.parse("Early recovery ↑ · recovery watch · weak volume")
+
+        assertEquals("Early recovery ↑\n* Recovery watch * [4/10]\nweak volume",
+            parsed.measurementText("[4/10]"))
+    }
+
     @Test fun `moves signal qualifiers to a second line`() {
         val content = SignalPatternText.parse("Momentum 3m ↓ · relaxed · cooling")
 

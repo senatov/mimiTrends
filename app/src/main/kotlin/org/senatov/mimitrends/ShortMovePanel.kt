@@ -77,7 +77,7 @@ class ShortMovePanel(
             TableColumnAutoFitter.Spec(period, {
                 "${time.format(Instant.ofEpochSecond(it.startedAtEpochSeconds))}–${time.format(Instant.ofEpochSecond(it.endedAtEpochSeconds))}"
             }, 82.0, 105.0)
-        ), columnLayout.savedWidths())
+        ), columnLayout.savedWidths(), columnLayout.manuallySizedColumnIds())
         table.placeholder = Label("Waiting for recent minute bars…")
         table.columnResizePolicy = TableView.UNCONSTRAINED_RESIZE_POLICY
         table.fixedCellSize = 23.0
@@ -100,7 +100,7 @@ class ShortMovePanel(
         autoFitter.request()
     }
 
-    internal fun savedColumnLayout(): String = columnLayout.capture()
+    internal fun savedColumnLayout(): String = columnLayout.capture(autoFitter.manuallySizedColumnIds())
 
     private fun directionLabel(move: ShortMove): String = when (move.pattern) {
         ShortMovePattern.POST_DROP_STRUGGLE -> "◆ POST-DROP"

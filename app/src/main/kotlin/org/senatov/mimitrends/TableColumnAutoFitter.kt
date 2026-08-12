@@ -8,13 +8,16 @@ import javafx.scene.control.TableView
 import javafx.scene.control.Labeled
 import javafx.scene.text.Font
 import javafx.scene.text.Text
+import javafx.scene.input.MouseButton
+import javafx.scene.input.MouseEvent
 import javafx.util.Duration
 import kotlin.math.ceil
 
 class TableColumnAutoFitter<T>(
     private val table: TableView<T>,
     private val specs: List<Spec<T>>,
-    preservedWidths: Map<String, Double> = emptyMap()
+    preservedWidths: Map<String, Double> = emptyMap(),
+    preservedManualIds: Set<String> = emptySet()
 ) {
     data class Spec<T>(
         val column: TableColumn<T, *>,
@@ -27,19 +30,21 @@ class TableColumnAutoFitter<T>(
 
     private val debounce = PauseTransition(Duration.millis(140.0)).apply { setOnFinished { fitNow() } }
     private val manuallySized = mutableSetOf<TableColumn<T, *>>()
+    private var widthsBeforePointerAction = emptyMap<TableColumn<T, *>, Double>()
     private var applying = false
 
     init {
         specs.forEach { spec ->
             preservedWidths[spec.column.id]?.let { width ->
                 spec.column.prefWidth = width.coerceIn(spec.column.minWidth, spec.maxWidth)
-                manuallySized += spec.column
             }
-            spec.column.widthProperty().addListener { _, old, new ->
-                if (!applying && table.scene != null && kotlin.math.abs(new.toDouble() - old.toDouble()) >= WIDTH_STABILITY_EPSILON) {
-                    manuallySized += spec.column
-                }
-            }
+            if (spec.column.id in preservedManualIds) manuallySized += spec.column
+        }
+        table.addEventFilter(MouseEvent.MOUSE_PRESSED) { event ->
+            if (event.button == MouseButton.PRIMARY) widthsBeforePointerAction = specs.associate { it.column to it.column.width }
+        }
+        table.addEventFilter(MouseEvent.MOUSE_RELEASED) { event ->
+            if (event.button == MouseButton.PRIMARY) rememberManualResize()
         }
         table.widthProperty().addListener { _, old, new ->
             if (kotlin.math.abs(new.toDouble() - old.toDouble()) >= WIDTH_STABILITY_EPSILON) request()
@@ -52,6 +57,16 @@ class TableColumnAutoFitter<T>(
             return
         }
         debounce.playFromStart()
+    }
+
+    fun manuallySizedColumnIds(): Set<String> = manuallySized.mapTo(mutableSetOf()) { it.id }
+
+    private fun rememberManualResize() {
+        if (applying) return
+        widthsBeforePointerAction.forEach { (column, width) ->
+            if (kotlin.math.abs(column.width - width) >= WIDTH_STABILITY_EPSILON) manuallySized += column
+        }
+        widthsBeforePointerAction = emptyMap()
     }
 
     private fun fitNow() {

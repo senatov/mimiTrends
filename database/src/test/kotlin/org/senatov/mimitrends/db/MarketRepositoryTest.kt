@@ -42,6 +42,8 @@ class MarketRepositoryTest {
             MinuteBar("LRCX", 120, 104.0, 104.0, 104.0, 104.0, 0.0, VolumeStatus.MISSING), 125_000
         )
         repository.upsertProviderMinuteBar(newerProvider)
+        assertEquals(listOf("TRADEGATE", "EURONEXT"),
+            repository.loadProviderMinuteBars("lrcx", 0).map(ProviderMinuteBar::provider))
         assertEquals("EURONEXT", repository.loadLatestProviderMinuteBar("lrcx", 100)?.provider)
         assertEquals(null, repository.loadLatestProviderMinuteBar("LRCX", 121))
         assertEquals("US5128073062", repository.loadProviderInstrument("TRADEGATE", "LRCX")?.identifier)
@@ -81,7 +83,7 @@ class MarketRepositoryTest {
         assertEquals(1, bars.size); assertEquals(102.0, bars.single().close); assertEquals(750.0, bars.single().volume)
         assertEquals(listOf("SAP.DE"), repository.listSymbols())
         repository.close()
-        assertFalse(indexExists(database.toString(), "idx_minute_symbol_time"))
+        assertFalse(legacyMinuteIndexExists(database.toString()))
     }
 
     @Test fun `persists explicit volume quality`() {
@@ -127,10 +129,10 @@ class MarketRepositoryTest {
         repository.close()
     }
 
-    private fun indexExists(database: String, name: String): Boolean =
+    private fun legacyMinuteIndexExists(database: String): Boolean =
         DriverManager.getConnection("jdbc:sqlite:$database").use { connection ->
             connection.prepareStatement("SELECT 1 FROM sqlite_schema WHERE type='index' AND name=?").use { statement ->
-                statement.setString(1, name)
+                statement.setString(1, "idx_minute_symbol_time")
                 statement.executeQuery().use { it.next() }
             }
         }

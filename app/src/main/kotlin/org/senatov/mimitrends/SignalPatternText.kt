@@ -1,6 +1,14 @@
 package org.senatov.mimitrends
 
 internal data class SignalPatternText(val primary: String, val qualifiers: String?, val watchLabel: String?) {
+    fun measurementText(scoreLabel: String): String = buildList {
+        add(primary)
+        watchLabel?.let { add("$it $scoreLabel") }
+            ?: qualifiers?.let { add("$it $scoreLabel") }
+            ?: add(scoreLabel)
+        if (watchLabel != null) qualifiers?.let(::add)
+    }.joinToString("\n")
+
     companion object {
         fun parse(source: String): SignalPatternText {
             val parts = source.split(" · ").map(String::trim).filter(String::isNotEmpty)

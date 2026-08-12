@@ -8,10 +8,7 @@ import org.senatov.mimitrends.charts.TrendChartView
 import org.senatov.mimitrends.db.MarketRepository
 import org.senatov.mimitrends.db.AnalyticsRepository
 import org.senatov.mimitrends.log.LogTag
-import org.senatov.mimitrends.model.MinuteBar
-import org.senatov.mimitrends.model.ProviderMinuteBar
-import org.senatov.mimitrends.model.ScannerCriteria
-import org.senatov.mimitrends.model.ScanResult
+import org.senatov.mimitrends.model.*
 import org.senatov.mimitrends.scanner.ScannerEngine
 import org.senatov.mimitrends.scanner.ScannerSettingsService
 import org.senatov.mimitrends.scanner.MarketCalendar
@@ -22,10 +19,7 @@ import org.senatov.mimitrends.marketdata.YahooFinanceClient
 import org.senatov.mimitrends.marketdata.CompanyLogoClient
 import org.slf4j.LoggerFactory
 import javafx.util.Duration
-import java.util.concurrent.CompletableFuture
-import java.util.concurrent.Executors
-import java.util.concurrent.ScheduledFuture
-import java.util.concurrent.TimeUnit
+import java.util.concurrent.*
 import java.util.function.BiConsumer
 import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.atomic.AtomicBoolean
@@ -68,6 +62,9 @@ class MainController(
         initialTableDivider = initialTableDivider,
         loadProfile = { symbol -> profileService.load(symbol) }
     )
+    private val shortMoveRefresh = ShortMoveRefreshCoordinator(shortMoveLoader, log) { moves ->
+        Platform.runLater { if (!closing.get()) shortMovePanel.show(moves) }
+    }
     private val batchScheduler = Executors.newSingleThreadScheduledExecutor { task ->
         Thread(task, "mimitrends-scanner-rotation").apply { isDaemon = true }
     }
@@ -177,6 +174,7 @@ class MainController(
         researchReport.close()
         observationUiBridge.close()
         try {
+            shortMoveRefresh.close()
             ApplicationResourceCloser.close(focusedSignals, priorityScanner, tradegateProvider, euronextProvider,
                 tableQuoteProviders, arivaReferences,
                 { finnhubClient?.close() }, batchScheduler, repository, analytics, log)
@@ -203,6 +201,7 @@ class MainController(
         scan = scan@ {
             if (closing.get()) return@scan
             val selectedSymbols = MarketUniverseSelector.select(scannerCriteria)
+            shortMoveRefresh.replaceSymbols(selectedSymbols)
             val symbols = selectedSymbols.filter { MarketCalendar.isOpen(it) }
             log.info(LogTag.API, "scan started symbols={} recentWindow={}m", symbols.size, criteria.maxSignalAgeMinutes)
             if (symbols.isEmpty()) {
@@ -301,6 +300,7 @@ class MainController(
                 dataStatus = observation.provider
             )
         }
+        shortMoveRefresh.request()
     }
 
     private fun openScannerResult(result: ScanResult) {

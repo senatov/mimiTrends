@@ -165,7 +165,7 @@ internal class ScannerColumnFactory(
                 }
             }
         }
-        configure(125.0, 82.0)
+            configure(110.0, 55.0)
     }
 
     fun number(

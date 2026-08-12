@@ -40,15 +40,20 @@ internal class TableColumnLayout<T>(
 
     fun savedWidths(): Map<String, Double> = savedEntries.associate { it.id to it.width }
 
-    fun capture(): String = table.columns.joinToString(";") { column ->
-        "${column.id},${column.isVisible},${"%.1f".format(java.util.Locale.ROOT, column.width)}"
+    fun manuallySizedColumnIds(): Set<String> = savedEntries.filter(Entry::manual).mapTo(mutableSetOf(), Entry::id)
+
+    fun capture(manuallySizedIds: Set<String> = emptySet()): String = table.columns.joinToString(";") { column ->
+        "${column.id},${column.isVisible},${"%.1f".format(java.util.Locale.ROOT, column.width)}," +
+            "${column.id in manuallySizedIds}"
     }
 
     private fun parse(value: String): List<Entry> = value.split(';').mapNotNull { encoded ->
         val parts = encoded.split(',')
         val width = parts.getOrNull(2)?.toDoubleOrNull() ?: return@mapNotNull null
-        parts.firstOrNull()?.takeIf(String::isNotBlank)?.let { Entry(it, parts.getOrNull(1).toBoolean(), width) }
+        parts.firstOrNull()?.takeIf(String::isNotBlank)?.let {
+            Entry(it, parts.getOrNull(1).toBoolean(), width, parts.getOrNull(3).toBoolean())
+        }
     }
 
-    private data class Entry(val id: String, val visible: Boolean, val width: Double)
+    private data class Entry(val id: String, val visible: Boolean, val width: Double, val manual: Boolean)
 }

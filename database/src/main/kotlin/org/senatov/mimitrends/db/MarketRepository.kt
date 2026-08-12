@@ -179,6 +179,9 @@ class MarketRepository(
             }
         }
 
+    fun loadProviderMinuteBars(symbol: String, fromEpochSeconds: Long): List<ProviderMinuteBar> =
+        database.locked { AllProviderBarsReader.load(connection, symbol, fromEpochSeconds) }
+
     fun loadLatestProviderMinuteBar(symbol: String, notBeforeEpochSeconds: Long): ProviderMinuteBar? =
         database.locked { LatestProviderBarReader.load(connection, symbol, notBeforeEpochSeconds) }
 
