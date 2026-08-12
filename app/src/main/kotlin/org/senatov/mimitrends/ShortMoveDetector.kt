@@ -38,32 +38,23 @@ internal object ShortMoveDetector {
         val recent = bars.filter { it.minuteEpochSeconds >= latest.minuteEpochSeconds - 14 * 60 }
             .sortedBy(MinuteBar::minuteEpochSeconds)
         if (recent.size < 4) return null
-        val closes = recent.map(MinuteBar::close)
         for (dropEnd in 1 until recent.lastIndex) {
             val postBars = recent.size - dropEnd - 1
             if (postBars < 2) continue
-            val dropStartRange = (dropEnd - 2).coerceAtLeast(0) until dropEnd
-            for (dropStart in dropStartRange) {
-                val startPrice = if (dropStart == 0) recent[dropStart].open else closes[dropStart - 1]
-                val bottomPrice = closes[dropEnd]
-                if (startPrice <= 0.0 || bottomPrice <= 0.0) continue
-                val dropPercent = (bottomPrice / startPrice - 1.0) * 100.0
-                if (dropPercent > -MIN_DROP_PERCENT) continue
-                val post = closes.subList(dropEnd + 1, closes.size)
-                val postChanges = listOf(bottomPrice) + post
-                val largestPostStep = postChanges.zipWithNext { left, right ->
-                    kotlin.math.abs((right / left - 1.0) * 100.0)
-                }.maxOrNull() ?: continue
-                val recovery = (latest.close / bottomPrice - 1.0) * 100.0
-                val retainedDrop = (latest.close / startPrice - 1.0) * 100.0
-                val quietEnough = largestPostStep <= kotlin.math.abs(dropPercent) * MAX_POST_STEP_SHARE
-                val remainsNearLow = recovery <= kotlin.math.abs(dropPercent) * MAX_RECOVERY_SHARE
-                val dropRetained = retainedDrop <= -kotlin.math.abs(dropPercent) * MIN_RETAINED_SHARE
-                if (quietEnough && remainsNearLow && dropRetained) {
-                    return ShortMove(symbol, retainedDrop, startPrice, latest.close,
-                        recent[dropStart].minuteEpochSeconds, latest.minuteEpochSeconds, recent.size,
-                        ShortMovePattern.POST_DROP_STRUGGLE)
-                }
+            val dropStart = recent.subList(0, dropEnd).indices.maxByOrNull { recent[it].high } ?: continue
+            val startPrice = recent[dropStart].high
+            val bottomPrice = recent[dropEnd].low
+            if (startPrice <= 0.0 || bottomPrice <= 0.0 || latest.close <= 0.0) continue
+            val dropPercent = (bottomPrice / startPrice - 1.0) * 100.0
+            if (dropPercent > -MIN_DROP_PERCENT) continue
+            val recovery = (latest.close / bottomPrice - 1.0) * 100.0
+            val retainedDrop = (latest.close / startPrice - 1.0) * 100.0
+            val remainsNearLow = recovery <= kotlin.math.abs(dropPercent) * MAX_RECOVERY_SHARE
+            val dropRetained = retainedDrop <= -kotlin.math.abs(dropPercent) * MIN_RETAINED_SHARE
+            if (remainsNearLow && dropRetained) {
+                return ShortMove(symbol, retainedDrop, startPrice, latest.close,
+                    recent[dropStart].minuteEpochSeconds, latest.minuteEpochSeconds, recent.size,
+                    ShortMovePattern.POST_DROP_STRUGGLE)
             }
         }
         return null
@@ -86,7 +77,6 @@ internal object ShortMoveDetector {
     }
 
     private const val MIN_DROP_PERCENT = 0.7
-    private const val MAX_POST_STEP_SHARE = 0.45
-    private const val MAX_RECOVERY_SHARE = 0.45
+    private const val MAX_RECOVERY_SHARE = 0.60
     private const val MIN_RETAINED_SHARE = 0.50
 }

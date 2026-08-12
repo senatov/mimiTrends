@@ -58,6 +58,23 @@ class ShortMoveDetectorTest {
         assertEquals(ShortMovePattern.DIRECTIONAL, result.pattern)
     }
 
+    @Test
+    fun `keeps the full retained drop after volatile trading near the low`() {
+        val now = 30_000L
+        val closes = listOf(470.0, 470.5, 459.0, 457.5, 461.0, 456.5, 459.8)
+        val recent = closes.mapIndexed { index, close ->
+            bar("LVMH", now - (closes.lastIndex - index) * 60,
+                if (index == 0) 470.0 else closes[index - 1], close)
+        }
+
+        val result = ShortMoveDetector.rank(mapOf("LVMH" to recent), now).single()
+
+        assertEquals(ShortMovePattern.POST_DROP_STRUGGLE, result.pattern)
+        assertTrue(result.changePercent < -2.0)
+        assertEquals(470.5, result.open)
+        assertEquals(459.8, result.close)
+    }
+
     private fun bars(symbol: String, end: Long, close: Double): List<MinuteBar> =
         (0 until 5).map { index ->
             val open = 100.0
