@@ -154,6 +154,11 @@ class TrendChartView : StackPane() {
             priceMultiplier, currencySymbol, signal, trades)
         renderRequest(requireNotNull(lastRequest))
     }
+
+    fun showFullHistory() {
+        historyButton.isSelected = true
+    }
+
     private fun renderRequest(request: TrendChartRenderRequest) {
         val focused = focusButton.isSelected && request.signal != null
         val tradeEpochs = if (tradesButton.isSelected) request.trades.flatMap { trade ->

@@ -112,7 +112,12 @@ class MainController(
     )
     private val shortMoveSelection = ShortMoveSelectionController(
         { marketData.loadPriorityResult(it, scannerCriteria) }, { it == currentSymbol && !closing.get() },
-        { currentSymbol = it; setLoading(true); setStatus("Refreshing market data: $it") }
+        {
+            currentSymbol = it
+            trendChart.showFullHistory()
+            setLoading(true)
+            setStatus("Refreshing market data: $it")
+        }
     ) { symbol, result, error ->
         if (error != null) {
             log.warn(LogTag.API, "short-move chart refresh failed symbol={}", symbol, error)
@@ -316,6 +321,7 @@ class MainController(
         log.debug(LogTag.UI, "openScannerResult(symbol={}, age={})", result.symbol, result.signalAgeMinutes)
         currentSymbol = result.symbol
         currentSignal = result
+        trendChart.showFullHistory()
         loadLocalChart(result.symbol)
     }
     private fun applyFocusedSelection(result: ScanResult) {

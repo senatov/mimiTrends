@@ -124,6 +124,21 @@ class ShortMoveDetectorTest {
         assertEquals(0.0, result.changePercent, 1e-9)
     }
 
+    @Test
+    fun `keeps only the strongest share class for one company`() {
+        val moves = listOf(
+            move("GOOG", -3.13),
+            move("GOOGL", -2.89),
+            move("PLTR", -2.74)
+        )
+
+        val distinct = ShortMoveCompanyRanking.distinct(moves, 10) { symbol ->
+            if (symbol.startsWith("GOOG")) "Alphabet Inc." else "Palantir Technologies Inc."
+        }
+
+        assertEquals(listOf("GOOG", "PLTR"), distinct.map(ShortMove::symbol))
+    }
+
     private fun bars(symbol: String, end: Long, close: Double): List<MinuteBar> =
         (0 until 5).map { index ->
             val open = 100.0
@@ -134,4 +149,7 @@ class ShortMoveDetectorTest {
 
     private fun bar(symbol: String, time: Long, open: Double, close: Double) =
         MinuteBar(symbol, time, open, maxOf(open, close), minOf(open, close), close, 100.0)
+
+    private fun move(symbol: String, change: Double) =
+        ShortMove(symbol, change, 100.0, 100.0 + change, 0L, 60L, 2)
 }

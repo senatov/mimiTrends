@@ -105,4 +105,23 @@ class BrokerTradeAnnotationsTest {
         assertEquals(entryCandle, anchor)
         assertTrue(anchor.y > 99.0, "connector must terminate on the candle, not the chart floor")
     }
+
+    @Test fun `keeps nearby trade cards readable and separated on a long range`() {
+        val renderer = BrokerTradeAnnotations(XYPlot())
+        val bars = (0L..1_000L).map { minute ->
+            MinuteBar("TEST", minute * 60L, 100.0, 101.0, 99.0, 100.0, 1_000.0)
+        }
+        val trades = listOf(
+            BrokerTrade("TEST", null, 1.0, 120L, 100.0, 480L, 101.0, 1.0, 1.0, 0.0, "EUR"),
+            BrokerTrade("TEST", null, 1.0, 180L, 100.0, 540L, 101.0, 1.0, 1.0, 0.0, "EUR")
+        )
+
+        renderer.render(trades, bars, bars, 1.0)
+
+        val cards = renderer.renderedCardBounds()
+        assertEquals(2, cards.size)
+        assertTrue(cards.all { it.width >= 0.15 * 60_000_000.0 })
+        assertTrue(cards[0].right <= cards[1].left || cards[1].right <= cards[0].left ||
+            cards[0].top <= cards[1].bottom || cards[1].top <= cards[0].bottom)
+    }
 }

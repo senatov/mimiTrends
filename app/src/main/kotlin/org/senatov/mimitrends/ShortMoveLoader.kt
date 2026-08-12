@@ -16,8 +16,26 @@ internal class ShortMoveLoader(private val repository: MarketRepository) {
                 nowEpochSeconds
             )
         }
-        return ShortMoveDetector.rank(bars, nowEpochSeconds)
+        return ShortMoveCompanyRanking.distinct(
+            ShortMoveDetector.rank(bars, nowEpochSeconds, Int.MAX_VALUE),
+            MAX_MOVES
+        ) { symbol -> repository.loadCompanyProfile(symbol)?.name }
     }
+
+    private companion object {
+        const val MAX_MOVES = 10
+    }
+}
+
+internal object ShortMoveCompanyRanking {
+    fun distinct(
+        ranked: List<ShortMove>,
+        limit: Int,
+        companyName: (String) -> String?
+    ): List<ShortMove> = ranked.distinctBy { move ->
+        companyName(move.symbol)?.let { CompanySearchTerm.from(it, move.symbol).lowercase() }
+            ?: move.symbol.uppercase()
+    }.take(limit)
 }
 
 internal object ShortMoveBarComposer {
