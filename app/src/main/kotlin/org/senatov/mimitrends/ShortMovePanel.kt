@@ -142,6 +142,8 @@ class ShortMovePanel(
 
     private fun directionLabel(move: ShortMove): String = when (move.pattern) {
         ShortMovePattern.POST_DROP_STRUGGLE -> "◆ POST-DROP"
+        ShortMovePattern.CONFIRMED_EXTENDED_DROP -> "◆ CONFIRMED DROP"
+        ShortMovePattern.RECOVERY_AFTER_EXTENDED_DROP -> "◆ DROP RECOVERY"
         ShortMovePattern.DIRECTIONAL -> if (move.changePercent >= 0.0) "▲ UP" else "▼ DOWN"
     }
 
@@ -176,6 +178,8 @@ class ShortMovePanel(
         private companion object {
             fun directionText(move: ShortMove): String = when (move.pattern) {
                 ShortMovePattern.POST_DROP_STRUGGLE -> "◆ POST-DROP"
+                ShortMovePattern.CONFIRMED_EXTENDED_DROP -> "◆ CONFIRMED DROP"
+                ShortMovePattern.RECOVERY_AFTER_EXTENDED_DROP -> "◆ DROP RECOVERY"
                 ShortMovePattern.DIRECTIONAL -> if (move.changePercent >= 0.0) "▲ UP" else "▼ DOWN"
             }
         }

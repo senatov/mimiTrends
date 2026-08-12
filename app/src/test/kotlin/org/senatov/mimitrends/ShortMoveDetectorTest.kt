@@ -108,6 +108,61 @@ class ShortMoveDetectorTest {
     }
 
     @Test
+    fun `confirms a retained extended decline after twenty five minutes`() {
+        val now = 80_000L
+        val bars = (0..36).map { index ->
+            val close = when {
+                index <= 11 -> 119.44 - index * (1.0 / 11.0)
+                else -> 118.44 + (index - 11) * (0.30 / 25.0)
+            }
+            val previous = if (index == 0) 119.44 else when {
+                index - 1 <= 11 -> 119.44 - (index - 1) * (1.0 / 11.0)
+                else -> 118.44 + (index - 12) * (0.30 / 25.0)
+            }
+            bar("PEP", now - (36 - index) * 60, previous, close)
+        }
+
+        val result = ShortMoveDetector.rank(mapOf("PEP" to bars), now).single()
+
+        assertEquals(ShortMovePattern.CONFIRMED_EXTENDED_DROP, result.pattern)
+        assertEquals(119.44, result.open, 1e-9)
+        assertEquals(118.74, result.close, 1e-9)
+        assertTrue(result.changePercent < -0.5)
+    }
+
+    @Test
+    fun `does not confirm an extended decline before observation period matures`() {
+        val now = 90_000L
+        val bars = (0..30).map { index ->
+            val close = 120.0 - minOf(index, 10) * 0.1
+            bar("EARLY", now - (30 - index) * 60, close, close)
+        }
+
+        val result = ShortMoveDetector.rank(mapOf("EARLY" to bars), now).single()
+
+        assertEquals(ShortMovePattern.DIRECTIONAL, result.pattern)
+    }
+
+    @Test
+    fun `detects danaher recovery after an extended drop at sixteen fifty eight`() {
+        val now = 100_000L
+        val prices = buildList {
+            repeat(16) { index -> add(178.59 - index * (2.38 / 15.0)) }
+            repeat(30) { index -> add(176.21 + index * (0.61 / 29.0)) }
+            addAll(listOf(176.82, 177.03, 177.12, 177.38, 177.33, 177.32, 177.27, 177.37, 177.45))
+        }
+        val bars = prices.mapIndexed { index, close ->
+            bar("DHR", now - (prices.lastIndex - index) * 60,
+                if (index == 0) close else prices[index - 1], close)
+        }
+
+        val result = ShortMoveDetector.rank(mapOf("DHR" to bars), now).single()
+
+        assertEquals(ShortMovePattern.RECOVERY_AFTER_EXTENDED_DROP, result.pattern)
+        assertTrue(result.changePercent < -0.5)
+    }
+
+    @Test
     fun `does not treat distant sparse bars as a five minute collapse`() {
         val now = 70_000L
         val session = listOf(

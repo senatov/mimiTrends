@@ -2,6 +2,7 @@ package org.senatov.mimitrends
 
 import org.senatov.mimitrends.log.LogTag
 import org.senatov.mimitrends.model.DisplayCurrency
+import org.senatov.mimitrends.model.MinuteBar
 import org.slf4j.LoggerFactory
 import java.net.URI
 import java.net.http.HttpClient
@@ -28,9 +29,7 @@ class ExchangeRateService(private val cachePath: Path = Path.of(System.getProper
     }
 
     fun convert(symbol: String, value: Double, target: DisplayCurrency): Double {
-        val sourceIsEuro = symbol.uppercase().let {
-            it.endsWith(".DE") || it.endsWith(".F") || it.endsWith(".PA") || it.endsWith(".AS")
-        }
+        val sourceIsEuro = EURO_SUFFIXES.any(symbol.uppercase()::endsWith)
         return when (target) {
             DisplayCurrency.EUR -> if (sourceIsEuro) value else usdToEur(value)
             DisplayCurrency.USD -> if (sourceIsEuro) eurToUsd(value) else value
@@ -42,6 +41,25 @@ class ExchangeRateService(private val cachePath: Path = Path.of(System.getProper
         source.equals("USD", ignoreCase = true) && target == DisplayCurrency.EUR -> usdToEur(value)
         source.equals("EUR", ignoreCase = true) && target == DisplayCurrency.USD -> eurToUsd(value)
         else -> value
+    }
+
+    fun convertBar(symbol: String, bar: MinuteBar, target: DisplayCurrency = DisplayCurrency.EUR): MinuteBar {
+        val factor = convert(symbol, 1.0, target)
+        return bar.scalePrices(factor)
+    }
+
+    fun convertBar(bar: MinuteBar, sourceCurrency: String, target: DisplayCurrency = DisplayCurrency.EUR): MinuteBar {
+        val factor = convertCurrency(1.0, sourceCurrency, target)
+        return bar.scalePrices(factor)
+    }
+
+    private fun MinuteBar.scalePrices(factor: Double): MinuteBar {
+        return copy(
+            open = open * factor,
+            high = high * factor,
+            low = low * factor,
+            close = close * factor
+        )
     }
 
     fun refresh(): CompletableFuture<Double> {
@@ -66,5 +84,9 @@ class ExchangeRateService(private val cachePath: Path = Path.of(System.getProper
         log.debug(LogTag.IO, "save(rate={})", rate)
         Files.createDirectories(cachePath.parent)
         Files.newOutputStream(cachePath).use { Properties().apply { setProperty("usdPerEur", rate.toString()) }.store(it, "ECB reference rate") }
+    }
+
+    private companion object {
+        val EURO_SUFFIXES = listOf(".DE", ".F", ".PA", ".AS", ".MI", ".HE")
     }
 }

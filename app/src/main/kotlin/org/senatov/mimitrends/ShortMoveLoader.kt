@@ -6,13 +6,18 @@ import org.senatov.mimitrends.model.ProviderMinuteBar
 import org.senatov.mimitrends.scanner.MarketCalendar
 import java.time.Instant
 
-internal class ShortMoveLoader(private val repository: MarketRepository) {
+internal class ShortMoveLoader(
+    private val repository: MarketRepository,
+    private val exchangeRates: ExchangeRateService
+) {
     fun load(symbols: Collection<String>, nowEpochSeconds: Long = java.time.Instant.now().epochSecond): List<ShortMove> {
         val bars = symbols.associateWith { symbol ->
             val from = MarketCalendar.sessionStart(symbol, Instant.ofEpochSecond(nowEpochSeconds)).epochSecond
             ShortMoveBarComposer.compose(
-                repository.loadMinuteBars(symbol, from),
-                repository.loadProviderMinuteBars(symbol, from),
+                repository.loadMinuteBars(symbol, from).map { exchangeRates.convertBar(symbol, it) },
+                repository.loadProviderMinuteBars(symbol, from).map { observation ->
+                    observation.copy(bar = exchangeRates.convertBar(observation.bar, observation.currency))
+                },
                 nowEpochSeconds
             )
         }

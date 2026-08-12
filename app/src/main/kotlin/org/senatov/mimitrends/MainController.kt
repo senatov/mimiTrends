@@ -34,8 +34,9 @@ class MainController(
     private val log = LoggerFactory.getLogger(MainController::class.java)
     private val repository = MarketRepository()
     private val analytics = AnalyticsRepository()
+    private val exchangeRates = ExchangeRateService()
     private val savedResultQuotes = SavedResultQuoteRefresher(repository)
-    private val shortMoveLoader = ShortMoveLoader(repository)
+    private val shortMoveLoader = ShortMoveLoader(repository, exchangeRates)
     private var currentSymbol = initialSymbol
     private var currentSignal: ScanResult? = null
     private var selectedRangeValue = initialRange.takeIf { it in setOf("1D", "5D", "1M", "3M", "6M", "1Y") } ?: "3M"
@@ -82,7 +83,6 @@ class MainController(
     private var rotationTask: ScheduledFuture<*>? = null
     private val scanGeneration = AtomicLong()
     private val closing = AtomicBoolean()
-    private val exchangeRates = ExchangeRateService()
     private val chartDataLoader = ChartDataLoader(repository, analytics, exchangeRates)
     private val initialDivider = initialDividerPosition.coerceIn(0.15, 0.75)
     private val contentSplitPane = SplitPane()
@@ -377,8 +377,9 @@ class MainController(
                         val bars = chartData.bars
                         val currency = scannerCriteria.displayCurrency
                         trendChart.renderMinuteBars(
-                            symbol, bars, selectedRangeValue, displayPrice(symbol, 1.0), currency.symbol,
-                            currentSignal?.takeIf { it.symbol == symbol }, chartData.companyName, chartData.trades
+                            symbol, bars, selectedRangeValue, 1.0, currency.symbol,
+                            currentSignal?.takeIf { it.symbol == symbol }?.inCurrency(symbol),
+                            chartData.companyName, chartData.trades
                         )
                         setStatus("Read SQLite: $symbol · ${bars.size} minute bars · $selectedRangeValue")
                     } else {
@@ -406,4 +407,9 @@ class MainController(
     }
 
     private fun displayPrice(symbol: String, value: Double): Double = exchangeRates.convert(symbol, value, scannerCriteria.displayCurrency)
+
+    private fun ScanResult.inCurrency(symbol: String): ScanResult = copy(
+        price = displayPrice(symbol, price),
+        signalPrice = displayPrice(symbol, signalPrice)
+    )
 }
