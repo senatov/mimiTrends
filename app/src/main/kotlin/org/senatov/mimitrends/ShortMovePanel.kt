@@ -71,16 +71,16 @@ class ShortMovePanel(
         table.columns.setAll(company, direction, move, period)
         columnLayout = TableColumnLayout(table, savedColumns).also(TableColumnLayout<ShortMove>::install)
         autoFitter = TableColumnAutoFitter(table, listOf(
-            TableColumnAutoFitter.Spec(company, { companyNames[it.symbol] ?: it.symbol }, 90.0, 330.0),
-            TableColumnAutoFitter.Spec(direction, ::directionLabel, 78.0, 145.0),
-            TableColumnAutoFitter.Spec(move, { "%+.2f%%".format(it.changePercent) }, 68.0, 105.0),
+            TableColumnAutoFitter.Spec(company, { companyNames[it.symbol] ?: it.symbol }, 80.0, 240.0),
+            TableColumnAutoFitter.Spec(direction, ::directionLabel, 68.0, 105.0),
+            TableColumnAutoFitter.Spec(move, { "%+.2f%%".format(it.changePercent) }, 54.0, 76.0),
             TableColumnAutoFitter.Spec(period, {
                 "${time.format(Instant.ofEpochSecond(it.startedAtEpochSeconds))}–${time.format(Instant.ofEpochSecond(it.endedAtEpochSeconds))}"
-            }, 94.0, 135.0)
+            }, 82.0, 105.0)
         ), columnLayout.savedWidths())
         table.placeholder = Label("Waiting for recent minute bars…")
         table.columnResizePolicy = TableView.UNCONSTRAINED_RESIZE_POLICY
-        table.fixedCellSize = 25.0
+        table.fixedCellSize = 23.0
         VBox.setVgrow(table, Priority.ALWAYS)
         table.styleClass += listOf("scanner-table", "short-move-table")
         table.setRowFactory {

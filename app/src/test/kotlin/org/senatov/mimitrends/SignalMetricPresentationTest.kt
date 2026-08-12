@@ -71,7 +71,7 @@ class SignalMetricPresentationTest {
     @Test fun `describes a statistically rare candle without promising strength`() {
         val result = TestScanResult.create(anomalyScore = 2.8)
 
-        assertEquals("Rare impulse ↑", SignalMetricPresentation.priceAction(result).label)
+        assertEquals("↑↑", SignalMetricPresentation.priceAction(result).label)
     }
 
     @Test fun `presents an extended rise as a wait state`() {
@@ -79,7 +79,7 @@ class SignalMetricPresentationTest {
 
         val metric = SignalMetricPresentation.priceAction(result)
 
-        assertEquals("Wait for pullback", metric.label)
+        assertEquals("↑↑", metric.label)
         assertTrue(metric.details.contains("not a buy signal"))
     }
 }

@@ -309,12 +309,17 @@
 }
 .table-section-header { -fx-padding: 0 3px 2px 3px; }
 .table-section-title {
-    -fx-font-family: "SF Pro Display", "Helvetica Neue", "System";
-    -fx-font-size: 15px;
+    -fx-font-family: "System";
+    -fx-font-size: 14px;
     -fx-font-weight: 600;
     -fx-text-fill: #17365f;
 }
-.short-move-caption { -fx-font-size: 11px; -fx-text-fill: #526b89; }
+.short-move-caption {
+    -fx-font-family: "System";
+    -fx-font-size: 10px;
+    -fx-font-weight: 400;
+    -fx-text-fill: #526b89;
+}
 .short-move-table .table-cell.short-move-up { -fx-text-fill: #16834a; -fx-font-weight: 600; }
 .short-move-table .table-cell.short-move-down { -fx-text-fill: #bd3c3c; -fx-font-weight: 600; }
 .short-move-table .table-cell.short-move-struggle { -fx-text-fill: #8a5600; -fx-font-weight: 600; }
@@ -443,8 +448,8 @@
     -fx-border-radius: 9px;
     -fx-border-width: 1px;
     -fx-padding: 0;
-    -fx-font-family: "SF Pro Text", "Helvetica Neue", "System";
-    -fx-font-size: 13px;
+    -fx-font-family: "System";
+    -fx-font-size: 11px;
     -fx-font-weight: 400;
 }
 .scanner-table .column-header-background,
@@ -453,13 +458,13 @@
 .scanner-table .column-header {
     -fx-border-color: transparent -mimi-table-grid #bcc4cc transparent;
     -fx-border-width: 0 1px 1px 0;
-    -fx-padding: 3px 7px;
+    -fx-padding: 2px 5px;
 }
 .scanner-table .column-header .label {
-    -fx-font-family: "SF Pro Display", "Helvetica Neue", sans-serif;
-    -fx-font-size: 14px;
+    -fx-font-family: "System";
+    -fx-font-size: 11px;
     -fx-text-fill: #17365f;
-    -fx-font-weight: 500;
+    -fx-font-weight: 600;
     -fx-alignment: center-left;
 }
 .scanner-table .table-row-cell:even { -fx-background-color: -mimi-row-even; }
@@ -473,31 +478,31 @@
 .scanner-table .table-row-cell:hover { -fx-background-color: derive(-mimi-selection, 22%); }
 .scanner-table .table-cell {
     -fx-text-fill: -mimi-table-text;
-    -fx-font-family: "SF Pro Text", "Helvetica Neue", "System";
-    -fx-font-size: 13px;
+    -fx-font-family: "System";
+    -fx-font-size: 11px;
     -fx-font-weight: 400;
     -fx-border-color: transparent -mimi-table-grid rgba(156,169,181,0.28) transparent;
     -fx-border-width: 0 1px 1px 0;
-    -fx-padding: 3px 7px;
+    -fx-padding: 2px 5px;
     -fx-alignment: center-left;
 }
 .scanner-table .table-row-cell:selected .table-cell { -fx-text-fill: -mimi-table-text; }
 .scanner-table .pattern-content { -fx-padding: 0; }
 .scanner-table .pattern-primary {
-    -fx-font-family: "SF Pro Text", "Helvetica Neue", "System";
-    -fx-font-size: 12.5px;
+    -fx-font-family: "System";
+    -fx-font-size: 10.5px;
     -fx-font-weight: 400;
 }
 .scanner-table .pattern-qualifiers {
-    -fx-font-family: "SF Pro Text", "Helvetica Neue", "System";
-    -fx-font-size: 10.5px;
+    -fx-font-family: "System";
+    -fx-font-size: 9px;
     -fx-font-weight: 400;
     -fx-text-fill: #273746;
 }
 .scanner-table .pattern-watch-badge,
 .scanner-table .table-row-cell:selected .pattern-watch-badge {
-    -fx-font-family: "SF Pro Display", "Helvetica Neue", "System";
-    -fx-font-size: 14px;
+    -fx-font-family: "System";
+    -fx-font-size: 11px;
     -fx-font-weight: 700;
     -fx-text-fill: #7f1734;
 }
@@ -513,8 +518,8 @@
     -fx-border-insets: 0;
     -fx-border-radius: 1px;
     -fx-text-fill: #123a63;
-    -fx-font-family: "SF Pro Text", "Helvetica Neue", "System";
-    -fx-font-size: 13px;
+    -fx-font-family: "System";
+    -fx-font-size: 11px;
     -fx-font-weight: 400;
 }
 .company-logo { -fx-background-radius: 4px; }

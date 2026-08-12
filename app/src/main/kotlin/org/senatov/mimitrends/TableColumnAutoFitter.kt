@@ -95,8 +95,8 @@ class TableColumnAutoFitter<T>(
     private companion object {
         const val SAMPLE_LIMIT = 500
         const val SAMPLE_HEAD = 200
-        const val CONTENT_INSETS = 20.0
-        const val HEADER_RESERVE = 38.0
+        const val CONTENT_INSETS = 12.0
+        const val HEADER_RESERVE = 22.0
         const val WIDTH_STABILITY_EPSILON = 1.0
     }
 }

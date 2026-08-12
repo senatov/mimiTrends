@@ -76,16 +76,16 @@ internal object SignalMetricPresentation {
     fun priceAction(result: ScanResult): SignalMetric {
         val arrow = directionArrow(result)
         if (result.signalSource.startsWith("Oversold decline")) {
-            return SignalMetric("Oversold watch ↓", "#9a6717", 600,
+            return SignalMetric(arrows(result), "#9a6717", 600,
                 "Exceptional selloff near its current low. A bottom has not been confirmed; wait for a higher low and positive recovery slope.")
         }
         if (result.signalSource.contains("wait for pullback")) {
-            return SignalMetric("Wait for pullback", "#9a6717", 600,
+            return SignalMetric(arrows(result), "#9a6717", 600,
                 "The rising structure remains valid, but price is extended above its earlier path or has stalled near a local high. " +
                     "Entry timing is currently unfavorable; this is a watch state, not a buy signal.")
         }
         if (!result.priceAnomaly.isFinite() && !result.rangeAnomaly.isFinite()) {
-            return SignalMetric("Steady trend $arrow", "#17365f", 500,
+            return SignalMetric(arrows(result), "#17365f", 500,
                 "Persistent price trend over ${result.signalWindowLabel}; no single exceptional candle.")
         }
         val jump = result.priceAnomaly.finiteOrZero()
@@ -96,8 +96,8 @@ internal object SignalMetricPresentation {
             jump >= 4.0 -> "Rare impulse $arrow" to if (arrow == "↑") "#137b50" else "#b23b48"
             else -> "Elevated move $arrow" to Level.NOTABLE.color
         }
-        return SignalMetric(label, color, if (jump >= 4.0 || range >= 5.0) 600 else 500,
-            "Price jump: %.2fσ\nFull candle range: %.2fσ\n10-minute move: %+.2f%%".format(jump, range, result.windowChangePercent))
+        return SignalMetric(arrows(result), color, if (jump >= 4.0 || range >= 5.0) 600 else 500,
+            "$label\nPrice jump: %.2fσ\nFull candle range: %.2fσ\n10-minute move: %+.2f%%".format(jump, range, result.windowChangePercent))
     }
 
     fun volume(result: ScanResult): SignalMetric {
@@ -129,6 +129,11 @@ internal object SignalMetricPresentation {
         result.priceAnomaly.finiteOrZero() / 3.0,
         result.rangeAnomaly.finiteOrZero() / 3.5
     )
+
+    private fun arrows(result: ScanResult): String {
+        val count = kotlin.math.ceil(priceActionSeverity(result)).toInt().coerceIn(1, 5)
+        return directionArrow(result).repeat(count)
+    }
 
     fun volumeSeverity(result: ScanResult): Double = maxOf(
         result.volumeAnomaly.finiteOrZero() / 2.0,

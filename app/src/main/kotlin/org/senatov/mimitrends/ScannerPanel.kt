@@ -136,7 +136,7 @@ class ScannerPanel(
         val outcome = columnFactory.metric("Outcome", SignalMetricPresentation::outcomeSeverity, SignalMetricPresentation::outcome)
         val priceAction = columnFactory.metric("Price action", SignalMetricPresentation::priceActionSeverity, SignalMetricPresentation::priceAction)
         val volume = columnFactory.metric("Volume", SignalMetricPresentation::volumeSeverity, SignalMetricPresentation::volume)
-        val age = columnFactory.signal("Age", ScanResult::signalWindowLabel)
+        val age = columnFactory.signal("Age") { SignalAgePresentation.label(it.signalWindowLabel) }
         val turnover = columnFactory.number("Turnover", { convertPrice(it.symbol, it.sessionTurnover) }, ::compactMoney)
         val updated = columnFactory.updated { time.format(Instant.ofEpochMilli(it)) }
         listOf(freshness, symbol, signal, move, price, scoreColumn, outcome, priceAction, volume, age, turnover, updated)
@@ -154,9 +154,9 @@ class ScannerPanel(
             TableColumnAutoFitter.Spec(price, { "${currency.symbol}%,.2f".format(convertPrice(it.symbol, it.price)) }, 72.0, 135.0, reserveWidth = 8.0),
             TableColumnAutoFitter.Spec(scoreColumn, { SignalMetricPresentation.strength(it).label }, 88.0, 140.0),
             TableColumnAutoFitter.Spec(outcome, { SignalMetricPresentation.outcome(it).label }, 105.0, 165.0),
-            TableColumnAutoFitter.Spec(priceAction, { SignalMetricPresentation.priceAction(it).label }, 100.0, 190.0),
+            TableColumnAutoFitter.Spec(priceAction, { SignalMetricPresentation.priceAction(it).label }, 78.0, 110.0),
             TableColumnAutoFitter.Spec(volume, { SignalMetricPresentation.volume(it).label }, 82.0, 160.0),
-            TableColumnAutoFitter.Spec(age, ScanResult::signalWindowLabel, 72.0, 150.0),
+            TableColumnAutoFitter.Spec(age, { SignalAgePresentation.label(it.signalWindowLabel) }, 52.0, 90.0),
             TableColumnAutoFitter.Spec(turnover, { compactMoney(convertPrice(it.symbol, it.sessionTurnover)) }, 88.0, 145.0, reserveWidth = 8.0),
             TableColumnAutoFitter.Spec(updated, { time.format(Instant.ofEpochMilli(it.updatedAtMillis)) }, 88.0, 125.0, reserveWidth = 8.0)
         ), columnLayout.savedWidths())
