@@ -155,8 +155,8 @@ class TrendChartView : StackPane() {
         renderRequest(requireNotNull(lastRequest))
     }
 
-    fun showFullHistory() {
-        historyButton.isSelected = true
+    fun showSignalFocus() {
+        focusButton.isSelected = true
     }
 
     private fun renderRequest(request: TrendChartRenderRequest) {

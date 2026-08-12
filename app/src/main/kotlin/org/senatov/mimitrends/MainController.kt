@@ -114,7 +114,7 @@ class MainController(
         { marketData.loadPriorityResult(it, scannerCriteria) }, { it == currentSymbol && !closing.get() },
         {
             currentSymbol = it
-            trendChart.showFullHistory()
+            trendChart.showSignalFocus()
             setLoading(true)
             setStatus("Refreshing market data: $it")
         }
@@ -321,7 +321,7 @@ class MainController(
         log.debug(LogTag.UI, "openScannerResult(symbol={}, age={})", result.symbol, result.signalAgeMinutes)
         currentSymbol = result.symbol
         currentSignal = result
-        trendChart.showFullHistory()
+        trendChart.showSignalFocus()
         loadLocalChart(result.symbol)
     }
     private fun applyFocusedSelection(result: ScanResult) {
