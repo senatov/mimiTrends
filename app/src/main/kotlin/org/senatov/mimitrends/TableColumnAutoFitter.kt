@@ -13,7 +13,8 @@ import kotlin.math.ceil
 
 class TableColumnAutoFitter<T>(
     private val table: TableView<T>,
-    private val specs: List<Spec<T>>
+    private val specs: List<Spec<T>>,
+    preservedWidths: Map<String, Double> = emptyMap()
 ) {
     data class Spec<T>(
         val column: TableColumn<T, *>,
@@ -25,8 +26,21 @@ class TableColumnAutoFitter<T>(
     )
 
     private val debounce = PauseTransition(Duration.millis(140.0)).apply { setOnFinished { fitNow() } }
+    private val manuallySized = mutableSetOf<TableColumn<T, *>>()
+    private var applying = false
 
     init {
+        specs.forEach { spec ->
+            preservedWidths[spec.column.id]?.let { width ->
+                spec.column.prefWidth = width.coerceIn(spec.column.minWidth, spec.maxWidth)
+                manuallySized += spec.column
+            }
+            spec.column.widthProperty().addListener { _, old, new ->
+                if (!applying && table.scene != null && kotlin.math.abs(new.toDouble() - old.toDouble()) >= WIDTH_STABILITY_EPSILON) {
+                    manuallySized += spec.column
+                }
+            }
+        }
         table.widthProperty().addListener { _, old, new ->
             if (kotlin.math.abs(new.toDouble() - old.toDouble()) >= WIDTH_STABILITY_EPSILON) request()
         }
@@ -48,17 +62,14 @@ class TableColumnAutoFitter<T>(
         val headerFont = table.lookupAll(".column-header .label").firstNotNullOfOrNull { (it as? Labeled)?.font }
             ?: cellFont
         val sampled = sample(table.items)
-        val measured = specs.associateWith { measure(it, sampled, cellFont, headerFont) }.toMutableMap()
-        val flexible = specs.firstOrNull(Spec<T>::flexible)
-        if (flexible != null) {
-            val fixedWidth = specs.filterNot(Spec<T>::flexible).sumOf { measured.getValue(it) }
-            val remainder = (table.width - fixedWidth - TRAILING_INSET - specs.size * DIVIDER_RESERVE).coerceAtLeast(flexible.minWidth)
-            val measuredFlexible = measured.getValue(flexible).coerceAtMost(table.width * FLEXIBLE_MAX_FRACTION)
-            measured[flexible] = maxOf(measuredFlexible, remainder).coerceAtMost(flexible.maxWidth)
-        }
-        specs.forEach { spec ->
-            val width = measured.getValue(spec)
-            if (kotlin.math.abs(spec.column.width - width) >= WIDTH_STABILITY_EPSILON) spec.column.prefWidth = width
+        applying = true
+        try {
+            specs.filterNot { it.column in manuallySized }.forEach { spec ->
+                val width = measure(spec, sampled, cellFont, headerFont)
+                if (kotlin.math.abs(spec.column.width - width) >= WIDTH_STABILITY_EPSILON) spec.column.prefWidth = width
+            }
+        } finally {
+            applying = false
         }
     }
 
@@ -86,9 +97,6 @@ class TableColumnAutoFitter<T>(
         const val SAMPLE_HEAD = 200
         const val CONTENT_INSETS = 20.0
         const val HEADER_RESERVE = 38.0
-        const val TRAILING_INSET = 18.0
-        const val DIVIDER_RESERVE = 1.0
-        const val FLEXIBLE_MAX_FRACTION = 0.45
         const val WIDTH_STABILITY_EPSILON = 1.0
     }
 }

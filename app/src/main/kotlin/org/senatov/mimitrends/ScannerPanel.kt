@@ -32,6 +32,9 @@ import javafx.util.Duration
 
 class ScannerPanel(
     private val onOpen: (ScanResult) -> Unit,
+    private val shortMovePanel: ShortMovePanel,
+    savedColumns: String = "",
+    initialTableDivider: Double = 0.68,
     private val loadProfile: ((String) -> CompletableFuture<CompanyProfile>)? = null
 ) : VBox(7.0) {
     internal var onInspect: (ScanResult) -> Unit = {}
@@ -112,12 +115,17 @@ class ScannerPanel(
     private var convertPrice: (String, Double) -> Double = { _, value -> value }
     private val columnFactory = ScannerColumnFactory(table, loadProfile)
     private val autoFitter: TableColumnAutoFitter<ScanResult>
+    private val columnLayout: TableColumnLayout<ScanResult>
+    private val tableSplit = SplitPane()
 
     init {
         log.debug(LogTag.UI, "init()")
-        val header = javafx.scene.layout.HBox(8.0, Label("Anomaly scanner").apply { styleClass += "scanner-title" },
+        val header = javafx.scene.layout.HBox(8.0, Label("Anomaly signals").apply { styleClass += "table-section-title" },
             scanIndicator, cycleStatus.apply { styleClass += "scanner-cycle" },
-            javafx.scene.layout.Region().also { javafx.scene.layout.HBox.setHgrow(it, Priority.ALWAYS) })
+            javafx.scene.layout.Region().also { javafx.scene.layout.HBox.setHgrow(it, Priority.ALWAYS) }).apply {
+            alignment = Pos.CENTER_LEFT
+            styleClass += "table-section-header"
+        }
         sortedRows.comparatorProperty().bind(table.comparatorProperty())
         val freshness = columnFactory.freshness()
         val symbol = columnFactory.symbol()
@@ -131,6 +139,11 @@ class ScannerPanel(
         val age = columnFactory.signal("Age", ScanResult::signalWindowLabel)
         val turnover = columnFactory.number("Turnover", { convertPrice(it.symbol, it.sessionTurnover) }, ::compactMoney)
         val updated = columnFactory.updated { time.format(Instant.ofEpochMilli(it)) }
+        listOf(freshness, symbol, signal, move, price, scoreColumn, outcome, priceAction, volume, age, turnover, updated)
+            .zip(listOf("delay", "company", "pattern", "move", "price", "anomaly", "outcome", "price_action",
+                "volume", "age", "turnover", "updated"))
+            .forEach { (column, id) -> column.id = id }
+        columnLayout = TableColumnLayout(table, savedColumns).also(TableColumnLayout<ScanResult>::install)
         autoFitter = TableColumnAutoFitter(table, listOf(
             TableColumnAutoFitter.Spec(freshness, { FeedFreshness.ageLabel(it.updatedAtMillis) }, 68.0, 96.0),
             TableColumnAutoFitter.Spec(symbol, columnFactory::companyName, 120.0, 460.0, flexible = true, reserveWidth = 32.0),
@@ -146,7 +159,7 @@ class ScannerPanel(
             TableColumnAutoFitter.Spec(age, ScanResult::signalWindowLabel, 72.0, 150.0),
             TableColumnAutoFitter.Spec(turnover, { compactMoney(convertPrice(it.symbol, it.sessionTurnover)) }, 88.0, 145.0, reserveWidth = 8.0),
             TableColumnAutoFitter.Spec(updated, { time.format(Instant.ofEpochMilli(it.updatedAtMillis)) }, 88.0, 125.0, reserveWidth = 8.0)
-        ))
+        ), columnLayout.savedWidths())
         columnFactory.onContentChanged = autoFitter::request
         scoreColumn.sortType = TableColumn.SortType.DESCENDING
         table.sortOrder += scoreColumn
@@ -156,50 +169,38 @@ class ScannerPanel(
         table.placeholder = empty
         table.columnResizePolicy = TableView.UNCONSTRAINED_RESIZE_POLICY
         table.fixedCellSize = -1.0
-        table.setRowFactory {
-            TableRow<ScanResult>().apply {
-                val hoverDelay = javafx.animation.PauseTransition(Duration.seconds(5.0)).apply {
-                    setOnFinished {
-                        val hovered = item
-                        if (isHover && !isEmpty && hovered != null) onInspect(hovered)
-                    }
-                }
-                setOnMouseEntered { if (!isEmpty) hoverDelay.playFromStart() }
-                setOnMouseExited { hoverDelay.stop() }
-                setOnMouseClicked { e ->
-                    if (!isEmpty && e.button == MouseButton.PRIMARY && e.clickCount == 1) {
-                        hoverDelay.stop()
-                        onOpen(item)
-                        onInspect(item)
-                    }
-                }
-                contextMenu = ContextMenu(
-                    MenuItem("Copy search keyword").apply { setOnAction { item?.let { copySearchKeyword(it) } } },
-                    MenuItem("Copy ticker").apply { setOnAction { item?.let { copyText(it.symbol) } } }
-                )
-            }
-        }
-        table.setOnKeyPressed { event ->
-            if (event.code == KeyCode.C && event.isShortcutDown) {
-                table.selectionModel.selectedItem?.let(::copySearchKeyword)
-                event.consume()
-            }
-        }
+        ScannerTableInteraction.install(table, onOpen, { onInspect(it) }, ::copySearchKeyword, ::copyText)
         table.minHeight = 0.0
         table.maxHeight = Double.MAX_VALUE
         table.styleClass += "scanner-table"
         tableContainer.children.setAll(table)
+        val scannerSection = VBox(5.0, header, tableContainer).apply {
+            styleClass += "table-section"
+            VBox.setVgrow(tableContainer, Priority.ALWAYS)
+        }
         marketClosedOverlay.addEventFilter(KeyEvent.KEY_PRESSED) { event ->
             if (event.code == KeyCode.ESCAPE) {
                 hideMarketClosedOverlay()
                 event.consume()
             }
         }
-        children += listOf(header, tableContainer)
-        VBox.setVgrow(tableContainer, Priority.ALWAYS)
+        tableSplit.apply {
+            items.setAll(scannerSection, shortMovePanel)
+            orientation = javafx.geometry.Orientation.HORIZONTAL
+            styleClass += "table-split-pane"
+            Platform.runLater { setDividerPosition(0, initialTableDivider.coerceIn(0.45, 0.82)) }
+        }
+        SplitPane.setResizableWithParent(scannerSection, true)
+        SplitPane.setResizableWithParent(shortMovePanel, true)
+        children += tableSplit
+        VBox.setVgrow(tableSplit, Priority.ALWAYS)
         minHeight = 0.0
         maxHeight = Double.MAX_VALUE
     }
+
+    fun savedColumnLayout(): String = columnLayout.capture()
+
+    fun tableDividerPosition(): Double = tableSplit.dividers.firstOrNull()?.position ?: 0.68
 
     private fun copySearchKeyword(result: ScanResult) {
         copyText(CompanySearchTerm.from(columnFactory.companyName(result), result.symbol))

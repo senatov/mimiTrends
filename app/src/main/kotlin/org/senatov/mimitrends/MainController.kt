@@ -33,7 +33,8 @@ import java.util.concurrent.ConcurrentHashMap
 
 class MainController(
     private val apiKey: String?, initialSymbol: String = "AAPL", initialRange: String = "3M",
-    initialDividerPosition: Double = 0.34
+    initialDividerPosition: Double = 0.34, scannerColumns: String = "", shortMoveColumns: String = "",
+    initialTableDivider: Double = 0.68
 ) {
     private companion object {
         const val MARKET_OPEN_GRACE_SECONDS = 5L
@@ -42,6 +43,7 @@ class MainController(
     private val repository = MarketRepository()
     private val analytics = AnalyticsRepository()
     private val savedResultQuotes = SavedResultQuoteRefresher(repository)
+    private val shortMoveLoader = ShortMoveLoader(repository)
     private var currentSymbol = initialSymbol
     private var currentSignal: ScanResult? = null
     private var selectedRangeValue = initialRange.takeIf { it in setOf("1D", "5D", "1M", "3M", "6M", "1Y") } ?: "3M"
@@ -58,8 +60,12 @@ class MainController(
     private var profileService = CompanyProfileService(
         repository, apiKey?.let(::FinnhubProfileClient), CompanyLogoClient()
     )
+    private val shortMovePanel = ShortMovePanel(::openShortMove, shortMoveColumns) { symbol -> profileService.load(symbol) }
     private val scannerPanel = ScannerPanel(
         onOpen = ::openScannerResult,
+        shortMovePanel = shortMovePanel,
+        savedColumns = scannerColumns,
+        initialTableDivider = initialTableDivider,
         loadProfile = { symbol -> profileService.load(symbol) }
     )
     private val batchScheduler = Executors.newSingleThreadScheduledExecutor { task ->
@@ -111,7 +117,6 @@ class MainController(
         repository.upsertMinuteBar(bar)
         liveTicks[bar.symbol] = System.currentTimeMillis()
     }
-
     init {
         scannerPanel.onInspect = focusedSignals::request
     }
@@ -160,7 +165,6 @@ class MainController(
     private fun handleScalableImport(event: ScalableImportEvent) {
         scalableImportResults.handle(event)
     }
-
     fun showClosing() {
         ClosingPresentation.show(scannerPanel,
             listOf(refreshButton, settingsButton, aboutButton, importTradesButton))
@@ -184,6 +188,9 @@ class MainController(
     fun selectedSymbol(): String = currentSymbol.ifEmpty { "AAPL" }
     fun selectedRange(): String = selectedRangeValue
     fun dividerPosition(): Double = contentSplitPane.dividers.firstOrNull()?.position ?: initialDivider
+    fun scannerColumnLayout(): String = scannerPanel.savedColumnLayout()
+    fun shortMoveColumnLayout(): String = shortMovePanel.savedColumnLayout()
+    fun tableDividerPosition(): Double = scannerPanel.tableDividerPosition()
 
     private fun startScanner() {
         log.debug(LogTag.API, "startScanner(symbols={})", scannerCriteria.symbols.size)
@@ -249,6 +256,7 @@ class MainController(
                 log.warn(LogTag.API, "scan completed with failures count={} sample={}", errors.size, errors.take(3).joinToString("; "))
             }
             val active = batch.active
+            val shortMoves = shortMoveLoader.load(symbols)
             val retained = recentEvents.merge(active, System.currentTimeMillis(), criteria.resultLimit)
             val displayed = retained
             tableQuoteProviders.replaceSymbols(displayed.map(ScanResult::symbol))
@@ -256,6 +264,7 @@ class MainController(
             priorityScanner.replaceCandidates(active)
             Platform.runLater {
                 if (generation != scanGeneration.get()) return@runLater
+                shortMovePanel.show(shortMoves)
                 if (active.isEmpty() && errors.size == symbols.size && symbols.isNotEmpty()) {
                     scannerPanel.abortScan()
                     setStatus("Yahoo scan produced no data; previous table retained", true, errors.joinToString("\n"))
@@ -301,6 +310,13 @@ class MainController(
         loadLocalChart(result.symbol)
     }
 
+    private fun openShortMove(symbol: String) {
+        log.debug(LogTag.UI, "openShortMove(symbol={})", symbol)
+        currentSymbol = symbol
+        currentSignal = null
+        loadLocalChart(symbol)
+    }
+
     private fun applyFocusedSelection(result: ScanResult) {
         if (currentSymbol != result.symbol || closing.get()) return
         currentSignal = result
@@ -327,29 +343,10 @@ class MainController(
 
     private fun restartFinnhubLive(key: String) {
         log.debug(LogTag.API, "restartFinnhubLive(keyPresent={})", key.isNotBlank())
-        finnhubClient?.close()
-        liveTicks.clear()
-        if (key.isBlank()) return
-        profileService = CompanyProfileService(repository, FinnhubProfileClient(key), CompanyLogoClient())
-        val client = FinnhubWebSocketClient(
-            apiKey = key,
-            onTrade = java.util.function.Consumer { tick ->
-                liveTicks[tick.symbol] = System.currentTimeMillis()
-                liveAggregator.accept(tick)
-            },
-            onError = java.util.function.Consumer { error: Throwable ->
-                log.warn(LogTag.API, "Finnhub live feed unavailable; Yahoo fallback remains active", error)
-                Platform.runLater { setStatus("Finnhub unavailable · Yahoo/SQLite fallback active") }
-            }
-        )
-        MarketUniverseSelector.select(scannerCriteria).filterNot { it.contains('.') }.forEach(client::subscribe)
-        finnhubClient = client
-        client.connect().whenComplete(java.util.function.BiConsumer<java.net.http.WebSocket?, Throwable?> { _, error ->
-            Platform.runLater {
-                if (error == null) setStatus("Finnhub live connected · Yahoo/SQLite history ready")
-                else setStatus("Finnhub connection failed · Yahoo/SQLite fallback active")
-            }
-        })
+        profileService = CompanyProfileService(repository, key.takeIf(String::isNotBlank)?.let(::FinnhubProfileClient),
+            CompanyLogoClient())
+        finnhubClient = FinnhubLiveStarter.restart(key, finnhubClient, scannerCriteria, liveTicks,
+            liveAggregator, log, ::setStatus)
     }
 
     private fun loadLocalChart(symbol: String) {

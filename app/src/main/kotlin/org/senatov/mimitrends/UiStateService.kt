@@ -11,7 +11,8 @@ import java.util.Properties
 
 data class UiState(
     val x: Double? = null, val y: Double? = null, val width: Double = 1120.0, val height: Double = 720.0,
-    val maximized: Boolean = false, val symbol: String = "AAPL", val range: String = "3M", val dividerPosition: Double = 0.34
+    val maximized: Boolean = false, val symbol: String = "AAPL", val range: String = "3M", val dividerPosition: Double = 0.34,
+    val scannerColumns: String = "", val shortMoveColumns: String = "", val tableDividerPosition: Double = 0.68
 )
 
 class UiStateService(private val path: Path = Path.of(System.getProperty("user.home"), ".mimi", "trends", "ui-state.properties")) {
@@ -26,7 +27,9 @@ class UiStateService(private val path: Path = Path.of(System.getProperty("user.h
             UiState(p.getProperty("x")?.toDouble(), p.getProperty("y")?.toDouble(),
                 p.getProperty("width", "1120").toDouble(), p.getProperty("height", "720").toDouble(),
                 p.getProperty("maximized", "false").toBoolean(), p.getProperty("symbol", "AAPL"), p.getProperty("range", "3M"),
-                p.getProperty("dividerPosition", "0.34").toDouble().coerceIn(0.15, 0.75))
+                p.getProperty("dividerPosition", "0.34").toDouble().coerceIn(0.15, 0.75),
+                p.getProperty("scannerColumns", ""), p.getProperty("shortMoveColumns", ""),
+                p.getProperty("tableDividerPosition", "0.68").toDouble().coerceIn(0.45, 0.82))
         }.onFailure { log.error(LogTag.IO, "UI state load failed", it) }.getOrDefault(UiState())
     }
 
@@ -47,7 +50,8 @@ class UiStateService(private val path: Path = Path.of(System.getProperty("user.h
         attachTracking(stage)
     }
 
-    fun save(stage: Stage, symbol: String, range: String, dividerPosition: Double) {
+    fun save(stage: Stage, symbol: String, range: String, dividerPosition: Double,
+             scannerColumns: String, shortMoveColumns: String, tableDividerPosition: Double) {
         log.debug(LogTag.IO, "save(symbol={}, range={}, maximized={}, divider={})", symbol, range, stage.isMaximized, dividerPosition)
         if (!stage.isMaximized && !stage.isFullScreen) normalBounds = Rectangle2D(stage.x, stage.y, stage.width, stage.height)
         Files.createDirectories(path.parent)
@@ -56,6 +60,8 @@ class UiStateService(private val path: Path = Path.of(System.getProperty("user.h
             setProperty("width", normalBounds.width.toString()); setProperty("height", normalBounds.height.toString())
             setProperty("maximized", stage.isMaximized.toString()); setProperty("symbol", symbol); setProperty("range", range)
             setProperty("dividerPosition", dividerPosition.coerceIn(0.15, 0.75).toString())
+            setProperty("scannerColumns", scannerColumns); setProperty("shortMoveColumns", shortMoveColumns)
+            setProperty("tableDividerPosition", tableDividerPosition.coerceIn(0.45, 0.82).toString())
         }
         Files.newOutputStream(path).use { p.store(it, "MiMiTrends UI state") }
     }

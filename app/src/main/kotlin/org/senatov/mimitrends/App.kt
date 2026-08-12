@@ -34,7 +34,8 @@ class App : Application() {
         val apiKey = ApiKeyResolver.resolve()
         val uiStateService = UiStateService()
         val uiState = uiStateService.load()
-        val controller = MainController(apiKey, uiState.symbol, uiState.range, uiState.dividerPosition)
+        val controller = MainController(apiKey, uiState.symbol, uiState.range, uiState.dividerPosition,
+            uiState.scannerColumns, uiState.shortMoveColumns, uiState.tableDividerPosition)
         val scene = Scene(controller.createView(), 1120.0, 720.0)
         scene.stylesheets += requireNotNull(javaClass.getResource("/org/senatov/mimitrends/MiMiTrends.css")).toExternalForm()
 
@@ -49,7 +50,8 @@ class App : Application() {
         stage.setOnCloseRequest {
             it.consume()
             if (!closing.compareAndSet(false, true)) return@setOnCloseRequest
-            uiStateService.save(stage, controller.selectedSymbol(), controller.selectedRange(), controller.dividerPosition())
+            uiStateService.save(stage, controller.selectedSymbol(), controller.selectedRange(), controller.dividerPosition(),
+                controller.scannerColumnLayout(), controller.shortMoveColumnLayout(), controller.tableDividerPosition())
             controller.showClosing()
             CompletableFuture.runAsync(controller::close).whenComplete(BiConsumer<Void?, Throwable?> { _, error ->
                 if (error != null) log.error(LogTag.APP, "application shutdown failed", error)

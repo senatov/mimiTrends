@@ -96,9 +96,9 @@
     -fx-effect: dropshadow(gaussian, rgba(30, 45, 65, 0.20), 5, 0.12, 0, 2);
 }
 
-.text-field, .combo-box {
-    -fx-background-radius: 6px;
-    -fx-border-radius: 6px;
+.button, .text-field, .combo-box, .choice-box, .spinner {
+    -fx-background-radius: 9px;
+    -fx-border-radius: 9px;
 }
 
 .primary-button {
@@ -297,7 +297,27 @@
     -fx-text-fill: #74787e;
 }
 
-.scanner-title { -fx-font-size: 17px; -fx-font-weight: 500; -fx-text-fill: #42464c; }
+.scanner-title { -fx-font-size: 17px; -fx-font-weight: 500; -fx-text-fill: #17365f; }
+.table-section {
+    -fx-background-color: rgba(255,255,255,0.72);
+    -fx-background-radius: 12px;
+    -fx-border-color: #c8d0da;
+    -fx-border-radius: 12px;
+    -fx-border-width: 1px;
+    -fx-padding: 7px;
+    -fx-effect: dropshadow(gaussian, rgba(31,54,79,0.10), 8, 0.10, 0, 2);
+}
+.table-section-header { -fx-padding: 0 3px 2px 3px; }
+.table-section-title {
+    -fx-font-family: "SF Pro Display", "Helvetica Neue", "System";
+    -fx-font-size: 15px;
+    -fx-font-weight: 600;
+    -fx-text-fill: #17365f;
+}
+.short-move-caption { -fx-font-size: 11px; -fx-text-fill: #526b89; }
+.short-move-table .table-cell.short-move-up { -fx-text-fill: #16834a; -fx-font-weight: 600; }
+.short-move-table .table-cell.short-move-down { -fx-text-fill: #bd3c3c; -fx-font-weight: 600; }
+.short-move-table .table-cell.short-move-struggle { -fx-text-fill: #8a5600; -fx-font-weight: 600; }
 .scanner-cycle { -fx-text-fill: #777b81; -fx-font-size: 12px; }
 .scanner-cycle.market-closed {
     -fx-text-fill: #a36a00;
@@ -418,7 +438,9 @@
     -mimi-selection: #fffde1;
     -mimi-table-grid: #9ca9b5;
     -fx-background-color: white;
+    -fx-background-radius: 9px;
     -fx-border-color: -mimi-table-grid;
+    -fx-border-radius: 9px;
     -fx-border-width: 1px;
     -fx-padding: 0;
     -fx-font-family: "SF Pro Text", "Helvetica Neue", "System";
@@ -436,8 +458,8 @@
 .scanner-table .column-header .label {
     -fx-font-family: "SF Pro Display", "Helvetica Neue", sans-serif;
     -fx-font-size: 14px;
-    -fx-text-fill: #111315;
-    -fx-font-weight: 300;
+    -fx-text-fill: #17365f;
+    -fx-font-weight: 500;
     -fx-alignment: center-left;
 }
 .scanner-table .table-row-cell:even { -fx-background-color: -mimi-row-even; }
@@ -521,6 +543,17 @@
 .content-split-pane > .split-pane-divider:hover {
     -fx-background-color: #f29a38;
 }
+.table-split-pane {
+    -fx-background-color: transparent;
+    -fx-padding: 0;
+}
+.table-split-pane > .split-pane-divider {
+    -fx-padding: 0 4px;
+    -fx-background-color: linear-gradient(to right, #d7dde5, #8fa2b8, #d7dde5);
+    -fx-background-radius: 5px;
+    -fx-cursor: h-resize;
+}
+.table-split-pane > .split-pane-divider:hover { -fx-background-color: #f29a38; }
 
 /* JavaFX cannot access macOS' private Liquid Glass compositor. These surfaces mirror its
    hierarchy with translucent layers, soft highlights, rounded cards, and lightweight type. */
