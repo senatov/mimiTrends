@@ -1,0 +1,25 @@
+package org.senatov.mimitrends
+
+internal object ShortMoveSort {
+    val direction = Comparator<ShortMove> { first, second ->
+        directionPosition(first).compareTo(directionPosition(second))
+    }
+    val priceChange = Comparator<ShortMove> { first, second ->
+        first.changePercent.compareTo(second.changePercent)
+    }
+    val period = Comparator<ShortMove> { first, second ->
+        compareValuesBy(first, second,
+            { periodMidpoint(it) },
+            ShortMove::startedAtEpochSeconds,
+            ShortMove::endedAtEpochSeconds)
+    }
+
+    private fun directionPosition(move: ShortMove): Int = when {
+        move.pattern == ShortMovePattern.POST_DROP_STRUGGLE -> -2
+        move.changePercent < 0.0 -> -1
+        else -> 1
+    }
+
+    private fun periodMidpoint(move: ShortMove): Long = move.startedAtEpochSeconds +
+        (move.endedAtEpochSeconds - move.startedAtEpochSeconds) / 2L
+}

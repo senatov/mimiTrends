@@ -1,10 +1,10 @@
 package org.senatov.mimitrends
 
 import javafx.beans.property.ReadOnlyDoubleWrapper
-import javafx.beans.property.ReadOnlyLongWrapper
 import javafx.beans.property.ReadOnlyObjectWrapper
 import javafx.beans.property.ReadOnlyStringWrapper
 import javafx.collections.FXCollections
+import javafx.collections.transformation.SortedList
 import javafx.geometry.Pos
 import javafx.scene.control.Label
 import javafx.scene.control.TableCell
@@ -30,7 +30,8 @@ class ShortMovePanel(
     private val copyText: (String) -> Unit = {}
 ) : VBox(5.0) {
     private val rows = FXCollections.observableArrayList<ShortMove>()
-    private val table = TableView(rows)
+    private val sortedRows = SortedList(rows)
+    private val table = TableView(sortedRows)
     private val time = DateTimeFormatter.ofPattern("HH:mm").withZone(ZoneId.systemDefault())
     private val updateCaption = Label("5-minute moves + recent post-drop · waiting").apply {
         styleClass += "short-move-caption"
@@ -56,35 +57,38 @@ class ShortMovePanel(
         val priceRange = TableColumn<ShortMove, ShortMove>("From → To").apply {
             id = "price_range"
             setCellValueFactory { ReadOnlyObjectWrapper(it.value) }
-            comparator = Comparator.comparingDouble(ShortMove::changePercent)
+            comparator = ShortMoveSort.priceChange
             isSortable = true
             setCellFactory { PriceRangeCell() }
             prefWidth = 82.0; minWidth = 62.0
         }
-        val direction = TableColumn<ShortMove, String>("Direction").apply {
+        val direction = TableColumn<ShortMove, ShortMove>("Direction").apply {
             id = "direction"
-            setCellValueFactory { ReadOnlyStringWrapper(directionLabel(it.value)) }
+            setCellValueFactory { ReadOnlyObjectWrapper(it.value) }
+            comparator = ShortMoveSort.direction
             setCellFactory { DirectionCell() }; prefWidth = 105.0
         }
         val move = TableColumn<ShortMove, Number>("Move").apply {
             id = "move"
             setCellValueFactory { ReadOnlyDoubleWrapper(it.value.changePercent) }
+            comparator = Comparator.comparingDouble(Number::toDouble)
             setCellFactory { PercentCell() }; prefWidth = 105.0
         }
-        val period = TableColumn<ShortMove, Number>("Period").apply {
+        val period = TableColumn<ShortMove, ShortMove>("Period").apply {
             id = "period"
-            setCellValueFactory { ReadOnlyLongWrapper(it.value.endedAtEpochSeconds) }
-            setCellFactory { object : TableCell<ShortMove, Number>() {
-                override fun updateItem(item: Number?, empty: Boolean) {
+            setCellValueFactory { ReadOnlyObjectWrapper(it.value) }
+            comparator = ShortMoveSort.period
+            setCellFactory { object : TableCell<ShortMove, ShortMove>() {
+                override fun updateItem(item: ShortMove?, empty: Boolean) {
                     super.updateItem(item, empty)
-                    val row = tableRow?.item
-                    text = if (empty || item == null || row == null) null else
-                        "${time.format(Instant.ofEpochSecond(row.startedAtEpochSeconds))}–${time.format(Instant.ofEpochSecond(item.toLong()))}"
+                    text = if (empty || item == null) null else
+                        "${time.format(Instant.ofEpochSecond(item.startedAtEpochSeconds))}–${time.format(Instant.ofEpochSecond(item.endedAtEpochSeconds))}"
                 }
             } }
             prefWidth = 135.0
         }
         table.columns.setAll(company, priceRange, direction, move, period)
+        sortedRows.comparatorProperty().bind(table.comparatorProperty())
         columnLayout = TableColumnLayout(table, savedColumns).also(TableColumnLayout<ShortMove>::install)
         autoFitter = TableColumnAutoFitter(table, listOf(
             TableColumnAutoFitter.Spec(company, { companyNames[it.symbol] ?: it.symbol }, 80.0, 240.0),
@@ -154,14 +158,23 @@ class ShortMovePanel(
     private fun searchKeyword(move: ShortMove): String =
         CompanySearchTerm.from(companyNames[move.symbol] ?: move.symbol, move.symbol)
 
-    private class DirectionCell : TableCell<ShortMove, String>() {
-        override fun updateItem(item: String?, empty: Boolean) {
-            super.updateItem(item, empty); text = if (empty) null else item
+    private class DirectionCell : TableCell<ShortMove, ShortMove>() {
+        override fun updateItem(item: ShortMove?, empty: Boolean) {
+            super.updateItem(item, empty)
+            val label = item?.let(::directionText)
+            text = if (empty) null else label
             styleClass.removeAll("short-move-up", "short-move-down", "short-move-struggle")
-            if (!empty && item != null) styleClass += when {
-                item.contains("POST-DROP") -> "short-move-struggle"
-                item.contains("UP") -> "short-move-up"
+            if (!empty && label != null) styleClass += when {
+                label.contains("POST-DROP") -> "short-move-struggle"
+                label.contains("UP") -> "short-move-up"
                 else -> "short-move-down"
+            }
+        }
+
+        private companion object {
+            fun directionText(move: ShortMove): String = when (move.pattern) {
+                ShortMovePattern.POST_DROP_STRUGGLE -> "◆ POST-DROP"
+                ShortMovePattern.DIRECTIONAL -> if (move.changePercent >= 0.0) "▲ UP" else "▼ DOWN"
             }
         }
     }
