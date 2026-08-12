@@ -3,11 +3,13 @@ package org.senatov.mimitrends
 import org.senatov.mimitrends.db.MarketRepository
 import org.senatov.mimitrends.model.MinuteBar
 import org.senatov.mimitrends.model.ProviderMinuteBar
+import org.senatov.mimitrends.scanner.MarketCalendar
+import java.time.Instant
 
 internal class ShortMoveLoader(private val repository: MarketRepository) {
     fun load(symbols: Collection<String>, nowEpochSeconds: Long = java.time.Instant.now().epochSecond): List<ShortMove> {
-        val from = nowEpochSeconds - 15 * 60
         val bars = symbols.associateWith { symbol ->
+            val from = MarketCalendar.sessionStart(symbol, Instant.ofEpochSecond(nowEpochSeconds)).epochSecond
             ShortMoveBarComposer.compose(
                 repository.loadMinuteBars(symbol, from),
                 repository.loadProviderMinuteBars(symbol, from),
@@ -19,8 +21,6 @@ internal class ShortMoveLoader(private val repository: MarketRepository) {
 }
 
 internal object ShortMoveBarComposer {
-    private const val MAX_PROVIDER_AGE_SECONDS = 15 * 60L
-
     fun compose(
         primary: List<MinuteBar>,
         providerBars: List<ProviderMinuteBar>,
@@ -31,8 +31,7 @@ internal object ShortMoveBarComposer {
             .associateByTo(sortedMapOf(), MinuteBar::minuteEpochSeconds)
         providerBars.asSequence()
             .filter { observation ->
-                observation.bar.minuteEpochSeconds <= nowEpochSeconds &&
-                    nowEpochSeconds - observation.bar.minuteEpochSeconds <= MAX_PROVIDER_AGE_SECONDS
+                observation.bar.minuteEpochSeconds <= nowEpochSeconds
             }
             .groupBy { it.bar.minuteEpochSeconds }
             .forEach { (minute, observations) ->

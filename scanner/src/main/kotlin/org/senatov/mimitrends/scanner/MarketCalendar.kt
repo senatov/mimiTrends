@@ -21,6 +21,15 @@ object MarketCalendar {
             !local.toLocalTime().isBefore(market.open) && local.toLocalTime().isBefore(market.close)
     }
 
+    fun sessionStart(symbol: String, instant: Instant = Instant.now()): Instant {
+        val market = marketFor(symbol)
+        var date = instant.atZone(market.zone).toLocalDate()
+        while (!isTradingDay(market, date) || ZonedDateTime.of(date, market.open, market.zone).toInstant().isAfter(instant)) {
+            date = date.minusDays(1)
+        }
+        return ZonedDateTime.of(date, market.open, market.zone).toInstant()
+    }
+
     fun nextOpening(symbol: String, instant: Instant = Instant.now()): Instant {
         val market = marketFor(symbol)
         var date = instant.atZone(market.zone).toLocalDate()

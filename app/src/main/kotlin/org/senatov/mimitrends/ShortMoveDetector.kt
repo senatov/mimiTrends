@@ -35,10 +35,9 @@ internal object ShortMoveDetector {
     ): ShortMove? {
         val latest = bars.maxByOrNull(MinuteBar::minuteEpochSeconds) ?: return null
         if (latest.minuteEpochSeconds < nowEpochSeconds - MAX_AGE_MINUTES * 60) return null
-        val recent = bars.filter { it.minuteEpochSeconds >= latest.minuteEpochSeconds - 14 * 60 }
-            .sortedBy(MinuteBar::minuteEpochSeconds)
+        val recent = bars.sortedBy(MinuteBar::minuteEpochSeconds)
         if (recent.size < 4) return null
-        for (dropEnd in 1 until recent.lastIndex) {
+        for (dropEnd in recent.lastIndex - 2 downTo 1) {
             val postBars = recent.size - dropEnd - 1
             if (postBars < 2) continue
             val dropStart = recent.subList(0, dropEnd).indices.maxByOrNull { recent[it].high } ?: continue

@@ -7,6 +7,11 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class MarketCalendarTest {
+    @Test fun `session start uses the current European market opening`() {
+        assertEquals(Instant.parse("2026-08-03T07:00:00Z"),
+            MarketCalendar.sessionStart("MC.PA", Instant.parse("2026-08-03T14:00:00Z")))
+    }
+
     @Test fun `US market observes regular session in New York time`() {
         assertTrue(MarketCalendar.isOpen("AAPL", Instant.parse("2026-08-03T14:00:00Z")))
         assertFalse(MarketCalendar.isOpen("AAPL", Instant.parse("2026-08-03T21:00:00Z")))

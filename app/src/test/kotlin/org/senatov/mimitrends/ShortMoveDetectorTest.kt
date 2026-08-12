@@ -75,6 +75,24 @@ class ShortMoveDetectorTest {
         assertEquals(459.8, result.close)
     }
 
+    @Test
+    fun `keeps an opening collapse visible later in the same session`() {
+        val now = 50_000L
+        val opening = listOf(470.0, 458.0, 456.0, 459.0)
+        val later = (1..20).map { index -> 458.0 + (index % 3) * 0.2 }
+        val closes = opening + later
+        val session = closes.mapIndexed { index, close ->
+            bar("LVMH", now - (closes.lastIndex - index) * 60,
+                if (index == 0) 470.0 else closes[index - 1], close)
+        }
+
+        val result = ShortMoveDetector.rank(mapOf("LVMH" to session), now).single()
+
+        assertEquals(ShortMovePattern.POST_DROP_STRUGGLE, result.pattern)
+        assertTrue(result.changePercent < -2.0)
+        assertEquals(470.0, result.open)
+    }
+
     private fun bars(symbol: String, end: Long, close: Double): List<MinuteBar> =
         (0 until 5).map { index ->
             val open = 100.0

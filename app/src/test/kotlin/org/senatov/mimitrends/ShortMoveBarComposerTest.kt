@@ -22,7 +22,7 @@ class ShortMoveBarComposerTest {
     }
 
     @Test
-    fun `stale and future provider observations are ignored`() {
+    fun `session provider observations are retained and future observations are ignored`() {
         val now = 10_000L
         val primary = listOf(bar(now - 60, 100.0))
         val providers = listOf(
@@ -30,7 +30,7 @@ class ShortMoveBarComposerTest {
             observation("EURONEXT", now + 60, 110.0, 2_000L)
         )
 
-        assertEquals(listOf(100.0), ShortMoveBarComposer.compose(primary, providers, now).map(MinuteBar::close))
+        assertEquals(listOf(90.0, 100.0), ShortMoveBarComposer.compose(primary, providers, now).map(MinuteBar::close))
     }
 
     private fun observation(provider: String, minute: Long, close: Double, observedAt: Long) =
