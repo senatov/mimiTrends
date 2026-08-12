@@ -62,7 +62,7 @@ class MainController(
         initialTableDivider = initialTableDivider,
         loadProfile = { symbol -> profileService.load(symbol) }
     )
-    private val shortMoveRefresh = ShortMoveRefreshCoordinator(shortMoveLoader, log) { moves ->
+    private val shortMoveRefresh = ShortMoveRefreshCoordinator(shortMoveLoader::load, log) { moves ->
         Platform.runLater { if (!closing.get()) shortMovePanel.show(moves) }
     }
     private val batchScheduler = Executors.newSingleThreadScheduledExecutor { task ->
