@@ -30,9 +30,7 @@ class MainController(
     initialDividerPosition: Double = 0.34, scannerColumns: String = "", shortMoveColumns: String = "",
     initialTableDivider: Double = 0.68
 ) {
-    private companion object {
-        const val MARKET_OPEN_GRACE_SECONDS = 5L
-    }
+    private companion object { const val MARKET_OPEN_GRACE_SECONDS = 5L }
     private val log = LoggerFactory.getLogger(MainController::class.java)
     private val repository = MarketRepository()
     private val analytics = AnalyticsRepository()
@@ -54,7 +52,9 @@ class MainController(
     private var profileService = CompanyProfileService(
         repository, apiKey?.let(::FinnhubProfileClient), CompanyLogoClient()
     )
-    private val shortMovePanel = ShortMovePanel(::openShortMove, shortMoveColumns) { symbol -> profileService.load(symbol) }
+    private val shortMovePanel = ShortMovePanel(
+        { shortMoveSelection.open(it) }, shortMoveColumns, { symbol -> profileService.load(symbol) }, ClipboardText::copy
+    )
     private val scannerPanel = ScannerPanel(
         onOpen = ::openScannerResult,
         shortMovePanel = shortMovePanel,
@@ -110,13 +110,22 @@ class MainController(
         formatError = requestStatus::formatError,
         log = log
     )
+    private val shortMoveSelection = ShortMoveSelectionController(
+        { marketData.loadPriorityResult(it, scannerCriteria) }, { it == currentSymbol && !closing.get() },
+        { currentSymbol = it; setLoading(true); setStatus("Refreshing market data: $it") }
+    ) { symbol, result, error ->
+        if (error != null) {
+            log.warn(LogTag.API, "short-move chart refresh failed symbol={}", symbol, error)
+            setStatus("Market refresh failed: $symbol · showing cached chart", true, requestStatus.formatError(symbol, error))
+        }
+        currentSignal = result
+        loadLocalChart(symbol)
+    }
     private val liveAggregator = FinnhubMinuteAggregator { bar ->
         repository.upsertMinuteBar(bar)
         liveTicks[bar.symbol] = System.currentTimeMillis()
     }
-    init {
-        scannerPanel.onInspect = focusedSignals::request
-    }
+    init { scannerPanel.onInspect = focusedSignals::request }
     fun createView(): Parent {
         log.debug(LogTag.UI, "createView()")
         scannerPanel.setCurrency(scannerCriteria.displayCurrency, ::displayPrice)
@@ -309,14 +318,6 @@ class MainController(
         currentSignal = result
         loadLocalChart(result.symbol)
     }
-
-    private fun openShortMove(symbol: String) {
-        log.debug(LogTag.UI, "openShortMove(symbol={})", symbol)
-        currentSymbol = symbol
-        currentSignal = null
-        loadLocalChart(symbol)
-    }
-
     private fun applyFocusedSelection(result: ScanResult) {
         if (currentSymbol != result.symbol || closing.get()) return
         currentSignal = result
@@ -395,6 +396,5 @@ class MainController(
         requestStatus.update(message, error, details)
     }
 
-    private fun displayPrice(symbol: String, value: Double): Double =
-        exchangeRates.convert(symbol, value, scannerCriteria.displayCurrency)
+    private fun displayPrice(symbol: String, value: Double): Double = exchangeRates.convert(symbol, value, scannerCriteria.displayCurrency)
 }

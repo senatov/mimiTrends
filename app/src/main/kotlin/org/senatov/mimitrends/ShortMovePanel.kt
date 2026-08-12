@@ -11,6 +11,9 @@ import javafx.scene.control.TableCell
 import javafx.scene.control.TableColumn
 import javafx.scene.control.TableRow
 import javafx.scene.control.TableView
+import javafx.scene.control.ContextMenu
+import javafx.scene.control.MenuItem
+import javafx.scene.input.KeyCode
 import javafx.scene.input.MouseButton
 import javafx.scene.layout.HBox
 import javafx.scene.layout.Priority
@@ -23,7 +26,8 @@ import java.time.format.DateTimeFormatter
 class ShortMovePanel(
     private val onOpen: (String) -> Unit,
     savedColumns: String = "",
-    private val loadProfile: ((String) -> java.util.concurrent.CompletableFuture<CompanyProfile>)? = null
+    private val loadProfile: ((String) -> java.util.concurrent.CompletableFuture<CompanyProfile>)? = null,
+    private val copyText: (String) -> Unit = {}
 ) : VBox(5.0) {
     private val rows = FXCollections.observableArrayList<ShortMove>()
     private val table = TableView(rows)
@@ -49,6 +53,8 @@ class ShortMovePanel(
         val priceRange = TableColumn<ShortMove, ShortMove>("From → To").apply {
             id = "price_range"
             setCellValueFactory { ReadOnlyObjectWrapper(it.value) }
+            comparator = Comparator.comparingDouble(ShortMove::changePercent)
+            isSortable = true
             setCellFactory { PriceRangeCell() }
             prefWidth = 82.0; minWidth = 62.0
         }
@@ -96,6 +102,18 @@ class ShortMovePanel(
                 setOnMouseClicked { event ->
                     if (!isEmpty && event.button == MouseButton.PRIMARY && event.clickCount == 1) onOpen(item.symbol)
                 }
+                contextMenu = ContextMenu(
+                    MenuItem("Copy search keyword").apply {
+                        setOnAction { item?.let { move -> copyText(searchKeyword(move)) } }
+                    },
+                    MenuItem("Copy ticker").apply { setOnAction { item?.symbol?.let(copyText) } }
+                )
+            }
+        }
+        table.setOnKeyPressed { event ->
+            if (event.code == KeyCode.C && event.isShortcutDown) {
+                table.selectionModel.selectedItem?.let { copyText(searchKeyword(it)) }
+                event.consume()
             }
         }
         styleClass += "table-section"
@@ -126,6 +144,9 @@ class ShortMovePanel(
             }
         }
     }
+
+    private fun searchKeyword(move: ShortMove): String =
+        CompanySearchTerm.from(companyNames[move.symbol] ?: move.symbol, move.symbol)
 
     private class DirectionCell : TableCell<ShortMove, String>() {
         override fun updateItem(item: String?, empty: Boolean) {

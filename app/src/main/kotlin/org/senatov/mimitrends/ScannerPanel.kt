@@ -9,8 +9,6 @@ import javafx.scene.image.Image
 import javafx.scene.image.ImageView
 import javafx.scene.control.*
 import javafx.scene.input.MouseButton
-import javafx.scene.input.Clipboard
-import javafx.scene.input.ClipboardContent
 import javafx.scene.input.KeyCode
 import javafx.scene.input.KeyEvent
 import javafx.scene.layout.HBox
@@ -387,7 +385,7 @@ class ScannerPanel(
 
     private fun copyText(value: String) {
         log.debug(LogTag.UI, "copyText(chars={})", value.length)
-        Clipboard.getSystemClipboard().setContent(ClipboardContent().apply { putString(value) })
+        ClipboardText.copy(value)
     }
 
     private fun compactMoney(value: Double): String = when {
