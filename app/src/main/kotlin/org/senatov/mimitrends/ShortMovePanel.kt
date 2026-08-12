@@ -2,6 +2,7 @@ package org.senatov.mimitrends
 
 import javafx.beans.property.ReadOnlyDoubleWrapper
 import javafx.beans.property.ReadOnlyLongWrapper
+import javafx.beans.property.ReadOnlyObjectWrapper
 import javafx.beans.property.ReadOnlyStringWrapper
 import javafx.collections.FXCollections
 import javafx.geometry.Pos
@@ -45,6 +46,12 @@ class ShortMovePanel(
             setCellValueFactory { ReadOnlyStringWrapper(companyNames[it.value.symbol] ?: it.value.symbol) }
             prefWidth = 210.0; minWidth = 90.0
         }
+        val priceRange = TableColumn<ShortMove, ShortMove>("From → To").apply {
+            id = "price_range"
+            setCellValueFactory { ReadOnlyObjectWrapper(it.value) }
+            setCellFactory { PriceRangeCell() }
+            prefWidth = 82.0; minWidth = 62.0
+        }
         val direction = TableColumn<ShortMove, String>("Direction").apply {
             id = "direction"
             setCellValueFactory { ReadOnlyStringWrapper(directionLabel(it.value)) }
@@ -68,10 +75,11 @@ class ShortMovePanel(
             } }
             prefWidth = 135.0
         }
-        table.columns.setAll(company, direction, move, period)
+        table.columns.setAll(company, priceRange, direction, move, period)
         columnLayout = TableColumnLayout(table, savedColumns).also(TableColumnLayout<ShortMove>::install)
         autoFitter = TableColumnAutoFitter(table, listOf(
             TableColumnAutoFitter.Spec(company, { companyNames[it.symbol] ?: it.symbol }, 80.0, 240.0),
+            TableColumnAutoFitter.Spec(priceRange, ShortMovePricePresentation::text, 62.0, 88.0),
             TableColumnAutoFitter.Spec(direction, ::directionLabel, 68.0, 105.0),
             TableColumnAutoFitter.Spec(move, { "%+.2f%%".format(it.changePercent) }, 54.0, 76.0),
             TableColumnAutoFitter.Spec(period, {
@@ -80,7 +88,7 @@ class ShortMovePanel(
         ), columnLayout.savedWidths(), columnLayout.manuallySizedColumnIds())
         table.placeholder = Label("Waiting for recent minute bars…")
         table.columnResizePolicy = TableView.UNCONSTRAINED_RESIZE_POLICY
-        table.fixedCellSize = 23.0
+        table.fixedCellSize = -1.0
         VBox.setVgrow(table, Priority.ALWAYS)
         table.styleClass += listOf("scanner-table", "short-move-table")
         table.setRowFactory {
@@ -136,6 +144,17 @@ class ShortMovePanel(
             super.updateItem(item, empty); text = if (empty || item == null) null else "%+.2f%%".format(item.toDouble())
             styleClass.removeAll("short-move-up", "short-move-down")
             if (!empty && item != null) styleClass += if (item.toDouble() >= 0.0) "short-move-up" else "short-move-down"
+        }
+    }
+
+    private class PriceRangeCell : TableCell<ShortMove, ShortMove>() {
+        override fun updateItem(item: ShortMove?, empty: Boolean) {
+            super.updateItem(item, empty)
+            text = if (empty || item == null) null else ShortMovePricePresentation.text(item)
+            styleClass.removeAll("short-move-up", "short-move-down")
+            if (!empty && item != null) {
+                styleClass += if (item.changePercent >= 0.0) "short-move-up" else "short-move-down"
+            }
         }
     }
 }
