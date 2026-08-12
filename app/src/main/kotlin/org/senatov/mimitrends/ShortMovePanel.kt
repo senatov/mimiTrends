@@ -24,7 +24,7 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
 class ShortMovePanel(
-    private val onOpen: (String) -> Unit,
+    private val onOpen: (String, Long) -> Unit,
     savedColumns: String = "",
     private val loadProfile: ((String) -> java.util.concurrent.CompletableFuture<CompanyProfile>)? = null,
     private val copyText: (String) -> Unit = {}
@@ -100,7 +100,9 @@ class ShortMovePanel(
         table.setRowFactory {
             TableRow<ShortMove>().apply {
                 setOnMouseClicked { event ->
-                    if (!isEmpty && event.button == MouseButton.PRIMARY && event.clickCount == 1) onOpen(item.symbol)
+                    if (!isEmpty && event.button == MouseButton.PRIMARY && event.clickCount == 1) {
+                        onOpen(item.symbol, item.endedAtEpochSeconds)
+                    }
                 }
                 contextMenu = ContextMenu(
                     MenuItem("Copy search keyword").apply {

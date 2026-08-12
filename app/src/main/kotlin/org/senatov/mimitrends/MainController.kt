@@ -53,7 +53,11 @@ class MainController(
         repository, apiKey?.let(::FinnhubProfileClient), CompanyLogoClient()
     )
     private val shortMovePanel = ShortMovePanel(
-        { shortMoveSelection.open(it) }, shortMoveColumns, { symbol -> profileService.load(symbol) }, ClipboardText::copy
+        { symbol, moveEpochSeconds ->
+            trendChart.showSignalFocus(moveEpochSeconds)
+            shortMoveSelection.open(symbol)
+        },
+        shortMoveColumns, { symbol -> profileService.load(symbol) }, ClipboardText::copy
     )
     private val scannerPanel = ScannerPanel(
         onOpen = ::openScannerResult,
@@ -114,7 +118,6 @@ class MainController(
         { marketData.loadPriorityResult(it, scannerCriteria) }, { it == currentSymbol && !closing.get() },
         {
             currentSymbol = it
-            trendChart.showSignalFocus()
             setLoading(true)
             setStatus("Refreshing market data: $it")
         }

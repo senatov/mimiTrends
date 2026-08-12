@@ -72,7 +72,7 @@ class ChartTimelineTest {
         assertEquals(1, timeline.actualBars.count { it.minuteEpochSeconds == 0L })
     }
 
-    @Test fun `focus timeline expands compressed context to include an earlier trade`() {
+    @Test fun `focus timeline can include an explicitly requested earlier event`() {
         val bars = (0 until 1_000).map { index ->
             MinuteBar("TEST", index * 60L, 100.0, 101.0, 99.0, 100.0, 1_000.0)
         }

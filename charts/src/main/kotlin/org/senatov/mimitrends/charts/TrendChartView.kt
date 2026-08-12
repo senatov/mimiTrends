@@ -76,6 +76,7 @@ class TrendChartView : StackPane() {
     private var renderedPriceMultiplier = 1.0
     private var renderedCurrencySymbol = "$"
     private var cursorPinned = false
+    private var requestedFocusEpochSeconds: Long? = null
     private val tradeAnnotations = BrokerTradeAnnotations(pricePlot)
     @Suppress("unused")
     private val tradeAnnotationDragController = TradeAnnotationDragController(
@@ -155,17 +156,16 @@ class TrendChartView : StackPane() {
         renderRequest(requireNotNull(lastRequest))
     }
 
-    fun showSignalFocus() {
+    fun showSignalFocus(epochSeconds: Long? = null) {
+        requestedFocusEpochSeconds = epochSeconds
         focusButton.isSelected = true
     }
 
     private fun renderRequest(request: TrendChartRenderRequest) {
-        val focused = focusButton.isSelected && request.signal != null
-        val tradeEpochs = if (tradesButton.isSelected) request.trades.flatMap { trade ->
-            listOfNotNull(trade.entryEpochSeconds, trade.exitEpochSeconds)
-        } else emptyList()
+        val focusEpoch = requestedFocusEpochSeconds ?: request.signal?.signalEpochMillis?.div(1_000L)
+        val focused = focusButton.isSelected && focusEpoch != null
         val timeline = if (focused) ChartTimeline.focused(
-            request.bars, requireNotNull(request.signal).signalEpochMillis / 1_000L, tradeEpochs
+            request.bars, requireNotNull(focusEpoch)
         )
         else ChartTimeline.linear(TrendChartSupport.aggregate(request.bars, MAX_CANDLES))
         val visible = timeline.actualBars
