@@ -11,7 +11,6 @@ import java.awt.BasicStroke
 import java.awt.Color
 import java.awt.Font
 import java.awt.geom.Ellipse2D
-import java.awt.geom.Path2D
 import java.awt.geom.RoundRectangle2D
 import java.text.DecimalFormat
 import java.text.SimpleDateFormat
@@ -65,15 +64,15 @@ internal class BrokerTradeAnnotations(private val plot: XYPlot) {
             val exitY = trade.exitPrice ?: trade.entryPrice
             val controlX = (entryX + exitX) / 2.0
             addTradeHighlight(trade, bars, entryX, exitX, timeStep, priceSpan, barPriceMultiplier)
-            val entryAlignment = alignToCandle(trade.entryEpochSeconds, trade.entryPrice,
+            val entryAlignment = alignToCandle(trade.entryEpochSeconds,
                 bars, timeStep, barPriceMultiplier, displayMillis)
             val exitAlignment = trade.exitEpochSeconds?.let { epoch ->
-                alignToCandle(epoch, requireNotNull(trade.exitPrice), bars, timeStep, barPriceMultiplier, displayMillis)
+                alignToCandle(epoch, bars, timeStep, barPriceMultiplier, displayMillis)
             }
-            entryAlignment?.let(::addConnector)
-            exitAlignment?.let(::addConnector)
-            addPoint(entryX, entryY, timeStep, priceSpan, ORANGE)
-            addPoint(exitX, exitY, timeStep, priceSpan, if (trade.isOpen) ORANGE else pnlColor(trade))
+            val entryPoint = entryAlignment?.candlePoint ?: TradePoint(entryX, entryY)
+            val exitPoint = exitAlignment?.candlePoint ?: TradePoint(exitX, exitY)
+            addPoint(entryPoint.x, entryPoint.y, timeStep, priceSpan, ORANGE)
+            addPoint(exitPoint.x, exitPoint.y, timeStep, priceSpan, if (trade.isOpen) ORANGE else pnlColor(trade))
             val key = TradeKey(trade.symbol, trade.entryEpochSeconds, trade.exitEpochSeconds)
             val stored = cardPositions[key]
             val preferredX = stored?.let { domainMin + (it.x * (domainMax - domainMin)) } ?: controlX
@@ -82,7 +81,7 @@ internal class BrokerTradeAnnotations(private val plot: XYPlot) {
             val connectorPoints = listOfNotNull(
                 entryAlignment?.candlePoint,
                 exitAlignment?.candlePoint
-            ).ifEmpty { listOf(TradePoint(entryX, entryY), TradePoint(exitX, exitY)) }
+            ).ifEmpty { listOf(entryPoint, exitPoint) }
             addCard(key, trade, connectorPoints, preferredX, preferredBottom, timeStep, priceSpan,
                 domainMin, domainMax, rangeMin, rangeMax, entryAlignment, exitAlignment)
         }
@@ -252,25 +251,15 @@ internal class BrokerTradeAnnotations(private val plot: XYPlot) {
 
     private fun alignToCandle(
         epochSeconds: Long,
-        tradePrice: Double,
         bars: List<MinuteBar>,
         timeStep: Double,
         multiplier: Double,
         displayMillis: (Long) -> Double
     ): CandleAlignment? {
         val nearest = bars.minByOrNull { kotlin.math.abs(it.minuteEpochSeconds - epochSeconds) } ?: return null
-        val tradeX = displayMillis(epochSeconds)
         val candleX = displayMillis(nearest.minuteEpochSeconds)
         if (kotlin.math.abs(nearest.minuteEpochSeconds - epochSeconds) <= timeStep / 1_000.0 * 1.5) return null
-        return CandleAlignment(tradeX, tradePrice, candleX, nearest.close * multiplier)
-    }
-
-    private fun addConnector(alignment: CandleAlignment) {
-        val line = Path2D.Double().apply {
-            moveTo(alignment.tradeX, alignment.tradeY)
-            lineTo(alignment.candleX, alignment.candleY)
-        }
-        add(XYShapeAnnotation(line, CONNECTOR_STROKE, Color(219, 126, 35, 150)))
+        return CandleAlignment(candleX, nearest.close * multiplier)
     }
 
     private fun add(annotation: XYAnnotation) {
@@ -313,8 +302,6 @@ internal class BrokerTradeAnnotations(private val plot: XYPlot) {
         val CARD_BORDER = Color(91, 72, 126, 215)
         val CARD_FILL = Color(248, 250, 252, 235)
         val CARD_STROKE = BasicStroke(1.35f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND)
-        val CONNECTOR_STROKE = BasicStroke(1.3f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND,
-            0f, floatArrayOf(5f, 5f), 0f)
         const val HIGHLIGHT_PADDING = 0.035
         const val HIGHLIGHT_CORNER_SHARE = 0.72
         const val CARD_GAP = 0.035
@@ -324,8 +311,6 @@ internal class BrokerTradeAnnotations(private val plot: XYPlot) {
     }
 
     private data class CandleAlignment(
-        val tradeX: Double,
-        val tradeY: Double,
         val candleX: Double,
         val candleY: Double
     ) {

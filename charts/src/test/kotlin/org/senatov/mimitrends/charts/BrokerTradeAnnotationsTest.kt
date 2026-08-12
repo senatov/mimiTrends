@@ -106,6 +106,21 @@ class BrokerTradeAnnotationsTest {
         assertTrue(anchor.y > 99.0, "connector must terminate on the candle, not the chart floor")
     }
 
+    @Test fun `does not draw an extended trade price away from available candles`() {
+        val renderer = BrokerTradeAnnotations(XYPlot())
+        val bars = (10L..20L).map { minute ->
+            MinuteBar("TEST", minute * 60L, 32.0, 32.5, 31.5, 32.2, 1_000.0)
+        }
+        val trade = BrokerTrade(
+            "TEST", null, 1.0, 60L, 27.15, 1_200L, 32.4,
+            5.25, 19.34, 0.0, "EUR"
+        )
+
+        renderer.render(listOf(trade), bars, bars, 1.0)
+
+        assertTrue(renderer.renderedTradePoints().all { it.y in 31.5..32.5 })
+    }
+
     @Test fun `keeps nearby trade cards readable and separated on a long range`() {
         val renderer = BrokerTradeAnnotations(XYPlot())
         val bars = (0L..1_000L).map { minute ->
