@@ -10,6 +10,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 internal class ShortMoveRefreshCoordinator(
     private val loadMoves: (Collection<String>) -> List<ShortMove>,
     private val log: Logger,
+    private val refreshIntervalMillis: Long = REFRESH_INTERVAL_MILLIS,
     private val publish: (List<ShortMove>) -> Unit
 ) : AutoCloseable {
     private val executor = Executors.newSingleThreadScheduledExecutor { task ->
@@ -17,6 +18,7 @@ internal class ShortMoveRefreshCoordinator(
     }
     private val closed = AtomicBoolean()
     private var task: ScheduledFuture<*>? = null
+    private var periodicTask: ScheduledFuture<*>? = null
     private var refreshRequested = false
     @Volatile private var symbols = emptyList<String>()
 
@@ -24,6 +26,11 @@ internal class ShortMoveRefreshCoordinator(
     fun replaceSymbols(values: Collection<String>) {
         val replacement = values.map(String::uppercase).distinct()
         symbols = replacement
+        if (periodicTask == null) {
+            periodicTask = executor.scheduleWithFixedDelay(
+                ::request, refreshIntervalMillis, refreshIntervalMillis, TimeUnit.MILLISECONDS
+            )
+        }
         request()
     }
 
@@ -55,7 +62,9 @@ internal class ShortMoveRefreshCoordinator(
         if (!closed.compareAndSet(false, true)) return
         synchronized(this) {
             task?.cancel(false)
+            periodicTask?.cancel(false)
             task = null
+            periodicTask = null
             refreshRequested = false
         }
         executor.shutdownNow()
@@ -66,6 +75,7 @@ internal class ShortMoveRefreshCoordinator(
 
     private companion object {
         const val DEBOUNCE_MILLIS = 350L
+        const val REFRESH_INTERVAL_MILLIS = 180_000L
         const val CLOSE_TIMEOUT_SECONDS = 15L
     }
 }

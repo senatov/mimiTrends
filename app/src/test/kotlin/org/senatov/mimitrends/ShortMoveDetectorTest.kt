@@ -77,7 +77,7 @@ class ShortMoveDetectorTest {
     }
 
     @Test
-    fun `keeps an opening collapse visible later in the same session`() {
+    fun `expires an opening collapse after the recent battle window`() {
         val now = 50_000L
         val opening = listOf(470.0, 458.0, 456.0, 459.0)
         val later = (1..20).map { index -> 458.0 + (index % 3) * 0.2 }
@@ -89,9 +89,8 @@ class ShortMoveDetectorTest {
 
         val result = ShortMoveDetector.rank(mapOf("LVMH" to session), now).single()
 
-        assertEquals(ShortMovePattern.POST_DROP_STRUGGLE, result.pattern)
-        assertTrue(result.changePercent < -2.0)
-        assertEquals(470.0, result.open)
+        assertEquals(ShortMovePattern.DIRECTIONAL, result.pattern)
+        assertTrue(kotlin.math.abs(result.changePercent) < 1.0)
     }
 
     @Test

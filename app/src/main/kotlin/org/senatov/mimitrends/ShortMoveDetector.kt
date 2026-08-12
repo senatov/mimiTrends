@@ -10,7 +10,8 @@ internal data class ShortMove(
     val startedAtEpochSeconds: Long,
     val endedAtEpochSeconds: Long,
     val barCount: Int,
-    val pattern: ShortMovePattern = ShortMovePattern.DIRECTIONAL
+    val pattern: ShortMovePattern = ShortMovePattern.DIRECTIONAL,
+    val eventEpochSeconds: Long = endedAtEpochSeconds
 )
 
 internal enum class ShortMovePattern { DIRECTIONAL, POST_DROP_STRUGGLE }
@@ -25,8 +26,7 @@ internal object ShortMoveDetector {
         limit: Int = 10
     ): List<ShortMove> = barsBySymbol.mapNotNull { (symbol, bars) ->
         detectPostDropStruggle(symbol, bars, nowEpochSeconds) ?: calculate(symbol, bars, nowEpochSeconds)
-    }.sortedWith(compareByDescending<ShortMove> { it.pattern == ShortMovePattern.POST_DROP_STRUGGLE }
-        .thenByDescending { kotlin.math.abs(it.changePercent) }).take(limit)
+    }.sortedByDescending { rankingScore(it, nowEpochSeconds) }.take(limit)
 
     private fun detectPostDropStruggle(
         symbol: String,
@@ -38,6 +38,7 @@ internal object ShortMoveDetector {
         val recent = bars.sortedBy(MinuteBar::minuteEpochSeconds)
         if (recent.size < 4) return null
         for (dropEnd in recent.lastIndex - 2 downTo 1) {
+            if (recent[dropEnd].minuteEpochSeconds < latest.minuteEpochSeconds - POST_DROP_MAX_AGE_MINUTES * 60) break
             val postBars = recent.size - dropEnd - 1
             if (postBars < 2) continue
             val dropWindowStart = recent[dropEnd].minuteEpochSeconds - (DROP_WINDOW_MINUTES - 1) * 60L
@@ -56,10 +57,17 @@ internal object ShortMoveDetector {
             if (remainsNearLow && dropRetained) {
                 return ShortMove(symbol, retainedDrop, startPrice, latest.close,
                     recent[dropStart].minuteEpochSeconds, latest.minuteEpochSeconds, recent.size - dropStart,
-                    ShortMovePattern.POST_DROP_STRUGGLE)
+                    ShortMovePattern.POST_DROP_STRUGGLE, recent[dropEnd].minuteEpochSeconds)
             }
         }
         return null
+    }
+
+    private fun rankingScore(move: ShortMove, nowEpochSeconds: Long): Double {
+        val ageMinutes = ((nowEpochSeconds - move.eventEpochSeconds).coerceAtLeast(0L) / 60.0)
+        val freshness = (1.0 - ageMinutes / FRESHNESS_DECAY_MINUTES).coerceAtLeast(MIN_FRESHNESS_WEIGHT)
+        val patternWeight = if (move.pattern == ShortMovePattern.POST_DROP_STRUGGLE) POST_DROP_WEIGHT else 1.0
+        return kotlin.math.abs(move.changePercent) * freshness * patternWeight
     }
 
     private fun calculate(symbol: String, bars: List<MinuteBar>, nowEpochSeconds: Long): ShortMove? {
@@ -80,6 +88,10 @@ internal object ShortMoveDetector {
 
     private const val MIN_DROP_PERCENT = 0.7
     private const val DROP_WINDOW_MINUTES = 5L
+    private const val POST_DROP_MAX_AGE_MINUTES = 15L
+    private const val FRESHNESS_DECAY_MINUTES = 15.0
+    private const val MIN_FRESHNESS_WEIGHT = 0.35
+    private const val POST_DROP_WEIGHT = 1.10
     private const val MAX_RECOVERY_SHARE = 0.60
     private const val MIN_RETAINED_SHARE = 0.50
 }

@@ -97,6 +97,21 @@ class ShortMoveRefreshCoordinatorTest {
         closing.join()
     }
 
+    @Test
+    fun `periodic refresh runs independently of scanner requests`() {
+        val publications = CountDownLatch(2)
+        ShortMoveRefreshCoordinator(
+            loadMoves = { emptyList() },
+            log = LoggerFactory.getLogger(javaClass),
+            publish = { publications.countDown() },
+            refreshIntervalMillis = 100L
+        ).use { coordinator ->
+            coordinator.replaceSymbols(listOf("AAPL"))
+
+            assertTrue(publications.await(2, TimeUnit.SECONDS))
+        }
+    }
+
     private fun waitUntil(condition: () -> Boolean): Boolean {
         val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(1)
         while (System.nanoTime() < deadline) {

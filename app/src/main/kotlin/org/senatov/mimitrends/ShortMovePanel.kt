@@ -32,6 +32,9 @@ class ShortMovePanel(
     private val rows = FXCollections.observableArrayList<ShortMove>()
     private val table = TableView(rows)
     private val time = DateTimeFormatter.ofPattern("HH:mm").withZone(ZoneId.systemDefault())
+    private val updateCaption = Label("5-minute moves + recent post-drop · waiting").apply {
+        styleClass += "short-move-caption"
+    }
     private val companyNames = java.util.concurrent.ConcurrentHashMap<String, String>()
     private val columnLayout: TableColumnLayout<ShortMove>
     private val autoFitter: TableColumnAutoFitter<ShortMove>
@@ -40,7 +43,7 @@ class ShortMovePanel(
         val spacer = javafx.scene.layout.Region().also { HBox.setHgrow(it, Priority.ALWAYS) }
         val header = HBox(8.0,
             Label("Recent price battles").apply { styleClass += "table-section-title" }, spacer,
-            Label("5-minute moves + post-drop struggle · top 10").apply { styleClass += "short-move-caption" }
+            updateCaption
         ).apply {
             alignment = Pos.CENTER_LEFT
             styleClass += "table-section-header"
@@ -124,6 +127,7 @@ class ShortMovePanel(
 
     internal fun show(moves: Collection<ShortMove>) {
         rows.setAll(moves)
+        updateCaption.text = "5-minute moves + recent post-drop · updated ${time.format(Instant.now())}"
         moves.forEach(::requestCompanyName)
         autoFitter.request()
     }
