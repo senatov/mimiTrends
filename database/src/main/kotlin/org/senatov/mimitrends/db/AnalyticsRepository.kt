@@ -371,15 +371,16 @@ class AnalyticsRepository(
     private fun zoneFor(symbol: String) = MarketTimeZone.forSymbol(symbol)
     private data class BaselineSample(val minute: Int, val returnPercent: Double, val logVolume: Double?)
     private fun <T> transaction(block: () -> T): T {
-        val previousAutoCommit = connection.autoCommit
-        connection.autoCommit = false
+        check(connection.autoCommit) { "Nested analytics transactions are not supported" }
+        connection.createStatement().use { it.execute("BEGIN IMMEDIATE") }
         return try {
-            block().also { connection.commit() }
+            block().also {
+                connection.createStatement().use { statement -> statement.execute("COMMIT") }
+            }
         } catch (error: Exception) {
-            connection.rollback()
+            runCatching { connection.createStatement().use { statement -> statement.execute("ROLLBACK") } }
+                .onFailure(error::addSuppressed)
             throw error
-        } finally {
-            connection.autoCommit = previousAutoCommit
         }
     }
     private inline fun <T> locked(crossinline block: () -> T): T = database.locked { block() }

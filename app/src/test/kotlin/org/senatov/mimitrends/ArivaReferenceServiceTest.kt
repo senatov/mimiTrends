@@ -37,4 +37,14 @@ class ArivaReferenceServiceTest {
         service.close()
         repository.close()
     }
+
+    @Test fun `ignores symbol replacement after close`() {
+        val repository = MarketRepository(Files.createTempDirectory("mimitrends-ariva-close").resolve("test.db"))
+        val service = ArivaReferenceService(repository)
+
+        service.close()
+        service.replaceSymbols(listOf("AAPL"))
+
+        repository.close()
+    }
 }

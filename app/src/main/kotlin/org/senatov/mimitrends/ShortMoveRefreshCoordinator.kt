@@ -51,16 +51,21 @@ internal class ShortMoveRefreshCoordinator(
         }
     }
 
-    @Synchronized
     override fun close() {
         if (!closed.compareAndSet(false, true)) return
-        task?.cancel(false)
-        task = null
-        refreshRequested = false
+        synchronized(this) {
+            task?.cancel(false)
+            task = null
+            refreshRequested = false
+        }
         executor.shutdownNow()
+        if (!executor.awaitTermination(CLOSE_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
+            log.warn(LogTag.DB, "short-move refresh executor did not stop within {}s", CLOSE_TIMEOUT_SECONDS)
+        }
     }
 
     private companion object {
         const val DEBOUNCE_MILLIS = 350L
+        const val CLOSE_TIMEOUT_SECONDS = 15L
     }
 }

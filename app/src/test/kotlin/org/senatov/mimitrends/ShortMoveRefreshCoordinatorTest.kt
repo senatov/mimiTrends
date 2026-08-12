@@ -7,6 +7,7 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.concurrent.thread
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class ShortMoveRefreshCoordinatorTest {
@@ -60,6 +61,40 @@ class ShortMoveRefreshCoordinatorTest {
             assertEquals(listOf("AAPL"), publications.first().map(ShortMove::symbol))
             assertTrue(publications.last().isEmpty())
         }
+    }
+
+    @Test
+    fun `close waits for an active refresh to finish`() {
+        val loadStarted = CountDownLatch(1)
+        val allowLoadToFinish = CountDownLatch(1)
+        val coordinator = ShortMoveRefreshCoordinator(
+            loadMoves = {
+                loadStarted.countDown()
+                while (allowLoadToFinish.count > 0) {
+                    try {
+                        allowLoadToFinish.await()
+                    } catch (_: InterruptedException) {
+                        // Simulate a database call that cannot be cancelled by thread interruption.
+                    }
+                }
+                emptyList()
+            },
+            log = LoggerFactory.getLogger(javaClass),
+            publish = {}
+        )
+        coordinator.replaceSymbols(listOf("AAPL"))
+        assertTrue(loadStarted.await(1, TimeUnit.SECONDS))
+
+        val closeFinished = CountDownLatch(1)
+        val closing = thread {
+            coordinator.close()
+            closeFinished.countDown()
+        }
+        assertFalse(closeFinished.await(100, TimeUnit.MILLISECONDS))
+
+        allowLoadToFinish.countDown()
+        assertTrue(closeFinished.await(1, TimeUnit.SECONDS))
+        closing.join()
     }
 
     private fun waitUntil(condition: () -> Boolean): Boolean {

@@ -10,6 +10,7 @@ import java.util.concurrent.Executors
 import java.util.concurrent.ScheduledFuture
 import java.util.concurrent.ThreadLocalRandom
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
 
 internal class ArivaReferenceService(
     private val repository: MarketRepository,
@@ -19,12 +20,14 @@ internal class ArivaReferenceService(
     private val scheduler = Executors.newSingleThreadScheduledExecutor { task ->
         Thread(task, "mimitrends-ariva-reference").apply { isDaemon = true }
     }
+    private val closed = AtomicBoolean()
     private var symbols = emptyList<String>()
     private var index = 0
     private var task: ScheduledFuture<*>? = null
 
     @Synchronized
     fun replaceSymbols(values: Collection<String>) {
+        if (closed.get()) return
         symbols = values.map(String::uppercase).distinct()
         if (index >= symbols.size) index = 0
         if (symbols.isNotEmpty() && task == null) scheduleNext(INITIAL_DELAY_MILLIS)
@@ -69,6 +72,7 @@ internal class ArivaReferenceService(
             !instrument.identifier.startsWith("XS")
 
     override fun close() {
+        if (!closed.compareAndSet(false, true)) return
         synchronized(this) { symbols = emptyList(); task?.cancel(false); task = null }
         scheduler.shutdownNow()
         runCatching { scheduler.awaitTermination(20, TimeUnit.SECONDS) }
