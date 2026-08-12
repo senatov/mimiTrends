@@ -16,6 +16,7 @@
 - Avoid artificial line compression, multiple unrelated statements per line, and refactors made only to satisfy a metric.
 - Extract repeated behavior after it has a stable responsibility; do not create abstractions for incidental similarity.
 - Use explicit Kotlin nullability at Java and JDBC boundaries.
+- Add `@file:Suppress("SqlNoDataSourceInspection")` to Kotlin JDBC files containing inline SQL so the IDE does not report unconfigured-data-source warnings.
 - Keep public APIs minimal. Prefer `private`, then `internal`, unless cross-module access is required.
 - Use deterministic, bounded algorithms for UI work. Large collections must be sampled or processed away from the JavaFX thread.
 - UI updates must execute on the JavaFX Application Thread; network, file, and database work must not block it.

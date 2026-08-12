@@ -17,6 +17,27 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class MarketRepositoryTest {
+    @Test
+    fun `stores explicit inferred currency for primary minute bars`() {
+        val database = Files.createTempDirectory("mimitrends-currency").resolve("test.db")
+        MarketRepository(database).use { repository ->
+            repository.upsertMinuteBar(MinuteBar("PEP", 60L, 100.0, 101.0, 99.0, 100.5, 10.0))
+            repository.upsertMinuteBar(MinuteBar("ENEL.MI", 60L, 10.0, 10.1, 9.9, 10.0, 10.0))
+            repository.flushPending()
+        }
+
+        DriverManager.getConnection("jdbc:sqlite:$database").use { connection ->
+            connection.createStatement().use { statement ->
+                statement.executeQuery("""SELECT symbol, source_currency, currency_status FROM minute_bars
+                    ORDER BY symbol""").use { result ->
+                    result.next(); assertEquals("ENEL.MI", result.getString(1)); assertEquals("EUR", result.getString(2))
+                    assertEquals("INFERRED", result.getString(3))
+                    result.next(); assertEquals("PEP", result.getString(1)); assertEquals("USD", result.getString(2))
+                    assertEquals("INFERRED", result.getString(3))
+                }
+            }
+        }
+    }
     @Test fun `provider bars reject stale observations and merge newer minute values`() {
         val repository = MarketRepository(Files.createTempDirectory("mimitrends-provider-bars").resolve("test.db"))
         repository.upsertProviderInstrument(ProviderInstrument(

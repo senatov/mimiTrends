@@ -96,6 +96,19 @@ internal object AnalyticsMigrations {
         9 to listOf(
             "DROP INDEX IF EXISTS idx_minute_symbol_time",
             "DROP INDEX IF EXISTS idx_aggregate_symbol_time"
+        ),
+        10 to listOf(
+            "ALTER TABLE scan_candidates ADD COLUMN price_currency TEXT",
+            "ALTER TABLE scan_candidates ADD COLUMN currency_status TEXT",
+            "ALTER TABLE scan_candidates ADD COLUMN price_eur REAL",
+            "ALTER TABLE scan_candidates ADD COLUMN entry_price_eur REAL",
+            "ALTER TABLE scan_candidates ADD COLUMN fx_rate REAL",
+            "ALTER TABLE scan_candidates ADD COLUMN fx_rate_epoch INTEGER",
+            "ALTER TABLE research_samples ADD COLUMN entry_currency TEXT",
+            "ALTER TABLE research_samples ADD COLUMN currency_status TEXT",
+            "ALTER TABLE research_samples ADD COLUMN entry_price_eur REAL",
+            "ALTER TABLE research_samples ADD COLUMN fx_rate REAL",
+            "ALTER TABLE research_samples ADD COLUMN fx_rate_epoch INTEGER"
         )
     )
 }

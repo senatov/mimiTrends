@@ -163,6 +163,28 @@ class ShortMoveDetectorTest {
     }
 
     @Test
+    fun `detects palantir recovery with one quarter of the drop retained at seventeen forty nine`() {
+        val now = 110_000L
+        val prices = (0..50).map { index ->
+            when {
+                index <= 20 -> 147.72 - index * (1.67 / 20.0)
+                index <= 40 -> 146.05 + (index - 20) * (0.85 / 20.0)
+                else -> 146.90 + (index - 40) * (0.38 / 10.0)
+            }
+        }
+        val bars = prices.mapIndexed { index, close ->
+            bar("PLTR", now - (prices.lastIndex - index) * 60,
+                if (index == 0) close else prices[index - 1], close)
+        }
+
+        val result = ShortMoveDetector.rank(mapOf("PLTR" to bars), now).single()
+
+        assertEquals(ShortMovePattern.RECOVERY_AFTER_EXTENDED_DROP, result.pattern)
+        assertEquals(147.28, result.close, 1e-9)
+        assertTrue(result.changePercent < -0.25)
+    }
+
+    @Test
     fun `does not treat distant sparse bars as a five minute collapse`() {
         val now = 70_000L
         val session = listOf(

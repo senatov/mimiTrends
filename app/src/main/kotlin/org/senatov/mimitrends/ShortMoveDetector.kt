@@ -193,7 +193,7 @@ internal object ShortMoveDetector {
     private const val RECOVERY_MIN_BOTTOM_AGE_MINUTES = 35L
     private const val RECOVERY_MAX_BOTTOM_AGE_MINUTES = 60L
     private const val RECOVERY_MIN_SHARE = 0.35
-    private const val RECOVERY_MAX_SHARE = 0.70
+    private const val RECOVERY_MAX_SHARE = 0.80
     private const val RECOVERY_MIN_RETAINED_SHARE = 0.25
     private const val RECOVERY_MOMENTUM_MINUTES = 10L
     private const val RECOVERY_MIN_MOMENTUM_PERCENT = 0.25

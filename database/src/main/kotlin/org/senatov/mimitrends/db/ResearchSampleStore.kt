@@ -22,6 +22,9 @@ internal class ResearchSampleStore(private val connection: Connection) {
         val family = result?.let { family(it.signalSource) } ?: CONTROL_FAMILY
         val direction = result?.let { if (it.signalSource.contains('↓')) -1 else 1 } ?: 1
         if (hasRecentEpisode(symbol, family, direction, features.observedEpochSeconds)) return
+        val currency = runCatching {
+            DatabaseCurrencyNormalizer(connection).snapshot(symbol, features.entryPrice, features.observedEpochSeconds)
+        }.getOrNull()
         connection.prepareStatement(INSERT_SQL).use { statement ->
             var index = 1
             statement.setLong(index++, runId)
@@ -44,6 +47,11 @@ internal class ResearchSampleStore(private val connection: Connection) {
                 features.sessionHighDistancePercent, features.sessionLowDistancePercent,
                 features.volumeRatio10m, features.trendEfficiency10m
             ).forEach { metric(statement, index++, it) }
+            statement.setString(index++, currency?.sourceCurrency ?: DatabaseCurrencyNormalizer.sourceCurrency(symbol))
+            statement.setString(index++, if (currency == null) "RATE_PENDING" else "INFERRED")
+            metric(statement, index++, currency?.eurPrice)
+            metric(statement, index++, currency?.fxRate)
+            if (currency != null) statement.setLong(index, currency.fxRateEpoch) else statement.setNull(index, Types.INTEGER)
             statement.executeUpdate()
         }
     }
@@ -176,8 +184,9 @@ internal class ResearchSampleStore(private val connection: Connection) {
             run_id, symbol, observed_epoch, entry_price, family, direction, accepted, source,
             score, jump_z, range_z, volume_z, rvol, return_1m, return_3m, return_5m, return_10m,
             return_30m, return_60m, range_10m, volatility_30m, vwap_distance, session_high_distance,
-            session_low_distance, volume_ratio_10m, trend_efficiency_10m)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"""
+            session_low_distance, volume_ratio_10m, trend_efficiency_10m, entry_currency, currency_status,
+            entry_price_eur, fx_rate, fx_rate_epoch)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"""
         const val HISTORICAL_OUTCOME_SQL = """INSERT OR IGNORE INTO research_outcomes(
             sample_id, horizon_minutes, observed_price, return_percent, elapsed_minutes,
             maximum_return_percent, minimum_return_percent, observed_at)

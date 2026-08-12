@@ -70,6 +70,7 @@ class AnalyticsRepository(
             VALUES (?, ?, ?, ?, ?) ON CONFLICT(base_currency, quote_currency, rate_epoch) DO UPDATE SET rate=excluded.rate, source=excluded.source""").use { s ->
             s.setString(1, base); s.setString(2, quote); s.setLong(3, epochSeconds / 86_400 * 86_400)
             s.setDouble(4, rate); s.setString(5, source); s.executeUpdate()
+            DatabaseCurrencyBackfill.run(connection)
         }
     }
 
@@ -302,6 +303,7 @@ class AnalyticsRepository(
                 }
             }
         }
+        transaction { DatabaseCurrencyBackfill.run(connection) }
         log.info(LogTag.DB, "analytics schema ready version={}", AnalyticsMigrations.values.maxOf { it.first })
     }
 

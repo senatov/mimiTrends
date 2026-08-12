@@ -238,7 +238,10 @@ class MarketRepository(
                             statement.setString(1, bar.symbol); statement.setLong(2, bar.minuteEpochSeconds)
                             statement.setDouble(3, bar.open); statement.setDouble(4, bar.high); statement.setDouble(5, bar.low)
                             statement.setDouble(6, bar.close); statement.setDouble(7, bar.volume)
-                            statement.setString(8, bar.volumeStatus.name); statement.addBatch()
+                            statement.setString(8, bar.volumeStatus.name)
+                            statement.setString(9, sourceCurrency(bar.symbol))
+                            statement.setString(10, "INFERRED")
+                            statement.addBatch()
                         }
                         statement.executeBatch()
                     }
@@ -292,6 +295,14 @@ class MarketRepository(
                     statement.executeUpdate(
                         "UPDATE minute_bars SET volume_status = CASE WHEN volume > 0 THEN 'REPORTED' ELSE 'MISSING' END"
                     )
+                }
+                if ("source_currency" !in columns) {
+                    statement.executeUpdate("ALTER TABLE minute_bars ADD COLUMN source_currency TEXT")
+                    statement.executeUpdate("ALTER TABLE minute_bars ADD COLUMN currency_status TEXT")
+                    statement.executeUpdate("""UPDATE minute_bars SET source_currency=CASE
+                        WHEN symbol LIKE '%.DE' OR symbol LIKE '%.F' OR symbol LIKE '%.PA'
+                          OR symbol LIKE '%.AS' OR symbol LIKE '%.MI' OR symbol LIKE '%.HE' THEN 'EUR'
+                        ELSE 'USD' END, currency_status='INFERRED'""")
                 }
                 statement.executeUpdate("DROP INDEX IF EXISTS idx_minute_symbol_time")
                 val removedSnapshots = statement.executeUpdate(
@@ -350,10 +361,12 @@ class MarketRepository(
     }
 
     private companion object {
-        const val UPSERT_SQL = """INSERT INTO minute_bars(symbol, minute_epoch, open, high, low, close, volume, volume_status)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(symbol, minute_epoch) DO UPDATE SET
+        const val UPSERT_SQL = """INSERT INTO minute_bars(symbol, minute_epoch, open, high, low, close, volume, volume_status,
+            source_currency, currency_status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(symbol, minute_epoch) DO UPDATE SET
             open=excluded.open, high=excluded.high, low=excluded.low, close=excluded.close,
-            volume=excluded.volume, volume_status=excluded.volume_status"""
+            volume=excluded.volume, volume_status=excluded.volume_status,
+            source_currency=excluded.source_currency, currency_status=excluded.currency_status"""
         const val UPSERT_PROFILE_SQL = """INSERT INTO company_profiles(symbol, name, exchange, logo_url, logo, updated_at)
             VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(symbol) DO UPDATE SET
             name=excluded.name, exchange=excluded.exchange, logo_url=excluded.logo_url,
@@ -380,5 +393,9 @@ class MarketRepository(
             average_price=excluded.average_price, executions=excluded.executions, session_high=excluded.session_high,
             session_low=excluded.session_low, previous_close=excluded.previous_close, observed_at=excluded.observed_at
             WHERE excluded.observed_at > provider_quotes.observed_at"""
+
+        private val EURO_SUFFIXES = listOf(".DE", ".F", ".PA", ".AS", ".MI", ".HE")
+        private fun sourceCurrency(symbol: String): String =
+            if (EURO_SUFFIXES.any(symbol.uppercase()::endsWith)) "EUR" else "USD"
     }
 }

@@ -294,6 +294,13 @@ class AnalyticsRepositoryTest {
                     it.next(); assertEquals(signalEpoch, it.getLong(1)); assertEquals(100.0, it.getDouble(2))
                     assertEquals(result(signalEpoch).updatedAtMillis / 1_000L, it.getLong(3))
                 }
+                statement.executeQuery("""SELECT price_currency, currency_status, price_eur,
+                    entry_price_eur, fx_rate FROM scan_candidates""").use {
+                    it.next(); assertEquals("USD", it.getString(1)); assertEquals("INFERRED", it.getString(2))
+                    assertEquals(101.0 / 1.15, it.getDouble(3), 0.000_001)
+                    assertEquals(100.0 / 1.15, it.getDouble(4), 0.000_001)
+                    assertEquals(1.15, it.getDouble(5), 0.000_001)
+                }
                 statement.executeQuery("""SELECT entry_price, observed_price, return_percent, elapsed_minutes,
                     maximum_return_percent, minimum_return_percent FROM signal_outcomes""").use {
                     it.next(); assertEquals(100.0, it.getDouble(1)); assertEquals(102.0, it.getDouble(2))
