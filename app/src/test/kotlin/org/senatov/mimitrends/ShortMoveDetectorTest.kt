@@ -73,6 +73,7 @@ class ShortMoveDetectorTest {
         assertTrue(result.changePercent < -2.0)
         assertEquals(470.5, result.open)
         assertEquals(459.8, result.close)
+        assertEquals((459.8 / 470.5 - 1.0) * 100.0, result.changePercent, 1e-9)
     }
 
     @Test
@@ -91,6 +92,36 @@ class ShortMoveDetectorTest {
         assertEquals(ShortMovePattern.POST_DROP_STRUGGLE, result.pattern)
         assertTrue(result.changePercent < -2.0)
         assertEquals(470.0, result.open)
+    }
+
+    @Test
+    fun `does not turn a gradual session drift into a sudden post drop`() {
+        val now = 60_000L
+        val session = (0 until 30).map { index ->
+            val open = 100.0 - index * 0.1
+            bar("DRIFT", now - (29 - index) * 60, open, open - 0.1)
+        }
+
+        val result = ShortMoveDetector.rank(mapOf("DRIFT" to session), now).single()
+
+        assertEquals(ShortMovePattern.DIRECTIONAL, result.pattern)
+        assertTrue(result.changePercent > -1.0)
+    }
+
+    @Test
+    fun `does not treat distant sparse bars as a five minute collapse`() {
+        val now = 70_000L
+        val session = listOf(
+            bar("SPARSE", now - 30 * 60, 100.0, 100.0),
+            bar("SPARSE", now - 4 * 60, 90.0, 90.0),
+            bar("SPARSE", now - 2 * 60, 90.0, 90.0),
+            bar("SPARSE", now, 90.0, 90.0)
+        )
+
+        val result = ShortMoveDetector.rank(mapOf("SPARSE" to session), now).single()
+
+        assertEquals(ShortMovePattern.DIRECTIONAL, result.pattern)
+        assertEquals(0.0, result.changePercent, 1e-9)
     }
 
     private fun bars(symbol: String, end: Long, close: Double): List<MinuteBar> =

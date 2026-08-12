@@ -24,10 +24,12 @@ object MarketCalendar {
     fun sessionStart(symbol: String, instant: Instant = Instant.now()): Instant {
         val market = marketFor(symbol)
         var date = instant.atZone(market.zone).toLocalDate()
-        while (!isTradingDay(market, date) || ZonedDateTime.of(date, market.open, market.zone).toInstant().isAfter(instant)) {
+        repeat(370) {
+            val opening = ZonedDateTime.of(date, market.open, market.zone).toInstant()
+            if (isTradingDay(market, date) && !opening.isAfter(instant)) return opening
             date = date.minusDays(1)
         }
-        return ZonedDateTime.of(date, market.open, market.zone).toInstant()
+        error("No session start found for $symbol within 370 days")
     }
 
     fun nextOpening(symbol: String, instant: Instant = Instant.now()): Instant {

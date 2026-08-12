@@ -29,19 +29,25 @@ internal object ShortMoveBarComposer {
         val byMinute = primary.asSequence()
             .filter { it.minuteEpochSeconds <= nowEpochSeconds }
             .associateByTo(sortedMapOf(), MinuteBar::minuteEpochSeconds)
-        providerBars.asSequence()
-            .filter { observation ->
-                observation.bar.minuteEpochSeconds <= nowEpochSeconds
-            }
+        val primaryLast = byMinute.lastKeyOrNull() ?: Long.MIN_VALUE
+        val tails = providerBars.asSequence()
+            .filter { it.bar.minuteEpochSeconds in (primaryLast + 1)..nowEpochSeconds }
+            .groupBy(ProviderMinuteBar::provider)
+        val selectedTail = tails.maxWithOrNull(compareBy<Map.Entry<String, List<ProviderMinuteBar>>> {
+            it.value.maxOf { observation -> observation.bar.minuteEpochSeconds }
+        }.thenBy { it.value.maxOf(ProviderMinuteBar::observedAtMillis) }
+            .thenBy { providerRank(it.key) })?.value.orEmpty()
+        selectedTail.asSequence()
             .groupBy { it.bar.minuteEpochSeconds }
             .forEach { (minute, observations) ->
                 byMinute[minute] = observations.maxWith(
-                    compareBy<ProviderMinuteBar> { it.observedAtMillis }
-                        .thenBy { providerRank(it.provider) }
+                    compareBy(ProviderMinuteBar::observedAtMillis)
                 ).bar
             }
         return byMinute.values.toList()
     }
+
+    private fun <V> java.util.SortedMap<Long, V>.lastKeyOrNull(): Long? = if (isEmpty()) null else lastKey()
 
     private fun providerRank(provider: String): Int = PROVIDER_PRIORITY.indexOf(provider.uppercase())
         .let { index -> if (index < 0) Int.MIN_VALUE else -index }

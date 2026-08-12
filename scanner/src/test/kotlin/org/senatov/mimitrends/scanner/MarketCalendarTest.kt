@@ -12,6 +12,11 @@ class MarketCalendarTest {
             MarketCalendar.sessionStart("MC.PA", Instant.parse("2026-08-03T14:00:00Z")))
     }
 
+    @Test fun `session start before Monday opening uses previous Friday`() {
+        assertEquals(Instant.parse("2026-07-31T07:00:00Z"),
+            MarketCalendar.sessionStart("MC.PA", Instant.parse("2026-08-03T06:00:00Z")))
+    }
+
     @Test fun `US market observes regular session in New York time`() {
         assertTrue(MarketCalendar.isOpen("AAPL", Instant.parse("2026-08-03T14:00:00Z")))
         assertFalse(MarketCalendar.isOpen("AAPL", Instant.parse("2026-08-03T21:00:00Z")))
