@@ -44,4 +44,15 @@ class ShortMoveSortTest {
             listOf(late, early, middle).sortedWith(ShortMoveSort.period).map(ShortMove::symbol))
     }
 
+    @Test
+    fun `reapplies selected sorting after refreshed rows replace the list`() {
+        val rows = mutableListOf(shortMove("OLD", 1.0))
+        rows.clear()
+        rows += listOf(shortMove("UP", 0.5), shortMove("DOWN", -0.5), shortMove("FLAT", 0.0))
+
+        ShortMoveSort.apply(rows, ShortMoveSort.priceChange)
+
+        assertEquals(listOf("DOWN", "FLAT", "UP"), rows.map(ShortMove::symbol))
+    }
+
 }

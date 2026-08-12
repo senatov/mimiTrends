@@ -4,7 +4,6 @@ import javafx.beans.property.ReadOnlyDoubleWrapper
 import javafx.beans.property.ReadOnlyObjectWrapper
 import javafx.beans.property.ReadOnlyStringWrapper
 import javafx.collections.FXCollections
-import javafx.collections.transformation.SortedList
 import javafx.geometry.Pos
 import javafx.scene.control.Label
 import javafx.scene.control.TableCell
@@ -30,8 +29,7 @@ class ShortMovePanel(
     private val copyText: (String) -> Unit = {}
 ) : VBox(5.0) {
     private val rows = FXCollections.observableArrayList<ShortMove>()
-    private val sortedRows = SortedList(rows)
-    private val table = TableView(sortedRows)
+    private val table = TableView(rows)
     private val time = DateTimeFormatter.ofPattern("HH:mm").withZone(ZoneId.systemDefault())
     private val updateCaption = Label("5-minute moves + recent post-drop · waiting").apply {
         styleClass += "short-move-caption"
@@ -88,7 +86,10 @@ class ShortMovePanel(
             prefWidth = 135.0
         }
         table.columns.setAll(company, priceRange, direction, move, period)
-        sortedRows.comparatorProperty().bind(table.comparatorProperty())
+        table.sortPolicy = javafx.util.Callback { sortedTable ->
+            ShortMoveSort.apply(rows, sortedTable.comparator)
+            true
+        }
         columnLayout = TableColumnLayout(table, savedColumns).also(TableColumnLayout<ShortMove>::install)
         autoFitter = TableColumnAutoFitter(table, listOf(
             TableColumnAutoFitter.Spec(company, { companyNames[it.symbol] ?: it.symbol }, 80.0, 240.0),
@@ -131,6 +132,7 @@ class ShortMovePanel(
 
     internal fun show(moves: Collection<ShortMove>) {
         rows.setAll(moves)
+        if (table.sortOrder.isNotEmpty()) table.sort()
         updateCaption.text = "5-minute moves + recent post-drop · updated ${time.format(Instant.now())}"
         moves.forEach(::requestCompanyName)
         autoFitter.request()

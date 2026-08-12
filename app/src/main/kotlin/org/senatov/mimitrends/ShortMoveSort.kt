@@ -14,6 +14,10 @@ internal object ShortMoveSort {
             ShortMove::endedAtEpochSeconds)
     }
 
+    fun apply(moves: MutableList<ShortMove>, comparator: Comparator<ShortMove>?) {
+        if (comparator != null) moves.sortWith(comparator)
+    }
+
     private fun directionPosition(move: ShortMove): Int = when {
         move.pattern == ShortMovePattern.POST_DROP_STRUGGLE -> -2
         move.changePercent < 0.0 -> -1
