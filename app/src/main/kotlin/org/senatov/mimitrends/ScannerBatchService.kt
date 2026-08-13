@@ -9,7 +9,9 @@ internal data class ScannerBatchResult(
     val active: List<ScanResult>,
     val strictCount: Int,
     val adaptiveCount: Int,
-    val errors: List<String>
+    val errors: List<String>,
+    val sourceCoverage: Map<String, Int>,
+    val oldestDataAgeSeconds: Long?
 )
 
 internal class ScannerBatchService(
@@ -29,6 +31,9 @@ internal class ScannerBatchService(
         val fallbackLevels = List(3) { mutableListOf<ScanResult>() }
         val longTerm = mutableListOf<ScanResult>()
         val errors = mutableListOf<String>()
+        val sourceCoverage = linkedMapOf<String, Int>()
+        var oldestDataAgeSeconds: Long? = null
+        val nowEpochSeconds = java.time.Instant.now().epochSecond
         symbols.forEachIndexed { index, symbol ->
             if (!isCurrent()) {
                 analytics.abortScan(runId)
@@ -36,6 +41,11 @@ internal class ScannerBatchService(
             }
             runCatching { evaluate(symbol, criteria) }
                 .onSuccess { evaluation ->
+                    sourceCoverage.compute(evaluation.sourceStatus) { _, count -> (count ?: 0) + 1 }
+                    evaluation.latestDataEpochSeconds?.let { latest ->
+                        val age = (nowEpochSeconds - latest).coerceAtLeast(0L)
+                        oldestDataAgeSeconds = maxOf(oldestDataAgeSeconds ?: 0L, age)
+                    }
                     evaluation.primary?.let(strict::add)
                     evaluation.fallback.forEachIndexed { level, result ->
                         result?.let(fallbackLevels[level]::add)
@@ -69,6 +79,7 @@ internal class ScannerBatchService(
         analytics.completeScan(runId, selection.results.map(ScanResult::symbol), errors.size)
         val strictSymbols = calibratedStrict.mapTo(hashSetOf(), ScanResult::symbol)
         val qualifiedStrictCount = selection.results.count { it.symbol in strictSymbols }
-        return ScannerBatchResult(selection.results, qualifiedStrictCount, selection.adaptiveCount, errors)
+        return ScannerBatchResult(selection.results, qualifiedStrictCount, selection.adaptiveCount, errors,
+            sourceCoverage.toMap(), oldestDataAgeSeconds)
     }
 }

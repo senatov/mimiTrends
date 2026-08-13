@@ -8,9 +8,11 @@ import org.senatov.mimitrends.db.MarketRepository
 import org.senatov.mimitrends.model.ScannerCriteria
 import java.nio.file.Files
 import java.sql.DriverManager
+import java.time.Instant
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 class ScannerBatchServiceTest {
     @Test fun `persists and completes an evaluated batch`() {
@@ -18,7 +20,8 @@ class ScannerBatchServiceTest {
         val repository = MarketRepository(path)
         val analytics = AnalyticsRepository(path)
         val service = ScannerBatchService(
-            { symbol, _ -> ScanEvaluation(TestScanResult.create(symbol = symbol), emptyList()) },
+            { symbol, _ -> ScanEvaluation(TestScanResult.create(symbol = symbol), emptyList(),
+                sourceStatus = "YAHOO", latestDataEpochSeconds = Instant.now().epochSecond - 90) },
             analytics, repository, { "TEST" }
         )
 
@@ -28,6 +31,8 @@ class ScannerBatchServiceTest {
 
         assertNotNull(result)
         assertEquals(2, result.active.size)
+        assertEquals(mapOf("YAHOO" to 2), result.sourceCoverage)
+        assertTrue(requireNotNull(result.oldestDataAgeSeconds) >= 90)
         analytics.close()
         repository.close()
         DriverManager.getConnection("jdbc:sqlite:$path").use { connection ->

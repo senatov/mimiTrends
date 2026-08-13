@@ -25,11 +25,9 @@ import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.ConcurrentHashMap
 
-class MainController(
-    private val apiKey: String?, initialSymbol: String = "AAPL", initialRange: String = "3M",
+class MainController(private val apiKey: String?, initialSymbol: String = "AAPL", initialRange: String = "3M",
     initialDividerPosition: Double = 0.34, scannerColumns: String = "", shortMoveColumns: String = "",
-    initialTableDivider: Double = 0.68
-) {
+    initialTableDivider: Double = 0.68) {
     private companion object { const val MARKET_OPEN_GRACE_SECONDS = 5L }
     private val log = LoggerFactory.getLogger(MainController::class.java)
     private val repository = MarketRepository()
@@ -48,6 +46,8 @@ class MainController(
     private val trendChart = TrendChartView()
     private val scannerSettings = ScannerSettingsService()
     private var scannerCriteria: ScannerCriteria = scannerSettings.load()
+    private val currencyConverter = ScanResultCurrencyConverter(exchangeRates) { scannerCriteria }
+    private val status = MainStatusController(requestStatus, trendChart, refreshButton, log)
     private val scannerEngine = ScannerEngine()
     private val yahooFinance = YahooFinanceClient()
     private var profileService = CompanyProfileService(
@@ -75,13 +75,14 @@ class MainController(
     }
     private val scalableImport = ScalableImportAction(analytics, batchScheduler)
     private val researchReport = ResearchReportAction(
-        analytics, repository, scannerEngine, { scannerCriteria }, ::setStatus
+        analytics, repository, scannerEngine, { scannerCriteria }, status::update
     )
     private val scalableImportResults = ScalableImportResultHandler(
-        importTradesButton, ::setStatus, requestStatus::formatError, log
+        importTradesButton, status::update, requestStatus::formatError, log
     )
     private var rotationTask: ScheduledFuture<*>? = null
     private val scanGeneration = AtomicLong()
+    private val scanCyclePlanner = ScanCyclePlanner()
     private val closing = AtomicBoolean()
     private val chartDataLoader = ChartDataLoader(repository, analytics, exchangeRates)
     private val initialDivider = initialDividerPosition.coerceIn(0.15, 0.75)
@@ -110,7 +111,7 @@ class MainController(
         panel = scannerPanel,
         isMarketOpen = MarketCalendar::isOpen,
         onSelectedResult = ::applyFocusedSelection,
-        setStatus = ::setStatus,
+        setStatus = status::update,
         formatError = requestStatus::formatError,
         log = log
     )
@@ -118,13 +119,13 @@ class MainController(
         { marketData.loadPriorityResult(it, scannerCriteria) }, { it == currentSymbol && !closing.get() },
         {
             currentSymbol = it
-            setLoading(true)
-            setStatus("Refreshing market data: $it")
+            status.setLoading(true)
+            status.update("Refreshing market data: $it")
         }
     ) { symbol, result, error ->
         if (error != null) {
             log.warn(LogTag.API, "short-move chart refresh failed symbol={}", symbol, error)
-            setStatus("Market refresh failed: $symbol · showing cached chart", true, requestStatus.formatError(symbol, error))
+            status.update("Market refresh failed: $symbol · showing cached chart", true, requestStatus.formatError(symbol, error))
         }
         currentSignal = result
         loadLocalChart(symbol)
@@ -136,7 +137,7 @@ class MainController(
     init { scannerPanel.onInspect = focusedSignals::request }
     fun createView(): Parent {
         log.debug(LogTag.UI, "createView()")
-        scannerPanel.setCurrency(scannerCriteria.displayCurrency, ::displayPrice)
+        scannerPanel.setCurrency(scannerCriteria.displayCurrency, currencyConverter::price)
         scannerPanel.setAppearance(scannerCriteria.tableAppearance)
         tradegateProvider.configure(scannerCriteria)
         euronextProvider.configure(scannerCriteria)
@@ -164,14 +165,14 @@ class MainController(
         }
         startScanner()
         Platform.runLater { loadLocalChart(currentSymbol) }
-        setStatus("Requesting ECB EUR/USD reference rate")
+        status.update("Requesting ECB EUR/USD reference rate")
         exchangeRates.refresh().whenComplete(BiConsumer<Double?, Throwable?> { rate, error ->
             if (error != null) log.warn(LogTag.API, "ECB exchange-rate refresh failed; cached rate remains active", error)
             if (error == null && rate != null) analytics.recordFxRate("EUR", "USD", rate, "ECB")
             Platform.runLater {
-                scannerPanel.setCurrency(scannerCriteria.displayCurrency, ::displayPrice)
+                scannerPanel.setCurrency(scannerCriteria.displayCurrency, currencyConverter::price)
                 loadLocalChart(currentSymbol)
-                if (error == null && rate != null) setStatus("Read ECB EUR/USD reference rate: $rate")
+                if (error == null && rate != null) status.update("Read ECB EUR/USD reference rate: $rate")
             }
         })
         return appLayers
@@ -211,15 +212,17 @@ class MainController(
         log.debug(LogTag.API, "startScanner(symbols={})", scannerCriteria.symbols.size)
         priorityScanner.replaceCandidates(emptyList())
         recentEvents.clear()
+        scanCyclePlanner.reset()
         val generation = scanGeneration.incrementAndGet()
         val criteria = scannerCriteria
         rotationTask?.cancel(false)
         lateinit var scan: () -> Unit
         scan = scan@ {
             if (closing.get()) return@scan
+            val cycleStartedNanos = System.nanoTime()
             val selectedSymbols = MarketUniverseSelector.select(scannerCriteria)
             shortMoveRefresh.replaceSymbols(selectedSymbols)
-            val symbols = selectedSymbols.filter { MarketCalendar.isOpen(it) }
+            val symbols = scanCyclePlanner.order(selectedSymbols.filter { MarketCalendar.isOpen(it) })
             log.info(LogTag.API, "scan started symbols={} recentWindow={}m", symbols.size, criteria.maxSignalAgeMinutes)
             if (symbols.isEmpty()) {
                 priorityScanner.replaceCandidates(emptyList())
@@ -245,7 +248,7 @@ class MainController(
                     scannerPanel.showCountdown(resumeDelaySeconds)
                     scannerPanel.showMarketClosed(saved.size, persisted.isNotEmpty(), resumeText,
                         localZoneName, marketHours, brokerHours)
-                    setStatus(if (saved.isEmpty())
+                    status.update(if (saved.isEmpty())
                         "All selected markets are closed · scanner paused until $resumeText"
                     else if (persisted.isNotEmpty())
                         "Markets closed · showing ${saved.size} saved results · resumes $resumeText"
@@ -259,12 +262,12 @@ class MainController(
             }
             Platform.runLater {
                 scannerPanel.beginScan(1, 1, symbols)
-                setStatus("Finnhub live + Yahoo/SQLite: scanning ${symbols.size} symbols · fresh impulses only")
+                status.update("Finnhub live + Yahoo/SQLite: scanning ${symbols.size} symbols · fresh impulses only")
             }
             val batch = scannerBatch.execute(symbols, criteria,
                 { generation == scanGeneration.get() && !closing.get() },
                 { completed, symbol -> Platform.runLater {
-                    setStatus("Market data: analyzed $completed/${symbols.size} · $symbol")
+                    status.update("Market data: analyzed $completed/${symbols.size} · $symbol")
                 } }
             ) ?: return@scan
             val errors = batch.errors
@@ -272,33 +275,38 @@ class MainController(
                 log.warn(LogTag.API, "scan completed with failures count={} sample={}", errors.size, errors.take(3).joinToString("; "))
             }
             val active = batch.active
+            scanCyclePlanner.replacePriority(active.map(ScanResult::symbol))
             val shortMoves = shortMoveLoader.load(symbols)
             val retained = recentEvents.merge(active, System.currentTimeMillis(), criteria.resultLimit)
             val displayed = retained
             tableQuoteProviders.replaceSymbols(displayed.map(ScanResult::symbol))
             arivaReferences.replaceSymbols(displayed.map(ScanResult::symbol))
             priorityScanner.replaceCandidates(active)
+            val elapsedMillis = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - cycleStartedNanos)
+            val nextDelayMillis = ScanCyclePresentation.nextDelayMillis(criteria.scanIntervalSeconds, elapsedMillis)
+            val nextDelaySeconds = ScanCyclePresentation.countdownSeconds(nextDelayMillis)
+            val diagnostics = ScanCyclePresentation.diagnostics(batch, elapsedMillis)
             Platform.runLater {
                 if (generation != scanGeneration.get()) return@runLater
                 shortMovePanel.show(shortMoves)
                 if (active.isEmpty() && errors.size == symbols.size && symbols.isNotEmpty()) {
                     scannerPanel.abortScan()
-                    setStatus("Yahoo scan produced no data; previous table retained", true, errors.joinToString("\n"))
+                    status.update("Yahoo scan produced no data; previous table retained", true, errors.joinToString("\n"))
                 } else {
                     displayed.forEach(scannerPanel::update)
                     scannerPanel.completeScan(criteria.resultLimit)
-                    scannerPanel.showCountdown(criteria.scanIntervalSeconds)
+                    scannerPanel.showCountdown(nextDelaySeconds)
                     val marketState = if (symbols.isEmpty()) "all selected markets closed"
                         else "${batch.strictCount.coerceAtMost(active.size)} strict impulses + ${batch.adaptiveCount} adaptive"
-                    log.info(LogTag.API, "scan completed: {}", marketState)
-                    setStatus(if (active.isEmpty()) "No current candidates · next in ${criteria.scanIntervalSeconds}s"
-                    else "Hybrid scan complete · $marketState · next in ${criteria.scanIntervalSeconds}s")
+                    log.info(LogTag.API, "scan completed: {} diagnostics={}", marketState, diagnostics)
+                    status.update(if (active.isEmpty()) "No current candidates · $diagnostics · next in ${nextDelaySeconds}s"
+                    else "Hybrid scan complete · $marketState · $diagnostics · next in ${nextDelaySeconds}s")
                 }
             }
             if (generation != scanGeneration.get()) return@scan
             rotationTask = batchScheduler.schedule(
                 { runCatching(scan).onFailure { log.error(LogTag.API, "scheduled Yahoo scan failed", it) } },
-                criteria.scanIntervalSeconds, TimeUnit.SECONDS
+                nextDelayMillis, TimeUnit.MILLISECONDS
             )
         }
         batchScheduler.execute { runCatching(scan).onFailure { log.error(LogTag.API, "initial Yahoo scan failed", it) } }
@@ -344,7 +352,7 @@ class MainController(
             scannerCriteria = result.criteria; scannerSettings.save(result.criteria)
             tradegateProvider.configure(result.criteria)
             euronextProvider.configure(result.criteria)
-            scannerPanel.setCurrency(result.criteria.displayCurrency, ::displayPrice)
+            scannerPanel.setCurrency(result.criteria.displayCurrency, currencyConverter::price)
             scannerPanel.setAppearance(result.criteria.tableAppearance)
             loadLocalChart(currentSymbol)
             startScanner()
@@ -356,60 +364,37 @@ class MainController(
         profileService = CompanyProfileService(repository, key.takeIf(String::isNotBlank)?.let(::FinnhubProfileClient),
             CompanyLogoClient())
         finnhubClient = FinnhubLiveStarter.restart(key, finnhubClient, scannerCriteria, liveTicks,
-            liveAggregator, log, ::setStatus)
+            liveAggregator, log, status::update)
     }
 
     private fun loadLocalChart(symbol: String) {
         log.debug(LogTag.UI, "loadLocalChart(symbol={})", symbol)
         if (symbol.isBlank()) return
-        setLoading(true)
+        status.setLoading(true)
         val days = ChartRange.days(selectedRangeValue)
-        setStatus("Requesting SQLite: $symbol · $selectedRangeValue")
+        status.update("Requesting SQLite: $symbol · $selectedRangeValue")
         CompletableFuture.supplyAsync {
             chartDataLoader.load(symbol, days, scannerCriteria.displayCurrency)
         }.whenComplete(BiConsumer<ChartData?, Throwable?> { chartData, error ->
                 Platform.runLater {
-                    setLoading(false)
+                    status.setLoading(false)
                     if (error != null) {
                         log.error(LogTag.DB, "local chart load failed symbol={}", symbol, error)
-                        setStatus("SQLite read failed: ${error.message ?: "unknown error"}", true, requestStatus.formatError(symbol, error))
+                        status.update("SQLite read failed: ${error.message ?: "unknown error"}", true, requestStatus.formatError(symbol, error))
                     } else if (chartData != null && chartData.bars.isNotEmpty()) {
                         val bars = chartData.bars
                         val currency = scannerCriteria.displayCurrency
                         trendChart.renderMinuteBars(
                             symbol, bars, selectedRangeValue, 1.0, currency.symbol,
-                            currentSignal?.takeIf { it.symbol == symbol }?.inCurrency(symbol),
+                            currentSignal?.takeIf { it.symbol == symbol }?.let(currencyConverter::result),
                             chartData.companyName, chartData.trades
                         )
-                        setStatus("Read SQLite: $symbol · ${bars.size} minute bars · $selectedRangeValue")
+                        status.update("Read SQLite: $symbol · ${bars.size} minute bars · $selectedRangeValue")
                     } else {
                         trendChart.clear()
-                        setStatus("Read SQLite: no collected minute bars for $symbol · $selectedRangeValue")
+                        status.update("Read SQLite: no collected minute bars for $symbol · $selectedRangeValue")
                     }
                 }
             })
     }
-
-    private fun setLoading(value: Boolean) {
-        log.debug(LogTag.UI, "setLoading(value={})", value)
-        trendChart.setLoading(value)
-        refreshButton.isDisable = value
-    }
-
-    private fun setStatus(message: String) {
-        log.debug(LogTag.UI, "setStatus(message={})", message)
-        setStatus(message, false, null)
-    }
-
-    private fun setStatus(message: String, error: Boolean, details: String?) {
-        log.debug(LogTag.UI, "setStatus(message={}, error={}, details={})", message, error, details != null)
-        requestStatus.update(message, error, details)
-    }
-
-    private fun displayPrice(symbol: String, value: Double): Double = exchangeRates.convert(symbol, value, scannerCriteria.displayCurrency)
-
-    private fun ScanResult.inCurrency(symbol: String): ScanResult = copy(
-        price = displayPrice(symbol, price),
-        signalPrice = displayPrice(symbol, signalPrice)
-    )
 }
