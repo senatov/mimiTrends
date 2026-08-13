@@ -16,10 +16,11 @@ MiMiTrends is informational software. It does not place orders, provide investme
 
 <img src="./Doc/MainWindow.png" alt="MiMiTrends scanner and signal-focused chart" width="900">
 
-*Freshness is the first sortable column. The scanner combines current signals with defensible
-long-term growth candidates, while the lower pane shows the selected event, minute candles, volume,
-entry, current price, and executed trades. Rounded trade cards can be dragged away from the candles;
-curved purple leaders keep every explanation associated with its orange trade interval.*
+*Freshness is the first sortable column. Pattern rows show their watch priority as a percentage, while
+Outcome progresses from `Collecting` to a preliminary `Beta` probability and finally a validated `Model`
+probability. The lower pane shows the selected event, minute candles, volume, entry, current price, and
+executed trades. Rounded trade cards can be dragged away from the candles; curved purple leaders keep
+every explanation associated with its orange trade interval.*
 
 ### Scanner settings
 
@@ -102,11 +103,11 @@ automatically. A rapid opposite V-reversal updates the same visible episode inst
 | --- | --- |
 | Delay | Age of the latest provider observation. It is numeric and sortable; the icon distinguishes a current quote from a stale one. |
 | Symbol | Instrument identity and cached company profile. The context menu copies either the ticker or a short search-friendly company name. |
-| Pattern | Detected fresh impulse, relaxed impulse, or persistent trend. It describes observed price action rather than recommending a trade. |
+| Pattern | Detected fresh impulse, relaxed impulse, or persistent trend. A bracketed value such as `[40%]` is the watch-priority score derived from structure, anomaly strength, entry timing, freshness, volume, and available outcomes. It is a ranking aid, not a predicted return or recommendation. |
 | Move 10m | Signed price change over the latest ten-minute display window. |
 | Price | Latest completed locally available price in the selected display currency. |
 | Anomaly | Composite anomaly ranking: `Low`, `Moderate`, `High`, or `Very high`. This measures how unusual and well-confirmed the detected move is; it is not a buy/sell recommendation or a prediction that the move will continue. |
-| Outcome | Median directional return after 0.20% estimated friction and the empirically profitable share, such as `+0.08% · 58%`. The tooltip includes the middle 50% range, a 95% uncertainty interval, sample count, and favorable/adverse excursions. |
+| Outcome | `Collecting` means that no completed independent episode is available. `Beta 60%` is a deliberately labelled preliminary, beta-smoothed probability from an incomplete or concentrated sample. With representative history it shows median directional return and the empirically profitable share, such as `+0.08% · 58%`; an accepted trained model is labelled `Model 60%`. Tooltips identify the state, horizon, sample count, uncertainty, and model metadata where available. |
 | Price action | Human-readable interpretation such as `Rare impulse ↑`, `Steady trend ↑`, or `Volatile / unstable`. Rare impulses receive a dark-green outline. |
 | Volume | `Normal`, `Elevated`, `Strong`, `Extreme`, or `Price-led`, with relative volume when available. |
 | Age | Signal window or retained publication age; this is separate from quote freshness. |
@@ -262,9 +263,11 @@ Published signals are evaluated later at target horizons of 5, 10, and 30 minute
 The scanner's `Outcome` column uses independent ten-minute episodes. Repeated publications for the same
 symbol and signal family within fifteen minutes count as one episode. Directional returns are reduced by a
 conservative 0.20% friction allowance before profitability is assessed, so a negligible move is not counted
-as a useful continuation. The displayed probability uses mild beta smoothing, while its uncertainty range is
-a 95% Wilson interval. A minimum of twelve independent episodes, five symbols, and three trading days is
-required before the metric is displayed.
+as a useful continuation. As soon as at least one completed episode exists, the column exposes a mild
+beta-smoothed estimate labelled `Beta`; this early number can change sharply and is not a validated model.
+A representative empirical distribution and its 95% Wilson interval require at least twelve independent
+episodes, five symbols, and three trading days. Until then return quartiles and excursion statistics remain
+hidden rather than being inferred from an inadequate sample.
 
 Calibration is walk-forward: a signal can use only outcomes recorded before its own signal time. When enough
 history exists, the first estimate is restricted to a comparable cohort by market region, strict versus
@@ -351,6 +354,20 @@ An active model uses detector metrics available identically in historical and li
 probability replaces the displayed beta probability, while historical return/excursion statistics remain
 visible. The UI identifies the logistic source, model id, and training sample count. If no validated model is
 available, the existing walk-forward beta calibration remains the automatic fallback.
+
+### Scan rotation and source diagnostics
+
+The default universe contains 256 instruments: 160 US and 96 European equities. Open-market scans alternate
+US and European symbols and rotate their starting positions between cycles, so the tail of a static list does
+not systematically receive the oldest evaluation. Recently active candidates remain at the front for three
+full cycles and also retain the dedicated one-minute priority refresh.
+
+The configured scan interval is measured from the start of one pass to the intended start of the next. If a
+pass takes longer than that interval, the next pass begins after a short safety delay instead of overlapping
+the running pass. The status line and `INFO` scan summary report the completed pass duration, oldest analytical
+bar age, counts by actual last-bar source such as `FINNHUB`, `YAHOO`, or a European provider, and the effective
+countdown to the next pass. These measurements are intended to reveal a real throughput bottleneck before
+parallel requests or database sharding are introduced.
 
 ## Market data
 
@@ -662,7 +679,9 @@ The default `INFO` level records lifecycle events, scan summaries, warnings, and
 JAVA_TOOL_OPTIONS="-Dmimitrends.logLevel=DEBUG" ./gradlew run
 ```
 
-The status bar reports the current operation. A red details button opens the complete error report. Credentials are not intentionally logged.
+The status bar reports the current operation. Completed scans additionally show pass duration, oldest data
+age, source coverage, and the effective delay before the next pass. A red details button opens the complete
+error report. Credentials are not intentionally logged.
 
 ## Technology
 
