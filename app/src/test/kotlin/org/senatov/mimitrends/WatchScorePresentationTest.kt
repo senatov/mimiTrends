@@ -9,7 +9,7 @@ class WatchScorePresentationTest {
         val score = WatchScorePresentation.calculate(TestScanResult.create())
 
         assertTrue(score.value in 1..10)
-        assertEquals("[${score.value}/10]", score.label)
+        assertEquals("[${score.value * 10}%]", score.label)
     }
 
     @Test fun `penalizes an extended entry without discarding a strong instrument`() {

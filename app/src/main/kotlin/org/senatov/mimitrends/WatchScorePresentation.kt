@@ -4,7 +4,7 @@ import kotlin.math.roundToInt
 import org.senatov.mimitrends.model.ScanResult
 
 internal data class WatchScore(val value: Int, val color: String, val details: String) {
-    val label: String get() = "[$value/10]"
+    val label: String get() = "[${value * 10}%]"
 }
 
 internal object WatchScorePresentation {

@@ -44,7 +44,7 @@ class SignalCalibrationStoreTest {
         }
     }
 
-    @Test fun `does not display a probability from fewer than twelve episodes`() {
+    @Test fun `does not display a probability without completed episodes`() {
         DriverManager.getConnection("jdbc:sqlite::memory:").use { connection ->
             connection.createStatement().use { statement ->
                 statement.execute("CREATE TABLE scan_candidates(run_id INTEGER, symbol TEXT, signal_epoch INTEGER, signal TEXT, accepted INTEGER, published INTEGER, source TEXT, score REAL)")
@@ -56,7 +56,27 @@ class SignalCalibrationStoreTest {
         }
     }
 
-    @Test fun `does not display a probability from a concentrated sample`() {
+    @Test fun `provides a smoothed preliminary probability from an incomplete sample`() {
+        DriverManager.getConnection("jdbc:sqlite::memory:").use { connection ->
+            connection.createStatement().use { statement ->
+                statement.execute("CREATE TABLE scan_candidates(run_id INTEGER, symbol TEXT, signal_epoch INTEGER, signal TEXT, accepted INTEGER, published INTEGER, source TEXT, score REAL)")
+                statement.execute("""CREATE TABLE signal_outcomes(run_id INTEGER, symbol TEXT, horizon_minutes INTEGER,
+                    return_percent REAL, maximum_return_percent REAL, minimum_return_percent REAL)""")
+                repeat(3) { index ->
+                    statement.execute("INSERT INTO scan_candidates VALUES(${index + 1},'S$index',${1_000 + index},'Impulse ↑',1,1,'CACHE',NULL)")
+                    statement.execute("INSERT INTO signal_outcomes VALUES(${index + 1},'S$index',10,0.5,0.8,-0.3)")
+                }
+            }
+
+            val calibrated = SignalCalibrationStore(connection).enrich(result())
+
+            assertEquals(3, calibrated.calibrationSamples)
+            assertEquals(4.0 / 5.0, calibrated.continuationProbability, 1e-12)
+            assertTrue(calibrated.medianNetReturnPercent.isNaN())
+        }
+    }
+
+    @Test fun `marks a concentrated sample as a preliminary probability`() {
         DriverManager.getConnection("jdbc:sqlite::memory:").use { connection ->
             connection.createStatement().use { statement ->
                 statement.execute("CREATE TABLE scan_candidates(run_id INTEGER, symbol TEXT, signal_epoch INTEGER, signal TEXT, accepted INTEGER, published INTEGER, source TEXT, score REAL)")
@@ -69,10 +89,11 @@ class SignalCalibrationStoreTest {
                 }
             }
 
-            val calibrated = SignalCalibrationStore(connection).enrich(result())
+        val calibrated = SignalCalibrationStore(connection).enrich(result())
 
-            assertEquals(12, calibrated.calibrationSamples)
-            assertTrue(calibrated.continuationProbability.isNaN())
+        assertEquals(12, calibrated.calibrationSamples)
+        assertEquals(13.0 / 14.0, calibrated.continuationProbability, 1e-12)
+        assertTrue(calibrated.medianNetReturnPercent.isNaN())
         }
     }
 

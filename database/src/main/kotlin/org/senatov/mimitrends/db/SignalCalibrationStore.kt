@@ -22,11 +22,14 @@ internal class SignalCalibrationStore(private val connection: Connection) {
         val exactSamples = loadSamples(signalFamily, direction, horizonMinutes, cutoffEpoch, cohort)
         val samples = if (hasRepresentativeSample(exactSamples)) exactSamples else
             loadSamples(signalFamily, direction, horizonMinutes, cutoffEpoch, null)
-        if (!hasRepresentativeSample(samples)) return normalized.copy(calibrationSamples = samples.size)
-
         val netReturns = samples.map { direction * it.returnPercent - ASSUMED_FRICTION_PERCENT }
         val wins = netReturns.count { it > 0.0 }
         val probability = (wins + PRIOR_WINS) / (samples.size + PRIOR_SAMPLES)
+        if (!hasRepresentativeSample(samples)) return normalized.copy(
+            continuationProbability = probability.takeIf { samples.isNotEmpty() } ?: Double.NaN,
+            calibrationSamples = samples.size,
+            calibrationHorizonMinutes = horizonMinutes
+        )
         val (lowerBound, upperBound) = wilsonInterval(wins + PRIOR_WINS, samples.size + PRIOR_SAMPLES)
         val favorable = samples.mapNotNull { it.favorableExcursion(direction) }
         val adverse = samples.mapNotNull { it.adverseExcursion(direction) }

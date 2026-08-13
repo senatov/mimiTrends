@@ -42,6 +42,13 @@ internal object SignalMetricPresentation {
                     "Historical return distribution is still being collected.")
         }
         if (!result.medianNetReturnPercent.isFinite()) {
+            if (result.continuationProbability.isFinite()) {
+                val probability = result.continuationProbability * 100.0
+                return SignalMetric("Beta %.0f%%".format(probability), modelColor(probability), 500,
+                    "Preliminary ${result.calibrationHorizonMinutes}-minute probability after 0.20%% friction: %.0f%%\n".format(probability) +
+                        "Independent episodes: ${result.calibrationSamples}. The sample is not yet representative; " +
+                        "this estimate can change sharply and is not a validated model.")
+            }
             return SignalMetric("Collecting", "#1f2933", 400,
                 "Need at least 12 independent ${result.calibrationHorizonMinutes}-minute episodes; " +
                     "currently ${result.calibrationSamples}. Nearby repeated scans count as one episode.")

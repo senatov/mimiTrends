@@ -50,6 +50,19 @@ class SignalMetricPresentationTest {
         assertTrue(metric.details.contains("Median adverse excursion: -0.27%"))
     }
 
+    @Test fun `shows a preliminary beta percentage before the sample is representative`() {
+        val result = TestScanResult.create().copy(
+            continuationProbability = 0.60,
+            calibrationSamples = 3,
+            calibrationHorizonMinutes = 10
+        )
+
+        val metric = SignalMetricPresentation.outcome(result)
+
+        assertEquals("Beta 60%", metric.label)
+        assertTrue(metric.details.contains("not a validated model"))
+    }
+
     @Test fun `labels missing impulse volume as unavailable`() {
         val result = TestScanResult.create(signalSource = "Impulse ↓")
 
