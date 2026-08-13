@@ -107,6 +107,7 @@ class ShortMovePanel(
         table.styleClass += listOf("scanner-table", "short-move-table")
         table.setRowFactory {
             TableRow<ShortMove>().apply {
+                var contextItem: ShortMove? = null
                 setOnMouseClicked { event ->
                     if (!isEmpty && event.button == MouseButton.PRIMARY && event.clickCount == 1) {
                         onOpen(item.symbol, item.endedAtEpochSeconds)
@@ -114,10 +115,16 @@ class ShortMovePanel(
                 }
                 contextMenu = ContextMenu(
                     MenuItem("Copy search keyword").apply {
-                        setOnAction { item?.let { move -> copyText(searchKeyword(move)) } }
+                        setOnAction { contextItem?.let { move -> copyText(searchKeyword(move)) } }
                     },
-                    MenuItem("Copy ticker").apply { setOnAction { item?.symbol?.let(copyText) } }
-                )
+                    MenuItem("Copy ticker").apply { setOnAction { contextItem?.symbol?.let(copyText) } }
+                ).apply {
+                    setOnShowing {
+                        contextItem = item.takeUnless { isEmpty }
+                        contextItem?.let { table.selectionModel.select(it) }
+                    }
+                    setOnHidden { contextItem = null }
+                }
             }
         }
         table.setOnKeyPressed { event ->

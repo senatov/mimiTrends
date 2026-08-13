@@ -20,6 +20,7 @@ internal object ScannerTableInteraction {
     ) {
         table.setRowFactory {
             TableRow<ScanResult>().apply {
+                var contextItem: ScanResult? = null
                 val hoverDelay = PauseTransition(Duration.seconds(5.0)).apply {
                     setOnFinished { item?.takeIf { isHover && !isEmpty }?.let(inspect) }
                 }
@@ -31,9 +32,15 @@ internal object ScannerTableInteraction {
                     }
                 }
                 contextMenu = ContextMenu(
-                    MenuItem("Copy search keyword").apply { setOnAction { item?.let(copySearch) } },
-                    MenuItem("Copy ticker").apply { setOnAction { item?.symbol?.let(copyTicker) } }
-                )
+                    MenuItem("Copy search keyword").apply { setOnAction { contextItem?.let(copySearch) } },
+                    MenuItem("Copy ticker").apply { setOnAction { contextItem?.symbol?.let(copyTicker) } }
+                ).apply {
+                    setOnShowing {
+                        contextItem = item.takeUnless { isEmpty }
+                        contextItem?.let { table.selectionModel.select(it) }
+                    }
+                    setOnHidden { contextItem = null }
+                }
             }
         }
         table.setOnKeyPressed { event ->
