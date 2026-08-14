@@ -96,7 +96,8 @@ class MainController(private val apiKey: String?, initialSymbol: String = "AAPL"
     private val observationUiBridge = MarketObservationUiBridge(observationBus.observations, ::applyProviderObservation)
     private val tradegateProvider = TradegatePollingService(repository, observationSink = observationBus)
     private val euronextProvider = EuronextPollingService(repository, observationSink = observationBus)
-    private val tableQuoteProviders = TableQuoteProviderGroup(repository, observationBus)
+    private val langSchwarzProvider = LangSchwarzPollingService(repository, observationBus)
+    private val wallstreetOnlineProvider = WallstreetOnlinePollingService(repository, observationBus)
     private val arivaReferences = ArivaReferenceService(repository)
     private val recentEvents = RecentEventRetainer()
     private val priorityScanner = PriorityScanCoordinator(
@@ -108,6 +109,7 @@ class MainController(private val apiKey: String?, initialSymbol: String = "AAPL"
     )
     private val focusedSignals = FocusedSignalController(
         evaluate = { symbol -> marketData.loadPriorityResult(symbol, scannerCriteria) },
+        refreshQuote = { savedResultQuotes.refresh(listOf(it)).single() },
         panel = scannerPanel,
         isMarketOpen = MarketCalendar::isOpen,
         onSelectedResult = ::applyFocusedSelection,
@@ -194,7 +196,7 @@ class MainController(private val apiKey: String?, initialSymbol: String = "AAPL"
         try {
             shortMoveRefresh.close()
             ApplicationResourceCloser.close(focusedSignals, priorityScanner, tradegateProvider, euronextProvider,
-                tableQuoteProviders, arivaReferences,
+                langSchwarzProvider, wallstreetOnlineProvider, arivaReferences,
                 { finnhubClient?.close() }, batchScheduler, repository, analytics, log)
         } finally {
             observationBus.close()
@@ -279,7 +281,8 @@ class MainController(private val apiKey: String?, initialSymbol: String = "AAPL"
             val shortMoves = shortMoveLoader.load(symbols)
             val retained = recentEvents.merge(active, System.currentTimeMillis(), criteria.resultLimit)
             val displayed = retained
-            tableQuoteProviders.replaceSymbols(displayed.map(ScanResult::symbol))
+            langSchwarzProvider.replaceSymbols(displayed.map(ScanResult::symbol))
+            wallstreetOnlineProvider.replaceSymbols(displayed.map(ScanResult::symbol))
             arivaReferences.replaceSymbols(displayed.map(ScanResult::symbol))
             priorityScanner.replaceCandidates(active)
             val elapsedMillis = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - cycleStartedNanos)

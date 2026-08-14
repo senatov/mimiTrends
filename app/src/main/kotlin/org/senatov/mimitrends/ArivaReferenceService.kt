@@ -84,7 +84,7 @@ internal class ArivaReferenceService(
         const val PROVIDER = "ARIVA"
         const val MIC = "ARIVA"
         const val INITIAL_DELAY_MILLIS = 30_000L
-        val SOURCE_PROVIDERS = listOf("EURONEXT", "TRADEGATE", "BOERSE_DE", "TRADERFOX", "BNP_PARIBAS")
+        val SOURCE_PROVIDERS = listOf("EURONEXT", "TRADEGATE")
         val ISIN = Regex("[A-Z]{2}[A-Z0-9]{9}[0-9]")
     }
 }

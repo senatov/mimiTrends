@@ -12,7 +12,7 @@ class FocusedSignalRefresherTest {
         val completed = CountDownLatch(1)
         val loading = mutableListOf<Boolean>()
         FocusedSignalRefresher(
-            evaluate = { evaluations++; TestScanResult.create(symbol = it) },
+            evaluate = { evaluations++; FocusedSignalRefresh(TestScanResult.create(symbol = it), true) },
             onLoading = { _, value -> synchronized(loading) { loading += value } },
             onResult = { _, _ -> completed.countDown() },
             onError = { _, error -> throw error },
@@ -26,5 +26,14 @@ class FocusedSignalRefresherTest {
 
         assertEquals(1, evaluations)
         assertEquals(listOf(true, false), synchronized(loading) { loading.toList() })
+    }
+
+    @Test fun `retains the row with a refreshed quote when no signal qualifies`() {
+        val saved = TestScanResult.create(symbol = "EOAN.DE").copy(price = 17.66)
+
+        val refresh = resolveFocusedSignalRefresh(null, saved) { it.copy(price = 17.33) }
+
+        assertEquals(17.33, refresh.result?.price)
+        assertEquals(false, refresh.qualifyingSignal)
     }
 }

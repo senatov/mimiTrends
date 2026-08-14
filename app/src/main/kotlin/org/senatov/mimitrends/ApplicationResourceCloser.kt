@@ -13,7 +13,8 @@ internal object ApplicationResourceCloser {
         priorityScanner: AutoCloseable,
         tradegateProvider: AutoCloseable,
         euronextProvider: AutoCloseable,
-        boerseDeProvider: AutoCloseable,
+        langSchwarzProvider: AutoCloseable,
+        wallstreetOnlineProvider: AutoCloseable,
         arivaReferences: AutoCloseable,
         closeFinnhub: () -> Unit,
         batchScheduler: ExecutorService,
@@ -25,7 +26,8 @@ internal object ApplicationResourceCloser {
         priorityScanner.close()
         tradegateProvider.close()
         euronextProvider.close()
-        boerseDeProvider.close()
+        langSchwarzProvider.close()
+        wallstreetOnlineProvider.close()
         arivaReferences.close()
         closeFinnhub()
         batchScheduler.shutdownNow()

@@ -106,14 +106,28 @@ class MarketRepository(
     }
 
     fun loadInstrumentIsin(symbol: String): String? = database.locked {
+        val normalizedSymbol = symbol.trim().uppercase()
         val metadataExists = connection.prepareStatement(
             "SELECT 1 FROM sqlite_master WHERE type='table' AND name='instrument_metadata'"
         ).use { statement -> statement.executeQuery().use { it.next() } }
-        if (!metadataExists) return@locked null
-        connection.prepareStatement("SELECT isin FROM instrument_metadata WHERE symbol=?").use { statement ->
-            statement.setString(1, symbol.trim().uppercase())
+        if (metadataExists) {
+            connection.prepareStatement("SELECT isin FROM instrument_metadata WHERE symbol=?").use { statement ->
+                statement.setString(1, normalizedSymbol)
+                statement.executeQuery().use { result ->
+                    val metadataIsin = if (result.next()) {
+                        result.getString(1)?.trim()?.uppercase()?.takeIf(ISIN::matches)
+                    } else null
+                    if (metadataIsin != null) return@locked metadataIsin
+                }
+            }
+        }
+        connection.prepareStatement("SELECT DISTINCT identifier FROM provider_instruments WHERE symbol=?").use { statement ->
+            statement.setString(1, normalizedSymbol)
             statement.executeQuery().use { result ->
-                if (result.next()) result.getString(1)?.trim()?.uppercase()?.takeIf(ISIN::matches) else null
+                val candidates = buildSet {
+                    while (result.next()) result.getString(1)?.trim()?.uppercase()?.takeIf(ISIN::matches)?.let(::add)
+                }
+                candidates.singleOrNull()
             }
         }
     }
@@ -358,6 +372,7 @@ class MarketRepository(
                 statement.executeUpdate(
                     "CREATE INDEX IF NOT EXISTS idx_provider_bars_symbol_time ON provider_minute_bars(symbol, minute_epoch)"
                 )
+                deleteRemovedProviders(connection)
                 // Remove the temporary generated-monogram source used by an older build so genuine
                 // cached company favicons are fetched on the next visible table render.
                 statement.executeUpdate(
@@ -371,6 +386,20 @@ class MarketRepository(
         } finally {
             connection.autoCommit = previousAutoCommit
         }
+    }
+
+    private fun deleteRemovedProviders(connection: Connection) {
+        connection.prepareStatement("DELETE FROM provider_instruments WHERE provider=?").use(::deleteRemovedProviders)
+        connection.prepareStatement("DELETE FROM provider_minute_bars WHERE provider=?").use(::deleteRemovedProviders)
+        connection.prepareStatement("DELETE FROM provider_quotes WHERE provider=?").use(::deleteRemovedProviders)
+    }
+
+    private fun deleteRemovedProviders(statement: java.sql.PreparedStatement) {
+        REMOVED_PROVIDERS.forEach { provider ->
+            statement.setString(1, provider)
+            statement.addBatch()
+        }
+        statement.executeBatch()
     }
 
     private companion object {
@@ -409,6 +438,7 @@ class MarketRepository(
 
         private val EURO_SUFFIXES = listOf(".DE", ".F", ".PA", ".AS", ".MI", ".HE")
         private val ISIN = Regex("[A-Z]{2}[A-Z0-9]{9}[0-9]")
+        private val REMOVED_PROVIDERS = listOf("BOERSE_DE", "BNP_PARIBAS", "TRADERFOX")
         private fun sourceCurrency(symbol: String): String =
             if (EURO_SUFFIXES.any(symbol.uppercase()::endsWith)) "EUR" else "USD"
     }

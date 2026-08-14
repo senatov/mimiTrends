@@ -95,6 +95,6 @@ internal class LangSchwarzPollingService(
         const val MIC = "LSSI"
         const val CURRENCY = "EUR"
         const val POLL_INTERVAL_MILLIS = 30_000L
-        val MATCHING_PROVIDERS = listOf("TRADEGATE", "EURONEXT", "BOERSE_DE", "BNP_PARIBAS")
+        val MATCHING_PROVIDERS = listOf("TRADEGATE", "EURONEXT")
     }
 }

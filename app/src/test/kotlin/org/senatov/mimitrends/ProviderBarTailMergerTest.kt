@@ -51,7 +51,7 @@ class ProviderBarTailMergerTest {
     @Test fun `uses the freshest provider instead of a fixed provider priority`() {
         val yahoo = listOf(bar(60, 100.0))
         val providers = listOf(
-            provider("BOERSE_DE", 120, 101.0),
+            provider("EURONEXT", 120, 101.0),
             provider("TRADEGATE", 180, 102.0)
         )
 
@@ -65,13 +65,13 @@ class ProviderBarTailMergerTest {
     @Test fun `keeps the denser analytic tail while exposing the freshest quote`() {
         val yahoo = listOf(bar(60, 100.0))
         val providers = (2L..6L).map { provider("TRADEGATE", it * 60L, 99.0 + it) } +
-            provider("BNP_PARIBAS", 420, 106.0)
+            provider("LANG_SCHWARZ", 420, 106.0)
 
         val merged = ProviderBarTailMerger.merge(yahoo, providers, MarketDataSource.YAHOO, 480)
 
         assertEquals(listOf(60L, 120L, 180L, 240L, 300L, 360L),
             merged.analysisBars.map(MinuteBar::minuteEpochSeconds))
-        assertEquals(MarketDataSource.BNP_PARIBAS, merged.latestSource)
+        assertEquals(MarketDataSource.LANG_SCHWARZ, merged.latestSource)
         assertEquals(420L, merged.latestEpochSeconds)
         assertEquals(106.0, merged.latestObservation?.bar?.close)
     }
@@ -79,12 +79,12 @@ class ProviderBarTailMergerTest {
     @Test fun `does not analyze a dense tail that ended long before the freshest quote`() {
         val yahoo = listOf(bar(60, 100.0))
         val providers = (2L..6L).map { provider("TRADEGATE", it * 60L, 99.0 + it) } +
-            provider("BNP_PARIBAS", 600, 106.0)
+            provider("LANG_SCHWARZ", 600, 106.0)
 
         val merged = ProviderBarTailMerger.merge(yahoo, providers, MarketDataSource.YAHOO, 660)
 
         assertEquals(listOf(60L), merged.analysisBars.map(MinuteBar::minuteEpochSeconds))
-        assertEquals(MarketDataSource.BNP_PARIBAS, merged.latestSource)
+        assertEquals(MarketDataSource.LANG_SCHWARZ, merged.latestSource)
     }
 
     @Test fun `ignores provider observations older than fifteen minutes`() {

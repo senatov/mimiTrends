@@ -179,6 +179,6 @@ internal class TradegatePollingService(
         val DEBT_MARKERS = listOf("note", "notes", "nts.", "bond", "anleihe", "flr-", "medium term")
         val PERMANENT_INSTRUMENT_STATUSES = setOf(400, 404)
         val ISIN = Regex("[A-Z]{2}[A-Z0-9]{9}[0-9]")
-        val ISIN_PROVIDERS = listOf("ARIVA", "EURONEXT", "BOERSE_DE", "BNP_PARIBAS", "TRADERFOX")
+        val ISIN_PROVIDERS = listOf("ARIVA", "EURONEXT")
     }
 }

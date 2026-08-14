@@ -63,7 +63,7 @@ class TradegatePollingServiceTest {
             "CPR.MI", "CAMPARI", "Milan", null, null, 1L
         ))
         repository.upsertProviderInstrument(ProviderInstrument(
-            "BOERSE_DE", "CPR.MI", "CA75888V1004", "XSTU", "EUR", "REGEN III Corp."
+            "ARIVA", "CPR.MI", "CA75888V1004", "ARIVA", "EUR", "REGEN III Corp."
         ))
         repository.upsertProviderInstrument(ProviderInstrument(
             "EURONEXT", "CPR.MI", "NL0015435975", "MTAH", "EUR", "CAMPARI"

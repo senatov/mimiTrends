@@ -17,6 +17,47 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class MarketRepositoryTest {
+    @Test fun `uses unique provider isin when canonical metadata is absent`() {
+        val database = Files.createTempDirectory("mimitrends-provider-isin").resolve("test.db")
+        MarketRepository(database).use { repository ->
+            repository.upsertProviderInstrument(ProviderInstrument(
+                "EURONEXT", "EOAN.DE", "DE000ENAG999", "XETR", "EUR", "E.ON SE", 1_000
+            ))
+            repository.upsertProviderInstrument(ProviderInstrument(
+                "LANG_SCHWARZ", "EOAN.DE", "1474998", "LSSI", "EUR", "E.ON SE", 1_000
+            ))
+
+            assertEquals("DE000ENAG999", repository.loadInstrumentIsin("EOAN.DE"))
+        }
+    }
+
+    @Test fun `removes cached observations from retired providers`() {
+        val database = Files.createTempDirectory("mimitrends-retired-providers").resolve("test.db")
+        MarketRepository(database).use { repository ->
+            repository.upsertProviderInstrument(ProviderInstrument(
+                "TRADERFOX", "EOAN.DE", "DE000ENAG999", "TFX", "EUR", "E.ON SE", 1_000
+            ))
+            repository.upsertProviderMinuteBar(ProviderMinuteBar(
+                "TRADERFOX", "EOAN.DE", "DE000ENAG999", "TFX", "EUR",
+                MinuteBar("EOAN.DE", 60, 17.0, 17.0, 17.0, 17.0, 0.0, VolumeStatus.MISSING), 60_000
+            ))
+            repository.upsertProviderQuote(ProviderQuoteSnapshot(
+                "TRADERFOX", "EOAN.DE", "DE000ENAG999", "EUR", 17.0,
+                null, null, null, null, null, null, null, null, null, null, null, 60_000
+            ))
+        }
+
+        MarketRepository(database).use { repository ->
+            assertEquals(null, repository.loadProviderInstrument("TRADERFOX", "EOAN.DE"))
+            assertEquals(emptyList(), repository.loadProviderMinuteBars("TRADERFOX", "EOAN.DE", 0))
+        }
+        DriverManager.getConnection("jdbc:sqlite:$database").use { connection ->
+            connection.createStatement().executeQuery(
+                "SELECT COUNT(*) FROM provider_quotes WHERE provider='TRADERFOX'"
+            ).use { result -> result.next(); assertEquals(0, result.getInt(1)) }
+        }
+    }
+
     @Test
     fun `stores explicit inferred currency for primary minute bars`() {
         val database = Files.createTempDirectory("mimitrends-currency").resolve("test.db")

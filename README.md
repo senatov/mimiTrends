@@ -79,7 +79,7 @@ The primary question is not “What did this stock do over the last year?” but
   their rows immediately and stopping when they fall below `Strong`;
 - stores minute OHLCV history, company profiles, derived statistics, scan runs, and signal outcomes in SQLite;
 - corrects stale European snapshots with timestamped observations from Tradegate, Euronext,
-  Börse.de, BNP Paribas, Lang & Schwarz, and TraderFox where an instrument can be resolved safely;
+  Lang & Schwarz, and wallstreetONLINE where an instrument can be resolved safely;
 - never labels a crawled quote as fresh using its HTTP download time: the provider's own observation
   timestamp is required;
 - uses exchange-local time zones and market calendars for US, Xetra, Euronext, and Helsinki instruments;
@@ -196,8 +196,10 @@ All user-facing thresholds can be adjusted in Settings.
 
 European coverage is corrected by independent provider adapters rather than by overwriting the Yahoo series.
 Tradegate and Euronext can be enabled and paced in Settings. The table-result refresher additionally uses
-Börse.de, BNP Paribas, Lang & Schwarz, and TraderFox for resolvable ISINs or WKNs. Lang & Schwarz reads its
-Europe and Euro Stoxx tables in one bounded pass; the other crawlers rotate selected symbols sequentially.
+Lang & Schwarz for resolvable ISINs or WKNs. Lang & Schwarz reads its Europe and Euro Stoxx tables in one
+bounded pass. wallstreetONLINE is a low-priority crawler for the public top/flop performance pages: it opens
+at most five matching instrument pages per pass and accepts a quote only when its ISIN matches the canonical
+instrument ISIN. The site's disallowed stock-search RPC is not used.
 
 Every provider observation is stored in its own series with provider, identifier, MIC, currency, and original
 observation time. A quote without an unambiguous provider timestamp is rejected. Newer observations can extend
@@ -384,8 +386,8 @@ European quotes may be delayed. MiMiTrends labels data as live, delayed, Yahoo, 
 
 ### European quote correction
 
-Timestamped public observations from Tradegate, Euronext, Börse.de, BNP Paribas, Lang & Schwarz,
-and TraderFox can correct the visible tail of European instruments. The leading `Delay` value is
+Timestamped public observations from Tradegate, Euronext, Lang & Schwarz, and wallstreetONLINE can correct the visible tail
+of European instruments. The leading `Delay` value is
 calculated from the quote timestamp, not from the moment MiMiTrends downloaded the page. A provider
 that returns an old quote therefore remains visibly stale and cannot displace a newer observation.
 

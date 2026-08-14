@@ -1,15 +1,14 @@
 package org.senatov.mimitrends
 
-import org.senatov.mimitrends.model.ScanResult
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicLong
 
 internal class FocusedSignalRefresher(
-    private val evaluate: (String) -> ScanResult?,
+    private val evaluate: (String) -> FocusedSignalRefresh,
     private val onLoading: (String, Boolean) -> Unit,
-    private val onResult: (String, ScanResult?) -> Unit,
+    private val onResult: (String, FocusedSignalRefresh) -> Unit,
     private val onError: (String, Throwable) -> Unit,
     private val cooldownMillis: Long = DEFAULT_COOLDOWN_MILLIS,
     private val nowMillis: () -> Long = System::currentTimeMillis

@@ -76,6 +76,6 @@ internal object ShortMoveBarComposer {
         .let { index -> if (index < 0) Int.MIN_VALUE else -index }
 
     private val PROVIDER_PRIORITY = listOf(
-        "LANG_SCHWARZ", "TRADERFOX", "BOERSE_DE", "BNP_PARIBAS", "TRADEGATE", "EURONEXT"
+        "LANG_SCHWARZ", "TRADEGATE", "EURONEXT", "WALLSTREET_ONLINE"
     )
 }
