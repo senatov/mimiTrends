@@ -17,6 +17,16 @@ internal data class MarketDataSnapshot(
         get() = latestObservation?.bar?.minuteEpochSeconds ?: analysisBars.lastOrNull()?.minuteEpochSeconds
     val latestAnalysisEpochSeconds: Long?
         get() = analysisBars.lastOrNull()?.minuteEpochSeconds
+
+    fun analysisTracksLatestQuote(): Boolean {
+        val quoteEpoch = latestEpochSeconds ?: return true
+        val analysisEpoch = latestAnalysisEpochSeconds ?: return false
+        return quoteEpoch - analysisEpoch <= MAX_QUOTE_ANALYSIS_LAG_SECONDS
+    }
+
+    private companion object {
+        const val MAX_QUOTE_ANALYSIS_LAG_SECONDS = 2 * 60L
+    }
 }
 
 internal object ProviderBarTailMerger {
@@ -26,10 +36,8 @@ internal object ProviderBarTailMerger {
         primarySource: MarketDataSource,
         nowEpochSeconds: Long
     ): MarketDataSnapshot {
-        val primaryLast = primary.lastOrNull()?.minuteEpochSeconds ?: Long.MIN_VALUE
         val usable = providerBars.filter {
-            it.bar.minuteEpochSeconds > primaryLast &&
-                it.bar.minuteEpochSeconds <= nowEpochSeconds &&
+            it.bar.minuteEpochSeconds <= nowEpochSeconds &&
                 nowEpochSeconds - it.bar.minuteEpochSeconds <= MAX_PROVIDER_AGE_SECONDS
         }
         val latestObservation = usable.maxWithOrNull(
@@ -39,14 +47,21 @@ internal object ProviderBarTailMerger {
         ) ?: return MarketDataSnapshot(
             primary, primary, primarySource, primarySource, MarketObservationQuality.FULL_OHLCV
         )
+        val primaryLastEpoch = primary.lastOrNull()?.minuteEpochSeconds ?: Long.MIN_VALUE
+        if (latestObservation.bar.minuteEpochSeconds < primaryLastEpoch) {
+            return MarketDataSnapshot(
+                primary, primary, primarySource, primarySource, MarketObservationQuality.FULL_OHLCV
+            )
+        }
         val providerTails = usable.groupBy(ProviderMinuteBar::provider).mapValues { (_, observations) ->
             observations.groupBy { it.bar.minuteEpochSeconds }.values
                 .map { sameMinute -> sameMinute.maxBy(ProviderMinuteBar::observedAtMillis) }
                 .sortedBy { it.bar.minuteEpochSeconds }
         }
         val statisticallyCurrentTails = providerTails.filterValues { tail ->
-            tail.size >= MIN_ANALYTIC_TAIL_BARS && isContinuous(tail) &&
-                latestObservation.bar.minuteEpochSeconds - tail.last().bar.minuteEpochSeconds <= MAX_ANALYTIC_LAG_SECONDS
+            isContinuous(tail) &&
+                latestObservation.bar.minuteEpochSeconds - tail.last().bar.minuteEpochSeconds <= MAX_ANALYTIC_LAG_SECONDS &&
+                bridgesHistoryOrIsSelfSufficient(primary, tail)
         }
         if (statisticallyCurrentTails.isEmpty()) return MarketDataSnapshot(
             primary, primary, primarySource, MarketDataSource.valueOf(latestObservation.provider),
@@ -60,9 +75,11 @@ internal object ProviderBarTailMerger {
                 .thenBy { providerRank(it.key) }
         )!!.key
         val tail = providerTails.getValue(selectedProvider).map(ProviderMinuteBar::bar)
+        val analysisByMinute = primary.associateByTo(sortedMapOf(), MinuteBar::minuteEpochSeconds)
+        tail.forEach { analysisByMinute[it.minuteEpochSeconds] = it }
         return MarketDataSnapshot(
             historyBars = primary,
-            analysisBars = primary + tail,
+            analysisBars = analysisByMinute.values.toList(),
             historySource = primarySource,
             latestSource = MarketDataSource.valueOf(latestObservation.provider),
             latestQuality = MarketObservationQuality.QUOTE_SNAPSHOT,
@@ -80,9 +97,17 @@ internal object ProviderBarTailMerger {
     private fun isContinuous(tail: List<ProviderMinuteBar>): Boolean = tail.zipWithNext().all { (first, second) ->
         second.bar.minuteEpochSeconds - first.bar.minuteEpochSeconds in 60L..MAX_ANALYTIC_GAP_SECONDS
     }
+    private fun bridgesHistoryOrIsSelfSufficient(
+        primary: List<MinuteBar>,
+        tail: List<ProviderMinuteBar>
+    ): Boolean {
+        if (tail.size >= MIN_SELF_SUFFICIENT_TAIL_BARS) return true
+        val previous = primary.lastOrNull { it.minuteEpochSeconds < tail.first().bar.minuteEpochSeconds } ?: return true
+        return tail.first().bar.minuteEpochSeconds - previous.minuteEpochSeconds <= MAX_ANALYTIC_GAP_SECONDS
+    }
     private val EUROPEAN_SUFFIXES = setOf("DE", "PA", "AS", "MI", "HE")
     private const val MAX_ANALYTIC_LAG_SECONDS = 3 * 60L
-    private const val MAX_ANALYTIC_GAP_SECONDS = 2 * 60L
-    private const val MIN_ANALYTIC_TAIL_BARS = 5
-    private const val MAX_PROVIDER_AGE_SECONDS = 15 * 60L
+        private const val MAX_ANALYTIC_GAP_SECONDS = 2 * 60L
+        private const val MIN_SELF_SUFFICIENT_TAIL_BARS = 5
+        private const val MAX_PROVIDER_AGE_SECONDS = 15 * 60L
 }

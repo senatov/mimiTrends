@@ -34,7 +34,7 @@ class ShortMoveBarComposerTest {
     }
 
     @Test
-    fun `provider quotes never overwrite full primary candles or mix venues`() {
+    fun `fresh provider overwrites overlapping primary candle without mixing venues`() {
         val now = 20_000L
         val primary = listOf(bar(now - 60, 100.0))
         val providers = listOf(
@@ -45,7 +45,7 @@ class ShortMoveBarComposerTest {
 
         val result = ShortMoveBarComposer.compose(primary, providers, now)
 
-        assertEquals(listOf(100.0, 99.0), result.map(MinuteBar::close))
+        assertEquals(listOf(80.0, 99.0), result.map(MinuteBar::close))
     }
 
     private fun observation(provider: String, minute: Long, close: Double, observedAt: Long) =

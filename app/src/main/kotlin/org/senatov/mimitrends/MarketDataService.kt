@@ -117,6 +117,12 @@ internal class MarketDataService(
             return ScanEvaluation(null, emptyList(), "STALE_DATA", sourceStatus = merged.latestSource.name,
                 latestDataEpochSeconds = merged.latestAnalysisEpochSeconds)
         }
+        if (!merged.analysisTracksLatestQuote()) {
+            log.debug(LogTag.API, "open-market analysis rejected behind quote symbol={} analysis={} quote={}",
+                symbol, merged.latestAnalysisEpochSeconds, merged.latestEpochSeconds)
+            return ScanEvaluation(null, emptyList(), "ANALYSIS_BEHIND_QUOTE", sourceStatus = merged.latestSource.name,
+                latestDataEpochSeconds = merged.latestAnalysisEpochSeconds)
+        }
         val primary = scannerEngine.evaluate(symbol, merged.analysisBars, criteria)?.forPresentation(merged, effectiveStatus)
         val fallback = if (primary != null) emptyList() else RELAXATION_LEVELS.map { factor ->
             scannerEngine.evaluateFallback(symbol, merged.analysisBars, criteria, factor)
@@ -150,7 +156,7 @@ internal class MarketDataService(
             primary, primary, primarySource, primarySource,
             org.senatov.mimitrends.model.MarketObservationQuality.FULL_OHLCV
         )
-        val from = maxOf(primary.lastOrNull()?.minuteEpochSeconds?.plus(60L) ?: 0L, nowEpochSeconds - 4 * 3_600L)
+        val from = nowEpochSeconds - 4 * 3_600L
         val providerBars = PROVIDER_SOURCES.flatMap { provider ->
             repository.loadProviderMinuteBars(provider.name, symbol, from)
         }
