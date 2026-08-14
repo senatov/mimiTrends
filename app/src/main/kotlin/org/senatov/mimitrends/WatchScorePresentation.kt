@@ -4,7 +4,11 @@ import kotlin.math.roundToInt
 import org.senatov.mimitrends.model.ScanResult
 
 internal data class WatchScore(val value: Int, val color: String, val details: String) {
-    val label: String get() = "[${value * 10}%]"
+    val label: String get() = when (value) {
+        in 7..10 -> "BUY ${value * 10}%"
+        in 4..6 -> "WAIT ${value * 10}%"
+        else -> "AVOID ${value * 10}%"
+    }
 }
 
 internal object WatchScorePresentation {
@@ -28,14 +32,16 @@ internal object WatchScorePresentation {
             raw += (result.medianNetReturnPercent * 0.5).coerceIn(-0.75, 0.75)
         }
         if (result.relativeVolume.isFinite()) raw += ((result.relativeVolume - 1.0) / 4.0).coerceIn(0.0, 0.5)
-        val value = raw.roundToInt().coerceIn(1, 10)
+        var value = raw.roundToInt().coerceIn(1, 10)
+        if (result.signalSource.startsWith("Oversold decline", true)) value = value.coerceAtMost(3)
+        if (result.signalSource.contains("bottom unconfirmed", true)) value = value.coerceAtMost(3)
         val color = when (value) {
             in 1..3 -> "#b23b48"
             in 4..6 -> "#b26012"
             else -> "#137b50"
         }
         return WatchScore(value, color,
-            "Watch priority: $value/10. Combines trend structure, signal strength, entry timing, freshness, " +
-                "volume and calibrated outcomes. This is not a recommendation to buy.")
+            "Entry readiness: ${value * 10}%. Combines trend structure, signal strength, entry timing, freshness, " +
+                "volume and calibrated outcomes. This is a heuristic score, not a probability or financial advice.")
     }
 }

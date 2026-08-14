@@ -8,19 +8,21 @@ private fun shortMove(
     change: Double,
     pattern: ShortMovePattern = ShortMovePattern.DIRECTIONAL,
     start: Long = 0L,
-    end: Long = 60L
-) = ShortMove(symbol, change, 100.0, 100.0 * (1.0 + change / 100.0), start, end, 2, pattern)
+    end: Long = 60L,
+    open: Double = 100.0
+) = ShortMove(symbol, change, open, open * (1.0 + change / 100.0), start, end, 2, pattern)
 
 class ShortMoveSortTest {
     @Test
-    fun `move and price range use signed percentage`() {
+    fun `price range sorts by the displayed opening price`() {
         val moves: List<ShortMove> = listOf(
-            shortMove("UP", 3.0),
-            shortMove("DOWN", -4.0),
-            shortMove("SMALL", -1.0)
+            shortMove("CHEAP", 3.0, open = 20.0),
+            shortMove("EXPENSIVE", -4.0, open = 300.0),
+            shortMove("MIDDLE", -1.0, open = 100.0)
         )
 
-        assertEquals(listOf("DOWN", "SMALL", "UP"), moves.sortedWith(ShortMoveSort.priceChange).map(ShortMove::symbol))
+        assertEquals(listOf("CHEAP", "MIDDLE", "EXPENSIVE"),
+            moves.sortedWith(ShortMoveSort.priceRange).map(ShortMove::symbol))
     }
 
     @Test
@@ -50,7 +52,7 @@ class ShortMoveSortTest {
         rows.clear()
         rows += listOf(shortMove("UP", 0.5), shortMove("DOWN", -0.5), shortMove("FLAT", 0.0))
 
-        ShortMoveSort.apply(rows, ShortMoveSort.priceChange)
+        ShortMoveSort.apply(rows, ShortMoveSort.priceRange)
 
         assertEquals(listOf("DOWN", "FLAT", "UP"), rows.map(ShortMove::symbol))
     }

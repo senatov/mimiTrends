@@ -4,6 +4,7 @@ import javafx.beans.property.ReadOnlyDoubleWrapper
 import javafx.beans.property.ReadOnlyObjectWrapper
 import javafx.beans.property.ReadOnlyStringWrapper
 import javafx.collections.FXCollections
+import javafx.collections.transformation.SortedList
 import javafx.geometry.Pos
 import javafx.scene.control.Label
 import javafx.scene.control.TableCell
@@ -29,7 +30,8 @@ class ShortMovePanel(
     private val copyText: (String) -> Unit = {}
 ) : VBox(5.0) {
     private val rows = FXCollections.observableArrayList<ShortMove>()
-    private val table = TableView(rows)
+    private val sortedRows = SortedList(rows)
+    private val table = TableView(sortedRows)
     private val time = DateTimeFormatter.ofPattern("HH:mm").withZone(ZoneId.systemDefault())
     private val updateCaption = Label("5-minute moves + recent post-drop · waiting").apply {
         styleClass += "short-move-caption"
@@ -39,6 +41,7 @@ class ShortMovePanel(
     private val autoFitter: TableColumnAutoFitter<ShortMove>
 
     init {
+        sortedRows.comparatorProperty().bind(table.comparatorProperty())
         val spacer = javafx.scene.layout.Region().also { HBox.setHgrow(it, Priority.ALWAYS) }
         val header = HBox(8.0,
             Label("Recent price battles").apply { styleClass += "table-section-title" }, spacer,
@@ -50,12 +53,13 @@ class ShortMovePanel(
         val company = TableColumn<ShortMove, String>("Company").apply {
             id = "company"
             setCellValueFactory { ReadOnlyStringWrapper(companyNames[it.value.symbol] ?: it.value.symbol) }
+            comparator = Comparator { left, right -> left.compareTo(right, ignoreCase = true) }
             prefWidth = 210.0; minWidth = 90.0
         }
         val priceRange = TableColumn<ShortMove, ShortMove>("From → To").apply {
             id = "price_range"
             setCellValueFactory { ReadOnlyObjectWrapper(it.value) }
-            comparator = ShortMoveSort.priceChange
+            comparator = ShortMoveSort.priceRange
             isSortable = true
             setCellFactory { PriceRangeCell() }
             prefWidth = 82.0; minWidth = 62.0
@@ -86,10 +90,6 @@ class ShortMovePanel(
             prefWidth = 135.0
         }
         table.columns.setAll(company, priceRange, direction, move, period)
-        table.sortPolicy = javafx.util.Callback { sortedTable ->
-            ShortMoveSort.apply(rows, sortedTable.comparator)
-            true
-        }
         columnLayout = TableColumnLayout(table, savedColumns).also(TableColumnLayout<ShortMove>::install)
         autoFitter = TableColumnAutoFitter(table, listOf(
             TableColumnAutoFitter.Spec(company, { companyNames[it.symbol] ?: it.symbol }, 80.0, 240.0),
@@ -139,7 +139,6 @@ class ShortMovePanel(
 
     internal fun show(moves: Collection<ShortMove>) {
         rows.setAll(moves)
-        if (table.sortOrder.isNotEmpty()) table.sort()
         updateCaption.text = "5-minute moves + recent post-drop · updated ${time.format(Instant.now())}"
         moves.forEach(::requestCompanyName)
         autoFitter.request()
@@ -161,6 +160,7 @@ class ShortMovePanel(
             if (error == null && profile != null) javafx.application.Platform.runLater {
                 companyNames[move.symbol] = CompanySearchTerm.normalizeDisplay(profile.name)
                 table.refresh()
+                if (table.sortOrder.isNotEmpty()) table.sort()
                 autoFitter.request()
             }
         }

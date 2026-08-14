@@ -4,8 +4,8 @@ internal object ShortMoveSort {
     val direction = Comparator<ShortMove> { first, second ->
         directionPosition(first).compareTo(directionPosition(second))
     }
-    val priceChange = Comparator<ShortMove> { first, second ->
-        first.changePercent.compareTo(second.changePercent)
+    val priceRange = Comparator<ShortMove> { first, second ->
+        compareValuesBy(first, second, ShortMove::open, ShortMove::close)
     }
     val period = Comparator<ShortMove> { first, second ->
         compareValuesBy(first, second,
@@ -18,10 +18,11 @@ internal object ShortMoveSort {
         if (comparator != null) moves.sortWith(comparator)
     }
 
-    private fun directionPosition(move: ShortMove): Int = when {
-        move.pattern != ShortMovePattern.DIRECTIONAL -> -2
-        move.changePercent < 0.0 -> -1
-        else -> 1
+    private fun directionPosition(move: ShortMove): Int = when (move.pattern) {
+        ShortMovePattern.CONFIRMED_EXTENDED_DROP -> -3
+        ShortMovePattern.POST_DROP_STRUGGLE -> -2
+        ShortMovePattern.DIRECTIONAL -> if (move.changePercent < 0.0) -1 else 1
+        ShortMovePattern.RECOVERY_AFTER_EXTENDED_DROP -> 2
     }
 
     private fun periodMidpoint(move: ShortMove): Long = move.startedAtEpochSeconds +

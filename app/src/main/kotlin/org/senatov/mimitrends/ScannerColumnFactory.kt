@@ -61,20 +61,24 @@ internal class ScannerColumnFactory(
         configure(78.0, 68.0)
     }
 
-    fun signal(title: String, value: (ScanResult) -> String): TableColumn<ScanResult, String> =
-        TableColumn<ScanResult, String>(title).apply {
-            setCellValueFactory { ReadOnlyObjectWrapper(value(it.value)) }
+    fun signal(
+        title: String,
+        value: (ScanResult) -> String,
+        sortValue: (ScanResult) -> Double
+    ): TableColumn<ScanResult, ScanResult> =
+        TableColumn<ScanResult, ScanResult>(title).apply {
+            setCellValueFactory { ReadOnlyObjectWrapper(it.value) }
+            comparator = Comparator { left, right -> sortValue(left).compareTo(sortValue(right)) }
             setCellFactory {
-                object : TableCell<ScanResult, String>() {
-                    override fun updateItem(item: String?, empty: Boolean) {
+                object : TableCell<ScanResult, ScanResult>() {
+                    override fun updateItem(item: ScanResult?, empty: Boolean) {
                         super.updateItem(item, empty)
-                        val result = tableRow?.item
-                        if (empty || item == null || result == null) {
+                        if (empty || item == null) {
                             text = null; style = ""; tooltip = null
                             return
                         }
-                        val visual = signalVisual(result)
-                        text = item
+                        val visual = signalVisual(item)
+                        text = value(item)
                         style = "-fx-text-fill: ${visual.color};"
                         tooltip = Tooltip(visual.description).apply { showDelay = Duration.millis(450.0) }
                     }
@@ -83,51 +87,27 @@ internal class ScannerColumnFactory(
             configure(115.0, 55.0)
         }
 
-    fun pattern(): TableColumn<ScanResult, String> = TableColumn<ScanResult, String>("Pattern").apply {
-        setCellValueFactory { ReadOnlyObjectWrapper(it.value.signalSource) }
+    fun pattern(): TableColumn<ScanResult, ScanResult> = TableColumn<ScanResult, ScanResult>("Buy?").apply {
+        setCellValueFactory { ReadOnlyObjectWrapper(it.value) }
+        comparator = Comparator { left, right ->
+            WatchScorePresentation.calculate(left).value.compareTo(WatchScorePresentation.calculate(right).value)
+        }
         setCellFactory {
-            object : TableCell<ScanResult, String>() {
-                override fun updateItem(item: String?, empty: Boolean) {
+            object : TableCell<ScanResult, ScanResult>() {
+                override fun updateItem(item: ScanResult?, empty: Boolean) {
                     super.updateItem(item, empty)
-                    val result = tableRow?.item
-                    if (empty || item == null || result == null) {
+                    if (empty || item == null) {
                         text = null; graphic = null; tooltip = null
                         return
                     }
-                    val visual = signalVisual(result)
-                    val content = SignalPatternText.parse(item)
-                    val watchScore = WatchScorePresentation.calculate(result)
-                    val primary = Label(content.primary).apply {
-                        styleClass += "pattern-primary"
-                        style = "-fx-text-fill: ${visual.color};"
-                    }
-                    val score = Label(watchScore.label).apply {
+                    val content = SignalPatternText.parse(item.signalSource)
+                    val watchScore = WatchScorePresentation.calculate(item)
+                    graphic = Label(watchScore.label).apply {
                         styleClass += "pattern-watch-score"
                         style = "-fx-text-fill: ${watchScore.color};"
                     }
-                    val watchBadge = content.watchLabel?.let { label ->
-                        Label(label).apply { styleClass += "pattern-watch-badge" }
-                    }
-                    graphic = VBox(0.0).apply {
-                        alignment = Pos.CENTER_LEFT
-                        styleClass += "pattern-content"
-                        if (watchBadge != null) {
-                            children += primary
-                            children += HBox(5.0, watchBadge, score).apply { alignment = Pos.CENTER_LEFT }
-                            content.qualifiers?.let { qualifiers ->
-                                children += Label(qualifiers).apply { styleClass += "pattern-qualifiers" }
-                            }
-                        } else if (content.qualifiers == null) {
-                            children += HBox(5.0, primary, score).apply { alignment = Pos.CENTER_LEFT }
-                        } else {
-                            children += primary
-                            children += HBox(5.0, Label(content.qualifiers).apply {
-                                styleClass += "pattern-qualifiers"
-                            }, score).apply { alignment = Pos.CENTER_LEFT }
-                        }
-                    }
                     text = null
-                    tooltip = Tooltip("${visual.description}\n${watchScore.details}").apply {
+                    tooltip = Tooltip("Detected: ${content.primary}\n${content.qualifiers.orEmpty()}\n${watchScore.details}").apply {
                         showDelay = Duration.millis(450.0)
                     }
                 }
@@ -192,6 +172,7 @@ internal class ScannerColumnFactory(
     fun updated(format: (Long) -> String): TableColumn<ScanResult, Number> =
         TableColumn<ScanResult, Number>("Updated").apply {
             setCellValueFactory { ReadOnlyLongWrapper(it.value.updatedAtMillis) }
+            comparator = Comparator { left, right -> left.toLong().compareTo(right.toLong()) }
             setCellFactory {
                 object : TableCell<ScanResult, Number>() {
                     override fun updateItem(item: Number?, empty: Boolean) {
@@ -205,6 +186,9 @@ internal class ScannerColumnFactory(
 
     fun symbol(): TableColumn<ScanResult, String> = TableColumn<ScanResult, String>("Symbol").apply {
         setCellValueFactory { ReadOnlyObjectWrapper(it.value.symbol) }
+        comparator = Comparator { left, right ->
+            (companyNames[left] ?: left).compareTo(companyNames[right] ?: right, ignoreCase = true)
+        }
         setCellFactory {
             object : TableCell<ScanResult, String>() {
                 private var renderedSymbol: String? = null
@@ -229,6 +213,7 @@ internal class ScannerColumnFactory(
                                 text = displayName
                                 graphic = logoBadge(symbol, profile.logoBytes, 22.0)
                                 tooltip = companyTooltip(symbol, profile.copy(name = displayName))
+                                if (table.sortOrder.any { it.id == "company" }) table.sort()
                                 onContentChanged()
                             }
                         }

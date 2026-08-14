@@ -78,7 +78,9 @@ internal object SignalMetricPresentation {
     }
 
     fun outcomeSeverity(result: ScanResult): Double =
-        result.medianNetReturnPercent.takeIf(Double::isFinite) ?: Double.NEGATIVE_INFINITY
+        result.continuationProbability.takeIf(Double::isFinite)?.times(100.0)
+            ?: result.medianNetReturnPercent.takeIf(Double::isFinite)
+            ?: Double.NEGATIVE_INFINITY
 
     fun priceAction(result: ScanResult): SignalMetric {
         val arrow = directionArrow(result)

@@ -9,7 +9,16 @@ class WatchScorePresentationTest {
         val score = WatchScorePresentation.calculate(TestScanResult.create())
 
         assertTrue(score.value in 1..10)
-        assertEquals("[${score.value * 10}%]", score.label)
+        assertTrue(score.label.endsWith("${score.value * 10}%"))
+    }
+
+    @Test fun `unconfirmed bottom is never presented as a buy`() {
+        val score = WatchScorePresentation.calculate(
+            TestScanResult.create(signalSource = "Oversold decline ↓ · watch · bottom unconfirmed")
+        )
+
+        assertTrue(score.value <= 3)
+        assertTrue(score.label.startsWith("AVOID"))
     }
 
     @Test fun `penalizes an extended entry without discarding a strong instrument`() {
