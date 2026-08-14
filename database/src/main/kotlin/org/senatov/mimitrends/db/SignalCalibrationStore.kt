@@ -99,6 +99,9 @@ internal class SignalCalibrationStore(private val connection: Connection) {
         source.startsWith("V-Reversal") -> "V-Reversal"
         source.startsWith("Momentum") -> "Momentum"
         source.startsWith("Steady rise") || source.startsWith("Trend") -> "Steady rise"
+        source.startsWith("Early recovery") || source.startsWith("Recovery rise") ||
+            source.startsWith("Recovery breakout") -> "Recovery"
+        source.startsWith("Oversold decline") -> "Oversold"
         else -> "Impulse"
     }
 
@@ -162,6 +165,9 @@ internal class SignalCalibrationStore(private val connection: Connection) {
                         WHEN c.signal LIKE 'V-Reversal%' THEN 'V-Reversal'
                         WHEN c.signal LIKE 'Momentum%' THEN 'Momentum'
                         WHEN c.signal LIKE 'Steady rise%' OR c.signal LIKE 'Trend%' THEN 'Steady rise'
+                        WHEN c.signal LIKE 'Early recovery%' OR c.signal LIKE 'Recovery rise%'
+                            OR c.signal LIKE 'Recovery breakout%' THEN 'Recovery'
+                        WHEN c.signal LIKE 'Oversold decline%' THEN 'Oversold'
                         ELSE 'Impulse'
                     END AS family,
                     CASE WHEN c.signal LIKE '%↓%' THEN -1 ELSE 1 END AS direction,
@@ -174,6 +180,9 @@ internal class SignalCalibrationStore(private val connection: Connection) {
                                 WHEN c.signal LIKE 'V-Reversal%' THEN 'V-Reversal'
                                 WHEN c.signal LIKE 'Momentum%' THEN 'Momentum'
                                 WHEN c.signal LIKE 'Steady rise%' OR c.signal LIKE 'Trend%' THEN 'Steady rise'
+                                WHEN c.signal LIKE 'Early recovery%' OR c.signal LIKE 'Recovery rise%'
+                                    OR c.signal LIKE 'Recovery breakout%' THEN 'Recovery'
+                                WHEN c.signal LIKE 'Oversold decline%' THEN 'Oversold'
                                 ELSE 'Impulse'
                             END,
                             CASE WHEN c.signal LIKE '%↓%' THEN -1 ELSE 1 END
@@ -181,6 +190,7 @@ internal class SignalCalibrationStore(private val connection: Connection) {
                     ) AS previous_epoch
                 FROM scan_candidates c
                 WHERE c.accepted=1 AND c.published=1 AND c.signal_epoch IS NOT NULL
+                    AND upper(c.source) NOT IN ('BOERSE_DE', 'BNP_PARIBAS', 'TRADERFOX')
             ), episodes AS (
                 SELECT * FROM classified
                 WHERE previous_epoch IS NULL OR signal_epoch-previous_epoch>=900
@@ -199,9 +209,13 @@ internal class SignalCalibrationStore(private val connection: Connection) {
                     WHEN signal LIKE 'V-Reversal%' THEN 'V-Reversal'
                     WHEN signal LIKE 'Momentum%' THEN 'Momentum'
                     WHEN signal LIKE 'Steady rise%' OR signal LIKE 'Trend%' THEN 'Steady rise'
+                    WHEN signal LIKE 'Early recovery%' OR signal LIKE 'Recovery rise%'
+                        OR signal LIKE 'Recovery breakout%' THEN 'Recovery'
+                    WHEN signal LIKE 'Oversold decline%' THEN 'Oversold'
                     ELSE 'Impulse'
                 END=?
                 AND CASE WHEN signal LIKE '%↓%' THEN -1 ELSE 1 END=?
+                AND upper(source) NOT IN ('BOERSE_DE', 'BNP_PARIBAS', 'TRADERFOX')
                 AND signal_epoch<?
         """
     }

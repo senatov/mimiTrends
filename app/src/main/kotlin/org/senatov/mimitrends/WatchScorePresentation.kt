@@ -1,64 +1,136 @@
 package org.senatov.mimitrends
 
+import kotlin.math.exp
+import kotlin.math.ln
 import kotlin.math.roundToInt
 import org.senatov.mimitrends.model.ScanResult
 
 internal data class WatchScore(val value: Int, val color: String, val details: String) {
-    val label: String get() = when (value) {
-        in 7..10 -> "BUY ${value * 10}%"
-        in 4..6 -> "WAIT ${value * 10}%"
-        else -> "AVOID ${value * 10}%"
+    val category: String get() = when {
+        value >= BUY_THRESHOLD -> "buy"
+        value >= WAIT_THRESHOLD -> "wait"
+        else -> "avoid"
+    }
+    val label: String get() = "$value% ($category)"
+
+    private companion object {
+        const val BUY_THRESHOLD = 67
+        const val WAIT_THRESHOLD = 35
     }
 }
 
 internal object WatchScorePresentation {
     fun calculate(result: ScanResult): WatchScore {
-        var raw = 3.5 + result.anomalyScore.coerceIn(0.0, 6.0) / 3.0
-        raw += when {
-            result.signalSource.startsWith("Steady rise", true) -> 1.5
-            result.signalSource.startsWith("Recovery", true) -> 1.0
-            result.signalSource.startsWith("Impulse", true) -> 0.5
-            else -> 0.0
+        val structure = structureScore(result.signalSource)
+        val strength = historicalStrength(result)
+        val freshness = exp(-result.signalAgeMinutes.coerceAtLeast(0) / FRESHNESS_DECAY_MINUTES)
+        val timing = entryTiming(result)
+        val volume = volumeConfirmation(result)
+        val outcome = outcomeEvidence(result)
+        val components = Components(structure, strength, freshness, timing, volume, outcome)
+        var value = (components.weightedTotal * 100.0).roundToInt().coerceIn(0, 100)
+
+        val volumeConfirmed = hasSupportiveVolume(result)
+        val outcomeConfirmed = hasRepresentativeOutcome(result)
+        if (!volumeConfirmed && !outcomeConfirmed) value = value.coerceAtMost(66)
+        if (result.signalSource.contains("wait for pullback", true)) value = value.coerceAtMost(59)
+        if (result.signalAgeMinutes >= STALE_SIGNAL_MINUTES) value = value.coerceAtMost(29)
+        else if (result.signalAgeMinutes >= AGING_SIGNAL_MINUTES) value = value.coerceAtMost(59)
+        if (result.signalSource.startsWith("Oversold decline", true) ||
+            result.signalSource.contains("bottom unconfirmed", true) || result.signalSource.contains('↓')) {
+            value = value.coerceAtMost(29)
         }
-        if (result.signalSource.contains('↓')) raw -= 1.5
-        if (result.signalSource.contains("wait for pullback", true)) raw -= 1.5
-        if (result.signalSource.contains("cooling", true)) raw -= 2.0
-        if (result.signalSource.contains("relaxed", true)) raw -= 0.75
-        raw -= (result.signalAgeMinutes / 30.0).coerceIn(0.0, 1.5)
-        if (result.calibrationSamples >= 5 && result.continuationProbability.isFinite()) {
-            raw += ((result.continuationProbability - 0.5) * 4.0).coerceIn(-1.5, 1.5)
+
+        val color = when {
+            value >= 67 -> "#137b50"
+            value >= 35 -> "#b26012"
+            else -> "#b23b48"
         }
-        if (result.medianNetReturnPercent.isFinite()) {
-            raw += (result.medianNetReturnPercent * 0.5).coerceIn(-0.75, 0.75)
-        }
-        if (result.relativeVolume.isFinite()) raw += ((result.relativeVolume - 1.0) / 4.0).coerceIn(0.0, 0.5)
-        var value = raw.roundToInt().coerceIn(1, 10)
-        val volumeConfirmed = result.relativeVolume.isFinite() || result.volumeAnomaly.isFinite()
-        val outcomeConfirmed = result.calibrationSamples >= MIN_CALIBRATION_SAMPLES &&
-            result.continuationProbability.isFinite() && result.continuationProbability >= MIN_BUY_PROBABILITY
-        if (!volumeConfirmed && !outcomeConfirmed) value = value.coerceAtMost(6)
-        if (result.signalSource.startsWith("Steady rise", true) &&
-            result.windowChangePercent >= MAX_UNCONFIRMED_ENTRY_MOVE_PERCENT && !volumeConfirmed) {
-            value = value.coerceAtMost(6)
-        }
-        if (result.signalSource.contains("wait for pullback", true)) value = value.coerceAtMost(6)
-        if (result.signalAgeMinutes >= STALE_SIGNAL_MINUTES) value = value.coerceAtMost(3)
-        else if (result.signalAgeMinutes >= AGING_SIGNAL_MINUTES) value = value.coerceAtMost(6)
-        if (result.signalSource.startsWith("Oversold decline", true)) value = value.coerceAtMost(3)
-        if (result.signalSource.contains("bottom unconfirmed", true)) value = value.coerceAtMost(3)
-        val color = when (value) {
-            in 1..3 -> "#b23b48"
-            in 4..6 -> "#b26012"
-            else -> "#137b50"
-        }
-        return WatchScore(value, color,
-            "Entry readiness: ${value * 10}%. Combines trend structure, signal strength, entry timing, freshness, " +
-                "volume and calibrated outcomes. This is a heuristic score, not a probability or financial advice.")
+        return WatchScore(value, color, details(value, components, volumeConfirmed, outcomeConfirmed))
     }
 
-    private const val MIN_CALIBRATION_SAMPLES = 12
-    private const val MIN_BUY_PROBABILITY = 0.55
-    private const val MAX_UNCONFIRMED_ENTRY_MOVE_PERCENT = 0.75
+    private fun structureScore(source: String): Double = when {
+        source.startsWith("Recovery breakout", true) -> 0.78
+        source.startsWith("V-Reversal", true) -> 0.74
+        source.startsWith("Early recovery", true) -> 0.68
+        source.startsWith("Recovery rise", true) -> 0.67
+        source.startsWith("Steady rise", true) -> 0.65
+        source.startsWith("Momentum", true) -> 0.62
+        source.startsWith("Impulse", true) -> 0.58
+        source.startsWith("Oversold decline", true) -> 0.20
+        else -> 0.50
+    }
+
+    private fun historicalStrength(result: ScanResult): Double =
+        if (result.rankingPercentile.isFinite()) (result.rankingPercentile / 10.0).coerceIn(0.0, 1.0)
+        else result.anomalyScore.coerceAtLeast(0.0).let { it / (it + ANOMALY_HALF_SATURATION) }
+
+    private fun entryTiming(result: ScanResult): Double {
+        val excessMove = (result.windowChangePercent - FREE_ENTRY_MOVE_PERCENT).coerceAtLeast(0.0)
+        var score = exp(-excessMove / CHASE_DECAY_PERCENT)
+        if (result.signalSource.contains("extended", true)) score *= 0.55
+        if (result.signalSource.contains("cooling", true)) score *= 0.45
+        if (result.signalSource.contains("relaxed", true)) score *= 0.75
+        return score.coerceIn(0.0, 1.0)
+    }
+
+    private fun volumeConfirmation(result: ScanResult): Double {
+        val relative = result.relativeVolume.takeIf(Double::isFinite)?.coerceAtLeast(0.0)?.let {
+            (ln(it.coerceAtLeast(1.0)) / ln(3.0)).coerceIn(0.0, 1.0)
+        }
+        val anomaly = result.volumeAnomaly.takeIf(Double::isFinite)?.let { (it / 5.0).coerceIn(0.0, 1.0) }
+        return listOfNotNull(relative, anomaly).maxOrNull() ?: MISSING_EVIDENCE_SCORE
+    }
+
+    private fun outcomeEvidence(result: ScanResult): Double =
+        if (hasRepresentativeOutcome(result)) {
+            result.continuationLowerBound.takeIf(Double::isFinite)
+                ?: result.continuationProbability.coerceIn(0.0, 1.0)
+        }
+        else MISSING_EVIDENCE_SCORE
+
+    private fun hasSupportiveVolume(result: ScanResult): Boolean =
+        result.relativeVolume.takeIf(Double::isFinite)?.let { it >= MIN_SUPPORTIVE_RELATIVE_VOLUME } == true ||
+            result.volumeAnomaly.takeIf(Double::isFinite)?.let { it >= MIN_SUPPORTIVE_VOLUME_Z } == true
+
+    private fun hasRepresentativeOutcome(result: ScanResult): Boolean =
+        result.continuationProbability.isFinite() && (
+            result.continuationLowerBound.isFinite() && result.continuationUpperBound.isFinite() ||
+                result.predictionSource == "LOGISTIC" && result.predictionSamples >= MIN_MODEL_SAMPLES
+            )
+
+    private fun details(
+        value: Int,
+        components: Components,
+        volumeConfirmed: Boolean,
+        outcomeConfirmed: Boolean
+    ): String = "Entry readiness: $value% (heuristic, not profit probability).\n" +
+        "Structure %.0f%% · strength %.0f%% · freshness %.0f%% · timing %.0f%% · volume %.0f%% · outcomes %.0f%%\n".format(
+            components.structure * 100, components.strength * 100, components.freshness * 100,
+            components.timing * 100, components.volume * 100, components.outcome * 100
+        ) + "Volume confirmed: ${if (volumeConfirmed) "yes" else "no"} · representative outcomes: " +
+        if (outcomeConfirmed) "yes" else "no"
+
+    private data class Components(
+        val structure: Double,
+        val strength: Double,
+        val freshness: Double,
+        val timing: Double,
+        val volume: Double,
+        val outcome: Double
+    ) {
+        val weightedTotal: Double get() = structure * 0.30 + strength * 0.20 + freshness * 0.15 +
+            timing * 0.15 + volume * 0.10 + outcome * 0.10
+    }
+
+    private const val ANOMALY_HALF_SATURATION = 3.0
+    private const val FRESHNESS_DECAY_MINUTES = 10.0
+    private const val FREE_ENTRY_MOVE_PERCENT = 0.50
+    private const val CHASE_DECAY_PERCENT = 0.75
+    private const val MISSING_EVIDENCE_SCORE = 0.40
+    private const val MIN_SUPPORTIVE_RELATIVE_VOLUME = 1.20
+    private const val MIN_SUPPORTIVE_VOLUME_Z = 1.0
+    private const val MIN_MODEL_SAMPLES = 30
     private const val AGING_SIGNAL_MINUTES = 10
     private const val STALE_SIGNAL_MINUTES = 30
 }
