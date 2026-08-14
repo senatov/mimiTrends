@@ -13,4 +13,7 @@ internal data class TrendChartRenderRequest(
     val currencySymbol: String,
     val signal: ScanResult?,
     val trades: List<BrokerTrade>
-)
+) {
+    val tradeEpochSeconds: List<Long>
+        get() = trades.flatMap { trade -> listOfNotNull(trade.entryEpochSeconds, trade.exitEpochSeconds) }
+}

@@ -40,6 +40,7 @@ import java.awt.Font
 import java.text.DecimalFormat
 import java.text.SimpleDateFormat
 import java.util.Date
+private const val MAX_CANDLES = 360
 class TrendChartView : StackPane() {
     private val log = LoggerFactory.getLogger(javaClass)
     private val dateAxis = DateAxis()
@@ -164,9 +165,7 @@ class TrendChartView : StackPane() {
     private fun renderRequest(request: TrendChartRenderRequest) {
         val focusEpoch = requestedFocusEpochSeconds ?: request.signal?.signalEpochMillis?.div(1_000L)
         val focused = focusButton.isSelected && focusEpoch != null
-        val timeline = if (focused) ChartTimeline.focused(
-            request.bars, requireNotNull(focusEpoch)
-        )
+        val timeline = if (focused) ChartTimeline.focused(request.bars, requireNotNull(focusEpoch), request.tradeEpochSeconds)
         else ChartTimeline.linear(TrendChartSupport.aggregate(request.bars, MAX_CANDLES))
         val visible = timeline.actualBars
         val plotted = timeline.plottedBars
@@ -395,9 +394,5 @@ class TrendChartView : StackPane() {
         volumePlot.addDomainMarker(volumeTimeCursor)
         pricePlot.addRangeMarker(priceCursor)
         cursorMarkersInstalled = true
-    }
-
-    private companion object {
-        const val MAX_CANDLES = 360
     }
 }

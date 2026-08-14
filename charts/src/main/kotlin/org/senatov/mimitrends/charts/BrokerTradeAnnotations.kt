@@ -46,7 +46,9 @@ internal class BrokerTradeAnnotations(private val plot: XYPlot) {
         if (bars.isEmpty()) return
         val firstEpoch = bars.first().minuteEpochSeconds
         val lastEpoch = bars.last().minuteEpochSeconds
-        val visible = trades.filter { trade -> trade.entryEpochSeconds in firstEpoch..lastEpoch }
+        val visible = trades.filter { trade ->
+            trade.entryEpochSeconds in firstEpoch..lastEpoch && hasNearbyBar(trade.entryEpochSeconds, bars)
+        }
         val priceSpan = (bars.maxOf { it.high } - bars.minOf { it.low })
             .coerceAtLeast(bars.last().close * 0.02) * barPriceMultiplier
         val timeStep = medianBarSeconds(displayBars) * 1_000.0
@@ -181,7 +183,7 @@ internal class BrokerTradeAnnotations(private val plot: XYPlot) {
         else "BUY $symbol$entry → SELL $symbol$exit"
         val aligned = listOfNotNull(entryAlignment, exitAlignment).firstOrNull()
         val sessionNote = aligned?.let {
-            " · extended → candle ${SimpleDateFormat("HH:mm").format(Date(it.candleX.toLong()))}"
+            " · market mismatch at ${SimpleDateFormat("HH:mm").format(Date(it.actualEpochSeconds * 1_000L))}"
         }.orEmpty()
         val pnl = trade.profitAmount?.let { amount ->
             val sign = if (amount >= 0.0) "+" else "−"
@@ -257,6 +259,7 @@ internal class BrokerTradeAnnotations(private val plot: XYPlot) {
         displayMillis: (Long) -> Double
     ): CandleAlignment? {
         val nearest = bars.minByOrNull { kotlin.math.abs(it.minuteEpochSeconds - epochSeconds) } ?: return null
+        if (kotlin.math.abs(nearest.minuteEpochSeconds - epochSeconds) > MAX_ALIGNMENT_SECONDS) return null
         val candleX = displayMillis(nearest.minuteEpochSeconds)
         val closeInTime = kotlin.math.abs(nearest.minuteEpochSeconds - epochSeconds) <= timeStep / 1_000.0 * 1.5
         val candleLow = nearest.low * multiplier
@@ -265,8 +268,12 @@ internal class BrokerTradeAnnotations(private val plot: XYPlot) {
             nearest.close * multiplier * MIN_PRICE_TOLERANCE_SHARE)
         val closeInPrice = tradePrice in (candleLow - priceTolerance)..(candleHigh + priceTolerance)
         if (closeInTime && closeInPrice) return null
-        return CandleAlignment(candleX, nearest.close * multiplier)
+        return CandleAlignment(candleX, tradePrice, nearest.minuteEpochSeconds)
     }
+
+    private fun hasNearbyBar(epochSeconds: Long, bars: List<MinuteBar>): Boolean =
+        bars.minOfOrNull { kotlin.math.abs(it.minuteEpochSeconds - epochSeconds) }
+            ?.let { it <= MAX_ALIGNMENT_SECONDS } == true
 
     private fun add(annotation: XYAnnotation) {
         annotations += annotation
@@ -312,6 +319,7 @@ internal class BrokerTradeAnnotations(private val plot: XYPlot) {
         const val HIGHLIGHT_CORNER_SHARE = 0.72
         const val PRICE_TOLERANCE_SHARE = 0.25
         const val MIN_PRICE_TOLERANCE_SHARE = 0.002
+        const val MAX_ALIGNMENT_SECONDS = 90L
         const val CARD_GAP = 0.035
         const val CARD_LANE_SHARE = 0.24
         const val CARD_CORNER_WIDTH_SHARE = 0.08
@@ -320,7 +328,8 @@ internal class BrokerTradeAnnotations(private val plot: XYPlot) {
 
     private data class CandleAlignment(
         val candleX: Double,
-        val candleY: Double
+        val candleY: Double,
+        val actualEpochSeconds: Long
     ) {
         val candlePoint: TradePoint get() = TradePoint(candleX, candleY)
     }

@@ -122,7 +122,7 @@ class BrokerTradeAnnotationsTest {
         assertEquals(emptyList(), renderer.renderedCardBounds())
     }
 
-    @Test fun `does not trust a matching timestamp when trade price is outside candle OHLC`() {
+    @Test fun `keeps actual execution price when it is outside candle OHLC`() {
         val renderer = BrokerTradeAnnotations(XYPlot())
         val bars = (0L..10L).map { minute ->
             MinuteBar("TEST", minute * 60L, 31.0, 31.4, 30.8, 31.1, 1_000.0)
@@ -134,7 +134,24 @@ class BrokerTradeAnnotationsTest {
 
         renderer.render(listOf(trade), bars, bars, 1.0)
 
-        assertEquals(31.1, renderer.renderedTradePoints().first().y, 0.000_001)
+        assertEquals(27.15, renderer.renderedTradePoints().first().y, 0.000_001)
+    }
+
+    @Test fun `does not relocate a trade to a distant retained candle`() {
+        val renderer = BrokerTradeAnnotations(XYPlot())
+        val bars = listOf(
+            MinuteBar("TEST", 0L, 31.0, 31.4, 30.8, 31.1, 1_000.0),
+            MinuteBar("TEST", 600L, 31.0, 31.4, 30.8, 31.1, 1_000.0)
+        )
+        val trade = BrokerTrade(
+            "TEST", null, 1.0, 300L, 31.1, null, null,
+            null, null, 0.0, "EUR"
+        )
+
+        renderer.render(listOf(trade), bars, bars, 1.0)
+
+        assertEquals(emptyList(), renderer.renderedTradePoints())
+        assertEquals(emptyList(), renderer.renderedCardBounds())
     }
 
     @Test fun `keeps nearby trade cards readable and separated on a long range`() {

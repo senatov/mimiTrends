@@ -68,19 +68,22 @@ internal class ChartTimeline private constructor(
                 kotlin.math.abs(bars[it].minuteEpochSeconds - signalEpochSeconds)
             } ?: bars.lastIndex
             val detailStart = (signalIndex - DETAIL_BEFORE_SIGNAL).coerceAtLeast(0)
-            val requestedStart = includedEpochSeconds.minOrNull()?.let { epoch ->
+            val requestedIndices = includedEpochSeconds.mapNotNull { epoch ->
                 bars.indices.minByOrNull { kotlin.math.abs(bars[it].minuteEpochSeconds - epoch) }
-            }
-            val contextStart = minOf((detailStart - CONTEXT_BARS).coerceAtLeast(0), requestedStart ?: detailStart)
+            }.filter { it < detailStart }.distinct()
+            val contextStart = minOf(
+                (detailStart - CONTEXT_BARS).coerceAtLeast(0),
+                requestedIndices.minOrNull() ?: detailStart
+            )
             val detail = bars.subList(detailStart, bars.size)
             val context = bars.subList(contextStart, detailStart)
             val contextSlots = (detail.size * 2).coerceAtLeast(MIN_CONTEXT_SLOTS)
             val previousSessionClose = previousSessionClose(bars, signalIndex, contextStart)
-            val requestedStartBar = requestedStart?.takeIf { it < detailStart }?.let(bars::get)
-            val reservedSlots = listOfNotNull(previousSessionClose, requestedStartBar).distinct().size
+            val requestedBars = requestedIndices.map(bars::get)
+            val reservedBars = (listOfNotNull(previousSessionClose) + requestedBars).distinct()
+            val reservedSlots = reservedBars.size
             val aggregateSlots = (contextSlots - reservedSlots).coerceAtLeast(1)
-            val selected = (listOfNotNull(previousSessionClose, requestedStartBar) +
-                TrendChartSupport.aggregate(context, aggregateSlots) + detail)
+            val selected = (reservedBars + TrendChartSupport.aggregate(context, aggregateSlots) + detail)
                 .distinctBy(MinuteBar::minuteEpochSeconds)
                 .sortedBy(MinuteBar::minuteEpochSeconds)
             val displayStart = selected.first().minuteEpochSeconds
