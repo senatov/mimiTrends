@@ -134,7 +134,7 @@ class ScannerPanel(
         val outcome = columnFactory.metric("Outcome", SignalMetricPresentation::outcomeSeverity, SignalMetricPresentation::outcome)
         val priceAction = columnFactory.metric("Price action", SignalMetricPresentation::priceActionSeverity, SignalMetricPresentation::priceAction)
         val volume = columnFactory.metric("Volume", SignalMetricPresentation::volumeSeverity, SignalMetricPresentation::volume)
-        val age = columnFactory.signal("Signal age", { SignalAgePresentation.label(it.signalWindowLabel) }) {
+        val age = columnFactory.signal("Signal age", { SignalAgePresentation.label(it.signalAgeMinutes) }) {
             it.signalAgeMinutes.toDouble()
         }
         val turnover = columnFactory.number("Turnover", { convertPrice(it.symbol, it.sessionTurnover) }, ::compactMoney)
@@ -154,7 +154,7 @@ class ScannerPanel(
             TableColumnAutoFitter.Spec(outcome, { SignalMetricPresentation.outcome(it).label }, 78.0, 135.0),
             TableColumnAutoFitter.Spec(priceAction, { SignalMetricPresentation.priceAction(it).label }, 72.0, 100.0),
             TableColumnAutoFitter.Spec(volume, { SignalMetricPresentation.volume(it).label }, 64.0, 125.0),
-            TableColumnAutoFitter.Spec(age, { SignalAgePresentation.label(it.signalWindowLabel) }, 52.0, 90.0),
+            TableColumnAutoFitter.Spec(age, { SignalAgePresentation.label(it.signalAgeMinutes) }, 64.0, 90.0),
             TableColumnAutoFitter.Spec(turnover, { compactMoney(convertPrice(it.symbol, it.sessionTurnover)) }, 88.0, 145.0, reserveWidth = 8.0),
             TableColumnAutoFitter.Spec(updated, { time.format(Instant.ofEpochMilli(it.updatedAtMillis)) }, 88.0, 125.0, reserveWidth = 8.0)
         ), columnLayout.savedWidths(), columnLayout.manuallySizedColumnIds())
