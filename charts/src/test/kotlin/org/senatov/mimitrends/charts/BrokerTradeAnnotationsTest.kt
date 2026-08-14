@@ -106,7 +106,7 @@ class BrokerTradeAnnotationsTest {
         assertTrue(anchor.y > 99.0, "connector must terminate on the candle, not the chart floor")
     }
 
-    @Test fun `does not draw an extended trade price away from available candles`() {
+    @Test fun `does not invent an entry candle for a trade opened before the visible range`() {
         val renderer = BrokerTradeAnnotations(XYPlot())
         val bars = (10L..20L).map { minute ->
             MinuteBar("TEST", minute * 60L, 32.0, 32.5, 31.5, 32.2, 1_000.0)
@@ -118,7 +118,8 @@ class BrokerTradeAnnotationsTest {
 
         renderer.render(listOf(trade), bars, bars, 1.0)
 
-        assertTrue(renderer.renderedTradePoints().all { it.y in 31.5..32.5 })
+        assertEquals(emptyList(), renderer.renderedTradePoints())
+        assertEquals(emptyList(), renderer.renderedCardBounds())
     }
 
     @Test fun `does not trust a matching timestamp when trade price is outside candle OHLC`() {

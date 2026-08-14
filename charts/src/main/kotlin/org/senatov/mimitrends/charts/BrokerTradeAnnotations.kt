@@ -46,9 +46,7 @@ internal class BrokerTradeAnnotations(private val plot: XYPlot) {
         if (bars.isEmpty()) return
         val firstEpoch = bars.first().minuteEpochSeconds
         val lastEpoch = bars.last().minuteEpochSeconds
-        val visible = trades.filter { trade ->
-            trade.entryEpochSeconds <= lastEpoch && (trade.exitEpochSeconds ?: lastEpoch) >= firstEpoch
-        }
+        val visible = trades.filter { trade -> trade.entryEpochSeconds in firstEpoch..lastEpoch }
         val priceSpan = (bars.maxOf { it.high } - bars.minOf { it.low })
             .coerceAtLeast(bars.last().close * 0.02) * barPriceMultiplier
         val timeStep = medianBarSeconds(displayBars) * 1_000.0
