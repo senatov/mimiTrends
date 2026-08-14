@@ -134,7 +134,7 @@ class ScannerPanel(
         val outcome = columnFactory.metric("Outcome", SignalMetricPresentation::outcomeSeverity, SignalMetricPresentation::outcome)
         val priceAction = columnFactory.metric("Price action", SignalMetricPresentation::priceActionSeverity, SignalMetricPresentation::priceAction)
         val volume = columnFactory.metric("Volume", SignalMetricPresentation::volumeSeverity, SignalMetricPresentation::volume)
-        val age = columnFactory.signal("Age", { SignalAgePresentation.label(it.signalWindowLabel) }) {
+        val age = columnFactory.signal("Signal age", { SignalAgePresentation.label(it.signalWindowLabel) }) {
             it.signalAgeMinutes.toDouble()
         }
         val turnover = columnFactory.number("Turnover", { convertPrice(it.symbol, it.sessionTurnover) }, ::compactMoney)

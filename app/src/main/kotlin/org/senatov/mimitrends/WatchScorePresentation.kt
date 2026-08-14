@@ -42,6 +42,8 @@ internal object WatchScorePresentation {
             value = value.coerceAtMost(6)
         }
         if (result.signalSource.contains("wait for pullback", true)) value = value.coerceAtMost(6)
+        if (result.signalAgeMinutes >= STALE_SIGNAL_MINUTES) value = value.coerceAtMost(3)
+        else if (result.signalAgeMinutes >= AGING_SIGNAL_MINUTES) value = value.coerceAtMost(6)
         if (result.signalSource.startsWith("Oversold decline", true)) value = value.coerceAtMost(3)
         if (result.signalSource.contains("bottom unconfirmed", true)) value = value.coerceAtMost(3)
         val color = when (value) {
@@ -57,4 +59,6 @@ internal object WatchScorePresentation {
     private const val MIN_CALIBRATION_SAMPLES = 12
     private const val MIN_BUY_PROBABILITY = 0.55
     private const val MAX_UNCONFIRMED_ENTRY_MOVE_PERCENT = 0.75
+    private const val AGING_SIGNAL_MINUTES = 10
+    private const val STALE_SIGNAL_MINUTES = 30
 }

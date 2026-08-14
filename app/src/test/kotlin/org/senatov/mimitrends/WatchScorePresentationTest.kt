@@ -48,6 +48,30 @@ class WatchScorePresentationTest {
         assertTrue(score.label.startsWith("BUY"))
     }
 
+    @Test fun `aging signal cannot remain buy`() {
+        val score = WatchScorePresentation.calculate(
+            TestScanResult.create(anomalyScore = 6.0, signalSource = "Steady rise ↑").copy(
+                relativeVolume = 3.0,
+                signalAgeMinutes = 12
+            )
+        )
+
+        assertTrue(score.value <= 6)
+        assertTrue(score.label.startsWith("WAIT"))
+    }
+
+    @Test fun `stale signal is always avoid`() {
+        val score = WatchScorePresentation.calculate(
+            TestScanResult.create(anomalyScore = 6.0, signalSource = "Steady rise ↑").copy(
+                relativeVolume = 3.0,
+                signalAgeMinutes = 122
+            )
+        )
+
+        assertTrue(score.value <= 3)
+        assertTrue(score.label.startsWith("AVOID"))
+    }
+
     @Test fun `penalizes an extended entry without discarding a strong instrument`() {
         val normal = WatchScorePresentation.calculate(TestScanResult.create(signalSource = "Steady rise ↑"))
         val extended = WatchScorePresentation.calculate(
