@@ -46,6 +46,17 @@ internal object WatchScorePresentation {
         if (outcomeConfirmed && result.continuationLowerBound < MIN_BUY_OUTCOME_LOWER_BOUND) {
             value = value.coerceAtMost(59)
         }
+        if (isBullish(result) && result.recentThreeMinutePercent.isFinite()) {
+            if (result.recentThreeMinutePercent <= NEGATIVE_THREE_MINUTE_PERCENT) value = value.coerceAtMost(29)
+            else if (result.recentThreeMinutePercent <= 0.0) value = value.coerceAtMost(49)
+        }
+        if (isBullish(result) && result.recentFiveMinutePercent.isFinite() &&
+            result.recentFiveMinutePercent <= NEGATIVE_FIVE_MINUTE_PERCENT) value = value.coerceAtMost(29)
+        if (result.recentDirectionChanges >= CYCLICAL_DIRECTION_CHANGES &&
+            result.recentFiveMinutePercent.isFinite() &&
+            kotlin.math.abs(result.recentFiveMinutePercent) <= CYCLICAL_MAX_NET_MOVE_PERCENT) {
+            value = value.coerceAtMost(49)
+        }
         if (isEarlyBullishReversal(result)) value = value.coerceAtMost(34)
         if (components.timing < POOR_TIMING_THRESHOLD) value = value.coerceAtMost(49)
         else if (components.timing < FAIR_TIMING_THRESHOLD) value = value.coerceAtMost(59)
@@ -62,7 +73,7 @@ internal object WatchScorePresentation {
             value >= 35 -> "#b26012"
             else -> "#b23b48"
         }
-        return WatchScore(value, color, details(value, components, volumeConfirmed, outcomeConfirmed, spread))
+        return WatchScore(value, color, details(result, value, components, volumeConfirmed, outcomeConfirmed, spread))
     }
 
     private fun structureScore(source: String): Double = when {
@@ -116,6 +127,7 @@ internal object WatchScorePresentation {
             )
 
     private fun details(
+        result: ScanResult,
         value: Int,
         components: Components,
         volumeConfirmed: Boolean,
@@ -127,7 +139,13 @@ internal object WatchScorePresentation {
             components.timing * 100, components.volume * 100, components.outcome * 100
         ) + "Volume confirmed: ${if (volumeConfirmed) "yes" else "no"} · representative outcomes: " +
         (if (outcomeConfirmed) "yes" else "no") + " · executable spread: " +
-        (spreadPercent?.let { "%.2f%%".format(it) } ?: "unavailable")
+        (spreadPercent?.let { "%.2f%%".format(it) } ?: "unavailable") + recentDynamicsText(result)
+
+    private fun recentDynamicsText(result: ScanResult): String {
+        val three = result.recentThreeMinutePercent.takeIf(Double::isFinite)?.let { "%+.2f%%".format(it) } ?: "n/a"
+        val five = result.recentFiveMinutePercent.takeIf(Double::isFinite)?.let { "%+.2f%%".format(it) } ?: "n/a"
+        return "\nLatest movement: 3m $three · 5m $five · direction changes ${result.recentDirectionChanges}"
+    }
 
     private fun executableSpreadPercent(result: ScanResult): Double? {
         if (!result.bidPrice.isFinite() || !result.askPrice.isFinite() || result.askPrice < result.bidPrice) return null
@@ -141,6 +159,8 @@ internal object WatchScorePresentation {
         val open = if (result.symbol.contains('.')) LocalTime.of(9, 0) else LocalTime.of(9, 30)
         return local.toLocalTime().isBefore(open.plusMinutes(EARLY_REVERSAL_MINUTES))
     }
+
+    private fun isBullish(result: ScanResult): Boolean = '↑' in result.signalSource
 
     private data class Components(
         val structure: Double,
@@ -170,4 +190,8 @@ internal object WatchScorePresentation {
     private const val EXPENSIVE_SPREAD_PERCENT = 0.12
     private const val PROHIBITIVE_SPREAD_PERCENT = 0.30
     private const val MIN_BUY_OUTCOME_LOWER_BOUND = 0.50
+    private const val NEGATIVE_THREE_MINUTE_PERCENT = -0.05
+    private const val NEGATIVE_FIVE_MINUTE_PERCENT = -0.08
+    private const val CYCLICAL_DIRECTION_CHANGES = 3
+    private const val CYCLICAL_MAX_NET_MOVE_PERCENT = 0.15
 }

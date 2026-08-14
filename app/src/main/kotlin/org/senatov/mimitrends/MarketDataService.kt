@@ -124,13 +124,13 @@ internal class MarketDataService(
                 latestDataEpochSeconds = merged.latestAnalysisEpochSeconds)
         }
         val primary = scannerEngine.evaluate(symbol, merged.analysisBars, criteria)
-            ?.forPresentation(merged, effectiveStatus)?.withExecutableQuote(now)
+            ?.forPresentation(merged, effectiveStatus)?.withRecentDynamics(merged.analysisBars)?.withExecutableQuote(now)
         val fallback = if (primary != null) emptyList() else RELAXATION_LEVELS.map { factor ->
             scannerEngine.evaluateFallback(symbol, merged.analysisBars, criteria, factor)
-                ?.forPresentation(merged, effectiveStatus)?.withExecutableQuote(now)
+                ?.forPresentation(merged, effectiveStatus)?.withRecentDynamics(merged.analysisBars)?.withExecutableQuote(now)
         }
         val longTerm = scannerEngine.evaluateLongTerm(symbol, merged.analysisBars, criteria)
-            ?.forPresentation(merged, effectiveStatus)?.withExecutableQuote(now)
+            ?.forPresentation(merged, effectiveStatus)?.withRecentDynamics(merged.analysisBars)?.withExecutableQuote(now)
         val rejectionReason = if (primary == null && fallback.none { it != null } && longTerm == null) {
             scannerEngine.rejectionReason(merged.analysisBars)
         } else null
@@ -182,6 +182,8 @@ internal class MarketDataService(
         val ask = quote.ask?.takeIf { it >= bid } ?: return this
         return copy(bidPrice = bid, askPrice = ask, executableQuoteAtMillis = quote.observedAtMillis)
     }
+
+    private fun ScanResult.withRecentDynamics(bars: List<MinuteBar>): ScanResult = RecentPriceDynamics.apply(this, bars)
 
     private companion object {
         val RELAXATION_LEVELS = listOf(0.85, 0.70, 0.55)

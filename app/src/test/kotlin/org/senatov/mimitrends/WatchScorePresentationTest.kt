@@ -140,6 +140,31 @@ class WatchScorePresentationTest {
         assertTrue(!score.label.endsWith("(buy)"))
     }
 
+    @Test fun `negative latest three minutes override an earlier bullish jump`() {
+        val score = WatchScorePresentation.calculate(
+            TestScanResult.create(signalSource = "Steady rise ↑").copy(
+                relativeVolume = 3.0, bidPrice = 100.0, askPrice = 100.04,
+                recentThreeMinutePercent = -0.12, recentFiveMinutePercent = -0.06
+            )
+        )
+
+        assertTrue(score.value <= 29)
+        assertTrue(score.label.endsWith("(avoid)"))
+    }
+
+    @Test fun `cyclic latest tail cannot remain buy`() {
+        val score = WatchScorePresentation.calculate(
+            TestScanResult.create(signalSource = "Steady rise ↑").copy(
+                relativeVolume = 3.0, bidPrice = 100.0, askPrice = 100.04,
+                recentThreeMinutePercent = 0.04, recentFiveMinutePercent = 0.06,
+                recentDirectionChanges = 4
+            )
+        )
+
+        assertTrue(score.value <= 49)
+        assertTrue(!score.label.endsWith("(buy)"))
+    }
+
     @Test fun `uses a separate traffic light color scale`() {
         val weak = WatchScore(20, "#b23b48", "")
         val medium = WatchScore(50, "#b26012", "")

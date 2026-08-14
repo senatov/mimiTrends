@@ -183,7 +183,10 @@ data class ScanResult(
     val empiricalContinuationProbability: Double = Double.NaN,
     val bidPrice: Double = Double.NaN,
     val askPrice: Double = Double.NaN,
-    val executableQuoteAtMillis: Long = 0L
+    val executableQuoteAtMillis: Long = 0L,
+    val recentThreeMinutePercent: Double = Double.NaN,
+    val recentFiveMinutePercent: Double = Double.NaN,
+    val recentDirectionChanges: Int = 0
 )
 
 data class CompanyProfile(
