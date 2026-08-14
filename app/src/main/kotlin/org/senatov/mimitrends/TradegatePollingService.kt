@@ -117,8 +117,10 @@ internal class TradegatePollingService(
 
     private fun resolve(symbol: String): ProviderInstrument? {
         val companyName = repository.loadCompanyProfile(symbol)?.name
+        val expectedIsin = repository.loadInstrumentIsin(symbol)
         repository.loadProviderInstrument(PROVIDER, symbol)?.let { cached ->
             if (isLikelyEquity(cached) &&
+                ProviderInstrumentSelector.matchesIdentity(expectedIsin, cached) &&
                 ProviderInstrumentSelector.matchesCompany(symbol, companyName, cached.resolvedName)) return cached
             repository.deleteProviderInstrument(PROVIDER, symbol)
         }
@@ -143,7 +145,9 @@ internal class TradegatePollingService(
     internal fun knownIsin(symbol: String): ProviderInstrument? {
         val companyName = repository.loadCompanyProfile(symbol)?.name
         val candidates = ISIN_PROVIDERS.mapNotNull { repository.loadProviderInstrument(it, symbol) }
-        return ProviderInstrumentSelector.select(symbol, companyName, candidates, ::isLikelyEquity)
+        return ProviderInstrumentSelector.select(
+            symbol, companyName, candidates, repository.loadInstrumentIsin(symbol), ::isLikelyEquity
+        )
     }
 
     private fun isLikelyEquity(instrument: ProviderInstrument): Boolean =

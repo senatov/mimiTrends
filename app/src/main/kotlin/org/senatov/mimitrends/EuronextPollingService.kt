@@ -114,8 +114,10 @@ internal class EuronextPollingService(
     }
 
     private fun resolve(symbol: String): ProviderInstrument? {
+        val expectedIsin = repository.loadInstrumentIsin(symbol)
         repository.loadProviderInstrument(PROVIDER, symbol)?.let { cached ->
-            if (!cached.identifier.startsWith(INDEX_ISIN_PREFIX)) return cached
+            if (!cached.identifier.startsWith(INDEX_ISIN_PREFIX) &&
+                ProviderInstrumentSelector.matchesIdentity(expectedIsin, cached)) return cached
             repository.deleteProviderInstrument(PROVIDER, symbol)
             log.info(LogTag.API, "discarded non-equity Euronext instrument symbol={} identifier={}",
                 symbol, cached.identifier)

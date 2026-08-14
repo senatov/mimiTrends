@@ -7,11 +7,18 @@ internal object ProviderInstrumentSelector {
         symbol: String,
         companyName: String?,
         candidates: Collection<ProviderInstrument>,
+        expectedIsin: String? = null,
         isEligible: (ProviderInstrument) -> Boolean
-    ): ProviderInstrument? = candidates.asSequence()
-        .filter(isEligible)
-        .filter { companyName.isNullOrBlank() || matchesCompany(symbol, companyName, it.resolvedName) }
-        .minByOrNull { providerPriority(symbol, it.provider) }
+    ): ProviderInstrument? {
+        val eligible = candidates.asSequence().filter(isEligible)
+        val identified = expectedIsin?.trim()?.uppercase()?.takeIf(ISIN::matches)
+        val matchingIdentity = if (identified == null) eligible else eligible.filter {
+            it.identifier.trim().uppercase() == identified
+        }
+        return matchingIdentity
+            .filter { identified != null || companyName.isNullOrBlank() || matchesCompany(symbol, companyName, it.resolvedName) }
+            .minByOrNull { providerPriority(symbol, it.provider) }
+    }
 
     fun matchesCompany(symbol: String, expectedName: String?, candidateName: String): Boolean {
         if (expectedName.isNullOrBlank()) return true
@@ -21,6 +28,11 @@ internal object ProviderInstrumentSelector {
         return expected == candidate ||
             (expected.length >= MIN_CONTAINED_NAME_LENGTH && candidate.contains(expected)) ||
             (candidate.length >= MIN_CONTAINED_NAME_LENGTH && expected.contains(candidate))
+    }
+
+    fun matchesIdentity(expectedIsin: String?, candidate: ProviderInstrument): Boolean {
+        val identified = expectedIsin?.trim()?.uppercase()?.takeIf(ISIN::matches) ?: return true
+        return candidate.identifier.trim().uppercase() == identified
     }
 
     private fun normalizedCore(name: String, symbol: String): String =
@@ -34,6 +46,7 @@ internal object ProviderInstrumentSelector {
 
     private val NON_ALPHANUMERIC = Regex("[^A-Z0-9]+")
     private val WHITESPACE = Regex("\\s+")
+    private val ISIN = Regex("[A-Z]{2}[A-Z0-9]{9}[0-9]")
     private const val MIN_TOKEN_LENGTH = 2
     private const val MIN_CONTAINED_NAME_LENGTH = 4
     private val PREFERRED_PROVIDER_BY_SUFFIX = mapOf(

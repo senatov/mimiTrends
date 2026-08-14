@@ -1,16 +1,11 @@
-plugins { kotlin("jvm") version "2.4.0" }
-
-repositories { mavenCentral() }
-kotlin { jvmToolchain(25) }
+plugins { alias(libs.plugins.kotlin.jvm) }
 
 dependencies {
     implementation(project(":core"))
-    implementation(platform("com.fasterxml.jackson:jackson-bom:2.22.1"))
-    implementation("com.fasterxml.jackson.core:jackson-databind")
-    testImplementation(platform("org.junit:junit-bom:5.14.4"))
-    testImplementation("org.junit.jupiter:junit-jupiter")
-    testImplementation("org.jetbrains.kotlin:kotlin-test-junit5")
-    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+    implementation(platform(libs.jackson.bom))
+    implementation(libs.jackson.databind)
+    testImplementation(platform(libs.junit.bom))
+    testImplementation(libs.junit.jupiter)
+    testImplementation(libs.kotlin.test.junit5)
+    testRuntimeOnly(libs.junit.platform.launcher)
 }
-
-tasks.test { useJUnitPlatform() }

@@ -24,6 +24,33 @@ class ProviderInstrumentSelectorTest {
         ))
     }
 
+    @Test fun `prefers isin identity over an ambiguous ticker and company name`() {
+        val wrong = instrument("EURONEXT", "US8261975010", "Siemens AG")
+        val siemens = instrument("TRADEGATE", "DE0007236101", "Siemens AG")
+
+        val selected = ProviderInstrumentSelector.select(
+            "SIE.DE", "Siemens AG", listOf(wrong, siemens), "DE0007236101"
+        ) { true }
+
+        assertEquals("DE0007236101", selected?.identifier)
+    }
+
+    @Test fun `does not fall back to a conflicting ticker candidate when isin is known`() {
+        val wrong = instrument("EURONEXT", "US8261975010", "Siemens AG")
+
+        val selected = ProviderInstrumentSelector.select(
+            "SIE.DE", "Siemens AG", listOf(wrong), "DE0007236101"
+        ) { true }
+
+        assertEquals(null, selected)
+    }
+
+    @Test fun `rejects a cached provider instrument with a conflicting isin`() {
+        val wrong = instrument("EURONEXT", "US8261975010", "Siemens AG")
+
+        assertFalse(ProviderInstrumentSelector.matchesIdentity("DE0007236101", wrong))
+    }
+
     private fun instrument(provider: String, isin: String, name: String) = ProviderInstrument(
         provider, "CPR.MI", isin, "TEST", "EUR", name
     )

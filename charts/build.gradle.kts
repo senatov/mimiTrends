@@ -1,11 +1,8 @@
 plugins {
-    kotlin("jvm") version "2.4.0"
+    alias(libs.plugins.kotlin.jvm)
 }
 
-repositories { mavenCentral() }
-kotlin { jvmToolchain(25) }
-
-val javafxVersion = "26"
+val javafxVersion = libs.versions.javafx.get()
 val javafxPlatform = providers.systemProperty("os.name").zip(providers.systemProperty("os.arch")) { os, arch ->
     val normalizedArch = if (arch.lowercase() in setOf("aarch64", "arm64")) "aarch64" else "x86_64"
     when {
@@ -20,11 +17,9 @@ dependencies {
     implementation("org.openjfx:javafx-base:$javafxVersion:$javafxPlatform")
     implementation("org.openjfx:javafx-graphics:$javafxVersion:$javafxPlatform")
     implementation("org.openjfx:javafx-controls:$javafxVersion:$javafxPlatform")
-    implementation("org.jfree:org.jfree.chart.fx:2.0.2")
-    testImplementation(platform("org.junit:junit-bom:5.14.4"))
-    testImplementation("org.junit.jupiter:junit-jupiter")
-    testImplementation("org.jetbrains.kotlin:kotlin-test-junit5")
-    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+    implementation(libs.jfreechart.fx)
+    testImplementation(platform(libs.junit.bom))
+    testImplementation(libs.junit.jupiter)
+    testImplementation(libs.kotlin.test.junit5)
+    testRuntimeOnly(libs.junit.platform.launcher)
 }
-
-tasks.test { useJUnitPlatform() }

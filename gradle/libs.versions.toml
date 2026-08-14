@@ -1,0 +1,37 @@
+[versions]
+kotlin = "2.4.10"
+jvmToolchain = "25"
+javafx = "26"
+atlantafx = "2.1.0"
+coroutines = "1.11.0"
+log4j = "2.26.1"
+jackson = "2.22.1"
+smile = "6.2.5"
+sqlite = "3.53.2.1"
+slf4j = "2.0.18"
+jfreechartFx = "2.0.2"
+junit = "5.14.4"
+
+[libraries]
+atlantafx-base = { module = "io.github.mkpaz:atlantafx-base", version.ref = "atlantafx" }
+coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "coroutines" }
+jackson-bom = { module = "com.fasterxml.jackson:jackson-bom", version.ref = "jackson" }
+jackson-databind = { module = "com.fasterxml.jackson.core:jackson-databind" }
+javafx-base = { module = "org.openjfx:javafx-base" }
+javafx-controls = { module = "org.openjfx:javafx-controls" }
+javafx-graphics = { module = "org.openjfx:javafx-graphics" }
+jfreechart-fx = { module = "org.jfree:org.jfree.chart.fx", version.ref = "jfreechartFx" }
+junit-bom = { module = "org.junit:junit-bom", version.ref = "junit" }
+junit-jupiter = { module = "org.junit.jupiter:junit-jupiter" }
+junit-platform-launcher = { module = "org.junit.platform:junit-platform-launcher" }
+kotlin-test-junit5 = { module = "org.jetbrains.kotlin:kotlin-test-junit5" }
+log4j-bom = { module = "org.apache.logging.log4j:log4j-bom", version.ref = "log4j" }
+log4j-api = { module = "org.apache.logging.log4j:log4j-api" }
+log4j-core = { module = "org.apache.logging.log4j:log4j-core" }
+log4j-slf4j = { module = "org.apache.logging.log4j:log4j-slf4j2-impl" }
+slf4j-api = { module = "org.slf4j:slf4j-api", version.ref = "slf4j" }
+smile-core = { module = "com.github.haifengl:smile-core", version.ref = "smile" }
+sqlite-jdbc = { module = "org.xerial:sqlite-jdbc", version.ref = "sqlite" }
+
+[plugins]
+kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }

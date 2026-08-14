@@ -55,7 +55,9 @@ internal class ArivaReferenceService(
     internal fun verifySymbol(symbol: String) {
         val companyName = repository.loadCompanyProfile(symbol)?.name
         val candidates = SOURCE_PROVIDERS.mapNotNull { repository.loadProviderInstrument(it, symbol) }
-        val candidate = ProviderInstrumentSelector.select(symbol, companyName, candidates, ::isEquityIsin) ?: return
+        val candidate = ProviderInstrumentSelector.select(
+            symbol, companyName, candidates, repository.loadInstrumentIsin(symbol), ::isEquityIsin
+        ) ?: return
         val reference = verify(candidate.identifier)
         repository.upsertProviderInstrument(ProviderInstrument(
             PROVIDER, symbol, reference.isin, MIC, candidate.currency, candidate.resolvedName

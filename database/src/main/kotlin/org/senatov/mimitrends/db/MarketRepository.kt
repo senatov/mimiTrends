@@ -105,6 +105,19 @@ class MarketRepository(
         }
     }
 
+    fun loadInstrumentIsin(symbol: String): String? = database.locked {
+        val metadataExists = connection.prepareStatement(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='instrument_metadata'"
+        ).use { statement -> statement.executeQuery().use { it.next() } }
+        if (!metadataExists) return@locked null
+        connection.prepareStatement("SELECT isin FROM instrument_metadata WHERE symbol=?").use { statement ->
+            statement.setString(1, symbol.trim().uppercase())
+            statement.executeQuery().use { result ->
+                if (result.next()) result.getString(1)?.trim()?.uppercase()?.takeIf(ISIN::matches) else null
+            }
+        }
+    }
+
     fun deleteProviderInstrument(provider: String, symbol: String): Boolean = database.locked {
         connection.prepareStatement("DELETE FROM provider_instruments WHERE provider=? AND symbol=?").use { statement ->
             statement.setString(1, provider.trim().uppercase())
@@ -395,6 +408,7 @@ class MarketRepository(
             WHERE excluded.observed_at > provider_quotes.observed_at"""
 
         private val EURO_SUFFIXES = listOf(".DE", ".F", ".PA", ".AS", ".MI", ".HE")
+        private val ISIN = Regex("[A-Z]{2}[A-Z0-9]{9}[0-9]")
         private fun sourceCurrency(symbol: String): String =
             if (EURO_SUFFIXES.any(symbol.uppercase()::endsWith)) "EUR" else "USD"
     }

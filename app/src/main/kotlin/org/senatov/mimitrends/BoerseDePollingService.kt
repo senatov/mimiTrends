@@ -142,8 +142,10 @@ private class IsinQuotePollingService(
 
     private fun resolveInstrument(symbol: String): ProviderInstrument? {
         val companyName = repository.loadCompanyProfile(symbol)?.name
+        val expectedIsin = repository.loadInstrumentIsin(symbol)
         repository.loadProviderInstrument(provider, symbol)?.let { cached ->
             if (isEquityIdentifier(cached.identifier) &&
+                ProviderInstrumentSelector.matchesIdentity(expectedIsin, cached) &&
                 ProviderInstrumentSelector.matchesCompany(symbol, companyName, cached.resolvedName)) return cached
             repository.deleteProviderInstrument(provider, symbol)
             log.info(LogTag.API, "discarded mismatched table quote instrument provider={} symbol={} name={}",
@@ -151,7 +153,9 @@ private class IsinQuotePollingService(
         }
         val candidates = SOURCE_PROVIDERS.asSequence().filter { it != provider }
             .mapNotNull { repository.loadProviderInstrument(it, symbol) }.toList()
-        val source = ProviderInstrumentSelector.select(symbol, companyName, candidates) {
+        val source = ProviderInstrumentSelector.select(
+            symbol, companyName, candidates, expectedIsin
+        ) {
             isEquityIdentifier(it.identifier)
         }
             ?: return null

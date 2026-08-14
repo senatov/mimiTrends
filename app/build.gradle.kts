@@ -7,7 +7,7 @@ import java.time.format.DateTimeFormatter
 
 plugins {
     application
-    kotlin("jvm") version "2.4.0"
+    alias(libs.plugins.kotlin.jvm)
 }
 
 val appVersion = providers.gradleProperty("appVersion").get()
@@ -39,15 +39,7 @@ tasks.named<ProcessResources>("processResources") {
     from(generatedBuildInfoDir)
 }
 
-repositories {
-    mavenCentral()
-}
-
-kotlin {
-    jvmToolchain(25)
-}
-
-val javafxVersion = "26"
+val javafxVersion = libs.versions.javafx.get()
 val javafxPlatform = providers.systemProperty("os.name").zip(providers.systemProperty("os.arch")) { os, arch ->
     val normalizedArch = if (arch.lowercase() in setOf("aarch64", "arm64")) "aarch64" else "x86_64"
     when {
@@ -67,20 +59,19 @@ dependencies {
     implementation("org.openjfx:javafx-base:$javafxVersion:$javafxPlatform")
     implementation("org.openjfx:javafx-graphics:$javafxVersion:$javafxPlatform")
     implementation("org.openjfx:javafx-controls:$javafxVersion:$javafxPlatform")
-    implementation("io.github.mkpaz:atlantafx-base:2.1.0")
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.10.2")
-    implementation(platform("org.apache.logging.log4j:log4j-bom:2.26.1"))
-    implementation("org.apache.logging.log4j:log4j-api")
-    implementation("org.apache.logging.log4j:log4j-core")
-    implementation("org.apache.logging.log4j:log4j-slf4j2-impl")
-    testImplementation(platform("org.junit:junit-bom:5.14.4"))
-    testImplementation("org.junit.jupiter:junit-jupiter")
-    testImplementation("org.jetbrains.kotlin:kotlin-test-junit5")
-    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+    implementation(libs.atlantafx.base)
+    implementation(libs.coroutines.core)
+    implementation(platform(libs.log4j.bom))
+    implementation(libs.log4j.api)
+    implementation(libs.log4j.core)
+    implementation(libs.log4j.slf4j)
+    testImplementation(platform(libs.junit.bom))
+    testImplementation(libs.junit.jupiter)
+    testImplementation(libs.kotlin.test.junit5)
+    testRuntimeOnly(libs.junit.platform.launcher)
 }
 
 tasks.test {
-    useJUnitPlatform()
     jvmArgs("--enable-native-access=ALL-UNNAMED")
 }
 
