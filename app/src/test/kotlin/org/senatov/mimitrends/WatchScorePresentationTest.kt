@@ -21,6 +21,33 @@ class WatchScorePresentationTest {
         assertTrue(score.label.startsWith("AVOID"))
     }
 
+    @Test fun `strong rise without volume or outcome confirmation remains wait`() {
+        val score = WatchScorePresentation.calculate(
+            TestScanResult.create(anomalyScore = 4.56, signalSource = "Steady rise ↑").copy(
+                windowChangePercent = 0.94,
+                relativeVolume = Double.NaN,
+                volumeAnomaly = Double.NaN,
+                continuationProbability = Double.NaN,
+                calibrationSamples = 0
+            )
+        )
+
+        assertTrue(score.value <= 6)
+        assertTrue(score.label.startsWith("WAIT"))
+    }
+
+    @Test fun `confirmed strong rise can reach buy category`() {
+        val score = WatchScorePresentation.calculate(
+            TestScanResult.create(anomalyScore = 4.56, signalSource = "Steady rise ↑").copy(
+                windowChangePercent = 0.65,
+                relativeVolume = 2.1
+            )
+        )
+
+        assertTrue(score.value >= 7)
+        assertTrue(score.label.startsWith("BUY"))
+    }
+
     @Test fun `penalizes an extended entry without discarding a strong instrument`() {
         val normal = WatchScorePresentation.calculate(TestScanResult.create(signalSource = "Steady rise ↑"))
         val extended = WatchScorePresentation.calculate(

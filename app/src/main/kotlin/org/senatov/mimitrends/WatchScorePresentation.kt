@@ -33,6 +33,15 @@ internal object WatchScorePresentation {
         }
         if (result.relativeVolume.isFinite()) raw += ((result.relativeVolume - 1.0) / 4.0).coerceIn(0.0, 0.5)
         var value = raw.roundToInt().coerceIn(1, 10)
+        val volumeConfirmed = result.relativeVolume.isFinite() || result.volumeAnomaly.isFinite()
+        val outcomeConfirmed = result.calibrationSamples >= MIN_CALIBRATION_SAMPLES &&
+            result.continuationProbability.isFinite() && result.continuationProbability >= MIN_BUY_PROBABILITY
+        if (!volumeConfirmed && !outcomeConfirmed) value = value.coerceAtMost(6)
+        if (result.signalSource.startsWith("Steady rise", true) &&
+            result.windowChangePercent >= MAX_UNCONFIRMED_ENTRY_MOVE_PERCENT && !volumeConfirmed) {
+            value = value.coerceAtMost(6)
+        }
+        if (result.signalSource.contains("wait for pullback", true)) value = value.coerceAtMost(6)
         if (result.signalSource.startsWith("Oversold decline", true)) value = value.coerceAtMost(3)
         if (result.signalSource.contains("bottom unconfirmed", true)) value = value.coerceAtMost(3)
         val color = when (value) {
@@ -44,4 +53,8 @@ internal object WatchScorePresentation {
             "Entry readiness: ${value * 10}%. Combines trend structure, signal strength, entry timing, freshness, " +
                 "volume and calibrated outcomes. This is a heuristic score, not a probability or financial advice.")
     }
+
+    private const val MIN_CALIBRATION_SAMPLES = 12
+    private const val MIN_BUY_PROBABILITY = 0.55
+    private const val MAX_UNCONFIRMED_ENTRY_MOVE_PERCENT = 0.75
 }
