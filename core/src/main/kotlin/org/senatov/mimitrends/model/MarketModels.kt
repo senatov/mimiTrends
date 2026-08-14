@@ -180,7 +180,10 @@ data class ScanResult(
     val predictionSource: String = "BETA",
     val predictionModelVersion: Long = 0,
     val predictionSamples: Int = 0,
-    val empiricalContinuationProbability: Double = Double.NaN
+    val empiricalContinuationProbability: Double = Double.NaN,
+    val bidPrice: Double = Double.NaN,
+    val askPrice: Double = Double.NaN,
+    val executableQuoteAtMillis: Long = 0L
 )
 
 data class CompanyProfile(

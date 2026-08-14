@@ -8,6 +8,19 @@ import org.senatov.mimitrends.model.VolumeStatus
 import java.time.ZoneId
 
 class VReversalStructureTest {
+    @Test fun `does not publish bullish reversal before twenty session candles`() {
+        val bars = historicalBars().toMutableList()
+        var minute = 4 * 1_440
+        repeat(12) { bars += candle(minute++, 100.0, 100.0) }
+        bars += candle(minute++, 100.0, 99.82)
+        bars += candle(minute++, 99.82, 99.65)
+        bars += candle(minute++, 99.65, 99.78)
+        bars += candle(minute++, 99.78, 99.91)
+        bars += candle(minute, 99.91, 100.02)
+
+        assertNull(VReversalDetector(ZoneId.of("UTC")).detect(bars, criteria()))
+    }
+
     @Test fun `rejects a small bullish V inside lower highs and lower lows`() {
         val bars = historicalBars().toMutableList()
         var minute = 4 * 1_440

@@ -123,13 +123,14 @@ internal class MarketDataService(
             return ScanEvaluation(null, emptyList(), "ANALYSIS_BEHIND_QUOTE", sourceStatus = merged.latestSource.name,
                 latestDataEpochSeconds = merged.latestAnalysisEpochSeconds)
         }
-        val primary = scannerEngine.evaluate(symbol, merged.analysisBars, criteria)?.forPresentation(merged, effectiveStatus)
+        val primary = scannerEngine.evaluate(symbol, merged.analysisBars, criteria)
+            ?.forPresentation(merged, effectiveStatus)?.withExecutableQuote(now)
         val fallback = if (primary != null) emptyList() else RELAXATION_LEVELS.map { factor ->
             scannerEngine.evaluateFallback(symbol, merged.analysisBars, criteria, factor)
-                ?.forPresentation(merged, effectiveStatus)
+                ?.forPresentation(merged, effectiveStatus)?.withExecutableQuote(now)
         }
         val longTerm = scannerEngine.evaluateLongTerm(symbol, merged.analysisBars, criteria)
-            ?.forPresentation(merged, effectiveStatus)
+            ?.forPresentation(merged, effectiveStatus)?.withExecutableQuote(now)
         val rejectionReason = if (primary == null && fallback.none { it != null } && longTerm == null) {
             scannerEngine.rejectionReason(merged.analysisBars)
         } else null
@@ -174,8 +175,17 @@ internal class MarketDataService(
         )
     }
 
+    private fun ScanResult.withExecutableQuote(nowEpochSeconds: Long): ScanResult {
+        val quote = repository.loadLatestProviderQuote(symbol, (nowEpochSeconds - EXECUTABLE_QUOTE_MAX_AGE_SECONDS) * 1_000L)
+            ?: return this
+        val bid = quote.bid?.takeIf { it > 0.0 } ?: return this
+        val ask = quote.ask?.takeIf { it >= bid } ?: return this
+        return copy(bidPrice = bid, askPrice = ask, executableQuoteAtMillis = quote.observedAtMillis)
+    }
+
     private companion object {
         val RELAXATION_LEVELS = listOf(0.85, 0.70, 0.55)
+        const val EXECUTABLE_QUOTE_MAX_AGE_SECONDS = 2 * 60L
         val PROVIDER_SOURCES = listOf(
             MarketDataSource.LANG_SCHWARZ, MarketDataSource.TRADEGATE, MarketDataSource.EURONEXT,
             MarketDataSource.WALLSTREET_ONLINE

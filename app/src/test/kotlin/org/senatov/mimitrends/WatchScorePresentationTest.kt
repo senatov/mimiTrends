@@ -40,7 +40,9 @@ class WatchScorePresentationTest {
         val score = WatchScorePresentation.calculate(
             TestScanResult.create(anomalyScore = 4.56, signalSource = "Steady rise ↑").copy(
                 windowChangePercent = 0.40,
-                relativeVolume = 2.1
+                relativeVolume = 2.1,
+                bidPrice = 100.00,
+                askPrice = 100.04
             )
         )
 
@@ -74,7 +76,7 @@ class WatchScorePresentationTest {
         )
 
         assertTrue(score.value <= 59)
-        assertTrue(score.label.endsWith("(wait)"))
+        assertTrue(!score.label.endsWith("(buy)"))
     }
 
     @Test fun `stale signal is always avoid`() {
@@ -92,16 +94,50 @@ class WatchScorePresentationTest {
     @Test fun `penalizes an extended entry without discarding a strong instrument`() {
         val normal = WatchScorePresentation.calculate(
             TestScanResult.create(signalSource = "Steady rise ↑").copy(
-                windowChangePercent = 0.4, relativeVolume = 2.0
+                windowChangePercent = 0.4, relativeVolume = 2.0, bidPrice = 100.0, askPrice = 100.04
             )
         )
         val extended = WatchScorePresentation.calculate(
             TestScanResult.create(signalSource = "Steady rise ↑ · extended · wait for pullback")
-                .copy(windowChangePercent = 0.4, relativeVolume = 2.0)
+                .copy(windowChangePercent = 0.4, relativeVolume = 2.0, bidPrice = 100.0, askPrice = 100.04)
         )
 
         assertTrue(extended.value < normal.value)
         assertTrue(extended.value <= 59)
+    }
+
+    @Test fun `missing executable quote cannot produce buy`() {
+        val score = WatchScorePresentation.calculate(
+            TestScanResult.create(signalSource = "V-Reversal ↑").copy(relativeVolume = 3.0)
+        )
+
+        assertTrue(score.value <= 59)
+        assertTrue(score.label.endsWith("(wait)"))
+    }
+
+    @Test fun `spread wider than plausible short move is avoid`() {
+        val score = WatchScorePresentation.calculate(
+            TestScanResult.create(signalSource = "V-Reversal ↑").copy(
+                relativeVolume = 3.0, bidPrice = 121.84, askPrice = 122.50
+            )
+        )
+
+        assertTrue(score.value <= 29)
+        assertTrue(score.label.endsWith("(avoid)"))
+    }
+
+    @Test fun `weak calibrated downside cannot be presented as buy`() {
+        val score = WatchScorePresentation.calculate(
+            TestScanResult.create(signalSource = "Steady rise ↑").copy(
+                relativeVolume = 3.0, bidPrice = 100.0, askPrice = 100.04,
+                continuationProbability = 0.62, continuationLowerBound = 0.44,
+                continuationUpperBound = 0.74, calibrationSamples = 40,
+                lowerQuartileNetReturnPercent = -0.08
+            )
+        )
+
+        assertTrue(score.value <= 59)
+        assertTrue(!score.label.endsWith("(buy)"))
     }
 
     @Test fun `uses a separate traffic light color scale`() {

@@ -39,7 +39,9 @@ internal class VReversalDetector(private val zoneOverride: ZoneId? = null) {
     fun detect(bars: List<MinuteBar>, criteria: ScannerCriteria): VReversal? {
         val recent = sameSessionTail(bars)
         if (recent.size < MIN_PATTERN_BARS || !continuous(recent)) return null
-        return patterns(recent, criteria).mapNotNull { pattern -> score(bars, pattern, criteria) }
+        return patterns(recent, criteria)
+            .filter { pattern -> pattern.direction < 0 || recent.size >= MIN_BULLISH_STRUCTURE_BARS }
+            .mapNotNull { pattern -> score(bars, pattern, criteria) }
             .maxByOrNull { it.score }
     }
 
@@ -204,8 +206,9 @@ internal class VReversalDetector(private val zoneOverride: ZoneId? = null) {
     private fun declinePercent(high: Double, last: Double) = max(0.0, -percent(high, last))
 
     private companion object {
-        const val PATTERN_BARS = 16
+        const val PATTERN_BARS = 30
         const val MIN_PATTERN_BARS = 5
+        const val MIN_BULLISH_STRUCTURE_BARS = 20
         const val MAX_EXTREME_AGE_MINUTES = 9
         const val MIN_SHOCK_BARS = 2
         const val MAX_SHOCK_BARS = 6

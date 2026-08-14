@@ -123,6 +123,10 @@ class MarketRepositoryTest {
         )
         assertTrue(repository.upsertProviderQuote(quote(101.0, 20_000)))
         assertFalse(repository.upsertProviderQuote(quote(99.0, 10_000)))
+        val loaded = repository.loadLatestProviderQuote("lrcx", 15_000)
+        assertEquals(100.9, loaded?.bid)
+        assertEquals(101.1, loaded?.ask)
+        assertEquals(null, repository.loadLatestProviderQuote("LRCX", 20_001))
         repository.close()
 
         DriverManager.getConnection("jdbc:sqlite:$database").use { connection ->
