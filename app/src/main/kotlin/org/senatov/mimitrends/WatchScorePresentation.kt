@@ -32,7 +32,9 @@ internal object WatchScorePresentation {
 
         val volumeConfirmed = hasSupportiveVolume(result)
         val outcomeConfirmed = hasRepresentativeOutcome(result)
-        if (!volumeConfirmed && !outcomeConfirmed) value = value.coerceAtMost(66)
+        if (!volumeConfirmed && !outcomeConfirmed) value = value.coerceAtMost(59)
+        if (components.timing < POOR_TIMING_THRESHOLD) value = value.coerceAtMost(49)
+        else if (components.timing < FAIR_TIMING_THRESHOLD) value = value.coerceAtMost(59)
         if (result.signalSource.contains("wait for pullback", true)) value = value.coerceAtMost(59)
         if (result.signalAgeMinutes >= STALE_SIGNAL_MINUTES) value = value.coerceAtMost(29)
         else if (result.signalAgeMinutes >= AGING_SIGNAL_MINUTES) value = value.coerceAtMost(59)
@@ -131,6 +133,8 @@ internal object WatchScorePresentation {
     private const val MIN_SUPPORTIVE_RELATIVE_VOLUME = 1.20
     private const val MIN_SUPPORTIVE_VOLUME_Z = 1.0
     private const val MIN_MODEL_SAMPLES = 30
+    private const val POOR_TIMING_THRESHOLD = 0.50
+    private const val FAIR_TIMING_THRESHOLD = 0.70
     private const val AGING_SIGNAL_MINUTES = 10
     private const val STALE_SIGNAL_MINUTES = 30
 }

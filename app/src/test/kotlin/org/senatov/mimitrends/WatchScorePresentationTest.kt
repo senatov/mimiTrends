@@ -49,6 +49,22 @@ class WatchScorePresentationTest {
         assertTrue(score.value % 10 != 0, "readiness must not be quantized to ten-point steps")
     }
 
+    @Test fun `strong trend cannot compensate for a late entry`() {
+        val score = WatchScorePresentation.calculate(
+            TestScanResult.create(anomalyScore = 6.0, signalSource = "Steady rise ↑").copy(
+                windowChangePercent = 1.10,
+                relativeVolume = 3.0,
+                continuationProbability = 0.70,
+                continuationLowerBound = 0.60,
+                continuationUpperBound = 0.78,
+                calibrationSamples = 40
+            )
+        )
+
+        assertTrue(score.value <= 49)
+        assertTrue(score.label.endsWith("(wait)"))
+    }
+
     @Test fun `aging signal cannot remain buy`() {
         val score = WatchScorePresentation.calculate(
             TestScanResult.create(anomalyScore = 6.0, signalSource = "Steady rise ↑").copy(
@@ -75,11 +91,13 @@ class WatchScorePresentationTest {
 
     @Test fun `penalizes an extended entry without discarding a strong instrument`() {
         val normal = WatchScorePresentation.calculate(
-            TestScanResult.create(signalSource = "Steady rise ↑").copy(windowChangePercent = 0.4)
+            TestScanResult.create(signalSource = "Steady rise ↑").copy(
+                windowChangePercent = 0.4, relativeVolume = 2.0
+            )
         )
         val extended = WatchScorePresentation.calculate(
             TestScanResult.create(signalSource = "Steady rise ↑ · extended · wait for pullback")
-                .copy(windowChangePercent = 0.4)
+                .copy(windowChangePercent = 0.4, relativeVolume = 2.0)
         )
 
         assertTrue(extended.value < normal.value)
