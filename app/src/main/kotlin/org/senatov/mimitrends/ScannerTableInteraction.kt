@@ -16,7 +16,8 @@ internal object ScannerTableInteraction {
         open: (ScanResult) -> Unit,
         inspect: (ScanResult) -> Unit,
         copySearch: (ScanResult) -> Unit,
-        copyTicker: (String) -> Unit
+        copyTicker: (String) -> Unit,
+        openStock: (String) -> Unit
     ) {
         table.setRowFactory {
             TableRow<ScanResult>().apply {
@@ -33,7 +34,8 @@ internal object ScannerTableInteraction {
                 }
                 contextMenu = ContextMenu(
                     MenuItem("Copy search keyword").apply { setOnAction { contextItem?.let(copySearch) } },
-                    MenuItem("Copy ticker").apply { setOnAction { contextItem?.symbol?.let(copyTicker) } }
+                    MenuItem("Copy ticker").apply { setOnAction { contextItem?.symbol?.let(copyTicker) } },
+                    MenuItem("Open Stock").apply { setOnAction { contextItem?.symbol?.let(openStock) } }
                 ).apply {
                     setOnShowing {
                         contextItem = item.takeUnless { isEmpty }

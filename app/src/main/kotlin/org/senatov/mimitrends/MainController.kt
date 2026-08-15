@@ -63,7 +63,8 @@ class MainController(private val apiKey: String?, initialSymbol: String = "AAPL"
         shortMovePanel = shortMovePanel,
         savedColumns = scannerColumns,
         initialTableDivider = initialTableDivider,
-        loadProfile = { symbol -> profileService.load(symbol) }
+        loadProfile = { symbol -> profileService.load(symbol) },
+        openStock = stockPageOpener::open
     )
     private val shortMoveRefresh = ShortMoveRefreshCoordinator(shortMoveLoader::load, log) { moves ->
         Platform.runLater { if (!closing.get()) shortMovePanel.show(moves) }

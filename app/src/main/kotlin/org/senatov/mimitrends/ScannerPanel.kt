@@ -33,7 +33,8 @@ class ScannerPanel(
     private val shortMovePanel: ShortMovePanel,
     savedColumns: String = "",
     initialTableDivider: Double = 0.68,
-    private val loadProfile: ((String) -> CompletableFuture<CompanyProfile>)? = null
+    private val loadProfile: ((String) -> CompletableFuture<CompanyProfile>)? = null,
+    private val openStock: (String) -> Unit = {}
 ) : VBox(7.0) {
     internal var onInspect: (ScanResult) -> Unit = {}
     private val log = LoggerFactory.getLogger(javaClass)
@@ -167,7 +168,9 @@ class ScannerPanel(
         table.placeholder = empty
         table.columnResizePolicy = TableView.UNCONSTRAINED_RESIZE_POLICY
         table.fixedCellSize = -1.0
-        ScannerTableInteraction.install(table, onOpen, { onInspect(it) }, ::copySearchKeyword, ::copyText)
+        ScannerTableInteraction.install(
+            table, onOpen, { onInspect(it) }, ::copySearchKeyword, ::copyText, openStock
+        )
         table.minHeight = 0.0
         table.maxHeight = Double.MAX_VALUE
         table.styleClass += "scanner-table"
