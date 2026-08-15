@@ -9,6 +9,8 @@ import javafx.scene.text.Font
 import javafx.stage.Stage
 import org.senatov.mimitrends.log.LogTag
 import org.slf4j.LoggerFactory
+import java.awt.Desktop
+import java.net.URI
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.function.BiConsumer
@@ -36,7 +38,7 @@ class App : Application() {
         val uiState = uiStateService.load()
         val controller = MainController(apiKey, uiState.symbol, uiState.range, uiState.dividerPosition,
             uiState.scannerColumns, uiState.shortMoveColumns, uiState.tableDividerPosition,
-            hostServices::showDocument)
+            ::openInDefaultBrowser)
         val scene = Scene(controller.createView(), 1120.0, 720.0)
         scene.stylesheets += requireNotNull(javaClass.getResource("/org/senatov/mimitrends/MiMiTrends.css")).toExternalForm()
 
@@ -70,6 +72,18 @@ class App : Application() {
         log.debug(LogTag.IO, "loadFont(path={})", path)
         javaClass.getResourceAsStream(path)?.use { Font.loadFont(it, 14.0) }
             ?: log.warn(LogTag.IO, "font resource missing path={}", path)
+    }
+
+    private fun openInDefaultBrowser(url: String) {
+        val uri = URI.create(url)
+        val desktop: Desktop? = if (Desktop.isDesktopSupported()) Desktop.getDesktop() else null
+        if (desktop?.isSupported(Desktop.Action.BROWSE) == true) {
+            log.info(LogTag.APP, "opening stock page in default browser url={}", uri)
+            desktop.browse(uri)
+        } else {
+            log.info(LogTag.APP, "desktop browse unavailable; using JavaFX host services url={}", uri)
+            hostServices.showDocument(uri.toString())
+        }
     }
 
 }

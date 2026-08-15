@@ -123,16 +123,29 @@ internal class StockPageOpener(
     private val log: org.slf4j.Logger
 ) {
     fun open(symbol: String) {
+        log.info(LogTag.UI, "open stock requested symbol={}", symbol)
         val isin = repository.loadInstrumentIsin(symbol)
         if (isin.isNullOrBlank()) {
+            log.warn(LogTag.DB, "cannot open stock page because ISIN is unavailable symbol={}", symbol)
             setStatus("Cannot open stock page: no ISIN for $symbol", true, null)
             return
         }
         setStatus("Finding stock page: $symbol", false, null)
         CompletableFuture.supplyAsync { client.resolveStockUrl(searchUrl(), isin) }.whenComplete { url, error ->
             Platform.runLater {
-                if (error == null && url != null) openExternal(url) else reportFailure(symbol, error)
+                if (error == null && url != null) launch(symbol, url) else reportFailure(symbol, error)
             }
+        }
+    }
+
+    private fun launch(symbol: String, url: String) {
+        runCatching {
+            log.info(LogTag.UI, "stock page resolved symbol={} url={}", symbol, url)
+            openExternal(url)
+        }.onSuccess {
+            setStatus("Opened stock page: $symbol", false, null)
+        }.onFailure { error ->
+            reportFailure(symbol, error)
         }
     }
 
