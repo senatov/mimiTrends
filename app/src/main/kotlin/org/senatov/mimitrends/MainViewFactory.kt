@@ -33,7 +33,7 @@ internal object MainViewFactory {
             Label("MiMiTrends").apply { styleClass += "app-title" },
             Label("v${BuildInfo.version}").apply { styleClass += "app-version" }
         ).apply { alignment = Pos.BASELINE_LEFT }
-        val titleActions = HBox(8.0, refreshButton, settingsButton, importButton, aboutButton).apply {
+        val titleActions = HBox(10.0, refreshButton, settingsButton, importButton, aboutButton).apply {
             alignment = Pos.CENTER_RIGHT
         }
         val titleBar = StackPane(titleIdentity, buildBadge(), titleActions).apply {

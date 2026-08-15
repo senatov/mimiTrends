@@ -12,7 +12,7 @@
     -fx-background-color: #f4f4f5;
     -fx-border-color: #cdced1;
     -fx-border-width: 0 0 1 0;
-    -fx-padding: 6 10 6 14;
+    -fx-padding: 8 12 8 16;
 }
 
 .app-title {
@@ -69,21 +69,26 @@
 }
 
 .toolbar-icon-button {
-    -fx-min-width: 30px; -fx-pref-width: 30px; -fx-max-width: 30px;
-    -fx-min-height: 30px; -fx-pref-height: 30px; -fx-max-height: 30px;
+    -fx-min-width: 32px; -fx-pref-width: 32px; -fx-max-width: 32px;
+    -fx-min-height: 32px; -fx-pref-height: 32px; -fx-max-height: 32px;
     -fx-padding: 0;
-    -fx-background-radius: 15px;
-    -fx-border-radius: 15px;
+    -fx-background-radius: 16px;
+    -fx-border-radius: 16px;
     -fx-background-color: #e6e9ee;
     -fx-border-color: #c6ccd5;
     -fx-text-fill: #183b69;
-    -fx-font-size: 23px;
+    -fx-font-size: 18px;
     -fx-font-weight: 600;
     -fx-alignment: center;
     -fx-effect: dropshadow(gaussian, rgba(30, 48, 72, 0.16), 3, 0.12, 0, 1);
 }
 .toolbar-icon-button:hover { -fx-background-color: #dce5f0; -fx-border-color: #9eafc3; }
-.toolbar-icon-button:pressed { -fx-background-color: #cfdbea; -fx-effect: innershadow(gaussian, rgba(26, 48, 76, 0.22), 3, 0.15, 0, 1); }
+.toolbar-icon-button:pressed {
+    -fx-background-color: #cfdbea;
+    -fx-translate-y: 1px;
+    -fx-effect: innershadow(gaussian, rgba(26, 48, 76, 0.22), 3, 0.15, 0, 1);
+}
+.toolbar-icon-button:focused { -fx-border-width: 2px; -fx-border-color: #9eafc3; }
 .mimi-tooltip {
     -fx-background-color: #fff6c9;
     -fx-background-radius: 7px;
@@ -97,13 +102,19 @@
 }
 
 .button, .text-field, .combo-box, .choice-box, .spinner {
-    -fx-background-radius: 9px;
-    -fx-border-radius: 9px;
+    -fx-min-height: 30px;
+    -fx-background-radius: 10px;
+    -fx-border-radius: 10px;
+}
+.button { -fx-padding: 6px 13px; }
+.text-field, .combo-box, .choice-box, .spinner { -fx-padding: 1px 8px; }
+.button:focused, .text-field:focused, .combo-box:focused, .choice-box:focused, .spinner:focused {
+    -fx-border-width: 2px;
 }
 
 .primary-button {
     -fx-background-color: #e1e2e4;
-    -fx-background-radius: 6px;
+    -fx-background-radius: 999px;
     -fx-text-fill: #2879d0;
     -fx-font-family: "SF Pro Display";
     -fx-font-weight: 500;
@@ -202,17 +213,17 @@
     -fx-padding: 0 0 0 4px;
 }
 .chart-mode-button {
-    -fx-padding: 5px 11px 5px 11px;
+    -fx-min-height: 28px;
+    -fx-padding: 5px 13px;
     -fx-font-family: "SF Pro Text", "Helvetica Neue", "System";
     -fx-font-size: 11.5px;
     -fx-font-weight: 500;
     -fx-text-fill: #273746;
     -fx-background-color: #f8fafc;
-    -fx-background-radius: 6px;
+    -fx-background-radius: 999px;
     -fx-border-color: #c2ccd5;
-    -fx-border-radius: 6px;
+    -fx-border-radius: 999px;
     -fx-border-width: 1px;
-    -fx-cursor: hand;
 }
 .chart-mode-button:hover {
     -fx-background-color: #eaf1f7;
@@ -590,13 +601,16 @@
 .glass-settings-dialog .tab-pane .tab-header-area .tab-header-background {
     -fx-background-color: rgba(245,249,253,0.72);
 }
+.glass-settings-dialog .tab-pane .tab-header-area { -fx-padding: 7px 12px 6px 12px; }
 .glass-settings-dialog .tab {
     -fx-background-color: transparent;
-    -fx-padding: 8px 18px;
+    -fx-padding: 7px 15px;
+    -fx-background-radius: 999px;
+    -fx-background-insets: 4px 2px;
 }
 .glass-settings-dialog .tab:selected {
     -fx-background-color: rgba(255,255,255,0.78);
-    -fx-background-radius: 12px 12px 0 0;
+    -fx-background-radius: 999px;
 }
 .glass-settings-dialog .tab .tab-label { -fx-font-weight: 300; -fx-text-fill: #27425f; }
 .settings-scroll, .settings-scroll > .viewport { -fx-background-color: transparent; }
@@ -605,30 +619,30 @@
     -fx-background-color:
         linear-gradient(to bottom, rgba(255,255,255,0.96), rgba(255,255,255,0.55)),
         rgba(232,241,250,0.70);
-    -fx-background-radius: 18px, 18px;
+    -fx-background-radius: 14px, 14px;
     -fx-border-color: rgba(255,255,255,0.98) rgba(255,255,255,0.72) rgba(91,118,145,0.24) rgba(255,255,255,0.82);
-    -fx-border-radius: 18px;
+    -fx-border-radius: 14px;
     -fx-effect: dropshadow(gaussian, rgba(46,68,92,0.13), 16, 0.08, 0, 5);
 }
 .settings-section-title { -fx-font-size: 16px; -fx-font-weight: 600; -fx-text-fill: #102f4c; }
 .settings-row-title { -fx-font-size: 13px; -fx-font-weight: 600; -fx-text-fill: #162f49; }
 .settings-row-detail { -fx-font-size: 11px; -fx-font-weight: 400; -fx-text-fill: #405a73; }
 .glass-settings-dialog .settings-info-button {
-    -fx-min-width: 18px;
-    -fx-pref-width: 18px;
-    -fx-max-width: 18px;
-    -fx-min-height: 18px;
-    -fx-pref-height: 18px;
-    -fx-max-height: 18px;
+    -fx-min-width: 22px;
+    -fx-pref-width: 22px;
+    -fx-max-width: 22px;
+    -fx-min-height: 22px;
+    -fx-pref-height: 22px;
+    -fx-max-height: 22px;
     -fx-padding: 0;
     -fx-font-family: "SF Pro Display", "Helvetica Neue", sans-serif;
     -fx-font-size: 11px;
     -fx-font-weight: 700;
     -fx-text-fill: #315b82;
     -fx-background-color: rgba(255,255,255,0.72);
-    -fx-background-radius: 9px;
+    -fx-background-radius: 11px;
     -fx-border-color: rgba(69,105,139,0.55);
-    -fx-border-radius: 9px;
+    -fx-border-radius: 11px;
 }
 .settings-info-popup { -fx-padding: 5px; }
 .settings-info-content {
@@ -649,6 +663,7 @@
 .glass-settings-dialog .text-area,
 .glass-settings-dialog .combo-box,
 .glass-settings-dialog .spinner {
+    -fx-min-height: 32px;
     -fx-font-weight: 500;
     -fx-text-fill: #142d46;
     -fx-background-color: rgba(255,255,255,0.90);
@@ -657,10 +672,16 @@
     -fx-border-radius: 11px;
 }
 .glass-settings-dialog .button {
+    -fx-min-height: 32px;
+    -fx-padding: 6px 15px;
     -fx-font-weight: 600;
     -fx-text-fill: #17324d;
     -fx-background-color: linear-gradient(to bottom, rgba(255,255,255,0.96), rgba(218,232,246,0.88));
-    -fx-background-radius: 11px;
+    -fx-background-radius: 999px;
     -fx-border-color: rgba(255,255,255,0.94) rgba(91,119,147,0.30) rgba(91,119,147,0.34) rgba(255,255,255,0.94);
-    -fx-border-radius: 11px;
+    -fx-border-radius: 999px;
 }
+.glass-settings-dialog .check-box { -fx-padding: 4px 2px; }
+.glass-settings-dialog .check-box .box { -fx-background-radius: 5px; -fx-border-radius: 5px; }
+.context-menu { -fx-padding: 6px; -fx-background-radius: 10px; -fx-border-radius: 10px; }
+.context-menu .menu-item { -fx-padding: 7px 12px; -fx-background-radius: 6px; }

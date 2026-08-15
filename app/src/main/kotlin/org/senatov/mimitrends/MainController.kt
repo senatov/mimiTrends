@@ -141,7 +141,7 @@ class MainController(private val apiKey: String?, initialSymbol: String = "AAPL"
         scannerPanel.setAppearance(scannerCriteria.tableAppearance)
         tradegateProvider.configure(scannerCriteria)
         euronextProvider.configure(scannerCriteria)
-        ToolbarIconButton.configure(refreshButton, "Refresh local chart", rotateOnHover = true)
+        ToolbarIconButton.configure(refreshButton, "Refresh local chart")
         refreshButton.setOnAction { loadLocalChart(currentSymbol) }
         ToolbarIconButton.configure(settingsButton, "Scanner and currency settings")
         settingsButton.setOnAction { showScannerSettings() }
