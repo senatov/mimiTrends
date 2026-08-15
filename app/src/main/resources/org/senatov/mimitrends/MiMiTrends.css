@@ -23,10 +23,11 @@
 }
 
 .app-version {
-    -fx-font-size: 10px;
-    -fx-font-weight: 300;
-    -fx-text-fill: linear-gradient(to bottom, #c9cdd2, #747a83);
-    -fx-opacity: 0.82;
+    -fx-font-size: 13px;
+    -fx-font-weight: 600;
+    -fx-text-fill: #183b69;
+    -fx-opacity: 1.0;
+    -fx-padding: 0 0 0 3px;
 }
 
 .build-badge {
@@ -82,6 +83,8 @@
     -fx-alignment: center;
     -fx-effect: dropshadow(gaussian, rgba(30, 48, 72, 0.16), 3, 0.12, 0, 1);
 }
+.button.toolbar-icon-button { -fx-padding: 0; }
+.toolbar-icon-button .graphic { -fx-padding: 0; }
 .toolbar-icon-button:hover { -fx-background-color: #dce5f0; -fx-border-color: #9eafc3; }
 .toolbar-icon-button:pressed {
     -fx-background-color: #cfdbea;

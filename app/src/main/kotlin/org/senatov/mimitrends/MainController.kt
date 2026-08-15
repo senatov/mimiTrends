@@ -141,13 +141,13 @@ class MainController(private val apiKey: String?, initialSymbol: String = "AAPL"
         scannerPanel.setAppearance(scannerCriteria.tableAppearance)
         tradegateProvider.configure(scannerCriteria)
         euronextProvider.configure(scannerCriteria)
-        ToolbarIconButton.configure(refreshButton, "Refresh local chart")
+        ToolbarIconButton.configure(refreshButton, ToolbarIcon.REFRESH, "Refresh local chart")
         refreshButton.setOnAction { loadLocalChart(currentSymbol) }
-        ToolbarIconButton.configure(settingsButton, "Scanner and currency settings")
+        ToolbarIconButton.configure(settingsButton, ToolbarIcon.SETTINGS, "Scanner and currency settings")
         settingsButton.setOnAction { showScannerSettings() }
-        ToolbarIconButton.configure(aboutButton, "About MiMiTrends")
+        ToolbarIconButton.configure(aboutButton, ToolbarIcon.ABOUT, "About MiMiTrends")
         aboutButton.setOnAction { AboutDialog.show(aboutButton.scene?.window) { researchReport.show(aboutButton.scene?.window) } }
-        ToolbarIconButton.configure(importTradesButton, "Import Scalable transactions CSV")
+        ToolbarIconButton.configure(importTradesButton, ToolbarIcon.IMPORT, "Import Scalable transactions CSV")
         importTradesButton.setOnAction { scalableImport.chooseAndImport(importTradesButton.scene?.window, ::handleScalableImport) }
         researchReport.start()
         val appLayers = MainViewFactory.create(refreshButton, settingsButton, importTradesButton,

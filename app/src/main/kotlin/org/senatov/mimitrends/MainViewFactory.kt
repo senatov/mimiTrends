@@ -11,8 +11,11 @@ import javafx.scene.control.Tooltip
 import javafx.scene.image.Image
 import javafx.scene.image.ImageView
 import javafx.scene.layout.BorderPane
+import javafx.scene.layout.ColumnConstraints
+import javafx.scene.layout.GridPane
 import javafx.scene.layout.HBox
 import javafx.scene.layout.Priority
+import javafx.scene.layout.Region
 import javafx.scene.layout.StackPane
 import javafx.scene.layout.VBox
 import org.senatov.mimitrends.charts.TrendChartView
@@ -36,11 +39,19 @@ internal object MainViewFactory {
         val titleActions = HBox(10.0, refreshButton, settingsButton, importButton, aboutButton).apply {
             alignment = Pos.CENTER_RIGHT
         }
-        val titleBar = StackPane(titleIdentity, buildBadge(), titleActions).apply {
+        val titleBar = GridPane().apply {
             styleClass += "title-toolbar"
-            StackPane.setAlignment(titleIdentity, Pos.CENTER_LEFT)
-            StackPane.setAlignment(children[1], Pos.CENTER)
-            StackPane.setAlignment(titleActions, Pos.CENTER_RIGHT)
+            columnConstraints += listOf(
+                toolbarColumn(33.0),
+                toolbarColumn(34.0),
+                toolbarColumn(33.0)
+            )
+            add(titleIdentity, 0, 0)
+            add(buildBadge(), 1, 0)
+            add(titleActions, 2, 0)
+            GridPane.setHalignment(titleIdentity, javafx.geometry.HPos.LEFT)
+            GridPane.setHalignment(children[1], javafx.geometry.HPos.CENTER)
+            GridPane.setHalignment(titleActions, javafx.geometry.HPos.RIGHT)
         }
         contentSplitPane.apply {
             orientation = javafx.geometry.Orientation.VERTICAL
@@ -63,6 +74,11 @@ internal object MainViewFactory {
         }
     }
 
+    private fun toolbarColumn(widthPercent: Double) = ColumnConstraints().apply {
+        percentWidth = widthPercent
+        hgrow = Priority.ALWAYS
+    }
+
     private fun buildBadge(): HBox {
         val icon = MainViewFactory::class.java.getResourceAsStream("/icons/icon_128x128.png")?.use { stream ->
             ImageView(Image(stream)).apply {
@@ -77,6 +93,8 @@ internal object MainViewFactory {
             }
         ).apply { alignment = Pos.CENTER_LEFT }).apply {
             alignment = Pos.CENTER_LEFT
+            minWidth = Region.USE_PREF_SIZE
+            maxWidth = Region.USE_PREF_SIZE
             styleClass += "build-badge"
             Tooltip.install(this, Tooltip("MiMiTrends ${BuildInfo.displayVersion}\nBuilt ${BuildInfo.buildTime} on ${BuildInfo.buildHost}"))
         }
