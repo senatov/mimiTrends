@@ -69,14 +69,15 @@ internal class TradeCardAnnotation(
         graphics.draw(shape)
 
         var baseline = card.y + VERTICAL_PADDING + graphics.getFontMetrics(TITLE_FONT).ascent
-        titleLines.forEach { line ->
+        titleLines.forEachIndexed { index, line ->
             drawCentered(graphics, line, card.centerX, baseline, TITLE_COLOR, TITLE_FONT)
-            baseline += titleLineHeight
+            if (index < titleLines.lastIndex) baseline += titleLineHeight
         }
-        baseline += ROW_GAP + graphics.getFontMetrics(DETAIL_FONT).ascent
-        detailLines.forEach { line ->
+        baseline += graphics.getFontMetrics(TITLE_FONT).descent + ROW_GAP +
+            graphics.getFontMetrics(DETAIL_FONT).ascent
+        detailLines.forEachIndexed { index, line ->
             drawCentered(graphics, line, card.centerX, baseline, detailColor, DETAIL_FONT)
-            baseline += detailLineHeight
+            if (index < detailLines.lastIndex) baseline += detailLineHeight
         }
         graphics.setRenderingHint(RenderingHints.KEY_ANTIALIASING, previousHint)
     }
