@@ -17,13 +17,14 @@ An unsigned application image for local testing:
 ./gradlew :app:packageMacApp
 ```
 
-The project wrapper builds a signed DMG and automatically selects the first available `Developer ID Application` identity:
+The project wrapper builds a signed and notarized DMG and automatically selects the first available
+`Developer ID Application` identity:
 
 ```zsh
 ./Scripts/build-macos-dmg.zsh
 ```
 
-A Developer ID signed DMG is built through the same wrapper with an explicit identity:
+A Developer ID signed and notarized DMG is built through the same wrapper with an explicit identity:
 
 ```zsh
 security find-identity -v -p codesigning
@@ -56,7 +57,7 @@ xcrun notarytool store-credentials "MiMiNotary" \
 Then build, sign, submit to Apple, wait for acceptance, staple the ticket, and validate it:
 
 ```zsh
-./Scripts/build-macos-dmg.zsh --notarize \
+./Scripts/build-macos-dmg.zsh \
   --identity "Iakov Senatov (G2V9T9AD95)" \
   --profile "MiMiNotary"
 ```
@@ -64,7 +65,7 @@ Then build, sign, submit to Apple, wait for acceptance, staple the ticket, and v
 The equivalent shorter command is:
 
 ```zsh
-./Scripts/build-macos-dmg.zsh --notarize
+./Scripts/build-macos-dmg.zsh
 ```
 
 CI may use App Store Connect API credentials instead of a keychain profile by setting all of `APPLE_NOTARY_KEY_FILE`, `APPLE_NOTARY_KEY_ID`, and `APPLE_NOTARY_ISSUER_ID`.

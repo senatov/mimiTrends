@@ -9,18 +9,18 @@ readonly GRADLEW="${PROJECT_DIR}/gradlew"
 readonly OUTPUT_DIR="${PROJECT_DIR}/app/build/distributions/native/macos"
 readonly VERSION_BUMPER="${SCRIPT_DIR}/bump-app-version.zsh"
 
-notarize=false
+notarize=true
 notary_profile="${APPLE_NOTARY_PROFILE:-MiMiNotary}"
 signing_identity="${MAC_SIGNING_KEY_USER_NAME:-}"
 
 usage() {
-  print "Usage: $SCRIPT_NAME [--notarize] [--identity NAME] [--profile NAME]"
+  print "Usage: $SCRIPT_NAME [--no-notarize] [--identity NAME] [--profile NAME]"
   print
   print "Builds a self-contained Developer ID signed MiMiTrends DMG."
-  print "With --notarize, also submits it to Apple, staples, and validates it."
+  print "By default it submits to Apple, staples the ticket, and validates it."
   print
   print "Options:"
-  print "  --notarize       Run the complete Apple notarization workflow"
+  print "  --no-notarize    Skip Apple notarization for local diagnostics only"
   print "  --identity NAME  Developer ID Application identity"
   print "  --profile NAME   notarytool keychain profile (default: MiMiNotary)"
   print "  -h, --help       Show this help"
@@ -35,6 +35,10 @@ while (( $# > 0 )); do
   case "$1" in
     --notarize)
       notarize=true
+      shift
+      ;;
+    --no-notarize)
+      notarize=false
       shift
       ;;
     --identity)

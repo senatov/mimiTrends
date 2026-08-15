@@ -590,7 +590,8 @@ separate JDK installation.
 
 The script requires Xcode Command Line Tools and a `Developer ID Application` certificate in the
 login Keychain. It automatically selects the first matching certificate, signs the application and
-embedded native libraries, builds the DMG, verifies it, and prints its location and SHA-256 hash.
+embedded native libraries, builds the DMG, notarizes it with Apple, staples and validates the ticket,
+and prints its location and SHA-256 hash.
 Before every DMG attempt it atomically increments the application patch version in
 `gradle.properties`. Decimal carry is intentional: `1.0.9` becomes `1.1.0`. The same value is then
 used for the title bar, About dialog, JAR manifest, generated build metadata, package metadata, and
@@ -605,8 +606,11 @@ For a public release, first store App Store Connect credentials in a Keychain pr
 in [Native packaging](Doc/NativePackaging.md), then run the complete notarization workflow:
 
 ```bash
-./Scripts/build-macos-dmg.zsh --notarize
+./Scripts/build-macos-dmg.zsh
 ```
+
+Notarization, ticket stapling, and validation are mandatory defaults for distributable DMGs and
+GitHub releases. Use `--no-notarize` only for an explicitly local diagnostic package.
 
 GitHub releases include categorized notes generated from commits since the previous release. Start
 user-visible commit subjects with `NEW:`, `FIX:`, `CHANGE:`, or `DOCS:` and follow the prefix with a

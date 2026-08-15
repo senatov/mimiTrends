@@ -11,19 +11,19 @@ readonly NOTES_SCRIPT="${SCRIPT_DIR}/generate-release-notes.zsh"
 readonly OUTPUT_DIR="${PROJECT_DIR}/app/build/distributions/native/macos"
 readonly REPOSITORY="senatov/mimiTrends"
 
-notarize=false
+notarize=true
 draft=false
 prerelease=false
 build_args=()
 
 usage() {
-  print "Usage: $SCRIPT_NAME [--notarize] [--draft] [--prerelease] [--identity NAME] [--profile NAME]"
+  print "Usage: $SCRIPT_NAME [--no-notarize] [--draft] [--prerelease] [--identity NAME] [--profile NAME]"
   print
   print "Builds a new MiMiTrends DMG and publishes it as a GitHub release."
   print "The build increments appVersion; the resulting release tag is v<version>."
   print
   print "Options:"
-  print "  --notarize       Submit to Apple, staple, and validate before publishing"
+  print "  --no-notarize    Skip Apple notarization for diagnostic releases only"
   print "  --draft          Create the GitHub release as a draft"
   print "  --prerelease     Mark the GitHub release as a prerelease"
   print "  --identity NAME  Developer ID Application identity"
@@ -40,7 +40,10 @@ while (( $# > 0 )); do
   case "$1" in
     --notarize)
       notarize=true
-      build_args+=("$1")
+      shift
+      ;;
+    --no-notarize)
+      notarize=false
       shift
       ;;
     --draft)
@@ -65,6 +68,12 @@ while (( $# > 0 )); do
       ;;
   esac
 done
+
+if $notarize; then
+  build_args=(--notarize "${build_args[@]}")
+else
+  build_args=(--no-notarize "${build_args[@]}")
+fi
 
 [[ -x "$BUILD_SCRIPT" ]] || fail "build script is missing or not executable: $BUILD_SCRIPT"
 [[ -x "$NOTES_SCRIPT" ]] || fail "release-notes script is missing or not executable: $NOTES_SCRIPT"
