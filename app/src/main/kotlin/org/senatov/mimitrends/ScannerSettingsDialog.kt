@@ -17,16 +17,19 @@ import org.senatov.mimitrends.model.MarketRegion
 import javafx.collections.FXCollections
 import javafx.scene.paint.Color
 import javafx.scene.text.Font
+import javafx.application.Platform
 import org.senatov.mimitrends.scanner.ScannerSettingsService
+import java.util.concurrent.CompletableFuture
 
 data class ScannerSettingsResult(val criteria: ScannerCriteria, val finnhubApiKey: String?)
 
 class ScannerSettingsDialog(
     owner: Window?, current: ScannerCriteria, private val service: ScannerSettingsService,
-    finnhubConfigured: Boolean
+    finnhubConfigured: Boolean, private val validateStockSearchUrl: (String) -> Unit = {}
 ) {
     private val dialog = Dialog<ScannerSettingsResult>()
     private val restoreDefaults = ButtonType("Restore Defaults", ButtonBar.ButtonData.LEFT)
+    private val saveSettings = ButtonType("Save", ButtonBar.ButtonData.OK_DONE)
     private val geometry = WindowGeometryService("settings", DEFAULT_WIDTH, DEFAULT_HEIGHT)
     private val marketRegion = ComboBox(FXCollections.observableArrayList(MarketRegion.entries)).apply { value = current.marketRegion }
     private val scanInterval = Spinner<Int>(60, 3_600, current.scanIntervalSeconds.toInt(), 30).apply { isEditable = true }
@@ -54,6 +57,7 @@ class ScannerSettingsDialog(
     private val euronextInterval = Spinner<Int>(750, 15_000, current.euronextRequestIntervalMillis.toInt(), 250).apply {
         isEditable = true
     }
+    private val stockSearchUrl = TextField(current.stockSearchUrl)
     private val finnhubApiKey = PasswordField().apply {
         promptText = if (finnhubConfigured) "Configured — leave blank to keep" else "Optional API key"
     }
@@ -129,6 +133,11 @@ class ScannerSettingsDialog(
                 settingRow("Public quote collector", "Resolve ISIN and MIC through Euronext search and collect delayed market-information quotes.", euronextEnabled),
                 settingRow("Request interval", "Milliseconds between sequential instruments. A small timing jitter and automatic backoff are applied.", euronextInterval)
             ),
+            section("External stock chart",
+                settingRow("Stock search page",
+                    "Open Stock uses this HTTPS search page. Saving verifies that a Northern Data query returns a stock result.",
+                    stockSearchUrl)
+            ),
             Label("Collectors honor Retry-After responses, pause after access or throttling errors, and do not replace newer database observations with older quotes.").apply {
                 isWrapText = true; styleClass += "settings-footnote"
             }
@@ -157,12 +166,29 @@ class ScannerSettingsDialog(
         )
         dialog.dialogPane.prefWidth = DEFAULT_WIDTH
         dialog.dialogPane.prefHeight = DEFAULT_HEIGHT
-        dialog.dialogPane.buttonTypes += listOf(restoreDefaults, ButtonType.CANCEL, ButtonType("Save", ButtonBar.ButtonData.OK_DONE))
+        dialog.dialogPane.buttonTypes += listOf(restoreDefaults, ButtonType.CANCEL, saveSettings)
         dialog.dialogPane.lookupButton(restoreDefaults).addEventFilter(javafx.event.ActionEvent.ACTION) { event ->
             event.consume()
             applyDefaults()
         }
-        dialog.setResultConverter { if (it.buttonData == ButtonBar.ButtonData.OK_DONE) parse() else null }
+        dialog.setResultConverter { null }
+        dialog.dialogPane.lookupButton(saveSettings).addEventFilter(javafx.event.ActionEvent.ACTION) { event ->
+            event.consume()
+            val result = parse() ?: return@addEventFilter
+            val saveButton = dialog.dialogPane.lookupButton(saveSettings)
+            saveButton.isDisable = true
+            CompletableFuture.runAsync { validateStockSearchUrl(result.criteria.stockSearchUrl) }.whenComplete { _, error ->
+                Platform.runLater {
+                    saveButton.isDisable = false
+                    if (error == null) {
+                        dialog.result = result
+                        dialog.close()
+                    } else Alert(Alert.AlertType.ERROR,
+                        "Stock search URL is not relevant: searching for Northern Data did not return a stock page.",
+                        ButtonType.OK).showAndWait()
+                }
+            }
+        }
         geometry.attach(dialog)
     }
 
@@ -230,6 +256,7 @@ class ScannerSettingsDialog(
         tradegateInterval.valueFactory.value = defaults.tradegateRequestIntervalMillis.toInt()
         euronextEnabled.isSelected = defaults.euronextEnabled
         euronextInterval.valueFactory.value = defaults.euronextRequestIntervalMillis.toInt()
+        stockSearchUrl.text = defaults.stockSearchUrl
         symbols.text = defaults.symbols.joinToString(", ")
         fontFamily.value = defaults.tableAppearance.fontFamily
         fontSize.valueFactory.value = defaults.tableAppearance.fontSize
@@ -264,6 +291,7 @@ class ScannerSettingsDialog(
             tradegateRequestIntervalMillis = tradegateInterval.value.toLong(),
             euronextEnabled = euronextEnabled.isSelected,
             euronextRequestIntervalMillis = euronextInterval.value.toLong(),
+            stockSearchUrl = stockSearchUrl.text.trim().also { require(it.isNotEmpty()) },
             tableAppearance = TableAppearance(
                 fontFamily = fontFamily.value ?: "SF Pro Display",
                 fontSize = fontSize.value,

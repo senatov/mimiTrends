@@ -323,6 +323,11 @@
 .short-move-table .table-cell.short-move-up { -fx-text-fill: #16834a; -fx-font-weight: 600; }
 .short-move-table .table-cell.short-move-down { -fx-text-fill: #bd3c3c; -fx-font-weight: 600; }
 .short-move-table .table-cell.short-move-struggle { -fx-text-fill: #8a5600; -fx-font-weight: 600; }
+.short-move-table .table-cell.short-move-recurring-jump,
+.short-move-table .table-row-cell:selected .table-cell.short-move-recurring-jump {
+    -fx-text-fill: #7a1424;
+    -fx-font-weight: 700;
+}
 .scanner-cycle { -fx-text-fill: #777b81; -fx-font-size: 12px; }
 .scanner-cycle.market-closed {
     -fx-text-fill: #a36a00;

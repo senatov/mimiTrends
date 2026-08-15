@@ -45,6 +45,7 @@ class ScannerSettingsService(private val path: Path = Path.of(System.getProperty
                 euronextEnabled = p.getProperty("provider.euronext.enabled", "false").toBooleanStrictOrNull() ?: false,
                 euronextRequestIntervalMillis = p.getProperty("provider.euronext.intervalMillis", "1500")
                     .toLong().coerceIn(750, 15_000),
+                stockSearchUrl = p.getProperty("stock.searchUrl", ScannerCriteria().stockSearchUrl),
                 tableAppearance = TableAppearance(
                     fontFamily = p.getProperty("table.fontFamily", "SF Pro Display"),
                     fontSize = p.getProperty("table.fontSize", "12.0").toDouble().coerceIn(9.0, 22.0),
@@ -92,6 +93,7 @@ class ScannerSettingsService(private val path: Path = Path.of(System.getProperty
             setProperty("provider.tradegate.intervalMillis", value.tradegateRequestIntervalMillis.toString())
             setProperty("provider.euronext.enabled", value.euronextEnabled.toString())
             setProperty("provider.euronext.intervalMillis", value.euronextRequestIntervalMillis.toString())
+            setProperty("stock.searchUrl", value.stockSearchUrl)
             setProperty("table.fontFamily", value.tableAppearance.fontFamily)
             setProperty("table.fontSize", value.tableAppearance.fontSize.toString())
             setProperty("table.textColor", value.tableAppearance.textColor)

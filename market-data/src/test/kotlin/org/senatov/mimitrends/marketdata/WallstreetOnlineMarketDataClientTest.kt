@@ -8,6 +8,21 @@ import java.time.ZoneId
 class WallstreetOnlineMarketDataClientTest {
     private val client = WallstreetOnlineMarketDataClient()
 
+    @Test fun `accepts only a resolved wallstreet online stock page`() {
+        assertEquals("https://www.wallstreet-online.de/aktien/northern-data-aktie",
+            client.validatedStockUrl(java.net.URI("https://www.wallstreet-online.de/suche/?q=x"),
+                java.net.URI("https://www.wallstreet-online.de/aktien/northern-data-aktie?q=x")))
+        kotlin.test.assertFailsWith<ProviderDataUnavailableException> {
+            client.validatedStockUrl(java.net.URI("https://www.wallstreet-online.de/suche/?q=x"),
+                java.net.URI("https://www.wallstreet-online.de/rohstoffe/goldpreis"))
+        }
+    }
+
+    @Test fun `inserts a stock query while retaining search page parameters`() {
+        val uri = client.searchUri("https://www.wallstreet-online.de/suche/?suche=&q=&sa=Suche", "Northern Data")
+        assertEquals("https://www.wallstreet-online.de/suche/?suche=&sa=Suche&q=Northern+Data", uri.toString())
+    }
+
     @Test
     fun `parses mover table row`() {
         val html = """

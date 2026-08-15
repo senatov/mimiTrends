@@ -1,33 +1,24 @@
 package org.senatov.mimitrends
-
 import javafx.application.Platform
 import javafx.scene.Parent
 import javafx.scene.control.*
 import javafx.scene.layout.*
 import org.senatov.mimitrends.charts.TrendChartView
-import org.senatov.mimitrends.db.MarketRepository
-import org.senatov.mimitrends.db.AnalyticsRepository
+import org.senatov.mimitrends.db.*
 import org.senatov.mimitrends.log.LogTag
 import org.senatov.mimitrends.model.*
-import org.senatov.mimitrends.scanner.ScannerEngine
-import org.senatov.mimitrends.scanner.ScannerSettingsService
-import org.senatov.mimitrends.scanner.MarketCalendar
-import org.senatov.mimitrends.ws.FinnhubProfileClient
-import org.senatov.mimitrends.ws.FinnhubWebSocketClient
-import org.senatov.mimitrends.ws.FinnhubMinuteAggregator
-import org.senatov.mimitrends.marketdata.YahooFinanceClient
-import org.senatov.mimitrends.marketdata.CompanyLogoClient
+import org.senatov.mimitrends.scanner.*
+import org.senatov.mimitrends.ws.*
+import org.senatov.mimitrends.marketdata.*
 import org.slf4j.LoggerFactory
 import javafx.util.Duration
 import java.util.concurrent.*
 import java.util.function.BiConsumer
-import java.util.concurrent.atomic.AtomicLong
-import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.*
 import java.util.concurrent.ConcurrentHashMap
-
 class MainController(private val apiKey: String?, initialSymbol: String = "AAPL", initialRange: String = "3M",
     initialDividerPosition: Double = 0.34, scannerColumns: String = "", shortMoveColumns: String = "",
-    initialTableDivider: Double = 0.68) {
+    initialTableDivider: Double = 0.68, private val openExternal: (String) -> Unit = {}) {
     private companion object { const val MARKET_OPEN_GRACE_SECONDS = 5L }
     private val log = LoggerFactory.getLogger(MainController::class.java)
     private val repository = MarketRepository()
@@ -53,12 +44,19 @@ class MainController(private val apiKey: String?, initialSymbol: String = "AAPL"
     private var profileService = CompanyProfileService(
         repository, apiKey?.let(::FinnhubProfileClient), CompanyLogoClient()
     )
+    private val wallstreetOnlineClient = WallstreetOnlineMarketDataClient()
+    private val stockPageOpener = StockPageOpener(
+        repository, wallstreetOnlineClient, { scannerCriteria.stockSearchUrl }, openExternal,
+        { message, error, details -> status.update(message, error, details) },
+        { symbol, error -> requestStatus.formatError(symbol, error) }, log
+    )
     private val shortMovePanel = ShortMovePanel(
         { symbol, moveEpochSeconds ->
             trendChart.showSignalFocus(moveEpochSeconds)
             shortMoveSelection.open(symbol)
         },
-        shortMoveColumns, { symbol -> profileService.load(symbol) }, ClipboardText::copy
+        shortMoveColumns, { symbol -> profileService.load(symbol) }, ClipboardText::copy,
+        stockPageOpener::open
     )
     private val scannerPanel = ScannerPanel(
         onOpen = ::openScannerResult,
@@ -202,14 +200,12 @@ class MainController(private val apiKey: String?, initialSymbol: String = "AAPL"
             observationBus.close()
         }
     }
-
     fun selectedSymbol(): String = currentSymbol.ifEmpty { "AAPL" }
     fun selectedRange(): String = selectedRangeValue
     fun dividerPosition(): Double = contentSplitPane.dividers.firstOrNull()?.position ?: initialDivider
     fun scannerColumnLayout(): String = scannerPanel.savedColumnLayout()
     fun shortMoveColumnLayout(): String = shortMovePanel.savedColumnLayout()
     fun tableDividerPosition(): Double = scannerPanel.tableDividerPosition()
-
     private fun startScanner() {
         log.debug(LogTag.API, "startScanner(symbols={})", scannerCriteria.symbols.size)
         priorityScanner.replaceCandidates(emptyList())
@@ -346,7 +342,8 @@ class MainController(private val apiKey: String?, initialSymbol: String = "AAPL"
 
     private fun showScannerSettings() {
         log.debug(LogTag.UI, "showScannerSettings()")
-        ScannerSettingsDialog(refreshButton.scene?.window, scannerCriteria, scannerSettings, ApiKeyResolver.resolve() != null)
+        ScannerSettingsDialog(refreshButton.scene?.window, scannerCriteria, scannerSettings,
+            ApiKeyResolver.resolve() != null, wallstreetOnlineClient::validateStockSearchUrl)
             .showAndWait()?.let { result ->
             result.finnhubApiKey?.let { key ->
                 ApiKeyResolver.saveLocal(key, ApiKeyResolver.resolveWebhookSecret())

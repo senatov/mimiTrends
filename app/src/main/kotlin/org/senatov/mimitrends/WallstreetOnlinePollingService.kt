@@ -1,5 +1,6 @@
 package org.senatov.mimitrends
 
+import javafx.application.Platform
 import org.senatov.mimitrends.db.MarketRepository
 import org.senatov.mimitrends.log.LogTag
 import org.senatov.mimitrends.marketdata.WallstreetOnlineMarketDataClient
@@ -13,6 +14,7 @@ import org.slf4j.LoggerFactory
 import java.util.concurrent.Executors
 import java.util.concurrent.ScheduledFuture
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.CompletableFuture
 import kotlin.math.abs
 
 internal class WallstreetOnlinePollingService(
@@ -108,5 +110,34 @@ internal class WallstreetOnlinePollingService(
         const val FUTURE_TOLERANCE_MILLIS = 60_000L
         const val MAX_DETAIL_REQUESTS = 5
         val VENUE_MICS = mapOf("tradegate" to "XGAT", "lang & schwarz" to "LSSI", "xetra" to "XETR")
+    }
+}
+
+internal class StockPageOpener(
+    private val repository: MarketRepository,
+    private val client: WallstreetOnlineMarketDataClient,
+    private val searchUrl: () -> String,
+    private val openExternal: (String) -> Unit,
+    private val setStatus: (String, Boolean, String?) -> Unit,
+    private val formatError: (String, Throwable) -> String,
+    private val log: org.slf4j.Logger
+) {
+    fun open(symbol: String) {
+        val isin = repository.loadInstrumentIsin(symbol)
+        if (isin.isNullOrBlank()) {
+            setStatus("Cannot open stock page: no ISIN for $symbol", true, null)
+            return
+        }
+        setStatus("Finding stock page: $symbol", false, null)
+        CompletableFuture.supplyAsync { client.resolveStockUrl(searchUrl(), isin) }.whenComplete { url, error ->
+            Platform.runLater {
+                if (error == null && url != null) openExternal(url) else reportFailure(symbol, error)
+            }
+        }
+    }
+
+    private fun reportFailure(symbol: String, error: Throwable?) {
+        log.warn(LogTag.API, "stock page lookup failed symbol={}", symbol, error)
+        setStatus("Stock page not found: $symbol", true, error?.let { formatError(symbol, it) })
     }
 }

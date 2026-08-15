@@ -1,6 +1,7 @@
 package org.senatov.mimitrends.marketdata
 
 import java.net.URI
+import java.net.URLEncoder
 import java.net.http.HttpClient
 import java.net.http.HttpRequest
 import java.net.http.HttpResponse
@@ -41,6 +42,45 @@ class WallstreetOnlineMarketDataClient(
     fun loadQuote(path: String): WallstreetOnlineQuote {
         require(DETAIL_PATH.matches(path)) { "Invalid wallstreetONLINE instrument path" }
         return parseQuote(send("$BASE_URL$path"))
+    }
+
+    fun resolveStockUrl(searchUrl: String, isin: String): String {
+        require(ISIN_QUERY.matches(isin)) { "Invalid ISIN for wallstreetONLINE search" }
+        val searchUri = searchUri(searchUrl, isin.uppercase())
+        val request = HttpRequest.newBuilder(searchUri)
+            .timeout(Duration.ofSeconds(15)).header("User-Agent", USER_AGENT)
+            .header("Accept", "text/html,application/xhtml+xml").GET().build()
+        val response = client.send(request, HttpResponse.BodyHandlers.discarding())
+        if (response.statusCode() != 200) {
+            throw ProviderHttpException.from(response.statusCode(), response.headers(), "wallstreetONLINE stock search")
+        }
+        return validatedStockUrl(searchUri, response.uri())
+    }
+
+    fun validateStockSearchUrl(searchUrl: String) {
+        val uri = searchUri(searchUrl, VALIDATION_COMPANY)
+        val request = HttpRequest.newBuilder(uri).timeout(Duration.ofSeconds(15))
+            .header("User-Agent", USER_AGENT).header("Accept", "text/html,application/xhtml+xml").GET().build()
+        val response = client.send(request, HttpResponse.BodyHandlers.ofString())
+        if (response.statusCode() != 200 || !VALIDATION_STOCK_LINK.containsMatchIn(response.body())) {
+            throw ProviderDataUnavailableException("Search page did not return Northern Data as a stock")
+        }
+    }
+
+    internal fun validatedStockUrl(searchUri: URI, resolvedUri: URI): String {
+        if (!resolvedUri.host.equals(searchUri.host, ignoreCase = true) || !DETAIL_PATH.matches(resolvedUri.path)) {
+            throw ProviderDataUnavailableException("wallstreetONLINE returned no unique stock page")
+        }
+        return URI("https", resolvedUri.authority, resolvedUri.path, null, null).toString()
+    }
+
+    internal fun searchUri(searchUrl: String, query: String): URI {
+        val base = URI.create(searchUrl.trim())
+        require(base.scheme.equals("https", true) && !base.host.isNullOrBlank()) { "Stock search URL must use HTTPS" }
+        val encoded = URLEncoder.encode(query, Charsets.UTF_8)
+        val parameters = base.rawQuery.orEmpty().split('&').filter(String::isNotBlank)
+            .filterNot { it.substringBefore('=').equals("q", true) }.plus("q=$encoded").joinToString("&")
+        return URI(base.scheme, base.authority, base.path.ifBlank { "/" }, parameters, null)
     }
 
     internal fun parseMovers(html: String): List<WallstreetOnlineMover> = ROW.findAll(html).mapNotNull { row ->
@@ -104,6 +144,10 @@ class WallstreetOnlineMarketDataClient(
         val QUOTE_ZONE: ZoneId = ZoneId.of("Europe/Berlin")
         val MOVER_PATHS = listOf("/statistik/top-aktien-performance", "/statistik/flop-aktien-performance")
         val DETAIL_PATH = Regex("/aktien/[a-z0-9-]+-aktie")
+        val ISIN_QUERY = Regex("[A-Z]{2}[A-Z0-9]{9}[0-9]", RegexOption.IGNORE_CASE)
+        const val VALIDATION_COMPANY = "Northern Data"
+        val VALIDATION_STOCK_LINK = Regex("href=[\"']/aktien/[^\"']*northern-data[^\"']*-aktie[\"']",
+            RegexOption.IGNORE_CASE)
         val ROW = Regex("<tr[^>]*>(.*?)</tr>", setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL))
         val DETAIL_LINK = Regex("<a[^>]+href=[\"'](/aktien/[a-z0-9-]+-aktie)[\"'][^>]*>([^<]+)</a>", RegexOption.IGNORE_CASE)
         val PRICE = Regex("data-push=[\"'][^\"']+;t[\"'][^>]*>\\s*([^<]+)", RegexOption.IGNORE_CASE)

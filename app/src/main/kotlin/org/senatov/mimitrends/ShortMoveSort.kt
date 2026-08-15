@@ -19,6 +19,7 @@ internal object ShortMoveSort {
     }
 
     private fun directionPosition(move: ShortMove): Int = when (move.pattern) {
+        ShortMovePattern.RECURRING_SHARP_JUMP -> -4
         ShortMovePattern.CONFIRMED_EXTENDED_DROP -> -3
         ShortMovePattern.POST_DROP_STRUGGLE -> -2
         ShortMovePattern.DIRECTIONAL -> if (move.changePercent < 0.0) -1 else 1

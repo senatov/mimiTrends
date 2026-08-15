@@ -27,7 +27,8 @@ class ShortMovePanel(
     private val onOpen: (String, Long) -> Unit,
     savedColumns: String = "",
     private val loadProfile: ((String) -> java.util.concurrent.CompletableFuture<CompanyProfile>)? = null,
-    private val copyText: (String) -> Unit = {}
+    private val copyText: (String) -> Unit = {},
+    private val openExternalChart: (String) -> Unit = {}
 ) : VBox(5.0) {
     private val rows = FXCollections.observableArrayList<ShortMove>()
     private val sortedRows = SortedList(rows)
@@ -37,6 +38,7 @@ class ShortMovePanel(
         styleClass += "short-move-caption"
     }
     private val companyNames = java.util.concurrent.ConcurrentHashMap<String, String>()
+    private val eventRetainer = ShortMoveEventRetainer()
     private val columnLayout: TableColumnLayout<ShortMove>
     private val autoFitter: TableColumnAutoFitter<ShortMove>
 
@@ -54,6 +56,19 @@ class ShortMovePanel(
             id = "company"
             setCellValueFactory { ReadOnlyStringWrapper(companyNames[it.value.symbol] ?: it.value.symbol) }
             comparator = Comparator { left, right -> left.compareTo(right, ignoreCase = true) }
+            setCellFactory {
+                object : TableCell<ShortMove, String>() {
+                    override fun updateItem(item: String?, empty: Boolean) {
+                        super.updateItem(item, empty)
+                        text = if (empty || item == null) null else
+                            if (tableRow?.item?.pattern == ShortMovePattern.RECURRING_SHARP_JUMP) "⚠ $item" else item
+                        styleClass.remove("short-move-recurring-jump")
+                        if (!empty && tableRow?.item?.pattern == ShortMovePattern.RECURRING_SHARP_JUMP) {
+                            styleClass += "short-move-recurring-jump"
+                        }
+                    }
+                }
+            }
             prefWidth = 210.0; minWidth = 90.0
         }
         val priceRange = TableColumn<ShortMove, ShortMove>("From → To").apply {
@@ -117,7 +132,10 @@ class ShortMovePanel(
                     MenuItem("Copy search keyword").apply {
                         setOnAction { contextItem?.let { move -> copyText(searchKeyword(move)) } }
                     },
-                    MenuItem("Copy ticker").apply { setOnAction { contextItem?.symbol?.let(copyText) } }
+                    MenuItem("Copy ticker").apply { setOnAction { contextItem?.symbol?.let(copyText) } },
+                    MenuItem("Open Stock").apply {
+                        setOnAction { contextItem?.symbol?.let(openExternalChart) }
+                    }
                 ).apply {
                     setOnShowing {
                         contextItem = item.takeUnless { isEmpty }
@@ -137,16 +155,18 @@ class ShortMovePanel(
         children.setAll(header, table)
     }
 
-    internal fun show(moves: Collection<ShortMove>) {
-        rows.setAll(moves)
-        updateCaption.text = "5-minute moves + recent post-drop · updated ${time.format(Instant.now())}"
-        moves.forEach(::requestCompanyName)
+    internal fun show(moves: Collection<ShortMove>, nowEpochSeconds: Long = Instant.now().epochSecond) {
+        val displayed = eventRetainer.merge(moves, nowEpochSeconds)
+        rows.setAll(displayed)
+        updateCaption.text = "5-minute moves + recurring jumps · updated ${time.format(Instant.ofEpochSecond(nowEpochSeconds))}"
+        displayed.forEach(::requestCompanyName)
         autoFitter.request()
     }
 
     internal fun savedColumnLayout(): String = columnLayout.capture(autoFitter.manuallySizedColumnIds())
 
     private fun directionLabel(move: ShortMove): String = when (move.pattern) {
+        ShortMovePattern.RECURRING_SHARP_JUMP -> recurringDirection(move)
         ShortMovePattern.POST_DROP_STRUGGLE -> "◆ POST-DROP"
         ShortMovePattern.CONFIRMED_EXTENDED_DROP -> "◆ CONFIRMED DROP"
         ShortMovePattern.RECOVERY_AFTER_EXTENDED_DROP -> "◆ DROP RECOVERY"
@@ -176,6 +196,7 @@ class ShortMovePanel(
             text = if (empty) null else label
             styleClass.removeAll("short-move-up", "short-move-down", "short-move-struggle")
             if (!empty && label != null) styleClass += when {
+                label.contains("RECURRING") -> "short-move-recurring-jump"
                 label.contains("POST-DROP") -> "short-move-struggle"
                 label.contains("UP") -> "short-move-up"
                 else -> "short-move-down"
@@ -184,12 +205,14 @@ class ShortMovePanel(
 
         private companion object {
             fun directionText(move: ShortMove): String = when (move.pattern) {
+                ShortMovePattern.RECURRING_SHARP_JUMP -> recurringDirection(move)
                 ShortMovePattern.POST_DROP_STRUGGLE -> "◆ POST-DROP"
                 ShortMovePattern.CONFIRMED_EXTENDED_DROP -> "◆ CONFIRMED DROP"
                 ShortMovePattern.RECOVERY_AFTER_EXTENDED_DROP -> "◆ DROP RECOVERY"
                 ShortMovePattern.DIRECTIONAL -> if (move.changePercent >= 0.0) "▲ UP" else "▼ DOWN"
             }
         }
+
     }
 
     private class PercentCell : TableCell<ShortMove, Number>() {
@@ -211,3 +234,6 @@ class ShortMovePanel(
         }
     }
 }
+
+private fun recurringDirection(move: ShortMove): String =
+    if (move.changePercent >= 0.0) "⚠ RECURRING UP" else "⚠ RECURRING DOWN"

@@ -79,3 +79,29 @@ internal class ShortMoveRefreshCoordinator(
         const val CLOSE_TIMEOUT_SECONDS = 15L
     }
 }
+
+internal class ShortMoveEventRetainer {
+    private val retainedBySymbol: MutableMap<String, ShortMove> = LinkedHashMap()
+
+    fun merge(current: Collection<ShortMove>, nowEpochSeconds: Long): List<ShortMove> {
+        val expiredSymbols = retainedBySymbol.values
+            .filter { move -> nowEpochSeconds - move.eventEpochSeconds > RETENTION_SECONDS }
+            .map(ShortMove::symbol)
+        expiredSymbols.forEach(retainedBySymbol::remove)
+        current.asSequence().filter { it.pattern == ShortMovePattern.RECURRING_SHARP_JUMP }.forEach { candidate ->
+            val retained = retainedBySymbol[candidate.symbol]
+            if (retained == null || candidate.eventEpochSeconds > retained.eventEpochSeconds) {
+                retainedBySymbol[candidate.symbol] = candidate
+            }
+        }
+        val frozenSymbols = retainedBySymbol.keys
+        return (retainedBySymbol.values + current.filter { it.symbol !in frozenSymbols })
+            .distinctBy(ShortMove::symbol)
+            .take(MAX_RETAINED_ROWS)
+    }
+
+    private companion object {
+        const val RETENTION_SECONDS = 20 * 60L
+        const val MAX_RETAINED_ROWS = 10
+    }
+}

@@ -6,6 +6,59 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 class ShortMoveDetectorTest {
+    @Test fun `freezes a recurring jump for twenty minutes despite refreshed rows`() {
+        val retainer = ShortMoveEventRetainer()
+        val initial = recurringMove(event = 1_000L, close = 104.0)
+
+        retainer.merge(listOf(initial), 1_000L)
+        val refreshed = retainer.merge(listOf(recurringMove(event = 1_000L, close = 106.0)), 1_900L)
+
+        assertEquals(104.0, refreshed.single().close)
+        kotlin.test.assertFalse(retainer.merge(emptyList(), 2_201L).any { it.symbol == "NDA.DE" })
+    }
+
+    @Test fun `replaces a frozen recurring row when a new jump occurs`() {
+        val retainer = ShortMoveEventRetainer()
+        retainer.merge(listOf(recurringMove(event = 1_000L, close = 104.0)), 1_000L)
+
+        val result = retainer.merge(listOf(recurringMove(event = 1_600L, close = 109.0)), 1_600L)
+
+        assertEquals(1_600L, result.single().eventEpochSeconds)
+        assertEquals(109.0, result.single().close)
+    }
+
+    @Test fun `detects a new sharp rise when similar rises recur across days`() {
+        val day = 86_400L
+        val now = 3 * day + 180L
+        val bars = listOf(
+            bar("NDA.DE", 60L, 100.0, 100.0), bar("NDA.DE", 120L, 104.0, 104.0),
+            bar("NDA.DE", day + 60L, 96.0, 96.0), bar("NDA.DE", day + 120L, 100.0, 100.0),
+            bar("NDA.DE", 3 * day + 60L, 100.0, 100.0),
+            bar("NDA.DE", 3 * day + 120L, 105.0, 105.0)
+        )
+
+        val result = ShortMoveDetector.rank(mapOf("NDA.DE" to bars), now).single()
+
+        assertEquals(ShortMovePattern.RECURRING_SHARP_JUMP, result.pattern)
+        assertEquals(3 * day + 120L, result.eventEpochSeconds)
+    }
+
+    @Test fun `detects a new sharp drop in the same recurring movement pattern`() {
+        val day = 86_400L
+        val now = 3 * day + 180L
+        val bars = listOf(
+            bar("NDA.DE", 60L, 100.0, 100.0), bar("NDA.DE", 120L, 104.0, 104.0),
+            bar("NDA.DE", day + 60L, 100.0, 100.0), bar("NDA.DE", day + 120L, 96.0, 96.0),
+            bar("NDA.DE", 3 * day + 60L, 100.0, 100.0),
+            bar("NDA.DE", 3 * day + 120L, 95.0, 95.0)
+        )
+
+        val result = ShortMoveDetector.rank(mapOf("NDA.DE" to bars), now).single()
+
+        assertEquals(ShortMovePattern.RECURRING_SHARP_JUMP, result.pattern)
+        assertTrue(result.changePercent < 0.0)
+    }
+
     @Test
     fun `ranks upward and downward candles by absolute move`() {
         val now = 10_000L
@@ -228,4 +281,9 @@ class ShortMoveDetectorTest {
 
     private fun move(symbol: String, change: Double) =
         ShortMove(symbol, change, 100.0, 100.0 + change, 0L, 60L, 2)
+
+    private fun recurringMove(event: Long, close: Double) = ShortMove(
+        "NDA.DE", 4.0, 100.0, close, event - 60L, event, 2,
+        ShortMovePattern.RECURRING_SHARP_JUMP, event
+    )
 }

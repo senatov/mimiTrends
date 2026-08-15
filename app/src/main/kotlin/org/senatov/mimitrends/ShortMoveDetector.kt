@@ -15,6 +15,7 @@ internal data class ShortMove(
 )
 
 internal enum class ShortMovePattern {
+    RECURRING_SHARP_JUMP,
     DIRECTIONAL,
     POST_DROP_STRUGGLE,
     CONFIRMED_EXTENDED_DROP,
@@ -30,11 +31,35 @@ internal object ShortMoveDetector {
         nowEpochSeconds: Long,
         limit: Int = 10
     ): List<ShortMove> = barsBySymbol.mapNotNull { (symbol, bars) ->
-        detectPostDropStruggle(symbol, bars, nowEpochSeconds)
+        detectRecurringSharpJump(symbol, bars, nowEpochSeconds)
+            ?: detectPostDropStruggle(symbol, bars, nowEpochSeconds)
             ?: detectConfirmedExtendedDrop(symbol, bars, nowEpochSeconds)
             ?: detectRecoveryAfterExtendedDrop(symbol, bars, nowEpochSeconds)
             ?: calculate(symbol, bars, nowEpochSeconds)
     }.sortedByDescending { rankingScore(it, nowEpochSeconds) }.take(limit)
+
+    private fun detectRecurringSharpJump(
+        symbol: String,
+        bars: List<MinuteBar>,
+        nowEpochSeconds: Long
+    ): ShortMove? {
+        val recent = bars.sortedBy(MinuteBar::minuteEpochSeconds)
+        val jumps = recent.zipWithNext().mapNotNull { (previous, current) ->
+            val elapsed = current.minuteEpochSeconds - previous.minuteEpochSeconds
+            if (elapsed !in 1..SHARP_JUMP_WINDOW_MINUTES * 60 || previous.close <= 0.0) return@mapNotNull null
+            val change = percent(previous.close, current.close)
+            if (kotlin.math.abs(change) < MIN_SHARP_MOVE_PERCENT) null else ShortMove(
+                symbol, change, previous.close, current.close, previous.minuteEpochSeconds,
+                current.minuteEpochSeconds, 2, ShortMovePattern.RECURRING_SHARP_JUMP,
+                current.minuteEpochSeconds
+            )
+        }
+        val current = jumps.lastOrNull()?.takeIf {
+            it.eventEpochSeconds >= nowEpochSeconds - SHARP_JUMP_RETENTION_MINUTES * 60
+        } ?: return null
+        val recurringSessions = jumps.map { it.eventEpochSeconds / 86_400L }.distinct().size
+        return current.takeIf { jumps.size >= MIN_RECURRING_JUMPS && recurringSessions >= MIN_RECURRING_SESSIONS }
+    }
 
     private fun detectPostDropStruggle(
         symbol: String,
@@ -153,6 +178,7 @@ internal object ShortMoveDetector {
         val ageMinutes = ((nowEpochSeconds - freshnessEpoch).coerceAtLeast(0L) / 60.0)
         val freshness = (1.0 - ageMinutes / FRESHNESS_DECAY_MINUTES).coerceAtLeast(MIN_FRESHNESS_WEIGHT)
         val patternWeight = when (move.pattern) {
+            ShortMovePattern.RECURRING_SHARP_JUMP -> RECURRING_JUMP_WEIGHT
             ShortMovePattern.POST_DROP_STRUGGLE -> POST_DROP_WEIGHT
             ShortMovePattern.CONFIRMED_EXTENDED_DROP -> EXTENDED_DROP_WEIGHT
             ShortMovePattern.RECOVERY_AFTER_EXTENDED_DROP -> RECOVERY_DROP_WEIGHT
@@ -178,6 +204,12 @@ internal object ShortMoveDetector {
     }
 
     private const val MIN_DROP_PERCENT = 0.7
+    private const val MIN_SHARP_MOVE_PERCENT = 3.0
+    private const val SHARP_JUMP_WINDOW_MINUTES = 5L
+    private const val SHARP_JUMP_RETENTION_MINUTES = 20L
+    private const val MIN_RECURRING_JUMPS = 3
+    private const val MIN_RECURRING_SESSIONS = 2
+    private const val RECURRING_JUMP_WEIGHT = 3.0
     private const val DROP_WINDOW_MINUTES = 5L
     private const val POST_DROP_MAX_AGE_MINUTES = 15L
     private const val FRESHNESS_DECAY_MINUTES = 15.0

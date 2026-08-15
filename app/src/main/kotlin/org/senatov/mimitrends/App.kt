@@ -35,7 +35,8 @@ class App : Application() {
         val uiStateService = UiStateService()
         val uiState = uiStateService.load()
         val controller = MainController(apiKey, uiState.symbol, uiState.range, uiState.dividerPosition,
-            uiState.scannerColumns, uiState.shortMoveColumns, uiState.tableDividerPosition)
+            uiState.scannerColumns, uiState.shortMoveColumns, uiState.tableDividerPosition,
+            hostServices::showDocument)
         val scene = Scene(controller.createView(), 1120.0, 720.0)
         scene.stylesheets += requireNotNull(javaClass.getResource("/org/senatov/mimitrends/MiMiTrends.css")).toExternalForm()
 

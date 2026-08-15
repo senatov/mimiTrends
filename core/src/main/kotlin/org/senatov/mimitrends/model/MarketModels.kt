@@ -142,6 +142,7 @@ data class ScannerCriteria(
     val tradegateRequestIntervalMillis: Long = 1_000,
     val euronextEnabled: Boolean = false,
     val euronextRequestIntervalMillis: Long = 1_500,
+    val stockSearchUrl: String = "https://www.wallstreet-online.de/suche/?suche=&q=&sa=Suche",
     val tableAppearance: TableAppearance = TableAppearance(),
     val symbols: List<String> = DefaultSymbolUniverse.symbols
 )
