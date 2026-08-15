@@ -1,5 +1,17 @@
 package org.senatov.mimitrends.charts
 
+private const val CARD_WIDTH_BARS = 10.0
+private const val MIN_CARD_DOMAIN_SHARE = 0.16
+private const val MAX_CARD_DOMAIN_SHARE = 0.90
+private const val CARD_HEIGHT_SHARE = 0.14
+private const val MAX_CARD_RANGE_SHARE = 0.24
+private const val CARD_EDGE_PADDING_BARS = 0.5
+private const val CARD_EDGE_PADDING_SHARE = 0.02
+private const val CARD_FLIP_GAP = 0.04
+private const val CARD_LEVEL_GAP = 0.02
+private const val MAX_HORIZONTAL_OFFSETS = 3
+private const val MAX_VERTICAL_LEVELS = 2
+
 internal object TradeCardLayout {
     fun place(
         preferredX: Double,
@@ -72,16 +84,4 @@ internal object TradeCardLayout {
         second: BrokerTradeAnnotations.CardBounds
     ): Boolean = first.left < second.right && first.right > second.left &&
         first.bottom < second.top && first.top > second.bottom
-
-    private const val CARD_WIDTH_BARS = 10.0
-    private const val MIN_CARD_DOMAIN_SHARE = 0.16
-    private const val MAX_CARD_DOMAIN_SHARE = 0.90
-    private const val CARD_HEIGHT_SHARE = 0.14
-    private const val MAX_CARD_RANGE_SHARE = 0.24
-    private const val CARD_EDGE_PADDING_BARS = 0.5
-    private const val CARD_EDGE_PADDING_SHARE = 0.02
-    private const val CARD_FLIP_GAP = 0.04
-    private const val CARD_LEVEL_GAP = 0.02
-    private const val MAX_HORIZONTAL_OFFSETS = 3
-    private const val MAX_VERTICAL_LEVELS = 2
 }

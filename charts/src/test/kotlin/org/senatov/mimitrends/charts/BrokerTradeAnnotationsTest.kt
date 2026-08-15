@@ -73,8 +73,8 @@ class BrokerTradeAnnotationsTest {
         renderer.render(listOf(trade), bars, bars.filterIndexed { index, _ -> index % 2 == 0 }, 1.0)
 
         assertTrue(renderer.renderedCardBounds().single().centerX > initial.centerX)
-        assertEquals(9, plot.annotations.count { it is XYShapeAnnotation })
-        assertEquals(2, plot.annotations.count { it is XYTextAnnotation })
+        assertEquals(8, plot.annotations.count { it is XYShapeAnnotation })
+        assertEquals(1, plot.annotations.count { it is TradeCardAnnotation })
     }
 
     @Test fun `does not convert trades that already use display currency`() {

@@ -2,14 +2,11 @@ package org.senatov.mimitrends.charts
 
 import org.jfree.chart.annotations.XYAnnotation
 import org.jfree.chart.annotations.XYShapeAnnotation
-import org.jfree.chart.annotations.XYTextAnnotation
 import org.jfree.chart.plot.XYPlot
-import org.jfree.chart.ui.TextAnchor
 import org.senatov.mimitrends.model.BrokerTrade
 import org.senatov.mimitrends.model.MinuteBar
 import java.awt.BasicStroke
 import java.awt.Color
-import java.awt.Font
 import java.awt.geom.Ellipse2D
 import java.awt.geom.RoundRectangle2D
 import java.text.DecimalFormat
@@ -197,18 +194,7 @@ internal class BrokerTradeAnnotations(private val plot: XYPlot) {
         )
         renderedCards += RenderedCard(key, bounds, domainMin, domainMax, rangeMin, rangeMax)
         addCardConnector(connectorPoints, bounds, timeStep, priceSpan)
-        val cardShape = RoundRectangle2D.Double(
-            bounds.left,
-            bounds.bottom,
-            bounds.width,
-            bounds.height,
-            bounds.width * CARD_CORNER_WIDTH_SHARE,
-            bounds.height * CARD_CORNER_HEIGHT_SHARE
-        )
-        add(XYShapeAnnotation(cardShape, CARD_STROKE, CARD_BORDER, CARD_FILL))
-        add(text(title + sessionNote, bounds.centerX, bounds.bottom + bounds.height * 0.68,
-            Color(48, 55, 63), Font.PLAIN))
-        add(text(pnl, bounds.centerX, bounds.bottom + bounds.height * 0.30, pnlColor(trade), Font.BOLD))
+        add(TradeCardAnnotation(bounds, title + sessionNote, pnl, pnlColor(trade)))
     }
 
     private fun addCardConnector(
@@ -280,13 +266,6 @@ internal class BrokerTradeAnnotations(private val plot: XYPlot) {
         plot.addAnnotation(annotation)
     }
 
-    private fun text(value: String, x: Double, y: Double, color: Color, style: Int) =
-        XYTextAnnotation(value, x, y).apply {
-            font = Font("SansSerif", style, 12)
-            paint = color
-            textAnchor = TextAnchor.CENTER
-        }
-
     private fun pnlColor(trade: BrokerTrade): Color = when {
         trade.profitAmount == null -> ORANGE
         requireNotNull(trade.profitAmount) >= 0.0 -> Color(22, 137, 76)
@@ -312,9 +291,6 @@ internal class BrokerTradeAnnotations(private val plot: XYPlot) {
         val HIGHLIGHT_ORANGE = Color(226, 122, 25, 190)
         val HIGHLIGHT_FILL = Color(255, 180, 52, 52)
         val HIGHLIGHT_STROKE = BasicStroke(3.2f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND)
-        val CARD_BORDER = Color(91, 72, 126, 215)
-        val CARD_FILL = Color(248, 250, 252, 235)
-        val CARD_STROKE = BasicStroke(1.35f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND)
         const val HIGHLIGHT_PADDING = 0.035
         const val HIGHLIGHT_CORNER_SHARE = 0.72
         const val PRICE_TOLERANCE_SHARE = 0.25
@@ -322,8 +298,6 @@ internal class BrokerTradeAnnotations(private val plot: XYPlot) {
         const val MAX_ALIGNMENT_SECONDS = 90L
         const val CARD_GAP = 0.035
         const val CARD_LANE_SHARE = 0.24
-        const val CARD_CORNER_WIDTH_SHARE = 0.08
-        const val CARD_CORNER_HEIGHT_SHARE = 0.72
     }
 
     private data class CandleAlignment(
