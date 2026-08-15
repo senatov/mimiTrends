@@ -25,7 +25,6 @@ import org.jfree.data.time.TimeSeriesCollection
 import org.jfree.data.xy.DefaultHighLowDataset
 import org.jfree.data.xy.XYBarDataset
 import org.jfree.chart.ui.RectangleAnchor
-import org.jfree.chart.ui.RectangleInsets
 import org.jfree.chart.ui.RectangleEdge
 import org.jfree.chart.ui.TextAnchor
 import org.jfree.chart.ui.Layer
@@ -65,6 +64,12 @@ class TrendChartView : StackPane() {
     private val priceCursor = ValueMarker(0.0)
     private val priceTimeCursor = ValueMarker(0.0)
     private val volumeTimeCursor = ValueMarker(0.0)
+    private val timeCursorLabel = ChartCursorLabelAnnotation(
+        ChartCursorLabelAnnotation.Placement.DOMAIN_BOTTOM
+    )
+    private val priceCursorLabel = ChartCursorLabelAnnotation(
+        ChartCursorLabelAnnotation.Placement.RANGE_RIGHT
+    )
     private var cursorMarkersInstalled = false
     private var cursorDateFormat = SimpleDateFormat("dd MMM HH:mm")
     private var cursorPriceFormat = DecimalFormat("$#,##0.00")
@@ -349,22 +354,15 @@ class TrendChartView : StackPane() {
         priceTimeCursor.value = snappedTime
         volumeTimeCursor.value = snappedTime
         priceCursor.value = priceValue
-        volumeTimeCursor.label = cursorDateFormat.format(Date(bar.minuteEpochSeconds * 1_000L))
-        priceCursor.label = cursorPriceFormat.format(priceValue)
+        timeCursorLabel.value = snappedTime
+        timeCursorLabel.text = cursorDateFormat.format(Date(bar.minuteEpochSeconds * 1_000L))
+        priceCursorLabel.value = priceValue
+        priceCursorLabel.text = cursorPriceFormat.format(priceValue)
         showBarDetails(bar)
-        // Keep both labels inside the plot canvas. TextAnchor describes the part of the
-        // label placed on the marker anchor, so bottom anchors make the text grow upward.
-        volumeTimeCursor.labelTextAnchor = when {
-            x < priceArea.minX + 95.0 -> TextAnchor.BOTTOM_LEFT
-            x > priceArea.maxX - 95.0 -> TextAnchor.BOTTOM_RIGHT
-            else -> TextAnchor.BOTTOM_CENTER
-        }
         if (y < priceArea.centerY) {
-            priceCursor.labelAnchor = RectangleAnchor.BOTTOM_RIGHT
-            priceCursor.labelTextAnchor = TextAnchor.TOP_RIGHT
+            priceCursorLabel.placeBeforeLine = false
         } else {
-            priceCursor.labelAnchor = RectangleAnchor.TOP_RIGHT
-            priceCursor.labelTextAnchor = TextAnchor.BOTTOM_RIGHT
+            priceCursorLabel.placeBeforeLine = true
         }
         return true
     }
@@ -381,18 +379,12 @@ class TrendChartView : StackPane() {
         listOf(priceTimeCursor, volumeTimeCursor, priceCursor).forEach { marker ->
             marker.paint = line
             marker.stroke = BasicStroke(1.0f, BasicStroke.CAP_BUTT, BasicStroke.JOIN_BEVEL, 0f, floatArrayOf(3f, 3f), 0f)
-            marker.labelFont = Font("SansSerif", Font.BOLD, 12)
-            marker.labelPaint = Color.WHITE
-            marker.labelBackgroundColor = Color(51, 57, 63, 230)
-            marker.labelOffset = RectangleInsets(5.0, 8.0, 5.0, 8.0)
         }
-        priceCursor.labelAnchor = RectangleAnchor.TOP_RIGHT
-        priceCursor.labelTextAnchor = TextAnchor.BOTTOM_RIGHT
-        volumeTimeCursor.labelAnchor = RectangleAnchor.BOTTOM
-        volumeTimeCursor.labelTextAnchor = TextAnchor.BOTTOM_CENTER
         pricePlot.addDomainMarker(priceTimeCursor)
         volumePlot.addDomainMarker(volumeTimeCursor)
         pricePlot.addRangeMarker(priceCursor)
+        pricePlot.addAnnotation(priceCursorLabel)
+        volumePlot.addAnnotation(timeCursorLabel)
         cursorMarkersInstalled = true
     }
 }
