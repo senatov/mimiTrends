@@ -31,12 +31,68 @@ Each analytical field includes a short explanation of what it changes.*
 
 ### Broker CSV import
 
-<img src="./Doc/BrokerCsvImport.png" alt="Importing a Scalable Capital transaction CSV into MiMiTrends" width="900">
+<img src="./Doc/BrokerCsvImport.png" alt="Importing a broker transaction CSV into MiMiTrends" width="900">
 
-*The import action accepts a Scalable Capital transaction export. Imported executions can be shown
-on the corresponding price chart without sending portfolio or transaction data to a remote service.
-Rows marked `Cancelled` or `Cancel` are ignored, and legacy cancelled rows are removed from the local
-transaction table during import.*
+*The import action accepts the CSV format documented below. A Scalable Capital transaction export can
+be used directly, while transactions from any other broker can be converted to the same format.
+Imported executions can be shown on the corresponding price chart without sending portfolio or
+transaction data to a remote service.*
+
+#### CSV format for completed trades
+
+The CSV file does not have to come from Scalable Capital. You can create it in a spreadsheet or convert
+an export from any broker, provided that the resulting file follows these rules:
+
+- encode the file as UTF-8;
+- separate columns with semicolons (`;`), not commas;
+- include the exact, case-sensitive header names shown below; their order may differ and additional
+  columns are allowed;
+- write one transaction per line;
+- use `yyyy-MM-dd` for dates and `HH:mm:ss` for times. Times are interpreted in the computer's local
+  time zone at the moment of import;
+- use European number formatting: a comma is the decimal separator and a period is the optional
+  thousands separator, for example `15,546` or `3.420,12`;
+- wrap a text value in double quotes if it contains a semicolon. Represent a double quote inside a
+  quoted value as two double quotes (`""`).
+
+The required header is:
+
+```csv
+date;time;status;reference;description;assetType;type;isin;shares;price;amount;fee;tax;currency
+```
+
+| Column | Required value and meaning |
+| --- | --- |
+| `date` | Execution date in `yyyy-MM-dd` format, for example `2026-08-03`. |
+| `time` | Execution time in `HH:mm:ss` format, for example `21:22:05`. |
+| `status` | Transaction status. Use `Executed` for a completed trade. Rows whose status is `Cancelled` or `Cancel` (case-insensitive) are ignored. |
+| `reference` | Broker transaction ID. It should be unique and stable; repeated non-empty references are imported only once. May be empty if the broker provides no ID. |
+| `description` | Instrument or company name displayed with the transaction. May be empty. |
+| `assetType` | Asset category, normally `Security` for a stock or ETF. |
+| `type` | Trade direction, normally `Buy` or `Sell`. |
+| `isin` | Instrument ISIN used to match the transaction to a chart, for example `US83406F1021`. It is converted to uppercase. |
+| `shares` | Executed quantity. Must be zero or positive. Fractional quantities are supported. |
+| `price` | Execution price per unit. Must be zero or positive. |
+| `amount` | Total cash amount. Use a negative value for money paid on a purchase and a positive value for proceeds from a sale. |
+| `fee` | Transaction fee. Must be zero or positive. |
+| `tax` | Tax amount or adjustment; both positive and negative values are accepted. |
+| `currency` | ISO currency code such as `EUR` or `USD`. It is converted to uppercase. |
+
+Empty numeric fields are imported as zero. All supplied numbers must be finite. When `reference` is
+empty, MiMiTrends detects duplicate rows from their complete CSV content instead. If the same
+transaction occurs more than once in one file, the first occurrence is kept.
+
+Example with one purchase and one sale:
+
+```csv
+date;time;status;reference;description;assetType;type;isin;shares;price;amount;fee;tax;currency
+2026-08-03;21:22:05;Executed;buy-220;SoFi Technologies;Security;Buy;US83406F1021;220;15,546;-3.420,12;0,00;0,00;EUR
+2026-08-03;21:43:14;Executed;sell-220;SoFi Technologies;Security;Sell;US83406F1021;220;15,508;3.411,76;0,99;-6,53;EUR
+```
+
+Save the file with a `.csv` extension, click the import button in the MiMiTrends toolbar, and select
+the file. Matching transactions are stored locally and appear on the instrument's chart. Importing
+the same file again does not create another copy of an already stored transaction.
 
 ## Quick start
 
@@ -87,7 +143,7 @@ The primary question is not “What did this stock do over the last year?” but
 - displays quote age in the leading `Delay` column and sorts it numerically, distinguishing current
   observations from stale ones without hiding delayed-but-useful European candidates;
 - provides a signal-focused chart with a consistently styled full-history fallback;
-- imports Scalable Capital transaction CSV files and outlines each matching trade interval on the
+- imports completed transactions from compatible broker CSV files and outlines each matching trade interval on the
   chart with a translucent orange highlighter-style frame, a draggable rounded explanation card,
   and a curved purple leader that keeps multiple trades identifiable;
 - remembers window geometry, divider position, table appearance, columns, and the selected instrument.
