@@ -35,7 +35,7 @@ internal class TradeCardAnnotation(
         val initialCard = screenBounds(plot.orientation, left, right, bottom, top)
         graphics.font = TITLE_FONT
         val desiredContentWidth = maxOf(
-            graphics.fontMetrics.stringWidth(title),
+            title.lines().maxOf(graphics.fontMetrics::stringWidth),
             graphics.getFontMetrics(DETAIL_FONT).stringWidth(detail)
         ).toDouble()
         val maximumWidth = (dataArea.width * MAXIMUM_WIDTH_SHARE).coerceAtLeast(initialCard.width)
@@ -117,17 +117,19 @@ internal class TradeCardAnnotation(
     ): List<String> {
         graphics.font = font
         val lines = mutableListOf<String>()
-        var current = ""
-        value.split(Regex("\\s+")).filter(String::isNotEmpty).forEach { word ->
-            val candidate = if (current.isEmpty()) word else "$current $word"
-            if (current.isNotEmpty() && graphics.fontMetrics.stringWidth(candidate) > availableWidth) {
-                lines += current
-                current = word
-            } else {
-                current = candidate
+        value.lines().forEach { paragraph ->
+            var current = ""
+            paragraph.split(Regex("\\s+")).filter(String::isNotEmpty).forEach { word ->
+                val candidate = if (current.isEmpty()) word else "$current $word"
+                if (current.isNotEmpty() && graphics.fontMetrics.stringWidth(candidate) > availableWidth) {
+                    lines += current
+                    current = word
+                } else {
+                    current = candidate
+                }
             }
+            if (current.isNotEmpty()) lines += current
         }
-        if (current.isNotEmpty()) lines += current
         return lines.ifEmpty { listOf("") }
     }
 

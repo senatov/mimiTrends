@@ -180,7 +180,7 @@ internal class BrokerTradeAnnotations(private val plot: XYPlot) {
         else "BUY $symbol$entry → SELL $symbol$exit"
         val aligned = listOfNotNull(entryAlignment, exitAlignment).firstOrNull()
         val sessionNote = aligned?.let {
-            " · market mismatch at ${SimpleDateFormat("HH:mm").format(Date(it.actualEpochSeconds * 1_000L))}"
+            "market mismatch at ${SimpleDateFormat("HH:mm").format(Date(it.actualEpochSeconds * 1_000L))}"
         }.orEmpty()
         val pnl = trade.profitAmount?.let { amount ->
             val sign = if (amount >= 0.0) "+" else "−"
@@ -194,7 +194,8 @@ internal class BrokerTradeAnnotations(private val plot: XYPlot) {
         )
         renderedCards += RenderedCard(key, bounds, domainMin, domainMax, rangeMin, rangeMax)
         addCardConnector(connectorPoints, bounds, timeStep, priceSpan)
-        add(TradeCardAnnotation(bounds, title + sessionNote, pnl, pnlColor(trade)))
+        val titleLines = listOf(title, sessionNote).filter(String::isNotEmpty).joinToString("\n")
+        add(TradeCardAnnotation(bounds, titleLines, pnl, pnlColor(trade)))
     }
 
     private fun addCardConnector(
