@@ -30,11 +30,12 @@ internal class LatestPriceLabelAnnotation(
         val width = metrics.stringWidth(text) + HORIZONTAL_PADDING * 2.0
         val height = metrics.height + VERTICAL_PADDING * 2.0
         val x = dataArea.maxX - width - EDGE_GAP
-        val aboveY = lineY - LINE_GAP - height
+        val lineClearance = maxOf(MINIMUM_LINE_CLEARANCE, height * LINE_CLEARANCE_HEIGHT_SHARE)
+        val aboveY = lineY - lineClearance - height
         val y = if (aboveY >= dataArea.minY + EDGE_GAP) {
             aboveY
         } else {
-            (lineY + LINE_GAP).coerceAtMost(dataArea.maxY - height - EDGE_GAP)
+            (lineY + lineClearance).coerceAtMost(dataArea.maxY - height - EDGE_GAP)
         }
         val frame = Rectangle2D.Double(
             x.coerceAtLeast(dataArea.minX + EDGE_GAP),
@@ -68,6 +69,7 @@ internal class LatestPriceLabelAnnotation(
         const val HORIZONTAL_PADDING = 6.0
         const val VERTICAL_PADDING = 3.0
         const val EDGE_GAP = 5.0
-        const val LINE_GAP = 4.0
+        const val MINIMUM_LINE_CLEARANCE = 12.0
+        const val LINE_CLEARANCE_HEIGHT_SHARE = 0.55
     }
 }
