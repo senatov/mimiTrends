@@ -608,6 +608,11 @@ in [Native packaging](Doc/NativePackaging.md), then run the complete notarizatio
 ./Scripts/build-macos-dmg.zsh --notarize
 ```
 
+GitHub releases include categorized notes generated from commits since the previous release. Start
+user-visible commit subjects with `NEW:`, `FIX:`, `CHANGE:`, or `DOCS:` and follow the prefix with a
+specific description of the observable change. Unprefixed commits remain visible under
+`Other changes`, but categorized messages produce a clearer release history.
+
 The notarized form uses the `MiMiNotary` keychain profile by default; override it with `--profile`.
 Apple explains the distribution requirements in
 [Notarizing macOS software before distribution](https://developer.apple.com/documentation/security/notarizing-macos-software-before-distribution)

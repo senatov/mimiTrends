@@ -19,6 +19,13 @@ app_paths=("$mount_dir"/*.app(N))
 readonly app="${app_paths[1]}"
 
 codesign --verify --deep --strict --verbose=2 "$app"
+app_signature_info="$(codesign -dvv "$app" 2>&1)"
+grep -q '^Authority=Developer ID Application:' <<< "$app_signature_info" || {
+  print -u2 "Missing Developer ID signature: $app"; exit 1
+}
+grep -q '^Timestamp=' <<< "$app_signature_info" || {
+  print -u2 "Missing secure timestamp: $app"; exit 1
+}
 work_dir="$(mktemp -d "${TMPDIR:-/tmp}/mimitrends-dmg-verify.XXXXXX")"
 typeset -i verified_count=0
 for jar_file in "$app"/Contents/app/*.jar(N); do

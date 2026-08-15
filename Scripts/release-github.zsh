@@ -7,6 +7,7 @@ readonly SCRIPT_NAME="${0:t}"
 readonly PROJECT_DIR="${SCRIPT_DIR:h}"
 readonly BUILD_SCRIPT="${SCRIPT_DIR}/build-macos-dmg.zsh"
 readonly VERIFY_SCRIPT="${SCRIPT_DIR}/verify-macos-dmg.zsh"
+readonly NOTES_SCRIPT="${SCRIPT_DIR}/generate-release-notes.zsh"
 readonly OUTPUT_DIR="${PROJECT_DIR}/app/build/distributions/native/macos"
 readonly REPOSITORY="senatov/mimiTrends"
 
@@ -66,6 +67,7 @@ while (( $# > 0 )); do
 done
 
 [[ -x "$BUILD_SCRIPT" ]] || fail "build script is missing or not executable: $BUILD_SCRIPT"
+[[ -x "$NOTES_SCRIPT" ]] || fail "release-notes script is missing or not executable: $NOTES_SCRIPT"
 command -v gh >/dev/null || fail "GitHub CLI is required; install it with: brew install gh"
 gh auth status >/dev/null 2>&1 || fail "GitHub CLI is not authenticated; run: gh auth login"
 
@@ -91,18 +93,29 @@ if [[ -x "$VERIFY_SCRIPT" ]]; then
   "$VERIFY_SCRIPT" "$dmg_file"
 fi
 
+readonly notes_file="$(mktemp "${TMPDIR:-/tmp}/mimitrends-release-notes.XXXXXX")"
+trap 'rm -f "$notes_file"' EXIT
+"$NOTES_SCRIPT" "$PROJECT_DIR" "$REPOSITORY" "$notes_file"
+print
+print "Release notes:"
+print -- "--------------"
+cat "$notes_file"
+print -- "--------------"
+
 release_args=(
   "$tag"
   "$dmg_file"
   --repo "$REPOSITORY"
   --title "MiMiTrends $app_version"
-  --generate-notes
+  --notes-file "$notes_file"
   --target "$(git -C "$PROJECT_DIR" rev-parse HEAD)"
 )
 $draft && release_args+=(--draft)
 $prerelease && release_args+=(--prerelease)
 
 gh release create "${release_args[@]}"
+rm -f "$notes_file"
+trap - EXIT
 
 print
 print "Published: https://github.com/$REPOSITORY/releases/tag/$tag"

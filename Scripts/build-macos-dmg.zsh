@@ -96,7 +96,7 @@ if $notarize; then
     "$GRADLEW" -PappVersion="$app_version" -PdmgVersionBumped=true :app:packageNotarizedMacDmg
 else
   MAC_SIGNING_KEY_USER_NAME="$signing_identity" \
-    "$GRADLEW" -PappVersion="$app_version" -PdmgVersionBumped=true :app:packageMacDmg
+    "$GRADLEW" -PappVersion="$app_version" -PdmgVersionBumped=true :app:verifySignedMacDmg
 fi
 
 dmg_files=("$OUTPUT_DIR"/*.dmg(N.om))
