@@ -32,7 +32,26 @@ internal class TradeCardAnnotation(
         val right = domainAxis.valueToJava2D(bounds.right, dataArea, plot.domainAxisEdge)
         val bottom = rangeAxis.valueToJava2D(bounds.bottom, dataArea, plot.rangeAxisEdge)
         val top = rangeAxis.valueToJava2D(bounds.top, dataArea, plot.rangeAxisEdge)
-        val card = screenBounds(plot.orientation, left, right, bottom, top)
+        val initialCard = screenBounds(plot.orientation, left, right, bottom, top)
+        graphics.font = TITLE_FONT
+        val desiredContentWidth = maxOf(
+            graphics.fontMetrics.stringWidth(title),
+            graphics.getFontMetrics(DETAIL_FONT).stringWidth(detail)
+        ).toDouble()
+        val maximumWidth = (dataArea.width * MAXIMUM_WIDTH_SHARE).coerceAtLeast(initialCard.width)
+        val cardWidth = maxOf(initialCard.width, desiredContentWidth + HORIZONTAL_PADDING * 2.0)
+            .coerceAtMost(maximumWidth)
+        val contentWidth = (cardWidth - HORIZONTAL_PADDING * 2.0).coerceAtLeast(1.0)
+        val titleLines = wrapWords(graphics, title, contentWidth, TITLE_FONT)
+        val detailLines = wrapWords(graphics, detail, contentWidth, DETAIL_FONT)
+        val titleLineHeight = graphics.getFontMetrics(TITLE_FONT).height.toDouble()
+        val detailLineHeight = graphics.getFontMetrics(DETAIL_FONT).height.toDouble()
+        val cardHeight = maxOf(
+            initialCard.height,
+            VERTICAL_PADDING * 2.0 + titleLines.size * titleLineHeight + ROW_GAP +
+                detailLines.size * detailLineHeight
+        )
+        val card = fitToDataArea(initialCard.centerX, initialCard.centerY, cardWidth, cardHeight, dataArea)
         val arc = minOf(card.width * 0.08, card.height * 0.72)
         val shape = RoundRectangle2D.Double(card.x, card.y, card.width, card.height, arc, arc)
         val previousHint = graphics.getRenderingHint(RenderingHints.KEY_ANTIALIASING)
@@ -49,13 +68,16 @@ internal class TradeCardAnnotation(
         graphics.stroke = CARD_STROKE
         graphics.draw(shape)
 
-        val contentWidth = (card.width - HORIZONTAL_PADDING * 2.0).coerceAtLeast(0.0)
-        graphics.font = TITLE_FONT
-        drawCentered(graphics, ellipsize(graphics, title, contentWidth), card.centerX,
-            card.y + card.height * 0.40, TITLE_COLOR, TITLE_FONT)
-        graphics.font = DETAIL_FONT
-        drawCentered(graphics, ellipsize(graphics, detail, contentWidth), card.centerX,
-            card.y + card.height * 0.78, detailColor, DETAIL_FONT)
+        var baseline = card.y + VERTICAL_PADDING + graphics.getFontMetrics(TITLE_FONT).ascent
+        titleLines.forEach { line ->
+            drawCentered(graphics, line, card.centerX, baseline, TITLE_COLOR, TITLE_FONT)
+            baseline += titleLineHeight
+        }
+        baseline += ROW_GAP + graphics.getFontMetrics(DETAIL_FONT).ascent
+        detailLines.forEach { line ->
+            drawCentered(graphics, line, card.centerX, baseline, detailColor, DETAIL_FONT)
+            baseline += detailLineHeight
+        }
         graphics.setRenderingHint(RenderingHints.KEY_ANTIALIASING, previousHint)
     }
 
@@ -87,13 +109,42 @@ internal class TradeCardAnnotation(
         graphics.drawString(value, (centerX - width / 2.0).toFloat(), baseline.toFloat())
     }
 
-    private fun ellipsize(graphics: Graphics2D, value: String, availableWidth: Double): String {
-        if (graphics.fontMetrics.stringWidth(value) <= availableWidth) return value
-        var end = value.length
-        while (end > 0 && graphics.fontMetrics.stringWidth(value.substring(0, end) + ELLIPSIS) > availableWidth) {
-            end--
+    private fun wrapWords(
+        graphics: Graphics2D,
+        value: String,
+        availableWidth: Double,
+        font: Font
+    ): List<String> {
+        graphics.font = font
+        val lines = mutableListOf<String>()
+        var current = ""
+        value.split(Regex("\\s+")).filter(String::isNotEmpty).forEach { word ->
+            val candidate = if (current.isEmpty()) word else "$current $word"
+            if (current.isNotEmpty() && graphics.fontMetrics.stringWidth(candidate) > availableWidth) {
+                lines += current
+                current = word
+            } else {
+                current = candidate
+            }
         }
-        return if (end == 0) "" else value.substring(0, end).trimEnd() + ELLIPSIS
+        if (current.isNotEmpty()) lines += current
+        return lines.ifEmpty { listOf("") }
+    }
+
+    private fun fitToDataArea(
+        centerX: Double,
+        centerY: Double,
+        width: Double,
+        height: Double,
+        dataArea: Rectangle2D
+    ): Rectangle2D.Double {
+        val fittedWidth = width.coerceAtMost(dataArea.width)
+        val fittedHeight = height.coerceAtMost(dataArea.height)
+        val x = (centerX - fittedWidth / 2.0)
+            .coerceIn(dataArea.minX, dataArea.maxX - fittedWidth)
+        val y = (centerY - fittedHeight / 2.0)
+            .coerceIn(dataArea.minY, dataArea.maxY - fittedHeight)
+        return Rectangle2D.Double(x, y, fittedWidth, fittedHeight)
     }
 
     private companion object {
@@ -107,6 +158,8 @@ internal class TradeCardAnnotation(
         val DETAIL_FONT = Font("SansSerif", Font.BOLD, 12)
         const val SHADOW_OFFSET = 3.0
         const val HORIZONTAL_PADDING = 10.0
-        const val ELLIPSIS = "…"
+        const val VERTICAL_PADDING = 7.0
+        const val ROW_GAP = 2.0
+        const val MAXIMUM_WIDTH_SHARE = 0.90
     }
 }
