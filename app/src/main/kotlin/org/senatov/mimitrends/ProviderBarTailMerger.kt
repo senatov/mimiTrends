@@ -25,7 +25,7 @@ internal data class MarketDataSnapshot(
     }
 
     private companion object {
-        const val MAX_QUOTE_ANALYSIS_LAG_SECONDS = 2 * 60L
+        const val MAX_QUOTE_ANALYSIS_LAG_SECONDS = 6 * 60L
     }
 }
 
@@ -107,7 +107,8 @@ internal object ProviderBarTailMerger {
     }
     private val EUROPEAN_SUFFIXES = setOf("DE", "PA", "AS", "MI", "HE")
     private const val MAX_ANALYTIC_LAG_SECONDS = 3 * 60L
-        private const val MAX_ANALYTIC_GAP_SECONDS = 2 * 60L
-        private const val MIN_SELF_SUFFICIENT_TAIL_BARS = 5
+        // Provider polling rotates through the universe, so one symbol is normally sampled every five minutes.
+        private const val MAX_ANALYTIC_GAP_SECONDS = 6 * 60L
+        private const val MIN_SELF_SUFFICIENT_TAIL_BARS = 3
         private const val MAX_PROVIDER_AGE_SECONDS = 15 * 60L
 }

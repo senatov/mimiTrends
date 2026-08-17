@@ -89,6 +89,21 @@ class AdaptiveResultSelectorTest {
         assertTrue(selection.results.all { it.signalSource.contains("long-term") })
     }
 
+    @Test fun `fills a quiet market with explicitly labelled neutral contexts`() {
+        val contexts = (1..10).map { index ->
+            result("C$index", 3.0 + index / 100.0, "Neutral context · watch")
+                .copy(signalWindowLabel = "30m context", windowChangePercent = 0.02)
+        }
+
+        val selection = AdaptiveResultSelector.select(
+            strict = emptyList(), fallbackLevels = emptyList(), requestedTarget = 7,
+            requestedLimit = 15, contexts = contexts
+        )
+
+        assertEquals(7, selection.results.size)
+        assertTrue(selection.results.all { it.signalSource.startsWith("Neutral context") })
+    }
+
     private fun result(symbol: String, score: Double, source: String = "Impulse ↑") =
         TestScanResult.create(score, source, symbol)
 }

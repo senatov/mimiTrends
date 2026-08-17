@@ -18,6 +18,11 @@ internal object CandidateQualityGate {
     fun qualifiesLongTerm(result: ScanResult): Boolean =
         result.signalSource.contains("long-term") && isCurrent(result) && trendQuality(result, watch = true)
 
+    fun qualifiesContext(result: ScanResult): Boolean =
+        isCurrent(result) && (result.signalSource.startsWith("Positive context") ||
+            result.signalSource.startsWith("Neutral context")) &&
+            result.windowChangePercent >= MIN_CONTEXT_RETURN && result.anomalyScore >= MIN_CONTEXT_SCORE
+
     private fun structuralQuality(result: ScanResult, watch: Boolean): Boolean {
         return when {
             result.signalSource.startsWith("Oversold decline") -> oversoldQuality(result)
@@ -146,6 +151,8 @@ internal object CandidateQualityGate {
     private const val MIN_GAP_PERCENT = 1.5
     private const val MIN_RETAINED_GAP_PERCENT = 1.2
     private const val MIN_GAP_SCORE = 4.0
+    private const val MIN_CONTEXT_RETURN = -0.10
+    private const val MIN_CONTEXT_SCORE = 2.5
     private const val MIN_ADAPTIVE_PERCENTILE = 8.0
     private const val MIN_UNCALIBRATED_ADAPTIVE_SCORE = 5.0
     private const val MIN_UNCALIBRATED_TREND_SCORE = 3.25

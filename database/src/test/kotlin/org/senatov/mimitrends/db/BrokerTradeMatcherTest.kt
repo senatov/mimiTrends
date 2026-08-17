@@ -84,6 +84,21 @@ class BrokerTradeMatcherTest {
         assertEquals(-15.75, trade.profitAmount!!, 0.000_001)
     }
 
+    @Test fun `does not manufacture an open position from a flat same-second batch`() {
+        val reconciliation = BrokerTradeMatcher.reconcile("IFX.DE", listOf(
+            execution(1, 100, "Buy", 52.0, 63.55, -3304.60),
+            execution(2, 100, "Sell", 54.0, 63.75, 3442.50),
+            execution(3, 100, "Buy", 54.0, 64.46, -3480.84),
+            execution(4, 200, "Buy", 52.0, 63.51, -3302.52),
+            execution(5, 200, "Sell", 52.0, 63.89, 3322.28),
+            execution(6, 300, "Sell", 52.0, 63.36, 3294.72)
+        ))
+
+        assertEquals(0, reconciliation.unmatchedSells)
+        assertTrue(reconciliation.trades.none { it.isOpen })
+        assertEquals(2, reconciliation.trades.size)
+    }
+
     private fun execution(
         id: Long, epoch: Long, type: String, shares: Double, price: Double, amount: Double, fee: Double = 0.0
     ) = BrokerExecution(id, epoch, "Test Corp", type, "TEST-ISIN", shares, price, amount, fee, 0.0, "EUR")

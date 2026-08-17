@@ -25,6 +25,7 @@ class ScannerEngine(private val zoneOverride: ZoneId? = null) {
     private val earlyRecoveryDetector = EarlyRecoveryDetector(zoneOverride)
     private val oversoldWatchDetector = OversoldWatchDetector(zoneOverride)
     private val gapContinuationDetector = GapContinuationDetector(zoneOverride)
+    private val marketContextDetector = MarketContextDetector(zoneOverride)
     private val longCandidateSafety = LongCandidateSafetyFilter(zoneOverride)
 
     internal fun freshnessWeight(ageMinutes: Double): Double =
@@ -190,6 +191,9 @@ class ScannerEngine(private val zoneOverride: ZoneId? = null) {
         (multiSessionRiseDetector.detect(symbol, bars, criteria)
             ?: steadyRiseDetector.detectLongTerm(symbol, bars, criteria))
             ?.let { longCandidateSafety.classify(bars, it) }
+
+    fun evaluateContext(symbol: String, bars: List<MinuteBar>, criteria: ScannerCriteria): ScanResult? =
+        marketContextDetector.detect(symbol, bars, criteria)
 
     private fun score(
         candidate: Feature,

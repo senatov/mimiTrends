@@ -131,11 +131,14 @@ internal class MarketDataService(
         }
         val longTerm = scannerEngine.evaluateLongTerm(symbol, merged.analysisBars, criteria)
             ?.forPresentation(merged, effectiveStatus)?.withRecentDynamics(merged.analysisBars)?.withExecutableQuote(now)
-        val rejectionReason = if (primary == null && fallback.none { it != null } && longTerm == null) {
+        val context = scannerEngine.evaluateContext(symbol, merged.analysisBars, criteria)
+            ?.forPresentation(merged, effectiveStatus)?.withRecentDynamics(merged.analysisBars)?.withExecutableQuote(now)
+        val rejectionReason = if (primary == null && fallback.none { it != null } && longTerm == null && context == null) {
             scannerEngine.rejectionReason(merged.analysisBars)
         } else null
         return ScanEvaluation(primary, fallback, rejectionReason, longTerm,
-            ResearchFeatureExtractor.extract(merged.analysisBars), merged.latestSource.name, merged.latestAnalysisEpochSeconds)
+            ResearchFeatureExtractor.extract(merged.analysisBars), merged.latestSource.name,
+            merged.latestAnalysisEpochSeconds, context)
     }
 
     fun loadPriorityResult(symbol: String, criteria: ScannerCriteria): ScanResult? {
@@ -202,5 +205,6 @@ internal data class ScanEvaluation(
     val longTerm: ScanResult? = null,
     val researchFeatures: ResearchFeatures? = null,
     val sourceStatus: String = "UNKNOWN",
-    val latestDataEpochSeconds: Long? = null
+    val latestDataEpochSeconds: Long? = null,
+    val context: ScanResult? = null
 )

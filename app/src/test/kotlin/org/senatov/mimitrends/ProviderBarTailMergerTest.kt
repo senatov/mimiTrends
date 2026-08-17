@@ -20,6 +20,17 @@ class ProviderBarTailMergerTest {
         assertEquals(VolumeStatus.MISSING, merged.analysisBars.last().volumeStatus)
     }
 
+    @Test fun `accepts the normal five minute provider rotation as an analytic tail`() {
+        val yahoo = listOf(bar(60, 100.0))
+        val providers = (1L..6L).map { index -> provider("TRADEGATE", 60L + index * 300L, 100.0 + index) }
+
+        val merged = ProviderBarTailMerger.merge(yahoo, providers, MarketDataSource.YAHOO, 1_900)
+
+        assertEquals(providers.takeLast(3).map { it.bar.minuteEpochSeconds },
+            merged.analysisBars.drop(1).map(MinuteBar::minuteEpochSeconds))
+        assertEquals(true, merged.analysisTracksLatestQuote())
+    }
+
     @Test fun `uses a lone live quote to extend current history for analysis`() {
         val yahoo = listOf(bar(60, 100.0), bar(120, 101.0))
 
@@ -80,9 +91,9 @@ class ProviderBarTailMergerTest {
     @Test fun `does not analyze a dense tail that ended long before the freshest quote`() {
         val yahoo = listOf(bar(60, 100.0))
         val providers = (2L..6L).map { provider("TRADEGATE", it * 60L, 99.0 + it) } +
-            provider("LANG_SCHWARZ", 600, 106.0)
+            provider("LANG_SCHWARZ", 900, 106.0)
 
-        val merged = ProviderBarTailMerger.merge(yahoo, providers, MarketDataSource.YAHOO, 660)
+        val merged = ProviderBarTailMerger.merge(yahoo, providers, MarketDataSource.YAHOO, 960)
 
         assertEquals(listOf(60L), merged.analysisBars.map(MinuteBar::minuteEpochSeconds))
         assertEquals(MarketDataSource.LANG_SCHWARZ, merged.latestSource)

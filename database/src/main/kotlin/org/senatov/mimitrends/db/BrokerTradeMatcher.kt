@@ -33,8 +33,9 @@ internal object BrokerTradeMatcher {
                     continue
                 }
                 val sell = pending.firstOrNull { it.isSell() }
-                val buy = pending.firstOrNull { it.isBuy() &&
-                    (sell == null || it.shares <= sell.shares - position.quantity + EPSILON) }
+                // Broker exports do not preserve execution order inside the same second. Apply buys
+                // before non-closing sells so a flat batch cannot manufacture a short and an open long.
+                val buy = pending.firstOrNull { it.isBuy() }
                 if (buy != null) {
                     pending.remove(buy)
                     val invertedSell = deferredSells.firstOrNull {

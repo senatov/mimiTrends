@@ -67,6 +67,7 @@ internal object WatchScorePresentation {
             result.signalSource.contains("bottom unconfirmed", true) || result.signalSource.contains('↓')) {
             value = value.coerceAtMost(29)
         }
+        if (result.signalSource.contains("context", true)) value = value.coerceAtMost(49)
 
         val color = when {
             value >= 67 -> "#137b50"
@@ -84,6 +85,8 @@ internal object WatchScorePresentation {
         source.startsWith("Steady rise", true) -> 0.65
         source.startsWith("Momentum", true) -> 0.62
         source.startsWith("Impulse", true) -> 0.58
+        source.startsWith("Positive context", true) -> 0.52
+        source.startsWith("Neutral context", true) -> 0.42
         source.startsWith("Oversold decline", true) -> 0.20
         else -> 0.50
     }

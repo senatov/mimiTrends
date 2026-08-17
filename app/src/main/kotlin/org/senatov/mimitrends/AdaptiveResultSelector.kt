@@ -8,7 +8,8 @@ internal object AdaptiveResultSelector {
         fallbackLevels: List<Collection<ScanResult>>,
         requestedTarget: Int,
         requestedLimit: Int,
-        longTerm: Collection<ScanResult> = emptyList()
+        longTerm: Collection<ScanResult> = emptyList(),
+        contexts: Collection<ScanResult> = emptyList()
     ): AdaptiveSelection {
         val limit = requestedLimit.coerceIn(MIN_RESULTS, MAX_RESULTS)
         val target = minOf(maxOf(requestedTarget, MIN_TARGET_RESULTS), TARGET_RESULTS, limit)
@@ -42,11 +43,17 @@ internal object AdaptiveResultSelector {
             .forEach { candidate ->
                 if (selected.size < target) selected.putIfAbsent(candidate.symbol, candidate)
             }
+        contexts.asSequence()
+            .filter(CandidateQualityGate::qualifiesContext)
+            .sortedWith(attentionComparator())
+            .forEach { candidate ->
+                if (selected.size < target) selected.putIfAbsent(candidate.symbol, candidate)
+            }
         val results = selected.values.sortedWith(attentionComparator()).take(limit)
         val adaptiveCount = results.count {
             it.signalSource.contains("relaxed") || it.signalSource.startsWith("Trend") ||
                 it.signalSource.startsWith("Steady rise") || it.signalSource.startsWith("Recovery") ||
-                it.signalSource.contains("watch")
+                it.signalSource.contains("watch") || it.signalSource.contains("context", ignoreCase = true)
         }
         return AdaptiveSelection(results, adaptiveCount)
     }

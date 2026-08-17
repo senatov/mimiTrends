@@ -30,6 +30,7 @@ internal class ScannerBatchService(
         val strict = mutableListOf<ScanResult>()
         val fallbackLevels = List(3) { mutableListOf<ScanResult>() }
         val longTerm = mutableListOf<ScanResult>()
+        val contexts = mutableListOf<ScanResult>()
         val errors = mutableListOf<String>()
         val sourceCoverage = linkedMapOf<String, Int>()
         var oldestDataAgeSeconds: Long? = null
@@ -51,8 +52,9 @@ internal class ScannerBatchService(
                         result?.let(fallbackLevels[level]::add)
                     }
                     evaluation.longTerm?.let(longTerm::add)
+                    evaluation.context?.let(contexts::add)
                     val accepted = evaluation.primary ?: evaluation.fallback.firstNotNullOfOrNull { it }
-                        ?: evaluation.longTerm
+                        ?: evaluation.longTerm ?: evaluation.context
                     analytics.recordScanCandidate(runId, symbol, accepted,
                         if (accepted == null) evaluation.rejectionReason ?: "NO_CURRENT_SIGNAL" else null,
                         accepted?.dataStatus ?: fallbackStatus(symbol), evaluation.researchFeatures)
@@ -72,9 +74,10 @@ internal class ScannerBatchService(
         val calibratedStrict = strict.map(analytics::withCalibration)
         val calibratedFallbacks = fallbackLevels.map { level -> level.map(analytics::withCalibration) }
         val calibratedLongTerm = longTerm.map(analytics::withCalibration)
+        val calibratedContexts = contexts.map(analytics::withCalibration)
         val selection = AdaptiveResultSelector.select(
             calibratedStrict, calibratedFallbacks, criteria.minimumTableResults, criteria.resultLimit,
-            calibratedLongTerm
+            calibratedLongTerm, calibratedContexts
         )
         analytics.completeScan(runId, selection.results.map(ScanResult::symbol), errors.size)
         val strictSymbols = calibratedStrict.mapTo(hashSetOf(), ScanResult::symbol)
