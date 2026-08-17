@@ -43,4 +43,16 @@ class ScannerSettingsServiceTest {
 
         assertEquals(listOf("AAPL", "MRSH", "FISV", "XYZ"), restored.symbols)
     }
+
+    @Test
+    fun `replaces the former Helsinki block in a persisted standard universe`() {
+        val path = Files.createTempDirectory("mimitrends-helsinki-migration").resolve("scanner.properties")
+        Files.writeString(path, "symbols=AAPL,NOKIA.HE,KNEBV.HE,FORTUM.HE,UPM.HE,NESTE.HE,SAMPO.HE,WRT1V.HE,METSO.HE\n")
+
+        val restored = ScannerSettingsService(path).load()
+
+        assertTrue(restored.symbols.none { it.endsWith(".HE") })
+        assertTrue(setOf("RHM.DE", "CBK.DE", "SHELL.AS", "MT.AS", "SGO.PA", "LR.PA", "STLAP.PA", "RACE.MI")
+            .all(restored.symbols::contains))
+    }
 }

@@ -23,7 +23,8 @@ class DefaultSymbolUniverseTest {
         assertTrue("INTC" in symbols)
         assertTrue("SAP.DE" in symbols)
         assertTrue("STLAM.MI" in symbols)
-        assertTrue("NOKIA.HE" in symbols)
+        assertTrue(setOf("RHM.DE", "SHELL.AS", "SGO.PA", "RACE.MI").all(symbols::contains))
+        assertFalse(symbols.any { it.endsWith(".HE") })
     }
 
     @Test

@@ -34,6 +34,6 @@ object DefaultSymbolUniverse {
         "ORA.PA", "GLE.PA", "ENGI.PA", "DSY.PA", "HO.PA", "PUB.PA", "ML.PA", "CA.PA",
         "ENEL.MI", "ISP.MI", "STLAM.MI", "UCG.MI", "ENI.MI", "G.MI", "SRG.MI", "TRN.MI",
         "TEN.MI", "MONC.MI", "PRY.MI", "LDO.MI", "PST.MI", "CPR.MI", "BAMI.MI", "DIA.MI",
-        "NOKIA.HE", "KNEBV.HE", "FORTUM.HE", "UPM.HE", "NESTE.HE", "SAMPO.HE", "WRT1V.HE", "METSO.HE"
+        "RHM.DE", "CBK.DE", "SHELL.AS", "MT.AS", "SGO.PA", "LR.PA", "STLAP.PA", "RACE.MI"
     )
 }

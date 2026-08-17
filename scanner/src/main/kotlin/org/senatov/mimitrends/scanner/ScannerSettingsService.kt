@@ -59,11 +59,12 @@ class ScannerSettingsService(private val path: Path = Path.of(System.getProperty
                     // Extend prior standard installation profiles with the broader liquid
                     // universe without overwriting a genuinely customized watchlist.
                     val defaults = ScannerCriteria().symbols
-                    if (stored.size in setOf(50, 100) && stored.all(defaults::contains) &&
+                    val expanded = if (stored.size in setOf(50, 100) && stored.all(defaults::contains) &&
                         "AAPL" in stored && "STLAM.MI" in stored
                     ) {
                         (stored + defaults).distinct()
                     } else stored
+                    migrateLegacyHelsinkiUniverse(expanded, defaults)
                 }
             )
         }.onFailure { log.error(LogTag.IO, "scanner settings load failed", it) }.getOrDefault(ScannerCriteria())
@@ -123,6 +124,13 @@ class ScannerSettingsService(private val path: Path = Path.of(System.getProperty
         color(value, DEFAULT_SELECTION_COLOR).takeUnless { it.equals(LEGACY_SELECTION_COLOR, ignoreCase = true) }
             ?: DEFAULT_SELECTION_COLOR
 
+    private fun migrateLegacyHelsinkiUniverse(stored: List<String>, defaults: List<String>): List<String> {
+        if (!stored.containsAll(LEGACY_HELSINKI_SYMBOLS)) return stored
+        return stored.filterNot(LEGACY_HELSINKI_SYMBOLS::contains).let { retained ->
+            (retained + defaults.filterNot(retained::contains)).distinct()
+        }
+    }
+
     private inline fun <reified T : Enum<T>> enumValue(value: String?, fallback: T): T =
         runCatching { enumValueOf<T>(value ?: fallback.name) }.getOrDefault(fallback)
 
@@ -130,5 +138,9 @@ class ScannerSettingsService(private val path: Path = Path.of(System.getProperty
         const val DEFAULT_SELECTION_COLOR = "#FFFDE1"
         const val LEGACY_SELECTION_COLOR = "#DCE8F6"
         val TICKER_MIGRATIONS = mapOf("MMC" to "MRSH", "FI" to "FISV", "SQ" to "XYZ")
+        val LEGACY_HELSINKI_SYMBOLS = setOf(
+            "NOKIA.HE", "KNEBV.HE", "FORTUM.HE", "UPM.HE",
+            "NESTE.HE", "SAMPO.HE", "WRT1V.HE", "METSO.HE"
+        )
     }
 }
