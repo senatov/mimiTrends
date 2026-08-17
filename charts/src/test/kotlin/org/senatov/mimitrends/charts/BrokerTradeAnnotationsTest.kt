@@ -172,4 +172,22 @@ class BrokerTradeAnnotationsTest {
         assertTrue(cards[0].right <= cards[1].left || cards[1].right <= cards[0].left ||
             cards[0].top <= cards[1].bottom || cards[1].top <= cards[0].bottom)
     }
+
+    @Test fun `stacks colliding cards downward when preferred position is at the ceiling`() {
+        val first = TradeCardLayout.place(
+            preferredX = 90.0, preferredBottom = 109.8, timeStep = 10.0, priceSpan = 10.0,
+            domainMin = 0.0, domainMax = 180.0, rangeMin = 100.0, rangeMax = 112.0,
+            occupied = emptyList()
+        )
+
+        val second = TradeCardLayout.place(
+            preferredX = 90.0, preferredBottom = 109.8, timeStep = 10.0, priceSpan = 10.0,
+            domainMin = 0.0, domainMax = 180.0, rangeMin = 100.0, rangeMax = 112.0,
+            occupied = listOf(first)
+        )
+
+        assertTrue(second.top <= first.bottom)
+        assertTrue(second.bottom >= 100.0)
+        assertTrue(first.top <= 112.0)
+    }
 }

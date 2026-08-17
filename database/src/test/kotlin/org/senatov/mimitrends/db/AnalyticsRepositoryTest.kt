@@ -184,6 +184,31 @@ class AnalyticsRepositoryTest {
         }
     }
 
+    @Test fun `does not load a broker trade already linked to another symbol`() {
+        val directory = Files.createTempDirectory("mimitrends-linked-elsewhere")
+        val database = directory.resolve("test.db")
+        val csv = directory.resolve("transactions.csv")
+        Files.writeString(csv, """date;time;status;reference;description;assetType;type;isin;shares;price;amount;fee;tax;currency
+2026-08-12;14:01:03;Executed;BUY-1;Siemens Energy;Security;Buy;DE000ENER6Y0;20;163,44;-3268,80;0,00;0,00;EUR
+2026-08-12;14:53:00;Executed;SELL-1;Siemens Energy;Security;Sell;DE000ENER6Y0;20;164,86;3297,20;0,00;0,00;EUR
+""")
+        AnalyticsRepository(database).use { analytics ->
+            analytics.upsertInstrument(InstrumentMetadata(
+                "DIA.MI", "DIASORIN", "Milan", "EUR", "Europe/Berlin", isin = "DE000ENER6Y0"
+            ))
+            analytics.importScalableTransactions(csv)
+        }
+        DriverManager.getConnection("jdbc:sqlite:$database").use { connection ->
+            connection.createStatement().executeUpdate(
+                "UPDATE broker_transactions SET linked_symbol='ENR.DE' WHERE isin='DE000ENER6Y0'"
+            )
+        }
+
+        AnalyticsRepository(database).use { analytics ->
+            assertTrue(analytics.loadBrokerTrades("DIA.MI", "DIASORIN").isEmpty())
+        }
+    }
+
     @Test fun `retains distinct referenced executions with the same timestamp side isin and quantity`() {
         val directory = Files.createTempDirectory("mimitrends-temporal-duplicate")
         val database = directory.resolve("test.db")

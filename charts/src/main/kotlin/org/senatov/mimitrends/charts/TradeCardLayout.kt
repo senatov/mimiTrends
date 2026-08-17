@@ -10,7 +10,7 @@ private const val CARD_EDGE_PADDING_SHARE = 0.02
 private const val CARD_FLIP_GAP = 0.04
 private const val CARD_LEVEL_GAP = 0.02
 private const val MAX_HORIZONTAL_OFFSETS = 3
-private const val MAX_VERTICAL_LEVELS = 2
+private const val MAX_VERTICAL_LEVELS = 5
 
 internal object TradeCardLayout {
     fun place(
@@ -32,7 +32,8 @@ internal object TradeCardLayout {
         val horizontalStep = initial.width + timeStep
         val verticalStep = initial.height + priceSpan * CARD_LEVEL_GAP
         val candidates = buildList {
-            for (level in 0..MAX_VERTICAL_LEVELS) {
+            val verticalOffsets = listOf(0) + (1..MAX_VERTICAL_LEVELS).flatMap { listOf(-it, it) }
+            for (level in verticalOffsets) {
                 val bottom = preferredBottom + level * verticalStep
                 add(bounds(preferredX, bottom, timeStep, priceSpan, domainMin, domainMax, rangeMin, rangeMax))
                 for (offset in 1..MAX_HORIZONTAL_OFFSETS) {

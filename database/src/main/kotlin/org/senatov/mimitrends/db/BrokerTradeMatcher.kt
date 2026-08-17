@@ -146,5 +146,6 @@ internal data class BrokerExecution(
     val amount: Double,
     val fee: Double,
     val tax: Double,
-    val currency: String
+    val currency: String,
+    val linkedSymbol: String? = null
 )

@@ -176,8 +176,8 @@ internal class BrokerTradeAnnotations(private val plot: XYPlot) {
         val symbol = currencySymbol(trade.currency)
         val entry = formatter.format(trade.entryPrice)
         val exit = trade.exitPrice?.let(formatter::format)
-        val title = if (exit == null) "BUY $symbol$entry · OPEN"
-        else "BUY $symbol$entry → SELL $symbol$exit"
+        val title = if (exit == null) "${trade.symbol} · BUY $symbol$entry · OPEN"
+        else "${trade.symbol} · BUY $symbol$entry → SELL $symbol$exit"
         val aligned = listOfNotNull(entryAlignment, exitAlignment).firstOrNull()
         val sessionNote = aligned?.let {
             "market mismatch at ${SimpleDateFormat("HH:mm").format(Date(it.actualEpochSeconds * 1_000L))}"

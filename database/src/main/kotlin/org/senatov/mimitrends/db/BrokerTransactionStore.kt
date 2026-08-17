@@ -93,9 +93,11 @@ internal class BrokerTransactionStore(private val connection: Connection) {
                 while (result.next()) {
                     val execution = BrokerExecution(result.getLong(1), result.getLong(2), result.getString(3),
                         result.getString(4), result.getString(5), result.getDouble(6), result.getDouble(7),
-                        result.getDouble(8), result.getDouble(9), result.getDouble(10), result.getString(11))
-                    if ((providerIsin != null && execution.isin == providerIsin) ||
-                        BrokerTradeMatcher.matches(execution.description, companyName)) add(execution)
+                        result.getDouble(8), result.getDouble(9), result.getDouble(10), result.getString(11),
+                        result.getString(12))
+                    val linkedElsewhere = execution.linkedSymbol != null && execution.linkedSymbol != normalizedSymbol
+                    if (!linkedElsewhere && ((providerIsin != null && execution.isin == providerIsin) ||
+                        BrokerTradeMatcher.matches(execution.description, companyName))) add(execution)
                 }
             } }
         }
@@ -151,7 +153,7 @@ internal class BrokerTransactionStore(private val connection: Connection) {
             WHERE trade.linked_run_id IS NULL AND trade.status='Executed'"""
         const val LOAD_EXECUTIONS = """
             SELECT id, occurred_at, description, transaction_type, isin, shares, price, amount,
-                fee, tax, currency
+                fee, tax, currency, linked_symbol
             FROM broker_transactions
             WHERE lower(trim(status))='executed' AND lower(trim(transaction_type)) IN ('buy','sell')
             ORDER BY occurred_at, id
