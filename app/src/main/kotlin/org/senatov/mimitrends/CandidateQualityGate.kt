@@ -25,6 +25,7 @@ internal object CandidateQualityGate {
                 result.signalSource.startsWith("Trend") || result.signalSource.startsWith("Early recovery") ->
                 trendQuality(result, watch)
             result.signalSource.startsWith("V-Reversal") -> reversalQuality(result, watch)
+            result.signalSource.startsWith("Gap-and-go") -> gapQuality(result)
             else -> impulseQuality(result, watch)
         }
     }
@@ -100,6 +101,10 @@ internal object CandidateQualityGate {
         result.signalSource.contains("watch") && abs(result.windowChangePercent) >= MIN_OVERSOLD_DECLINE_PERCENT &&
             result.candleBodyRatio >= MIN_OVERSOLD_EFFICIENCY && result.anomalyScore >= MIN_OVERSOLD_SCORE
 
+    private fun gapQuality(result: ScanResult): Boolean =
+        result.priceAnomaly >= MIN_GAP_PERCENT && result.windowChangePercent >= MIN_RETAINED_GAP_PERCENT &&
+            result.anomalyScore >= MIN_GAP_SCORE
+
     private fun watchRankingQuality(result: ScanResult): Boolean =
         result.rankingPercentile.takeIf(Double::isFinite)?.let { it >= MIN_WATCH_PERCENTILE }
             ?: (result.anomalyScore >= if (isTrend(result)) MIN_WATCH_TREND_SCORE else MIN_WATCH_SCORE)
@@ -138,6 +143,9 @@ internal object CandidateQualityGate {
     private const val MIN_OVERSOLD_DECLINE_PERCENT = 2.0
     private const val MIN_OVERSOLD_EFFICIENCY = 0.35
     private const val MIN_OVERSOLD_SCORE = 3.5
+    private const val MIN_GAP_PERCENT = 1.5
+    private const val MIN_RETAINED_GAP_PERCENT = 1.2
+    private const val MIN_GAP_SCORE = 4.0
     private const val MIN_ADAPTIVE_PERCENTILE = 8.0
     private const val MIN_UNCALIBRATED_ADAPTIVE_SCORE = 5.0
     private const val MIN_UNCALIBRATED_TREND_SCORE = 3.25

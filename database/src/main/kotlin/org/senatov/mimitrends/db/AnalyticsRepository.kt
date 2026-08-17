@@ -15,6 +15,7 @@ import java.nio.file.Path
 import java.sql.Connection
 import java.sql.Statement
 import java.time.Instant
+import java.time.ZoneId
 import kotlin.math.abs
 import kotlin.math.ln1p
 
@@ -30,6 +31,7 @@ class AnalyticsRepository(
     private val researchSamples: ResearchSampleStore
     private val scanCandidates: ScanCandidateStore
     private val predictionAnalytics: PredictionAnalyticsStore
+    private val todayDetections: TodayDetectionStore
 
     init {
         migrate()
@@ -39,6 +41,7 @@ class AnalyticsRepository(
         researchSamples = ResearchSampleStore(connection)
         scanCandidates = ScanCandidateStore(connection, researchSamples)
         predictionAnalytics = PredictionAnalyticsStore(connection)
+        todayDetections = TodayDetectionStore(connection)
     }
 
     fun upsertInstrument(value: InstrumentMetadata) = locked { upsertInstrumentInternal(value) }
@@ -239,6 +242,10 @@ class AnalyticsRepository(
             } }
         }
     }
+
+    fun loadTodayDetections(
+        now: Instant = Instant.now(), zone: ZoneId = ZoneId.systemDefault()
+    ): List<TodayDetection> = locked { todayDetections.load(now, zone) }
 
     fun applyRetention(nowEpoch: Long = Instant.now().epochSecond) = locked {
         connection.prepareStatement("DELETE FROM minute_bars WHERE minute_epoch < ?").use { it.setLong(1, nowEpoch - RAW_RETENTION_DAYS * 86_400L); it.executeUpdate() }

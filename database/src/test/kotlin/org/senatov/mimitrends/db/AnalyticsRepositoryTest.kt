@@ -14,6 +14,23 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class AnalyticsRepositoryTest {
+    @Test fun `summarizes every symbol published today`() {
+        val path = Files.createTempDirectory("mimitrends-today").resolve("test.db")
+        MarketRepository(path).close()
+        AnalyticsRepository(path).use { analytics ->
+            repeat(2) { index ->
+                val run = analytics.beginScan("US", 1, 180)
+                analytics.recordScanCandidate(run, "AMD", result(1_800_000_000L + index * 60), null, "YAHOO")
+                analytics.completeScan(run, listOf("AMD"), 0)
+            }
+
+            val detection = analytics.loadTodayDetections().single()
+
+            assertEquals("AMD", detection.symbol)
+            assertEquals(2, detection.publishedCycles)
+        }
+    }
+
     @Test fun `removes the redundant aggregate primary key index`() {
         val path = Files.createTempDirectory("mimitrends-index-migration").resolve("test.db")
 

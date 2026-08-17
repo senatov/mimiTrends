@@ -44,6 +44,34 @@ class YahooFinanceClient(
         }
     }
 
+    fun loadDayGainers(limit: Int = 25): List<YahooMarketLeader> {
+        val safeLimit = limit.coerceIn(1, MAX_DISCOVERY_RESULTS)
+        val uri = URI.create(
+            "https://$PRIMARY_HOST/v1/finance/screener/predefined/saved" +
+                "?scrIds=day_gainers&count=$safeLimit&start=0"
+        )
+        val response = sendWithRetry(request(uri))
+        check(response.statusCode() == 200) { "Yahoo Finance screener HTTP ${response.statusCode()}" }
+        return parseDayGainers(response.body(), safeLimit)
+    }
+
+    internal fun parseDayGainers(body: String, limit: Int = 25): List<YahooMarketLeader> {
+        val quotes = mapper.readTree(body).path("finance").path("result").firstOrNull()?.path("quotes")
+            ?: return emptyList()
+        return quotes.mapNotNull { quote ->
+            val symbol = quote.path("symbol").asText().trim().uppercase()
+            val price = quote.path("regularMarketPrice").asDouble(Double.NaN)
+            val change = quote.path("regularMarketChangePercent").asDouble(Double.NaN)
+            val type = quote.path("quoteType").asText()
+            val exchange = quote.path("exchange").asText()
+            if (symbol.isBlank() || !price.isFinite() || price <= 0.0 || !change.isFinite() ||
+                type != "EQUITY" || exchange !in US_EXCHANGES) null
+            else YahooMarketLeader(symbol, price, change)
+        }.distinctBy(YahooMarketLeader::symbol)
+            .sortedByDescending(YahooMarketLeader::changePercent)
+            .take(limit.coerceIn(1, MAX_DISCOVERY_RESULTS))
+    }
+
     private fun requestSeries(normalized: String, period: String): MarketSeries {
         val encoded = URLEncoder.encode(normalized, StandardCharsets.UTF_8)
         val pathAndQuery = "/v8/finance/chart/$encoded" +
@@ -137,8 +165,12 @@ class YahooFinanceClient(
         const val ALTERNATE_HOST = "query2.finance.yahoo.com"
         const val MAX_SERVER_RETRIES = 2
         const val RETRY_DELAY_MILLIS = 250L
+        const val MAX_DISCOVERY_RESULTS = 50
+        val US_EXCHANGES = setOf("NMS", "NYQ", "NGM", "NCM", "ASE", "PCX", "BTS")
     }
 }
+
+data class YahooMarketLeader(val symbol: String, val price: Double, val changePercent: Double)
 
 internal class YahooEmptyOhlcvException(symbol: String) :
     RuntimeException("Yahoo Finance returned empty OHLCV data for $symbol") {

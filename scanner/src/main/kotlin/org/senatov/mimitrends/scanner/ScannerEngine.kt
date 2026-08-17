@@ -24,6 +24,7 @@ class ScannerEngine(private val zoneOverride: ZoneId? = null) {
     private val multiSessionRiseDetector = MultiSessionRiseDetector(zoneOverride)
     private val earlyRecoveryDetector = EarlyRecoveryDetector(zoneOverride)
     private val oversoldWatchDetector = OversoldWatchDetector(zoneOverride)
+    private val gapContinuationDetector = GapContinuationDetector(zoneOverride)
     private val longCandidateSafety = LongCandidateSafetyFilter(zoneOverride)
 
     internal fun freshnessWeight(ageMinutes: Double): Double =
@@ -56,18 +57,22 @@ class ScannerEngine(private val zoneOverride: ZoneId? = null) {
         val earlyRecovery = if (signal == null && momentum == null && reversal == null) {
             earlyRecoveryDetector.detect(symbol, sorted, criteria)
         } else null
+        val gapContinuation = gapContinuationDetector.detect(symbol, sorted, criteria)
         val hasBullishSignal = (signal?.feature?.returnPercent ?: 0.0) > 0.0 ||
-            (momentum?.returnPercent ?: 0.0) > 0.0 || (reversal?.direction ?: 0) > 0 || earlyRecovery != null
+            (momentum?.returnPercent ?: 0.0) > 0.0 || (reversal?.direction ?: 0) > 0 || earlyRecovery != null ||
+            gapContinuation != null
         val oversoldWatch = if (!hasBullishSignal) {
             oversoldWatchDetector.detect(symbol, sorted, criteria)
         } else null
-        if (signal == null && momentum == null && reversal == null && earlyRecovery == null && oversoldWatch == null) {
+        if (signal == null && momentum == null && reversal == null && earlyRecovery == null &&
+            gapContinuation == null && oversoldWatch == null) {
             return null
         }
         val sessionBars = sameSession(sorted, latest)
         val turnover = sessionBars.sumOf { it.close * it.volume }
         if (latest.close < criteria.minPrice || turnover < criteria.minSessionTurnover) return null
         if (oversoldWatch != null) return oversoldWatch
+        if (gapContinuation != null) return longCandidateSafety.classify(sorted, gapContinuation)
         val impulseScore = signal?.score ?: Double.NEGATIVE_INFINITY
         if (reversal != null && reversal.score >= max(impulseScore, momentum?.score ?: Double.NEGATIVE_INFINITY)) {
             return reversalResult(symbol, latest, sessionBars, turnover, reversal)

@@ -45,6 +45,16 @@ data class AnalyticsStats(
     val linkedBrokerTransactions: Long
 )
 
+data class TodayDetection(
+    val symbol: String,
+    val signal: String,
+    val firstDetectedEpochSeconds: Long,
+    val lastDetectedEpochSeconds: Long,
+    val publishedCycles: Int,
+    val bestScore: Double,
+    val largestMovePercent: Double
+)
+
 data class WalkForwardResearchReport(
     val horizonMinutes: Int,
     val frictionPercent: Double,

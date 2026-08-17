@@ -1,5 +1,33 @@
 # MiMiTrends
 
+> **MiMiTrends is primarily an experimental, recreational mathematics project.** It began as a
+> personal response to reading books full of stock-market formulas: an attempt to turn some of those
+> ideas into a visible, testable desktop program. It is not a trading system, investment research, or
+> a promise that a statistically unusual move will continue.
+
+The implementation is original and combines the ideas below rather than reproducing one published
+strategy. The main mathematical reference shelf behind the formulas used in the program is:
+
+- Ruey S. Tsay, *Analysis of Financial Time Series* — returns, volatility, time-series behaviour,
+  regression, and statistical diagnostics;
+- Perry J. Kaufman, *Trading Systems and Methods* — momentum, trend efficiency, noise, drawdown,
+  and separating persistent movement from an isolated price jump;
+- Ernest P. Chan, *Algorithmic Trading: Winning Strategies and Their Rationale* — quantitative
+  momentum and mean-reversion ideas, signal construction, backtesting, and realistic validation;
+- David Aronson, *Evidence-Based Technical Analysis* — statistical testing of market rules,
+  data-mining bias, and the need to validate apparent patterns rather than trust chart intuition;
+- Marcos López de Prado, *Advances in Financial Machine Learning* — feature engineering,
+  walk-forward evaluation, sample dependence, probability calibration, and protection against
+  overfitting;
+- Robert Kissell, *The Science of Algorithmic Trading and Portfolio Management* — VWAP, liquidity,
+  volume profiles, transaction costs, and market-microstructure context.
+
+These references inspired the project's use of percentage and logarithmic returns, median/MAD robust
+Z-scores, relative volume, VWAP distance, regression slope and R², path efficiency, realized volatility,
+logistic probabilities, Brier scores, and walk-forward evaluation. The exact composite scores,
+thresholds, gap/reversal rules, and UI classifications are MiMiTrends-specific heuristics and should be
+treated as experiments, not formulas endorsed by the cited authors.
+
 <img src="./Doc/AppIcon-1024.png" alt="MiMiTrends application icon" width="128">
 
 **A local-first desktop scanner for fresh US and European market anomalies.**

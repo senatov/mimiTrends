@@ -3,19 +3,13 @@ package org.senatov.mimitrends
 import javafx.application.Platform
 import javafx.collections.FXCollections
 import javafx.collections.transformation.SortedList
-import javafx.geometry.Pos
-import javafx.geometry.Insets
+import javafx.geometry.*
 import javafx.scene.image.Image
 import javafx.scene.image.ImageView
 import javafx.scene.control.*
-import javafx.scene.input.MouseButton
 import javafx.scene.input.KeyCode
 import javafx.scene.input.KeyEvent
-import javafx.scene.layout.HBox
-import javafx.scene.layout.Priority
-import javafx.scene.layout.Region
-import javafx.scene.layout.StackPane
-import javafx.scene.layout.VBox
+import javafx.scene.layout.*
 import org.senatov.mimitrends.log.LogTag
 import org.senatov.mimitrends.model.CompanyProfile
 import org.senatov.mimitrends.model.ScanResult
@@ -26,7 +20,6 @@ import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.concurrent.CompletableFuture
-import javafx.util.Duration
 
 class ScannerPanel(
     private val onOpen: (ScanResult) -> Unit,
@@ -34,7 +27,8 @@ class ScannerPanel(
     savedColumns: String = "",
     initialTableDivider: Double = 0.68,
     private val loadProfile: ((String) -> CompletableFuture<CompanyProfile>)? = null,
-    private val openStock: (String) -> Unit = {}
+    private val openStock: (String) -> Unit = {},
+    private val onShowDetectedToday: () -> Unit = {}
 ) : VBox(7.0) {
     internal var onInspect: (ScanResult) -> Unit = {}
     private val log = LoggerFactory.getLogger(javaClass)
@@ -116,12 +110,17 @@ class ScannerPanel(
     private val autoFitter: TableColumnAutoFitter<ScanResult>
     private val columnLayout: TableColumnLayout<ScanResult>
     private val tableSplit = SplitPane()
+    private val detectedTodayButton = Button("Detected today · 0").apply {
+        styleClass += "detected-today-button"
+        setOnAction { onShowDetectedToday() }
+    }
 
     init {
         log.debug(LogTag.UI, "init()")
         val header = javafx.scene.layout.HBox(8.0, Label("Anomaly signals").apply { styleClass += "table-section-title" },
             scanIndicator, cycleStatus.apply { styleClass += "scanner-cycle" },
-            javafx.scene.layout.Region().also { javafx.scene.layout.HBox.setHgrow(it, Priority.ALWAYS) }).apply {
+            javafx.scene.layout.Region().also { javafx.scene.layout.HBox.setHgrow(it, Priority.ALWAYS) },
+            detectedTodayButton).apply {
             alignment = Pos.CENTER_LEFT
             styleClass += "table-section-header"
         }
@@ -200,8 +199,10 @@ class ScannerPanel(
     }
 
     fun savedColumnLayout(): String = columnLayout.capture(autoFitter.manuallySizedColumnIds())
-
     fun tableDividerPosition(): Double = tableSplit.dividers.firstOrNull()?.position ?: 0.68
+    fun setDetectedTodayCount(count: Int) {
+        detectedTodayButton.text = "Detected today · $count"
+    }
 
     private fun copySearchKeyword(result: ScanResult) {
         copyText(CompanySearchTerm.from(columnFactory.companyName(result), result.symbol))

@@ -46,4 +46,17 @@ class YahooFinanceClientTest {
         assertEquals(2.0, events.first { it.type == "SPLIT" }.ratio)
         assertEquals(0.25, events.first { it.type == "DIVIDEND" }.amount)
     }
+
+    @Test fun `keeps supported US equities from the day gainers screener`() {
+        val json = """{"finance":{"result":[{"quotes":[
+            {"symbol":"LITE","regularMarketPrice":100.0,"regularMarketChangePercent":5.2,"quoteType":"EQUITY","exchange":"NMS"},
+            {"symbol":"SAP.DE","regularMarketPrice":200.0,"regularMarketChangePercent":6.0,"quoteType":"EQUITY","exchange":"GER"},
+            {"symbol":"SPY","regularMarketPrice":500.0,"regularMarketChangePercent":1.0,"quoteType":"ETF","exchange":"PCX"},
+            {"symbol":"AMD","regularMarketPrice":150.0,"regularMarketChangePercent":4.1,"quoteType":"EQUITY","exchange":"NMS"}
+        ]}]}}"""
+
+        val leaders = YahooFinanceClient().parseDayGainers(json)
+
+        assertEquals(listOf("LITE", "AMD"), leaders.map(YahooMarketLeader::symbol))
+    }
 }

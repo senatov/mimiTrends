@@ -19,7 +19,6 @@ import java.util.concurrent.ConcurrentHashMap
 class MainController(private val apiKey: String?, initialSymbol: String = "AAPL", initialRange: String = "3M",
     initialDividerPosition: Double = 0.34, scannerColumns: String = "", shortMoveColumns: String = "",
     initialTableDivider: Double = 0.68, private val openExternal: (String) -> Unit = {}) {
-    private companion object { const val MARKET_OPEN_GRACE_SECONDS = 5L }
     private val log = LoggerFactory.getLogger(MainController::class.java)
     private val repository = MarketRepository()
     private val analytics = AnalyticsRepository()
@@ -41,6 +40,7 @@ class MainController(private val apiKey: String?, initialSymbol: String = "AAPL"
     private val status = MainStatusController(requestStatus, trendChart, refreshButton, log)
     private val scannerEngine = ScannerEngine()
     private val yahooFinance = YahooFinanceClient()
+    private val dynamicUniverse = DynamicMarketUniverse(yahooFinance, log)
     private var profileService = CompanyProfileService(
         repository, apiKey?.let(::FinnhubProfileClient), CompanyLogoClient()
     )
@@ -64,8 +64,14 @@ class MainController(private val apiKey: String?, initialSymbol: String = "AAPL"
         savedColumns = scannerColumns,
         initialTableDivider = initialTableDivider,
         loadProfile = { symbol -> profileService.load(symbol) },
-        openStock = stockPageOpener::open
+        openStock = stockPageOpener::open,
+        onShowDetectedToday = { detectedToday.show() }
     )
+    private val detectedToday: DetectedTodayController by lazy { DetectedTodayController(analytics, batchScheduler, scannerPanel) }
+    private val exchangeRateStartup by lazy {
+        ExchangeRateStartup(exchangeRates, analytics, scannerPanel, { scannerCriteria.displayCurrency },
+            currencyConverter::price, { loadLocalChart(currentSymbol) }, status::update, log)
+    }
     private val shortMoveRefresh = ShortMoveRefreshCoordinator(shortMoveLoader::load, log) { moves ->
         Platform.runLater { if (!closing.get()) shortMovePanel.show(moves) }
     }
@@ -158,7 +164,10 @@ class MainController(private val apiKey: String?, initialSymbol: String = "AAPL"
         DatabaseStartupMaintenance.schedule(analytics, batchScheduler, log)
         batchScheduler.execute {
             val saved = savedResultQuotes.refresh(analytics.loadLatestPublishedResults(scannerCriteria.resultLimit))
-            Platform.runLater { scannerPanel.showSnapshot(saved, scannerCriteria.resultLimit) }
+            Platform.runLater {
+                scannerPanel.showSnapshot(saved, scannerCriteria.resultLimit)
+            }
+            detectedToday.refreshCount()
         }
         batchScheduler.execute {
             marketData.ensureCachedInstrumentMetadata()
@@ -166,16 +175,7 @@ class MainController(private val apiKey: String?, initialSymbol: String = "AAPL"
         }
         startScanner()
         Platform.runLater { loadLocalChart(currentSymbol) }
-        status.update("Requesting ECB EUR/USD reference rate")
-        exchangeRates.refresh().whenComplete(BiConsumer<Double?, Throwable?> { rate, error ->
-            if (error != null) log.warn(LogTag.API, "ECB exchange-rate refresh failed; cached rate remains active", error)
-            if (error == null && rate != null) analytics.recordFxRate("EUR", "USD", rate, "ECB")
-            Platform.runLater {
-                scannerPanel.setCurrency(scannerCriteria.displayCurrency, currencyConverter::price)
-                loadLocalChart(currentSymbol)
-                if (error == null && rate != null) status.update("Read ECB EUR/USD reference rate: $rate")
-            }
-        })
+        exchangeRateStartup.start()
         return appLayers
     }
     private fun handleScalableImport(event: ScalableImportEvent) {
@@ -219,16 +219,18 @@ class MainController(private val apiKey: String?, initialSymbol: String = "AAPL"
         scan = scan@ {
             if (closing.get()) return@scan
             val cycleStartedNanos = System.nanoTime()
-            val selectedSymbols = MarketUniverseSelector.select(scannerCriteria)
+            val universe = dynamicUniverse.select(scannerCriteria)
+            val selectedSymbols = universe.symbols
             shortMoveRefresh.replaceSymbols(selectedSymbols)
             val symbols = scanCyclePlanner.order(selectedSymbols.filter { MarketCalendar.isOpen(it) })
-            log.info(LogTag.API, "scan started symbols={} recentWindow={}m", symbols.size, criteria.maxSignalAgeMinutes)
+            log.info(LogTag.API, "scan started symbols={} discovered={} recentWindow={}m",
+                symbols.size, universe.discovered.size, criteria.maxSignalAgeMinutes)
             if (symbols.isEmpty()) {
                 priorityScanner.replaceCandidates(emptyList())
                 val now = java.time.Instant.now()
                 val nextOpening = MarketCalendar.nextOpening(selectedSymbols, now)
                 val resumeDelaySeconds = nextOpening?.let {
-                    java.time.Duration.between(now, it.instant).seconds.coerceAtLeast(1) + MARKET_OPEN_GRACE_SECONDS
+                    java.time.Duration.between(now, it.instant).seconds.coerceAtLeast(1) + 5L
                 } ?: criteria.scanIntervalSeconds
                 val resumeText = nextOpening?.let(MarketHoursFormatter::nextOpening) ?: "market schedule unavailable"
                 val persisted = savedResultQuotes.refresh(analytics.loadLatestPublishedResults(criteria.resultLimit))
@@ -269,6 +271,7 @@ class MainController(private val apiKey: String?, initialSymbol: String = "AAPL"
                     status.update("Market data: analyzed $completed/${symbols.size} · $symbol")
                 } }
             ) ?: return@scan
+            val detectedTodayCount = analytics.loadTodayDetections().size
             val errors = batch.errors
             if (errors.isNotEmpty()) {
                 log.warn(LogTag.API, "scan completed with failures count={} sample={}", errors.size, errors.take(3).joinToString("; "))
@@ -295,6 +298,7 @@ class MainController(private val apiKey: String?, initialSymbol: String = "AAPL"
                 } else {
                     displayed.forEach(scannerPanel::update)
                     scannerPanel.completeScan(criteria.resultLimit)
+                    scannerPanel.setDetectedTodayCount(detectedTodayCount)
                     scannerPanel.showCountdown(nextDelaySeconds)
                     val marketState = if (symbols.isEmpty()) "all selected markets closed"
                         else "${batch.strictCount.coerceAtMost(active.size)} strict impulses + ${batch.adaptiveCount} adaptive"
@@ -311,7 +315,6 @@ class MainController(private val apiKey: String?, initialSymbol: String = "AAPL"
         }
         batchScheduler.execute { runCatching(scan).onFailure { log.error(LogTag.API, "initial Yahoo scan failed", it) } }
     }
-
     private fun applyProviderObservation(observation: ProviderMinuteBar) {
         scannerPanel.applyMarketObservation(
             observation.symbol, observation.bar.close, observation.observedAtMillis, observation.provider
@@ -327,7 +330,6 @@ class MainController(private val apiKey: String?, initialSymbol: String = "AAPL"
         }
         shortMoveRefresh.request()
     }
-
     private fun openScannerResult(result: ScanResult) {
         log.debug(LogTag.UI, "openScannerResult(symbol={}, age={})", result.symbol, result.signalAgeMinutes)
         currentSymbol = result.symbol
@@ -340,7 +342,6 @@ class MainController(private val apiKey: String?, initialSymbol: String = "AAPL"
         currentSignal = result
         loadLocalChart(result.symbol)
     }
-
     private fun showScannerSettings() {
         log.debug(LogTag.UI, "showScannerSettings()")
         ScannerSettingsDialog(refreshButton.scene?.window, scannerCriteria, scannerSettings,
@@ -359,7 +360,6 @@ class MainController(private val apiKey: String?, initialSymbol: String = "AAPL"
             startScanner()
         }
     }
-
     private fun restartFinnhubLive(key: String) {
         log.debug(LogTag.API, "restartFinnhubLive(keyPresent={})", key.isNotBlank())
         profileService = CompanyProfileService(repository, key.takeIf(String::isNotBlank)?.let(::FinnhubProfileClient),
@@ -367,7 +367,6 @@ class MainController(private val apiKey: String?, initialSymbol: String = "AAPL"
         finnhubClient = FinnhubLiveStarter.restart(key, finnhubClient, scannerCriteria, liveTicks,
             liveAggregator, log, status::update)
     }
-
     private fun loadLocalChart(symbol: String) {
         log.debug(LogTag.UI, "loadLocalChart(symbol={})", symbol)
         if (symbol.isBlank()) return
