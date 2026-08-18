@@ -24,6 +24,10 @@ class MainController(private val apiKey: String?, initialSymbol: String = "AAPL"
     private val analytics = AnalyticsRepository()
     private val exchangeRates = ExchangeRateService()
     private val savedResultQuotes = SavedResultQuoteRefresher(repository)
+    private val resultDeduplicator = InstrumentResultDeduplicator(
+        repository::loadInstrumentIsin,
+        { symbol -> repository.loadCompanyProfile(symbol)?.name }
+    )
     private val shortMoveLoader = ShortMoveLoader(repository, exchangeRates)
     private var currentSymbol = initialSymbol
     private var currentSignal: ScanResult? = null
@@ -163,7 +167,9 @@ class MainController(private val apiKey: String?, initialSymbol: String = "AAPL"
         analytics.applyRetention()
         DatabaseStartupMaintenance.schedule(analytics, batchScheduler, log)
         batchScheduler.execute {
-            val saved = savedResultQuotes.refresh(analytics.loadLatestPublishedResults(scannerCriteria.resultLimit))
+            val saved = resultDeduplicator.deduplicate(
+                savedResultQuotes.refresh(analytics.loadLatestPublishedResults(scannerCriteria.resultLimit))
+            )
             Platform.runLater {
                 scannerPanel.showSnapshot(saved, scannerCriteria.resultLimit)
             }
@@ -234,8 +240,8 @@ class MainController(private val apiKey: String?, initialSymbol: String = "AAPL"
                 } ?: criteria.scanIntervalSeconds
                 val resumeText = nextOpening?.let(MarketHoursFormatter::nextOpening) ?: "market schedule unavailable"
                 val persisted = savedResultQuotes.refresh(analytics.loadLatestPublishedResults(criteria.resultLimit))
-                val saved = if (persisted.isNotEmpty()) persisted else marketData.closedMarketSnapshot(
-                    MarketUniverseSelector.select(scannerCriteria), criteria)
+                val saved = resultDeduplicator.deduplicate(if (persisted.isNotEmpty()) persisted
+                    else marketData.closedMarketSnapshot(MarketUniverseSelector.select(scannerCriteria), criteria))
                 val userZone = java.time.ZoneId.systemDefault()
                 val marketHours = MarketHoursFormatter.priceData(selectedSymbols, now, userZone)
                 val brokerHours = MarketHoursFormatter.scalable(now, userZone)
@@ -276,7 +282,7 @@ class MainController(private val apiKey: String?, initialSymbol: String = "AAPL"
             if (errors.isNotEmpty()) {
                 log.warn(LogTag.API, "scan completed with failures count={} sample={}", errors.size, errors.take(3).joinToString("; "))
             }
-            val active = batch.active
+            val active = resultDeduplicator.deduplicate(batch.active)
             scanCyclePlanner.replacePriority(active.map(ScanResult::symbol))
             val shortMoves = shortMoveLoader.load(symbols)
             val retained = recentEvents.merge(active, System.currentTimeMillis(), criteria.resultLimit)
