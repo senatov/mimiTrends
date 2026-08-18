@@ -44,7 +44,7 @@ class MainController(private val apiKey: String?, initialSymbol: String = "AAPL"
     private val status = MainStatusController(requestStatus, trendChart, refreshButton, log)
     private val scannerEngine = ScannerEngine()
     private val yahooFinance = YahooFinanceClient()
-    private val dynamicUniverse = DynamicMarketUniverse(yahooFinance, log)
+    private val dynamicUniverse = DynamicMarketUniverse()
     private var profileService = CompanyProfileService(
         repository, apiKey?.let(::FinnhubProfileClient), CompanyLogoClient()
     )
