@@ -55,6 +55,27 @@ class YahooFinanceClient(
         return parseDayGainers(response.body(), safeLimit)
     }
 
+    fun resolveEquity(query: String): YahooResolvedEquity? {
+        val encoded = URLEncoder.encode(query.trim(), StandardCharsets.UTF_8)
+        val uri = URI.create("https://$PRIMARY_HOST/v1/finance/search?q=$encoded&quotesCount=8&newsCount=0")
+        val response = sendWithRetry(request(uri))
+        check(response.statusCode() == 200) { "Yahoo Finance search HTTP ${response.statusCode()}" }
+        return parseEquitySearch(response.body())
+    }
+
+    internal fun parseEquitySearch(body: String): YahooResolvedEquity? =
+        mapper.readTree(body).path("quotes").mapNotNull { quote ->
+            val symbol = quote.path("symbol").asText().trim().uppercase()
+            val exchange = quote.path("exchange").asText().trim().uppercase()
+            val name = quote.path("longname").asText().ifBlank { quote.path("shortname").asText() }.trim()
+            if (quote.path("quoteType").asText() != "EQUITY" || symbol.isBlank() ||
+                !isSupportedDiscoveryExchange(symbol, exchange)) null
+            else YahooResolvedEquity(symbol, name.ifBlank { symbol }, exchange)
+        }.firstOrNull()
+
+    private fun isSupportedDiscoveryExchange(symbol: String, exchange: String): Boolean =
+        exchange in DISCOVERY_EXCHANGES && BLOCKED_SUFFIXES.none(symbol::endsWith)
+
     internal fun parseDayGainers(body: String, limit: Int = 25): List<YahooMarketLeader> {
         val quotes = mapper.readTree(body).path("finance").path("result").firstOrNull()?.path("quotes")
             ?: return emptyList()
@@ -167,10 +188,14 @@ class YahooFinanceClient(
         const val RETRY_DELAY_MILLIS = 250L
         const val MAX_DISCOVERY_RESULTS = 50
         val US_EXCHANGES = setOf("NMS", "NYQ", "NGM", "NCM", "ASE", "PCX", "BTS")
+        val DISCOVERY_EXCHANGES = US_EXCHANGES + setOf("GER", "FRA", "AMS", "PAR")
+        val BLOCKED_SUFFIXES = setOf(".MI")
     }
 }
 
 data class YahooMarketLeader(val symbol: String, val price: Double, val changePercent: Double)
+
+data class YahooResolvedEquity(val symbol: String, val name: String, val exchange: String)
 
 internal class YahooEmptyOhlcvException(symbol: String) :
     RuntimeException("Yahoo Finance returned empty OHLCV data for $symbol") {

@@ -5,13 +5,14 @@ import kotlin.math.abs
 
 internal object CandidateQualityGate {
     fun qualifies(result: ScanResult, adaptive: Boolean): Boolean {
-        if (!isCurrent(result) || result.signalSource.contains("watch") || isExtended(result)) return false
+        if (!isCurrent(result) || result.signalSource.contains("watch") || isExtended(result) ||
+            !hasExecutionQuality(result)) return false
         if (adaptive && !adaptiveQuality(result)) return false
         return structuralQuality(result, watch = false)
     }
 
     fun qualifiesWatch(result: ScanResult): Boolean {
-        if (!isCurrent(result) || !watchRankingQuality(result)) return false
+        if (!isCurrent(result) || !watchRankingQuality(result) || !hasExecutionQuality(result)) return false
         return structuralQuality(result, watch = true)
     }
 
@@ -128,6 +129,15 @@ internal object CandidateQualityGate {
 
     private fun isExtended(result: ScanResult): Boolean = result.signalSource.contains("wait for pullback")
 
+    internal fun hasExecutionQuality(result: ScanResult): Boolean {
+        if (result.sessionTurnover.isFinite() && result.sessionTurnover < MIN_SESSION_TURNOVER) return false
+        if (!result.bidPrice.isFinite() || !result.askPrice.isFinite()) return true
+        if (result.bidPrice <= 0.0 || result.askPrice < result.bidPrice) return false
+        val midpoint = (result.askPrice + result.bidPrice) / 2.0
+        val spreadPercent = (result.askPrice - result.bidPrice) / midpoint * 100.0
+        return spreadPercent <= MAX_EXECUTABLE_SPREAD_PERCENT
+    }
+
     private fun minimumMove(result: ScanResult): Double =
         if (result.symbol.contains('.')) MIN_EUROPE_MOVE_PERCENT else MIN_US_MOVE_PERCENT
 
@@ -170,4 +180,6 @@ internal object CandidateQualityGate {
     private const val WATCH_TIER = 1
     private const val DOWNSIDE_WATCH_TIER = 2
     private const val EXTENDED_TIER = 2
+    private const val MIN_SESSION_TURNOVER = 1_000_000.0
+    private const val MAX_EXECUTABLE_SPREAD_PERCENT = 0.30
 }

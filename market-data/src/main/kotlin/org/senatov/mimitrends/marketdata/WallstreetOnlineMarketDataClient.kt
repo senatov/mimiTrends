@@ -36,7 +36,7 @@ class WallstreetOnlineMarketDataClient(
         .build()
 ) {
     fun loadMovers(): List<WallstreetOnlineMover> = MOVER_PATHS.flatMap { path ->
-        parseMovers(send("$BASE_URL$path"))
+        parseMovers(send("$BASE_URL$path")).take(DISCOVERY_RESULTS_PER_PAGE)
     }.distinctBy(WallstreetOnlineMover::path)
 
     fun loadQuote(path: String): WallstreetOnlineQuote {
@@ -142,7 +142,11 @@ class WallstreetOnlineMarketDataClient(
         const val MAX_MOVERS_PER_PAGE = 50
         const val FUTURE_TOLERANCE_MILLIS = 5 * 60_000L
         val QUOTE_ZONE: ZoneId = ZoneId.of("Europe/Berlin")
-        val MOVER_PATHS = listOf("/statistik/top-aktien-performance", "/statistik/flop-aktien-performance")
+        const val DISCOVERY_RESULTS_PER_PAGE = 20
+        val MOVER_PATHS = listOf(
+            "/statistik/top-aktien-performance",
+            "/statistik/top-aktien-meistgehandelt"
+        )
         val DETAIL_PATH = Regex("/aktien/[a-z0-9-]+-aktie")
         val ISIN_QUERY = Regex("[A-Z]{2}[A-Z0-9]{9}[0-9]", RegexOption.IGNORE_CASE)
         const val VALIDATION_COMPANY = "Northern Data"

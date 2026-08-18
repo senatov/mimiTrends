@@ -52,7 +52,8 @@ class ScannerSettingsServiceTest {
         val restored = ScannerSettingsService(path).load()
 
         assertTrue(restored.symbols.none { it.endsWith(".HE") })
-        assertTrue(setOf("RHM.DE", "CBK.DE", "SHELL.AS", "MT.AS", "SGO.PA", "LR.PA", "STLAP.PA", "RACE.MI")
+        assertTrue(setOf("RHM.DE", "CBK.DE", "SHELL.AS", "MT.AS", "SGO.PA", "LR.PA", "STLAP.PA")
             .all(restored.symbols::contains))
+        assertTrue(restored.symbols.none { it.endsWith(".MI") })
     }
 }

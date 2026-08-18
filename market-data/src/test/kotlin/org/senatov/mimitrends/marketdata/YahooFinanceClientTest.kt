@@ -59,4 +59,13 @@ class YahooFinanceClientTest {
 
         assertEquals(listOf("LITE", "AMD"), leaders.map(YahooMarketLeader::symbol))
     }
+
+    @Test fun `resolves only equities on supported liquid venues`() {
+        val json = """{"quotes":[
+            {"symbol":"RACE.MI","quoteType":"EQUITY","exchange":"MIL","longname":"Ferrari"},
+            {"symbol":"RACE","quoteType":"EQUITY","exchange":"NYQ","longname":"Ferrari N.V."}
+        ]}"""
+
+        assertEquals("RACE", YahooFinanceClient().parseEquitySearch(json)?.symbol)
+    }
 }

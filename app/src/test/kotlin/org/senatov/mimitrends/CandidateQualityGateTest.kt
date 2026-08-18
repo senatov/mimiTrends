@@ -5,6 +5,16 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class CandidateQualityGateTest {
+    @Test fun `rejects low turnover and wide executable spreads`() {
+        val liquid = TestScanResult.create().copy(sessionTurnover = 2_000_000.0, bidPrice = 99.9, askPrice = 100.1)
+        val illiquid = liquid.copy(sessionTurnover = 100_000.0)
+        val expensive = liquid.copy(bidPrice = 99.0, askPrice = 101.0)
+
+        kotlin.test.assertTrue(CandidateQualityGate.hasExecutionQuality(liquid))
+        kotlin.test.assertFalse(CandidateQualityGate.hasExecutionQuality(illiquid))
+        kotlin.test.assertFalse(CandidateQualityGate.hasExecutionQuality(expensive))
+    }
+
     @Test fun `rejects an impulse without volume unless price evidence is exceptional`() {
         val weak = TestScanResult.create().copy(
             symbol = "TEST.DE", windowChangePercent = 0.60, priceAnomaly = 4.0,
