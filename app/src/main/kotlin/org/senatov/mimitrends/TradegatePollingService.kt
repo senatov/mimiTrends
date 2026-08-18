@@ -70,7 +70,7 @@ internal class TradegatePollingService(
                         log.debug(LogTag.API, "Tradegate quote unavailable symbol={} cause={}", symbol, error.message)
                         return@onFailure
                     }
-                    if (error is ProviderHttpException && error.statusCode in PERMANENT_INSTRUMENT_STATUSES) {
+                    if (error is ProviderHttpException && isPermanentInstrumentStatus(error.statusCode)) {
                         repository.deleteProviderInstrument(PROVIDER, symbol)
                         unresolvedUntil[symbol] = System.currentTimeMillis() + UNRESOLVED_RETRY_MILLIS
                         backoff.success()
@@ -162,6 +162,9 @@ internal class TradegatePollingService(
             !local.toLocalTime().isBefore(OPEN) && local.toLocalTime().isBefore(CLOSE)
     }
 
+    internal fun isPermanentInstrumentStatus(statusCode: Int): Boolean =
+        statusCode in PERMANENT_INSTRUMENT_STATUSES
+
     override fun close() {
         synchronized(this) { generation++; task?.cancel(false); task = null; symbols = emptyList() }
         scheduler.shutdownNow()
@@ -177,7 +180,7 @@ internal class TradegatePollingService(
         val OPEN: LocalTime = LocalTime.of(8, 0)
         val CLOSE: LocalTime = LocalTime.of(22, 0)
         val DEBT_MARKERS = listOf("note", "notes", "nts.", "bond", "anleihe", "flr-", "medium term")
-        val PERMANENT_INSTRUMENT_STATUSES = setOf(400, 404)
+        val PERMANENT_INSTRUMENT_STATUSES = setOf(404)
         val ISIN = Regex("[A-Z]{2}[A-Z0-9]{9}[0-9]")
         val ISIN_PROVIDERS = listOf("ARIVA", "EURONEXT")
     }

@@ -26,6 +26,18 @@ class TradegatePollingServiceTest {
     }
 
     @Test
+    fun `treats bad request as transient but not found as permanent`() {
+        val repository = MarketRepository(Files.createTempDirectory("mimitrends-tradegate-status").resolve("test.db"))
+        val service = TradegatePollingService(repository)
+
+        assertFalse(service.isPermanentInstrumentStatus(400))
+        assertTrue(service.isPermanentInstrumentStatus(404))
+
+        service.close()
+        repository.close()
+    }
+
+    @Test
     fun `reuses a verified provider isin before searching by company name`() {
         val repository = MarketRepository(Files.createTempDirectory("mimitrends-tradegate-isin").resolve("test.db"))
         repository.upsertProviderInstrument(ProviderInstrument(
