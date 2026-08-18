@@ -50,11 +50,16 @@ class WallstreetOnlineMarketDataClient(
         val request = HttpRequest.newBuilder(searchUri)
             .timeout(Duration.ofSeconds(15)).header("User-Agent", USER_AGENT)
             .header("Accept", "text/html,application/xhtml+xml").GET().build()
-        val response = client.send(request, HttpResponse.BodyHandlers.discarding())
+        val response = client.send(request, HttpResponse.BodyHandlers.ofString())
         if (response.statusCode() != 200) {
             throw ProviderHttpException.from(response.statusCode(), response.headers(), "wallstreetONLINE stock search")
         }
-        return validatedStockUrl(searchUri, response.uri())
+        return validatedStockUrl(searchUri, response.uri()).also {
+            val resolvedIsin = ISIN.find(response.body())?.groupValues?.get(1)
+            if (!resolvedIsin.equals(isin, ignoreCase = true)) {
+                throw ProviderDataUnavailableException("wallstreetONLINE returned a different stock")
+            }
+        }
     }
 
     fun validateStockSearchUrl(searchUrl: String) {

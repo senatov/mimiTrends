@@ -24,6 +24,12 @@ class ProviderInstrumentSelectorTest {
         ))
     }
 
+    @Test fun `rejects TXNM Energy for Texas Instruments ticker`() {
+        assertFalse(ProviderInstrumentSelector.matchesCompany(
+            "TXN", "Texas Instruments Incorporated", "TXNM Energy Inc."
+        ))
+    }
+
     @Test fun `prefers isin identity over an ambiguous ticker and company name`() {
         val wrong = instrument("EURONEXT", "US8261975010", "Siemens AG")
         val siemens = instrument("TRADEGATE", "DE0007236101", "Siemens AG")

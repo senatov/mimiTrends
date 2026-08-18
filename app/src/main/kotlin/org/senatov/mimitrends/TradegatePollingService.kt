@@ -138,6 +138,12 @@ internal class TradegatePollingService(
             unresolvedUntil[symbol] = now + UNRESOLVED_RETRY_MILLIS
             return null
         }
+        if (!ProviderInstrumentSelector.matchesCompany(symbol, companyName, resolved.name)) {
+            unresolvedUntil[symbol] = now + UNRESOLVED_RETRY_MILLIS
+            log.warn(LogTag.API, "Tradegate instrument rejected symbol={} expectedName={} resolvedName={}",
+                symbol, companyName, resolved.name)
+            return null
+        }
         return ProviderInstrument(PROVIDER, symbol, resolved.isin, MIC, CURRENCY, resolved.name, now)
             .also(repository::upsertProviderInstrument)
     }

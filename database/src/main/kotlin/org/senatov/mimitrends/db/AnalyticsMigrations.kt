@@ -109,6 +109,9 @@ internal object AnalyticsMigrations {
             "ALTER TABLE research_samples ADD COLUMN entry_price_eur REAL",
             "ALTER TABLE research_samples ADD COLUMN fx_rate REAL",
             "ALTER TABLE research_samples ADD COLUMN fx_rate_epoch INTEGER"
+        ),
+        11 to listOf(
+            "UPDATE instrument_metadata SET isin='US8825081040' WHERE symbol='TXN' AND isin='US69349H1077'"
         )
     )
 }

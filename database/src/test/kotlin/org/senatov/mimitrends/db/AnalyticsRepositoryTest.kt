@@ -14,6 +14,35 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class AnalyticsRepositoryTest {
+    @Test fun `repairs the TXN identifier confused with TXNM Energy`() {
+        val path = Files.createTempDirectory("mimitrends-txn-isin").resolve("test.db")
+        MarketRepository(path).use { repository ->
+            repository.upsertProviderInstrument(ProviderInstrument(
+                "TRADEGATE", "TXN", "US69349H1077", "XGAT", "EUR", "TXNM Energy Inc."
+            ))
+        }
+        AnalyticsRepository(path).close()
+        DriverManager.getConnection("jdbc:sqlite:$path").use { connection ->
+            connection.createStatement().use { statement ->
+                statement.executeUpdate(
+                    "INSERT INTO instrument_metadata VALUES ('TXN','Texas Instruments Incorporated','NASDAQ'," +
+                        "'USD','America/New_York','US69349H1077',NULL,NULL,1,0)"
+                )
+                statement.executeUpdate("DELETE FROM schema_migrations WHERE version=11")
+            }
+        }
+
+        AnalyticsRepository(path).close()
+
+        DriverManager.getConnection("jdbc:sqlite:$path").use { connection ->
+            connection.createStatement().use { statement ->
+                statement.executeQuery("SELECT isin FROM instrument_metadata WHERE symbol='TXN'").use {
+                    it.next(); assertEquals("US8825081040", it.getString(1))
+                }
+            }
+        }
+    }
+
     @Test fun `summarizes every symbol published today`() {
         val path = Files.createTempDirectory("mimitrends-today").resolve("test.db")
         MarketRepository(path).close()
