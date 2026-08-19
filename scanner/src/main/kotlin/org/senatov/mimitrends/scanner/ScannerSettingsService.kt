@@ -3,6 +3,7 @@ package org.senatov.mimitrends.scanner
 import org.senatov.mimitrends.log.LogTag
 import org.senatov.mimitrends.model.ScannerCriteria
 import org.senatov.mimitrends.model.DisplayCurrency
+import org.senatov.mimitrends.model.FinancialTransactionTaxExclusions
 import org.senatov.mimitrends.model.TableAppearance
 import org.senatov.mimitrends.model.AnomalyWindow
 import org.senatov.mimitrends.model.MarketRegion
@@ -64,7 +65,9 @@ class ScannerSettingsService(private val path: Path = Path.of(System.getProperty
                     ) {
                         (stored + defaults).distinct()
                     } else stored
-                    migrateLegacyHelsinkiUniverse(expanded, defaults)
+                    FinancialTransactionTaxExclusions.removeFrom(
+                        migrateLegacyHelsinkiUniverse(expanded, defaults)
+                    )
                 }
             )
         }.onFailure { log.error(LogTag.IO, "scanner settings load failed", it) }.getOrDefault(ScannerCriteria())

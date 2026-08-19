@@ -1,7 +1,7 @@
 package org.senatov.mimitrends.model
 
 object DefaultSymbolUniverse {
-    val symbols: List<String> = listOf(
+    val symbols: List<String> = FinancialTransactionTaxExclusions.removeFrom(listOf(
         "AAPL", "MSFT", "NVDA", "AMZN", "META", "GOOGL", "GOOG", "TSLA",
         "AVGO", "BRK-B", "JPM", "V", "MA", "WMT", "LLY", "NFLX",
         "XOM", "COST", "JNJ", "HD", "PG", "BAC", "ABBV", "KO",
@@ -33,5 +33,5 @@ object DefaultSymbolUniverse {
         "DG.PA", "CS.PA", "RI.PA", "ACA.PA", "STMPA.PA", "VIE.PA", "KER.PA", "CAP.PA",
         "ORA.PA", "GLE.PA", "ENGI.PA", "DSY.PA", "HO.PA", "PUB.PA", "ML.PA", "CA.PA",
         "RHM.DE", "CBK.DE", "SHELL.AS", "MT.AS", "SGO.PA", "LR.PA", "STLAP.PA"
-    )
+    ))
 }

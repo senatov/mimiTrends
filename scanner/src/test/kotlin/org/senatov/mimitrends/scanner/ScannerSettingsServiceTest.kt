@@ -52,8 +52,19 @@ class ScannerSettingsServiceTest {
         val restored = ScannerSettingsService(path).load()
 
         assertTrue(restored.symbols.none { it.endsWith(".HE") })
-        assertTrue(setOf("RHM.DE", "CBK.DE", "SHELL.AS", "MT.AS", "SGO.PA", "LR.PA", "STLAP.PA")
+        assertTrue(setOf("RHM.DE", "CBK.DE", "SHELL.AS", "MT.AS", "STLAP.PA")
             .all(restored.symbols::contains))
+        assertTrue(setOf("SGO.PA", "LR.PA").none(restored.symbols::contains))
         assertTrue(restored.symbols.none { it.endsWith(".MI") })
+    }
+
+    @Test
+    fun `removes transaction-taxed shares from a persisted watchlist`() {
+        val path = Files.createTempDirectory("mimitrends-tax-exclusions").resolve("scanner.properties")
+        Files.writeString(path, "symbols=AAPL,TTE.PA,MC.PA,AIR.PA,STMPA.PA\n")
+
+        val restored = ScannerSettingsService(path).load()
+
+        assertEquals(listOf("AAPL", "AIR.PA", "STMPA.PA"), restored.symbols)
     }
 }

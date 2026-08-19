@@ -2,6 +2,7 @@ package org.senatov.mimitrends
 
 import javafx.application.Platform
 import org.senatov.mimitrends.db.AnalyticsRepository
+import org.senatov.mimitrends.model.FinancialTransactionTaxExclusions
 import java.util.concurrent.Executor
 
 internal class DetectedTodayController(
@@ -12,6 +13,7 @@ internal class DetectedTodayController(
     fun show() {
         executor.execute {
             val detections = analytics.loadTodayDetections()
+                .filterNot { FinancialTransactionTaxExclusions.contains(it.symbol) }
             Platform.runLater {
                 panel.setDetectedTodayCount(detections.size)
                 DetectedTodayDialog.show(panel.scene?.window, detections)
@@ -21,7 +23,8 @@ internal class DetectedTodayController(
 
     fun refreshCount() {
         executor.execute {
-            val count = analytics.loadTodayDetections().size
+            val count = analytics.loadTodayDetections()
+                .count { !FinancialTransactionTaxExclusions.contains(it.symbol) }
             Platform.runLater { panel.setDetectedTodayCount(count) }
         }
     }

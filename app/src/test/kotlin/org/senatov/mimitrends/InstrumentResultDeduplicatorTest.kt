@@ -31,4 +31,11 @@ class InstrumentResultDeduplicatorTest {
 
         assertEquals(2, deduplicator.deduplicate(results).size)
     }
+
+    @Test fun `removes transaction-taxed results loaded from history`() {
+        val deduplicator = InstrumentResultDeduplicator({ null }, { null })
+        val results = listOf(TestScanResult.create(symbol = "TTE.PA"), TestScanResult.create(symbol = "AIR.PA"))
+
+        assertEquals(listOf("AIR.PA"), deduplicator.deduplicate(results).map { it.symbol })
+    }
 }

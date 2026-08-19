@@ -1,6 +1,7 @@
 package org.senatov.mimitrends
 
 import org.senatov.mimitrends.model.ScanResult
+import org.senatov.mimitrends.model.FinancialTransactionTaxExclusions
 
 /** Collapses multiple exchange listings of the same instrument into one scanner result. */
 internal class InstrumentResultDeduplicator(
@@ -9,7 +10,7 @@ internal class InstrumentResultDeduplicator(
 ) {
     fun deduplicate(results: Collection<ScanResult>): List<ScanResult> {
         val retained = mutableListOf<IdentifiedResult>()
-        results.forEach { result ->
+        results.filterNot { FinancialTransactionTaxExclusions.contains(it.symbol) }.forEach { result ->
             val identified = identify(result)
             val duplicateIndex = retained.indexOfFirst { existing -> sameInstrument(existing, identified) }
             if (duplicateIndex < 0) {
