@@ -29,6 +29,7 @@ internal class WallstreetOnlinePollingService(
     private var symbols = emptyList<String>()
     private var generation = 0L
     private var task: ScheduledFuture<*>? = null
+    private val rejectedCandidates = RejectedProviderCandidates()
 
     @Synchronized
     fun replaceSymbols(values: Collection<String>) {
@@ -64,15 +65,22 @@ internal class WallstreetOnlinePollingService(
 
     private fun match(symbol: String, movers: List<WallstreetOnlineMover>): WallstreetOnlineMover? {
         val name = repository.loadCompanyProfile(symbol)?.name ?: return null
-        return movers.firstOrNull { ProviderInstrumentSelector.matchesCompany(symbol, name, it.name) }
+        val expectedIsin = repository.loadInstrumentIsin(symbol) ?: return null
+        return movers.firstOrNull {
+            ProviderInstrumentSelector.matchesCompany(symbol, name, it.name) &&
+                !rejectedCandidates.contains(symbol, expectedIsin, it.path)
+        }
     }
 
     private fun refresh(symbol: String, mover: WallstreetOnlineMover) {
         val expectedIsin = repository.loadInstrumentIsin(symbol) ?: return
         val quote = client.loadQuote(mover.path)
         if (!quote.isin.equals(expectedIsin, ignoreCase = true)) {
-            log.warn(LogTag.API, "wallstreetONLINE identity mismatch symbol={} expectedIsin={} actualIsin={}",
-                symbol, expectedIsin, quote.isin)
+            if (rejectedCandidates.reject(symbol, expectedIsin, mover.path)) {
+                log.warn(LogTag.API,
+                    "wallstreetONLINE candidate rejected symbol={} expectedIsin={} actualIsin={} path={}",
+                    symbol, expectedIsin, quote.isin, mover.path)
+            }
             return
         }
         val now = System.currentTimeMillis()
@@ -111,6 +119,20 @@ internal class WallstreetOnlinePollingService(
         const val MAX_DETAIL_REQUESTS = 5
         val VENUE_MICS = mapOf("tradegate" to "XGAT", "lang & schwarz" to "LSSI", "xetra" to "XETR")
     }
+}
+
+internal class RejectedProviderCandidates {
+    private val values = mutableSetOf<CandidateIdentity>()
+
+    @Synchronized
+    fun reject(symbol: String, expectedIsin: String, path: String): Boolean =
+        values.add(CandidateIdentity(symbol.uppercase(), expectedIsin.uppercase(), path))
+
+    @Synchronized
+    fun contains(symbol: String, expectedIsin: String, path: String): Boolean =
+        CandidateIdentity(symbol.uppercase(), expectedIsin.uppercase(), path) in values
+
+    private data class CandidateIdentity(val symbol: String, val expectedIsin: String, val path: String)
 }
 
 internal class StockPageOpener(
