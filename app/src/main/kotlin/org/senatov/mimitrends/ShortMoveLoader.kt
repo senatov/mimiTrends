@@ -1,11 +1,13 @@
 package org.senatov.mimitrends
 
 import org.senatov.mimitrends.db.MarketRepository
+import org.senatov.mimitrends.db.AnalyticsRepository
 import org.senatov.mimitrends.model.MinuteBar
 import org.senatov.mimitrends.model.ProviderMinuteBar
 
 internal class ShortMoveLoader(
     private val repository: MarketRepository,
+    private val analytics: AnalyticsRepository,
     private val exchangeRates: ExchangeRateService
 ) {
     fun load(symbols: Collection<String>, nowEpochSeconds: Long = java.time.Instant.now().epochSecond): List<ShortMove> {
@@ -19,7 +21,25 @@ internal class ShortMoveLoader(
                 nowEpochSeconds
             )
         }
-        val ranked = ShortMoveDetector.rank(bars, nowEpochSeconds, Int.MAX_VALUE)
+        val ranked = ShortMoveDetector.rank(bars, nowEpochSeconds, Int.MAX_VALUE).map { move ->
+            val aggregatePrices = analytics.loadAggregatedBars(
+                move.symbol, TREND_RESOLUTION_MINUTES, nowEpochSeconds - TREND_LOOKBACK_DAYS * 86_400L
+            ).map { TrendPrice(it.bucketEpochSeconds, it.close) }
+            val recentPrices = bars[move.symbol].orEmpty().map { TrendPrice(it.minuteEpochSeconds, it.close) }
+            // Aggregates retain the instrument's source currency while recent bars may be converted for display.
+            // Never splice both price levels into one return series; fall back to recent bars only when aggregates
+            // do not yet cover enough distinct sessions.
+            val trendPrices = if (aggregatePrices.distinctBy { it.epochSeconds / 86_400L }.size >= 4) {
+                aggregatePrices
+            } else recentPrices
+            val assessment = MultiHorizonTrendModel.assess(trendPrices)
+            if (assessment == null) move else move.copy(
+                trendScore = assessment.score,
+                trendConfidence = assessment.confidence,
+                trendLabel = assessment.label,
+                trendDetails = assessment.details
+            )
+        }
         val companyName = { symbol: String -> repository.loadCompanyProfile(symbol)?.name }
         val recent = ShortMoveCompanyRanking.distinct(ranked, MAX_MOVES, companyName)
         val moderate = ShortMoveCompanyRanking.distinct(
@@ -32,25 +52,26 @@ internal class ShortMoveLoader(
         const val MAX_MOVES = 10
         const val MAX_MODERATE_CANDIDATES = 6
         const val PATTERN_LOOKBACK_DAYS = 30L
+        const val TREND_LOOKBACK_DAYS = 370L
+        const val TREND_RESOLUTION_MINUTES = 60
     }
 }
 
 internal object ModeratePositiveCandidateSelector {
     fun select(ranked: List<ShortMove>): List<ShortMove> = ranked.filter { move ->
         move.pattern == ShortMovePattern.DIRECTIONAL &&
-            move.changePercent in MIN_MOVE_PERCENT..MAX_MOVE_PERCENT && move.barCount >= MIN_BARS
-    }
+            move.changePercent in MIN_CURRENT_MOVE_PERCENT..MAX_CURRENT_MOVE_PERCENT &&
+            move.barCount >= MIN_BARS &&
+            (move.trendScore ?: 0) >= MIN_TREND_SCORE && move.trendConfidence >= MIN_CONFIDENCE
+    }.sortedWith(compareByDescending<ShortMove> { it.trendScore }.thenByDescending { it.trendConfidence })
 
-    fun positivityPercent(move: ShortMove): Int {
-        val movement = ((move.changePercent - MIN_MOVE_PERCENT) /
-            (MAX_MOVE_PERCENT - MIN_MOVE_PERCENT)).coerceIn(0.0, 1.0)
-        val continuity = (move.barCount / 5.0).coerceIn(0.0, 1.0)
-        return (52.0 + movement * 34.0 + continuity * 10.0).toInt().coerceIn(50, 96)
-    }
+    fun positivityPercent(move: ShortMove): Int = move.trendScore?.coerceIn(0, 100) ?: 0
 
-    private const val MIN_MOVE_PERCENT = 0.03
-    private const val MAX_MOVE_PERCENT = 1.75
+    private const val MIN_CURRENT_MOVE_PERCENT = -0.80
+    private const val MAX_CURRENT_MOVE_PERCENT = 1.75
     private const val MIN_BARS = 3
+    private const val MIN_TREND_SCORE = 56
+    private const val MIN_CONFIDENCE = 8
 }
 
 internal object ShortMoveCompanyRanking {

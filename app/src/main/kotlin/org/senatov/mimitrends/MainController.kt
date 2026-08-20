@@ -28,7 +28,7 @@ class MainController(private val apiKey: String?, initialSymbol: String = "AAPL"
         repository::loadInstrumentIsin,
         { symbol -> repository.loadCompanyProfile(symbol)?.name }
     )
-    private val shortMoveLoader = ShortMoveLoader(repository, exchangeRates)
+    private val shortMoveLoader = ShortMoveLoader(repository, analytics, exchangeRates)
     private var currentSymbol = initialSymbol
     private var currentSignal: ScanResult? = null
     private var selectedRangeValue = initialRange.takeIf { it in setOf("1D", "5D", "1M", "3M", "6M", "1Y") } ?: "3M"

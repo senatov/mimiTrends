@@ -8,15 +8,16 @@ import kotlin.test.assertTrue
 class ShortMoveDetectorTest {
     @Test fun `selects holding gains and moderate positive moves`() {
         val selected = ModeratePositiveCandidateSelector.select(listOf(
-            move("STEADY", 0.55).copy(barCount = 5),
-            move("FLAT", 0.05).copy(barCount = 5),
-            move("JUMP", 2.0).copy(barCount = 5),
-            move("DOWN", -0.4).copy(barCount = 5),
-            move("SPECIAL", 0.6).copy(barCount = 5, pattern = ShortMovePattern.RECURRING_SHARP_JUMP)
+            move("STEADY", 0.55).copy(barCount = 5, trendScore = 76, trendConfidence = 80),
+            move("FLAT", 0.05).copy(barCount = 5, trendScore = 62, trendConfidence = 60),
+            move("JUMP", 2.0).copy(barCount = 5, trendScore = 90, trendConfidence = 90),
+            move("DOWN", -0.4).copy(barCount = 5, trendScore = 40, trendConfidence = 80),
+            move("SPECIAL", 0.6).copy(barCount = 5, pattern = ShortMovePattern.RECURRING_SHARP_JUMP,
+                trendScore = 82, trendConfidence = 80)
         ))
 
         assertEquals(listOf("STEADY", "FLAT"), selected.map(ShortMove::symbol))
-        assertTrue(selected.all { ModeratePositiveCandidateSelector.positivityPercent(it) in 50..96 })
+        assertEquals(listOf(76, 62), selected.map(ModeratePositiveCandidateSelector::positivityPercent))
     }
 
     @Test fun `freezes a recurring jump for twenty minutes despite refreshed rows`() {

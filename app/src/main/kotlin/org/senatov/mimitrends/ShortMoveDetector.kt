@@ -11,7 +11,11 @@ internal data class ShortMove(
     val endedAtEpochSeconds: Long,
     val barCount: Int,
     val pattern: ShortMovePattern = ShortMovePattern.DIRECTIONAL,
-    val eventEpochSeconds: Long = endedAtEpochSeconds
+    val eventEpochSeconds: Long = endedAtEpochSeconds,
+    val trendScore: Int? = null,
+    val trendConfidence: Int = 0,
+    val trendLabel: String = "",
+    val trendDetails: String = ""
 )
 
 internal enum class ShortMovePattern {

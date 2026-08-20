@@ -23,7 +23,7 @@ internal class ModerateCandidatePanel(
     init {
         children.setAll(
             Label("Positive watch").apply { styleClass += "positive-watch-title" },
-            Label("Holding gains or rising steadily").apply { styleClass += "positive-watch-caption" },
+            Label("3d–1y trend, volatility and drawdown adjusted").apply { styleClass += "positive-watch-caption" },
             candidates
         )
         styleClass += listOf("table-section", "moderate-candidate-panel")
@@ -55,7 +55,11 @@ internal class ModerateCandidatePanel(
             minWidth = 54.0
             prefWidth = 54.0
             alignment = Pos.CENTER
-            tooltip = Tooltip("Relative positive-movement score based on the current five-minute move and continuity; not a profit forecast.")
+            tooltip = Tooltip(
+                "${move.trendLabel} · confidence ${move.trendConfidence}%\n${move.trendDetails}\n" +
+                    "Current 5m move: ${"%+.2f%%".format(move.changePercent)}\n" +
+                    "Trend score, not a profit forecast."
+            )
         }
         return HBox(7.0, company, spacer, score).apply {
             alignment = Pos.CENTER_LEFT
