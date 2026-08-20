@@ -392,14 +392,15 @@
     -fx-effect: dropshadow(gaussian, rgba(31,54,79,0.10), 5, 0.08, 0, 2);
 }
 .positive-watch-row:hover { -fx-background-color: rgba(217,229,242,0.96); -fx-border-color: #7890aa; }
-.positive-watch-company { -fx-font-size: 11.5px; -fx-font-weight: 500; -fx-text-fill: #17365f; }
+.positive-watch-company { -fx-font-size: 12px; -fx-font-weight: 600; -fx-text-fill: #17365f; }
 .positive-watch-score {
-    -fx-font-size: 12px;
+    -fx-font-family: "SF Pro Text", "Helvetica Neue", "System";
+    -fx-font-size: 13px;
     -fx-font-weight: 700;
-    -fx-text-fill: #ffd27a;
-    -fx-background-color: #365f82;
+    -fx-text-fill: #ffe3a3;
+    -fx-background-color: #496f91;
     -fx-background-radius: 999px;
-    -fx-border-color: rgba(255,210,122,0.58);
+    -fx-border-color: rgba(255,218,145,0.78);
     -fx-border-radius: 999px;
     -fx-padding: 3px 8px;
     -fx-effect: dropshadow(gaussian, rgba(23,54,95,0.24), 5, 0.12, 0, 2);

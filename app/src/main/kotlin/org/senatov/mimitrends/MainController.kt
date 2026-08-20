@@ -101,6 +101,7 @@ class MainController(private val apiKey: String?, initialSymbol: String = "AAPL"
     )
     private var rotationTask: ScheduledFuture<*>? = null
     private val scanGeneration = AtomicLong()
+    private val chartLoadGeneration = AtomicLong()
     private val scanCyclePlanner = ScanCyclePlanner()
     private val closing = AtomicBoolean()
     private val chartDataLoader = ChartDataLoader(repository, analytics, exchangeRates)
@@ -387,6 +388,7 @@ class MainController(private val apiKey: String?, initialSymbol: String = "AAPL"
     private fun loadLocalChart(symbol: String) {
         log.debug(LogTag.UI, "loadLocalChart(symbol={})", symbol)
         if (symbol.isBlank()) return
+        val requestGeneration = chartLoadGeneration.incrementAndGet()
         status.setLoading(true)
         val days = ChartRange.days(selectedRangeValue)
         status.update("Requesting SQLite: $symbol · $selectedRangeValue")
@@ -394,6 +396,10 @@ class MainController(private val apiKey: String?, initialSymbol: String = "AAPL"
             chartDataLoader.load(symbol, days, scannerCriteria.displayCurrency)
         }.whenComplete(BiConsumer<ChartData?, Throwable?> { chartData, error ->
                 Platform.runLater {
+                    if (requestGeneration != chartLoadGeneration.get() || symbol != currentSymbol || closing.get()) {
+                        log.debug(LogTag.UI, "discard stale chart load symbol={} generation={}", symbol, requestGeneration)
+                        return@runLater
+                    }
                     status.setLoading(false)
                     if (error != null) {
                         log.error(LogTag.DB, "local chart load failed symbol={}", symbol, error)
