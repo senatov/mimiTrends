@@ -12,6 +12,8 @@ internal data class SignalMetric(
 internal object SignalMetricPresentation {
     fun strength(result: ScanResult): SignalMetric {
         val score = result.anomalyScore
+        val percentile = result.rankingPercentile.takeIf(Double::isFinite)?.times(10.0)
+            ?: (1.0 - kotlin.math.exp(-score.coerceAtLeast(0.0) / 3.0)) * 100.0
         val level = when {
             score >= 6.0 -> Level.EXTREME
             score >= 4.0 -> Level.STRONG
@@ -26,10 +28,10 @@ internal object SignalMetricPresentation {
             "\nEmpirical ${result.calibrationHorizonMinutes}m outcome available: %.0f%% after estimated friction (%d episodes)."
                 .format(result.continuationProbability * 100.0, result.calibrationSamples)
         else "\nContinuation calibration: insufficient independent episodes (${result.calibrationSamples}/12)."
-        return SignalMetric(level.anomalyLabel, level.color, if (score >= 4.0) 600 else 500,
-            "Anomaly score: %.2f\nMeasures rarity, confirmation, candle quality and freshness.\n" +
+        return SignalMetric("%.0f%%".format(percentile), anomalyColor(percentile), if (score >= 4.0) 600 else 500,
+            "Anomaly percentile: %.0f%%\nRaw anomaly score: %.2f\nMeasures rarity, confirmation, candle quality and freshness.\n".format(percentile, score) +
                 "This is not a buy/sell recommendation and does not predict direction.%s"
-                .format(score, calibration))
+                .format(calibration))
     }
 
     fun outcome(result: ScanResult): SignalMetric {
@@ -116,7 +118,7 @@ internal object SignalMetricPresentation {
             val impulse = result.signalSource.startsWith("Impulse") ||
                 result.signalSource.startsWith("Momentum") || result.signalSource.startsWith("V-Reversal")
             return SignalMetric(
-                if (impulse) "Unavailable" else "Price-led",
+                "—",
                 Level.WATCH.color,
                 400,
                 if (impulse) "No reliable positive volume was reported for the signal candle."
@@ -129,7 +131,9 @@ internal object SignalMetricPresentation {
             (relative ?: 0.0) >= 1.8 || (anomaly ?: 0.0) >= 2.0 -> Level.NOTABLE
             else -> Level.WATCH
         }
-        val label = relative?.let { "${level.volumeLabel} %.1f×".format(it) } ?: level.volumeLabel
+        val label = listOfNotNull(
+            relative?.let { "%.1f×".format(it) }, anomaly?.let { "%.1fσ".format(it) }
+        ).joinToString(" / ")
         return SignalMetric(label, level.color, if (level in setOf(Level.EXTREME, Level.STRONG)) 600 else 500,
             "Relative volume: ${relative?.let { "%.2f×".format(it) } ?: "—"}\nVolume anomaly: ${anomaly?.let { "%.2fσ".format(it) } ?: "—"}")
     }
@@ -151,9 +155,17 @@ internal object SignalMetricPresentation {
 
     private fun directionArrow(result: ScanResult) = if (result.windowChangePercent < 0) "↓" else "↑"
     private fun modelColor(probability: Double) = when {
-        probability >= 60.0 -> "#137b50"
-        probability < 45.0 -> "#b23b48"
-        else -> "#9a6717"
+        probability >= 70.0 -> "#0b6b43"
+        probability >= 60.0 -> "#2e8b57"
+        probability >= 50.0 -> "#9a6717"
+        probability >= 40.0 -> "#c06b22"
+        else -> "#b23b48"
+    }
+    private fun anomalyColor(percentile: Double) = when {
+        percentile >= 90.0 -> "#a92f3d"
+        percentile >= 75.0 -> "#b26012"
+        percentile >= 55.0 -> "#17365f"
+        else -> "#52606d"
     }
     private fun Double.finiteOrZero() = takeIf(Double::isFinite) ?: 0.0
 

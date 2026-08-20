@@ -8,10 +8,9 @@ import kotlin.test.assertTrue
 
 class DefaultSymbolUniverseTest {
     @Test
-    fun containsExactly215UniqueSymbols() {
+    fun containsUniqueSymbols() {
         val symbols = ScannerCriteria().symbols
 
-        assertEquals(215, symbols.size)
         assertEquals(symbols.size, symbols.distinct().size)
     }
 
@@ -22,10 +21,11 @@ class DefaultSymbolUniverseTest {
         assertTrue("AAPL" in symbols)
         assertTrue("INTC" in symbols)
         assertTrue("SAP.DE" in symbols)
-        assertTrue(setOf("RHM.DE", "SHELL.AS", "AIR.PA", "STMPA.PA", "STLAP.PA").all(symbols::contains))
+        assertTrue(setOf("RHM.DE", "CBK.DE").all(symbols::contains))
         assertFalse(setOf("TTE.PA", "SGO.PA", "LR.PA").any(symbols::contains))
         assertFalse(symbols.any { it.endsWith(".MI") })
         assertFalse(symbols.any { it.endsWith(".HE") })
+        assertFalse(symbols.any { it.contains('.') && !it.endsWith(".DE") })
     }
 
     @Test

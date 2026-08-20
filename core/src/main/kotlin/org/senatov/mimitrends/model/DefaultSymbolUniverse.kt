@@ -27,11 +27,6 @@ object DefaultSymbolUniverse {
         "DBK.DE", "DHL.DE", "ADS.DE", "IFX.DE", "VOW3.DE", "HEN3.DE", "BEI.DE", "BAYN.DE",
         "MTX.DE", "ZAL.DE", "FRE.DE", "EOAN.DE", "VNA.DE", "CON.DE", "HEI.DE", "QIA.DE",
         "MUV2.DE", "DB1.DE", "MRK.DE", "SY1.DE", "PAH3.DE", "P911.DE", "AIR.DE", "ENR.DE",
-        "ASML.AS", "INGA.AS", "AD.AS", "UNA.AS", "PHIA.AS", "ASM.AS", "HEIA.AS", "KPN.AS",
-        "PRX.AS", "AKZA.AS", "WKL.AS", "NN.AS", "AGN.AS", "RAND.AS", "IMCD.AS", "BESI.AS",
-        "MC.PA", "OR.PA", "TTE.PA", "AIR.PA", "BNP.PA", "SAN.PA", "SU.PA", "RMS.PA",
-        "DG.PA", "CS.PA", "RI.PA", "ACA.PA", "STMPA.PA", "VIE.PA", "KER.PA", "CAP.PA",
-        "ORA.PA", "GLE.PA", "ENGI.PA", "DSY.PA", "HO.PA", "PUB.PA", "ML.PA", "CA.PA",
-        "RHM.DE", "CBK.DE", "SHELL.AS", "MT.AS", "SGO.PA", "LR.PA", "STLAP.PA"
+        "RHM.DE", "CBK.DE"
     ))
 }

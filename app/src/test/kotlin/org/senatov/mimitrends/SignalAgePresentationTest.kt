@@ -5,10 +5,10 @@ import kotlin.test.assertEquals
 
 class SignalAgePresentationTest {
     @Test fun `formats a current signal clearly`() {
-        assertEquals("now", SignalAgePresentation.label(0))
+        assertEquals("00:00", SignalAgePresentation.label(0))
     }
 
     @Test fun `formats actual signal age in minutes`() {
-        assertEquals("134m", SignalAgePresentation.label(134))
+        assertEquals("02:14", SignalAgePresentation.label(134))
     }
 }

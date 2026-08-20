@@ -20,15 +20,26 @@ internal class ShortMoveLoader(
             )
         }
         return ShortMoveCompanyRanking.distinct(
-            ShortMoveDetector.rank(bars, nowEpochSeconds, Int.MAX_VALUE),
+            ModeratePositiveCandidateSelector.select(ShortMoveDetector.rank(bars, nowEpochSeconds, Int.MAX_VALUE)),
             MAX_MOVES
         ) { symbol -> repository.loadCompanyProfile(symbol)?.name }
     }
 
     private companion object {
-        const val MAX_MOVES = 10
+        const val MAX_MOVES = 6
         const val PATTERN_LOOKBACK_DAYS = 30L
     }
+}
+
+internal object ModeratePositiveCandidateSelector {
+    fun select(ranked: List<ShortMove>): List<ShortMove> = ranked.filter { move ->
+        move.pattern == ShortMovePattern.DIRECTIONAL &&
+            move.changePercent in MIN_MOVE_PERCENT..MAX_MOVE_PERCENT && move.barCount >= MIN_BARS
+    }
+
+    private const val MIN_MOVE_PERCENT = 0.15
+    private const val MAX_MOVE_PERCENT = 1.25
+    private const val MIN_BARS = 4
 }
 
 internal object ShortMoveCompanyRanking {

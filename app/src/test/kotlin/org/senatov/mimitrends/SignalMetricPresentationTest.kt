@@ -25,7 +25,7 @@ class SignalMetricPresentationTest {
     @Test fun `high anomaly is not presented as a trading recommendation`() {
         val metric = SignalMetricPresentation.strength(TestScanResult.create(anomalyScore = 4.2))
 
-        assertEquals("High", metric.label)
+        assertTrue(metric.label.endsWith("%"))
         assertTrue(metric.details.contains("not a buy/sell recommendation"))
         assertTrue(metric.details.contains("does not predict direction"))
     }
@@ -66,19 +66,19 @@ class SignalMetricPresentationTest {
     @Test fun `labels missing impulse volume as unavailable`() {
         val result = TestScanResult.create(signalSource = "Impulse ↓")
 
-        assertEquals("Unavailable", SignalMetricPresentation.volume(result).label)
+        assertEquals("—", SignalMetricPresentation.volume(result).label)
     }
 
-    @Test fun `labels a trend without candle volume metrics as price led`() {
+    @Test fun `shows a dash for a trend without volume metrics`() {
         val result = TestScanResult.create(signalSource = "Trend ↑")
 
-        assertEquals("Price-led", SignalMetricPresentation.volume(result).label)
+        assertEquals("—", SignalMetricPresentation.volume(result).label)
     }
 
     @Test fun `labels early momentum without reliable volume as unavailable`() {
         val result = TestScanResult.create(signalSource = "Momentum 3m ↑")
 
-        assertEquals("Unavailable", SignalMetricPresentation.volume(result).label)
+        assertEquals("—", SignalMetricPresentation.volume(result).label)
     }
 
     @Test fun `describes a statistically rare candle without promising strength`() {

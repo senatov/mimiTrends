@@ -67,7 +67,7 @@ class ScannerSettingsService(private val path: Path = Path.of(System.getProperty
                     } else stored
                     FinancialTransactionTaxExclusions.removeFrom(
                         migrateLegacyHelsinkiUniverse(expanded, defaults)
-                    )
+                    ).filter { symbol -> !symbol.contains('.') || symbol.endsWith(".DE") }
                 }
             )
         }.onFailure { log.error(LogTag.IO, "scanner settings load failed", it) }.getOrDefault(ScannerCriteria())

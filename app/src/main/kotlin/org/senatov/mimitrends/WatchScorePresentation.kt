@@ -70,8 +70,10 @@ internal object WatchScorePresentation {
         if (result.signalSource.contains("context", true)) value = value.coerceAtMost(49)
 
         val color = when {
-            value >= 67 -> "#137b50"
-            value >= 35 -> "#b26012"
+            value >= 80 -> "#075f3b"
+            value >= 67 -> "#16834a"
+            value >= 50 -> "#9a6717"
+            value >= 35 -> "#c06b22"
             else -> "#b23b48"
         }
         return WatchScore(value, color, details(result, value, components, volumeConfirmed, outcomeConfirmed, spread))

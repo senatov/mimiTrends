@@ -6,6 +6,18 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 class ShortMoveDetectorTest {
+    @Test fun `selects only a small moderate positive shortlist`() {
+        val selected = ModeratePositiveCandidateSelector.select(listOf(
+            move("STEADY", 0.55).copy(barCount = 5),
+            move("FLAT", 0.05).copy(barCount = 5),
+            move("JUMP", 2.0).copy(barCount = 5),
+            move("DOWN", -0.4).copy(barCount = 5),
+            move("SPECIAL", 0.6).copy(barCount = 5, pattern = ShortMovePattern.RECURRING_SHARP_JUMP)
+        ))
+
+        assertEquals(listOf("STEADY"), selected.map(ShortMove::symbol))
+    }
+
     @Test fun `freezes a recurring jump for twenty minutes despite refreshed rows`() {
         val retainer = ShortMoveEventRetainer()
         val initial = recurringMove(event = 1_000L, close = 104.0)
