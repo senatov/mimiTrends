@@ -38,7 +38,6 @@ class AnalyticsRepository(
         migrate()
         recoverInterruptedScans()
         duckAnalytics = DuckDbAnalyticsStore.open(database.path)
-        duckAnalytics.synchronize(connection)
         brokerTransactions = BrokerTransactionStore(connection)
         signalOutcomes = SignalOutcomeStore(connection)
         researchSamples = ResearchSampleStore(connection)
@@ -46,7 +45,7 @@ class AnalyticsRepository(
         predictionAnalytics = PredictionAnalyticsStore(connection)
         todayDetections = TodayDetectionStore(connection)
         duckAnalytics.stats().also { stats -> log.info(LogTag.DB,
-            "DuckDB analytics ready size={}MiB aggregateBars={} researchSamples={} researchOutcomes={}",
+            "DuckDB analytics opened size={}MiB aggregateBars={} researchSamples={} researchOutcomes={}",
             stats.databaseBytes / 1_048_576L, stats.aggregateBars, stats.researchSamples, stats.researchOutcomes) }
     }
 
@@ -177,8 +176,11 @@ class AnalyticsRepository(
 
     fun downsideSafetyCalibration(european: Boolean): DownsideSafetyCalibration =
         locked {
-            duckAnalytics.synchronizeRecentResearch(connection)
-            duckAnalytics.downsideSafetyCalibration(european)
+            if (duckAnalytics.stats().researchOutcomes > 0L) {
+                duckAnalytics.downsideSafetyCalibration(european)
+            } else {
+                DownsideSafetyStore(connection).calibration(european)
+            }
         }
 
     fun walkForwardResearchReport(horizonMinutes: Int = 10, frictionPercent: Double = 0.20): WalkForwardResearchReport =
@@ -212,7 +214,27 @@ class AnalyticsRepository(
     }
 
     fun loadAggregatedBars(symbol: String, resolutionMinutes: Int, fromEpoch: Long): List<AggregatedBar> = locked {
-        duckAnalytics.loadAggregatedBars(symbol, resolutionMinutes, fromEpoch)
+        duckAnalytics.loadAggregatedBars(symbol, resolutionMinutes, fromEpoch).ifEmpty {
+            loadAggregatedBarsFromSqlite(symbol, resolutionMinutes, fromEpoch)
+        }
+    }
+
+    private fun loadAggregatedBarsFromSqlite(
+        symbol: String,
+        resolutionMinutes: Int,
+        fromEpoch: Long
+    ): List<AggregatedBar> = connection.prepareStatement("""SELECT bucket_epoch, open, high, low, close, volume
+        FROM aggregate_bars WHERE symbol=? AND resolution_minutes=? AND bucket_epoch>=?
+        ORDER BY bucket_epoch""").use { statement ->
+        statement.setString(1, symbol.uppercase())
+        statement.setInt(2, resolutionMinutes)
+        statement.setLong(3, fromEpoch)
+        statement.executeQuery().use { rows -> buildList {
+            while (rows.next()) add(AggregatedBar(
+                symbol.uppercase(), resolutionMinutes, rows.getLong(1), rows.getDouble(2), rows.getDouble(3),
+                rows.getDouble(4), rows.getDouble(5), rows.getDouble(6)
+            ))
+        } }
     }
 
     fun loadLatestPublishedResults(limit: Int): List<ScanResult> = locked {
