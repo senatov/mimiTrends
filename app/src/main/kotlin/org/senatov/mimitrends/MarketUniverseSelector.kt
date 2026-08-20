@@ -7,9 +7,11 @@ import org.senatov.mimitrends.model.ScannerCriteria
 internal object MarketUniverseSelector {
     fun select(criteria: ScannerCriteria): List<String> = criteria.symbols.filterNot(
         FinancialTransactionTaxExclusions::contains
-    ).filter { symbol ->
+    ).filter { symbol -> includes(symbol, criteria.marketRegion) }
+
+    fun includes(symbol: String, region: MarketRegion): Boolean {
         val european = symbol.contains('.')
-        when (criteria.marketRegion) {
+        return when (region) {
             MarketRegion.BOTH -> true
             MarketRegion.US -> !european
             MarketRegion.EUROPE -> european

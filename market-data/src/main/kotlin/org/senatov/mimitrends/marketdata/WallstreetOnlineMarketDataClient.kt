@@ -36,8 +36,10 @@ class WallstreetOnlineMarketDataClient(
         .build()
 ) {
     fun loadMovers(): List<WallstreetOnlineMover> = MOVER_PATHS.flatMap { path ->
-        parseMovers(send("$BASE_URL$path")).take(DISCOVERY_RESULTS_PER_PAGE)
+        parseMovers(send("$BASE_URL$path"))
     }.distinctBy(WallstreetOnlineMover::path)
+        .sortedByDescending(WallstreetOnlineMover::changePercent)
+        .take(DISCOVERY_RESULT_LIMIT)
 
     fun loadQuote(path: String): WallstreetOnlineQuote {
         require(DETAIL_PATH.matches(path)) { "Invalid wallstreetONLINE instrument path" }
@@ -147,7 +149,7 @@ class WallstreetOnlineMarketDataClient(
         const val MAX_MOVERS_PER_PAGE = 50
         const val FUTURE_TOLERANCE_MILLIS = 5 * 60_000L
         val QUOTE_ZONE: ZoneId = ZoneId.of("Europe/Berlin")
-        const val DISCOVERY_RESULTS_PER_PAGE = 20
+        const val DISCOVERY_RESULT_LIMIT = 30
         val MOVER_PATHS = listOf(
             "/statistik/top-aktien-performance",
             "/statistik/top-aktien-meistgehandelt"

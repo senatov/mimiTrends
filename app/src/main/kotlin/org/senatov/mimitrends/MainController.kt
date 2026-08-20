@@ -44,11 +44,12 @@ class MainController(private val apiKey: String?, initialSymbol: String = "AAPL"
     private val status = MainStatusController(requestStatus, trendChart, refreshButton, log)
     private val scannerEngine = ScannerEngine()
     private val yahooFinance = YahooFinanceClient()
-    private val dynamicUniverse = DynamicMarketUniverse()
+    private val wallstreetOnlineClient = WallstreetOnlineMarketDataClient()
+    private val wallstreetOnlineDiscovery = WallstreetOnlineDiscoveryService(wallstreetOnlineClient, yahooFinance)
+    private val dynamicUniverse = DynamicMarketUniverse(wallstreetOnlineDiscovery::discover)
     private var profileService = CompanyProfileService(
         repository, apiKey?.let(::FinnhubProfileClient), CompanyLogoClient()
     )
-    private val wallstreetOnlineClient = WallstreetOnlineMarketDataClient()
     private val stockPageOpener = StockPageOpener(
         repository, wallstreetOnlineClient, { scannerCriteria.stockSearchUrl }, openExternal,
         { message, error, details -> status.update(message, error, details) },

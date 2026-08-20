@@ -6,6 +6,19 @@ import java.time.LocalDate
 import java.time.ZoneId
 
 class WallstreetOnlineMarketDataClientTest {
+    @Test fun `parses movers in document order before discovery ranks by performance`() {
+        val html = """
+            <table>
+              <tr><td><a href='/aktien/slow-aktie'>Slow AG</a></td><td data-push='x;t'>10,00</td><td class='drel right'><span class='font green'>+1,00</span></td></tr>
+              <tr><td><a href='/aktien/fast-aktie'>Fast AG</a></td><td data-push='x;t'>20,00</td><td class='drel right'><span class='font green'>+5,00</span></td></tr>
+            </table>
+        """.trimIndent()
+
+        val movers = client.parseMovers(html).sortedByDescending(WallstreetOnlineMover::changePercent)
+
+        assertEquals(listOf("Fast AG", "Slow AG"), movers.map(WallstreetOnlineMover::name))
+    }
+
     private val client = WallstreetOnlineMarketDataClient()
 
     @Test fun `accepts only a resolved wallstreet online stock page`() {

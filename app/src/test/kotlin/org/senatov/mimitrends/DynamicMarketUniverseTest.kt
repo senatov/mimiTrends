@@ -23,4 +23,14 @@ class DynamicMarketUniverseTest {
 
         assertEquals(listOf("AIR.PA", "STMPA.PA", "STLAP.PA"), selection.symbols)
     }
+
+    @Test
+    fun `adds current external movers to every selected universe`() {
+        val selection = DynamicMarketUniverse { listOf("MU", "SRT3.DE", "MU") }.select(
+            ScannerCriteria(symbols = listOf("AAPL"))
+        )
+
+        assertEquals(listOf("AAPL", "MU", "SRT3.DE"), selection.symbols)
+        assertEquals(listOf("MU", "SRT3.DE"), selection.discovered)
+    }
 }
