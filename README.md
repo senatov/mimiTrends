@@ -149,6 +149,9 @@ The primary question is not “What did this stock do over the last year?” but
 ## What the application does
 
 - scans US, European, or combined watchlists;
+- refreshes the first HTML page of wallstreetONLINE's performance and most-traded tables before every
+  scan, merges duplicate instruments, sorts the combined discovery set by percentage performance, and
+  evaluates the leading 30 resolvable equities through the same scanner as the configured watchlist;
 - detects fresh upward and downward one-minute impulses;
 - requires an exceptional price move or candle range, not volume alone;
 - confirms candidates using candle structure, relative volume, log-volume anomaly, or immediate continuation;
@@ -170,6 +173,10 @@ The primary question is not “What did this stock do over the last year?” but
 - pauses scanning while every selected market is closed and resumes after the earliest next opening;
 - displays quote age in the leading `Delay` column and sorts it numerically, distinguishing current
   observations from stale ones without hiding delayed-but-useful European candidates;
+- marks statistically repeating two- or three-minute price paths with a bright-red `↻` indicator beside
+  the company name; the tooltip reports the measured cycle strength;
+- shortens displayed company names and copied `Search Words` by removing trailing legal forms,
+  punctuation, share-class labels, and leading or trailing `The`;
 - provides a signal-focused chart with a consistently styled full-history fallback;
 - imports completed transactions from compatible broker CSV files and outlines each matching trade interval on the
   chart with a translucent orange highlighter-style frame, a draggable rounded explanation card,
@@ -186,7 +193,7 @@ automatically. A rapid opposite V-reversal updates the same visible episode inst
 | Column | Meaning |
 | --- | --- |
 | Delay | Age of the latest provider observation. It is numeric and sortable; the icon distinguishes a current quote from a stale one. |
-| Symbol | Instrument identity and cached company profile. The context menu copies either the ticker or a short search-friendly company name. |
+| Symbol | Instrument identity and cleaned cached company name. A bright-red `↻` marks a statistically repeating two- or three-minute price cycle; its tooltip shows cycle strength. The context menu copies either the ticker or the same short search-friendly company name. |
 | Pattern | Detected fresh impulse, relaxed impulse, or persistent trend. A bracketed value such as `[40%]` is the watch-priority score derived from structure, anomaly strength, entry timing, freshness, volume, and available outcomes. It is a ranking aid, not a predicted return or recommendation. |
 | Move 10m | Signed price change over the latest ten-minute display window. |
 | Price | Latest completed locally available price in the selected display currency. |
@@ -281,9 +288,13 @@ All user-facing thresholds can be adjusted in Settings.
 European coverage is corrected by independent provider adapters rather than by overwriting the Yahoo series.
 Tradegate and Euronext can be enabled and paced in Settings. The table-result refresher additionally uses
 Lang & Schwarz for resolvable ISINs or WKNs. Lang & Schwarz reads its Europe and Euro Stoxx tables in one
-bounded pass. wallstreetONLINE is a low-priority crawler for the public top/flop performance pages: it opens
-at most five matching instrument pages per pass and accepts a quote only when its ISIN matches the canonical
-instrument ISIN. The site's disallowed stock-search RPC is not used.
+bounded pass. Before every normal scan, wallstreetONLINE discovery reads only the first HTML page of the
+public top-performance and most-traded tables. It merges duplicate paths, sorts the combined set by reported
+percentage performance, keeps the first 30 rows, resolves their equity tickers, and adds them to that scan's
+market universe. This is candidate discovery, not an endorsement and not a replacement for the normal signal
+quality gates. Separately, the low-priority quote crawler opens at most five matching instrument pages per
+pass and accepts a quote only when its ISIN matches the canonical instrument ISIN. The site's disallowed
+stock-search RPC is not used.
 
 Every provider observation is stored in its own series with provider, identifier, MIC, currency, and original
 observation time. A quote without an unambiguous provider timestamp is rejected. Newer observations can extend
@@ -312,6 +323,15 @@ price repeatedly alternates direction. A candidate that remains inside that esta
 rejected. A close beyond the range with a small confirmation buffer is retained as a possible breakout. This
 prevents ordinary oscillation around a mean from being promoted while preserving genuine exits from
 consolidation.
+
+### Repeating short price cycles
+
+The latest 12–24 completed minute bars are also checked for bounded paths that repeat after two or three
+minutes. The detector requires at least five direction changes, low net displacement relative to the travelled
+price path, and autocorrelation of at least `0.72` at lag two or three. A directional rise therefore does not
+qualify merely because adjacent returns are similar. Detected cycles remain candidates for inspection but are
+marked with a bright-red `↻` beside the company name; the marker describes observed structure and is not a
+prediction that the next phase will repeat.
 
 ### Composite score
 
@@ -443,8 +463,9 @@ available, the existing walk-forward beta calibration remains the automatic fall
 
 ### Scan rotation and source diagnostics
 
-The default universe contains 256 instruments: 160 US and 96 European equities. Open-market scans alternate
-US and European symbols and rotate their starting positions between cycles, so the tail of a static list does
+The configured universe is supplemented on every pass by up to 30 resolvable leaders from the first
+wallstreetONLINE performance/most-traded HTML pages. Open-market scans alternate US and European symbols and
+rotate their starting positions between cycles, so the tail of a static or discovered list does
 not systematically receive the oldest evaluation. Recently active candidates remain at the front for three
 full cycles and also retain the dedicated one-minute priority refresh.
 
@@ -676,8 +697,9 @@ The script requires Xcode Command Line Tools and a `Developer ID Application` ce
 login Keychain. It automatically selects the first matching certificate, signs the application and
 embedded native libraries, builds the DMG, notarizes it with Apple, staples and validates the ticket,
 and prints its location and SHA-256 hash.
-Before every DMG attempt it atomically increments the application patch version in
-`gradle.properties`. Decimal carry is intentional: `1.0.9` becomes `1.1.0`. The same value is then
+Before every DMG attempt it atomically increments the three-digit application patch version in
+`gradle.properties`. Patch values run from `000` through `099`; decimal carry is intentional:
+`2.65.099` becomes `2.66.000`. The same value is then
 used for the title bar, About dialog, JAR manifest, generated build metadata, package metadata, and
 DMG filename.
 Use an explicit identity when more than one suitable certificate is installed:

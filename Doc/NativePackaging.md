@@ -77,7 +77,8 @@ app/build/distributions/native/macos/MiMiTrends-<version>.dmg
 ```
 
 The wrapper increments `appVersion` in `gradle.properties` before every DMG attempt and passes that
-exact version to Gradle. Version components carry at ten (`1.0.9` becomes `1.1.0`). The application
+exact version to Gradle. The patch component is always written with three digits and runs from `000`
+through `099`; `2.65.099` therefore becomes `2.66.000`. The application
 label, About dialog, generated build information, JAR manifest, `jpackage` metadata, and DMG filename
 therefore use one value. Calling the DMG Gradle task without the wrapper is rejected, preventing a
 package from being created without its required version increment.
@@ -124,7 +125,7 @@ app/build/distributions/native/linux/
 ## Versions and secrets
 
 The repository stores one three-component `appVersion` in `gradle.properties`. DMG builds advance
-the patch digit automatically, carrying into minor and major digits as necessary. Build IDs remain
+the three-digit patch automatically and carry `099` into the next minor version. Build IDs remain
 independently generated and appear alongside the application version in the title bar and About dialog.
 
 Certificates, Apple passwords, API private keys, and notarization profiles are never stored in the repository. Pass only identity names or environment variables to Gradle.
