@@ -30,7 +30,7 @@ work_dir="$(mktemp -d "${TMPDIR:-/tmp}/mimitrends-dmg-verify.XXXXXX")"
 typeset -i verified_count=0
 for jar_file in "$app"/Contents/app/*.jar(N); do
   jar_entries="$(unzip -Z1 "$jar_file")"
-  grep -Eq '\.(dylib|jnilib)$' <<< "$jar_entries" || continue
+  grep -Eq '\.(dylib|jnilib)$|\.so(_[^/]*)?$' <<< "$jar_entries" || continue
   jar_dir="$work_dir/${jar_file:t:r}"
   mkdir -p "$jar_dir"
   unzip -qq "$jar_file" -d "$jar_dir"
@@ -45,7 +45,7 @@ for jar_file in "$app"/Contents/app/*.jar(N); do
       print -u2 "Missing secure timestamp: $native_file"; exit 1
     }
     verified_count+=1
-  done < <(find "$jar_dir" -type f \( -name '*.dylib' -o -name '*.jnilib' \) -print0)
+  done < <(find "$jar_dir" -type f \( -name '*.dylib' -o -name '*.jnilib' -o -name '*.so' -o -name '*.so_*' \) -print0)
 done
 
 (( verified_count > 0 )) || { print -u2 "No embedded Mach-O libraries were verified"; exit 1; }

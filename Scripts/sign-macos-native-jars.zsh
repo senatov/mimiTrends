@@ -19,7 +19,7 @@ typeset -i signed_count=0
 typeset -i jar_count=0
 for jar_file in "$input_dir"/*.jar(N); do
   jar_entries="$(unzip -Z1 "$jar_file")"
-  grep -Eq '\.(dylib|jnilib)$' <<< "$jar_entries" || continue
+  grep -Eq '\.(dylib|jnilib)$|\.so(_[^/]*)?$' <<< "$jar_entries" || continue
   work_dir="$(mktemp -d "${TMPDIR:-/tmp}/mimitrends-native-jar.XXXXXX")"
   unzip -qq "$jar_file" -d "$work_dir"
   jar_signed=false
@@ -29,7 +29,7 @@ for jar_file in "$input_dir"/*.jar(N); do
     codesign --verify --strict --verbose=2 "$native_file"
     signed_count+=1
     jar_signed=true
-  done < <(find "$work_dir" -type f \( -name '*.dylib' -o -name '*.jnilib' \) -print0)
+  done < <(find "$work_dir" -type f \( -name '*.dylib' -o -name '*.jnilib' -o -name '*.so' -o -name '*.so_*' \) -print0)
   if $jar_signed; then
     rm -f "$jar_file"
     (cd "$work_dir" && zip -q -r -X "$jar_file" .)

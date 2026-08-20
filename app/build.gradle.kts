@@ -290,7 +290,11 @@ val submitMacNotarization = tasks.register<Exec>("submitMacNotarization") {
         check(dmg.isFile) { "Signed DMG was not created: $dmg" }
         check(authentication.isNotEmpty()) { "Set APPLE_NOTARY_PROFILE, or APPLE_NOTARY_KEY_FILE + APPLE_NOTARY_KEY_ID + APPLE_NOTARY_ISSUER_ID" }
     }
-    commandLine(listOf("xcrun", "notarytool", "submit", dmg.absolutePath, "--wait") + authentication)
+    commandLine(listOf(
+        "zsh",
+        rootProject.file("Scripts/notarize-macos-dmg.zsh").absolutePath,
+        dmg.absolutePath
+    ) + authentication)
 }
 
 val stapleMacDmg = tasks.register<Exec>("stapleMacDmg") {
