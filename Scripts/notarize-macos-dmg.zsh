@@ -12,11 +12,11 @@ cleanup() { rm -f "$result_file"; }
 trap cleanup EXIT INT TERM
 
 xcrun notarytool submit "$dmg_file" --wait --output-format json "$@" | tee "$result_file"
-status="$(plutil -extract status raw -o - "$result_file")"
+notary_status="$(plutil -extract status raw -o - "$result_file")"
 submission_id="$(plutil -extract id raw -o - "$result_file")"
 
-if [[ "$status" != "Accepted" ]]; then
-  print -u2 "Apple notarization rejected ${dmg_file:t}: status=$status submission=$submission_id"
+if [[ "$notary_status" != "Accepted" ]]; then
+  print -u2 "Apple notarization rejected ${dmg_file:t}: status=$notary_status submission=$submission_id"
   xcrun notarytool log "$submission_id" "$@" || true
   exit 1
 fi
