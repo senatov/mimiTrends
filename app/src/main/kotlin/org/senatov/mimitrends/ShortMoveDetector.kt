@@ -15,7 +15,12 @@ internal data class ShortMove(
     val trendScore: Int? = null,
     val trendConfidence: Int = 0,
     val trendLabel: String = "",
-    val trendDetails: String = ""
+    val trendDetails: String = "",
+    val entryQualityScore: Int = -1,
+    val entryQualityConfidence: Int = 0,
+    val entryQualityLabel: String = "Unavailable",
+    val entryCooldownMinutes: Int = 0,
+    val entryQualityDetails: String = ""
 )
 
 internal enum class ShortMovePattern {

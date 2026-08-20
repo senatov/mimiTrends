@@ -4,6 +4,7 @@ import org.senatov.mimitrends.db.MarketRepository
 import org.senatov.mimitrends.db.AnalyticsRepository
 import org.senatov.mimitrends.model.MinuteBar
 import org.senatov.mimitrends.model.ProviderMinuteBar
+import org.senatov.mimitrends.scanner.ResearchFeatureExtractor
 
 internal class ShortMoveLoader(
     private val repository: MarketRepository,
@@ -32,12 +33,30 @@ internal class ShortMoveLoader(
             val trendPrices = if (aggregatePrices.distinctBy { it.epochSeconds / 86_400L }.size >= 4) {
                 aggregatePrices
             } else recentPrices
-            val assessment = MultiHorizonTrendModel.assess(trendPrices)
-            if (assessment == null) move else move.copy(
-                trendScore = assessment.score,
-                trendConfidence = assessment.confidence,
-                trendLabel = assessment.label,
-                trendDetails = assessment.details
+            val trend = MultiHorizonTrendModel.assess(trendPrices)
+            val features = ResearchFeatureExtractor.extract(bars[move.symbol].orEmpty())
+            val quote = repository.loadLatestProviderQuote(move.symbol, (nowEpochSeconds - 120L) * 1_000L)
+            val entry = features?.let { extracted -> EntryQualityModel.assess(EntryQualityInput(
+                price = move.close,
+                bid = quote?.bid ?: Double.NaN,
+                ask = quote?.ask ?: Double.NaN,
+                return1mPercent = extracted.return1mPercent,
+                return3mPercent = extracted.return3mPercent,
+                return5mPercent = extracted.return5mPercent,
+                volatility30mPercent = extracted.realizedVolatility30m,
+                vwapDistancePercent = extracted.vwapDistancePercent,
+                sessionHighDistancePercent = extracted.sessionHighDistancePercent
+            )) }
+            move.copy(
+                trendScore = trend?.score,
+                trendConfidence = trend?.confidence ?: 0,
+                trendLabel = trend?.label.orEmpty(),
+                trendDetails = trend?.details.orEmpty(),
+                entryQualityScore = entry?.score ?: -1,
+                entryQualityConfidence = entry?.confidence ?: 0,
+                entryQualityLabel = entry?.label ?: "Unavailable",
+                entryCooldownMinutes = entry?.cooldownMinutes ?: 0,
+                entryQualityDetails = entry?.details.orEmpty()
             )
         }
         val companyName = { symbol: String -> repository.loadCompanyProfile(symbol)?.name }

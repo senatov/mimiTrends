@@ -187,7 +187,12 @@ data class ScanResult(
     val executableQuoteAtMillis: Long = 0L,
     val recentThreeMinutePercent: Double = Double.NaN,
     val recentFiveMinutePercent: Double = Double.NaN,
-    val recentDirectionChanges: Int = 0
+    val recentDirectionChanges: Int = 0,
+    val entryQualityScore: Int = -1,
+    val entryQualityConfidence: Int = 0,
+    val entryQualityLabel: String = "Unavailable",
+    val entryCooldownMinutes: Int = 0,
+    val entryQualityDetails: String = "Entry-quality inputs are unavailable."
 )
 
 data class CompanyProfile(

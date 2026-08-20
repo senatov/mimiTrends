@@ -124,7 +124,10 @@ class MainController(private val apiKey: String?, initialSymbol: String = "AAPL"
         { symbol -> marketData.loadPriorityResult(symbol, scannerCriteria) },
         { symbol, result ->
             val retained = recentEvents.priorityUpdate(symbol, result, System.currentTimeMillis())
-            Platform.runLater { scannerPanel.applyPriorityResult(symbol, retained) }
+            Platform.runLater {
+                scannerPanel.applyPriorityResult(symbol, retained)
+                moderateCandidatePanel.setAnomalyPresent(symbol, retained != null)
+            }
         }
     )
     private val focusedSignals = FocusedSignalController(
@@ -183,6 +186,7 @@ class MainController(private val apiKey: String?, initialSymbol: String = "AAPL"
             )
             Platform.runLater {
                 scannerPanel.showSnapshot(saved, scannerCriteria.resultLimit)
+                moderateCandidatePanel.setAnomalySymbols(saved.map(ScanResult::symbol))
             }
             detectedToday.refreshCount()
         }
@@ -263,6 +267,7 @@ class MainController(private val apiKey: String?, initialSymbol: String = "AAPL"
                     scannerPanel.beginScan(1, 1, emptyList())
                     saved.forEach(scannerPanel::update)
                     scannerPanel.completeScan(criteria.resultLimit)
+                    moderateCandidatePanel.setAnomalySymbols(saved.map(ScanResult::symbol))
                     scannerPanel.showCountdown(resumeDelaySeconds)
                     scannerPanel.showMarketClosed(saved.size, persisted.isNotEmpty(), resumeText,
                         localZoneName, marketHours, brokerHours)
@@ -310,6 +315,7 @@ class MainController(private val apiKey: String?, initialSymbol: String = "AAPL"
                 if (generation != scanGeneration.get()) return@runLater
                 shortMovePanel.show(shortMoves)
                 moderateCandidatePanel.show(shortMoves)
+                moderateCandidatePanel.setAnomalySymbols(displayed.map(ScanResult::symbol))
                 if (active.isEmpty() && errors.size == symbols.size && symbols.isNotEmpty()) {
                     scannerPanel.abortScan()
                     status.update("Yahoo scan produced no data; previous table retained", true, errors.joinToString("\n"))

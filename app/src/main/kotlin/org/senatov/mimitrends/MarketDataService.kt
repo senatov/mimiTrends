@@ -123,21 +123,24 @@ internal class MarketDataService(
             return ScanEvaluation(null, emptyList(), "ANALYSIS_BEHIND_QUOTE", sourceStatus = merged.latestSource.name,
                 latestDataEpochSeconds = merged.latestAnalysisEpochSeconds)
         }
-        val primary = scannerEngine.evaluate(symbol, merged.analysisBars, criteria)
-            ?.forPresentation(merged, effectiveStatus)?.withRecentDynamics(merged.analysisBars)?.withExecutableQuote(now)
-        val fallback = if (primary != null) emptyList() else RELAXATION_LEVELS.map { factor ->
-            scannerEngine.evaluateFallback(symbol, merged.analysisBars, criteria, factor)
-                ?.forPresentation(merged, effectiveStatus)?.withRecentDynamics(merged.analysisBars)?.withExecutableQuote(now)
+        val researchFeatures = ResearchFeatureExtractor.extract(merged.analysisBars)
+        val prepare: (ScanResult) -> ScanResult = { result ->
+            result.forPresentation(merged, effectiveStatus)
+                .withRecentDynamics(merged.analysisBars)
+                .withExecutableQuote(now)
+                .withEntryQuality(researchFeatures)
         }
-        val longTerm = scannerEngine.evaluateLongTerm(symbol, merged.analysisBars, criteria)
-            ?.forPresentation(merged, effectiveStatus)?.withRecentDynamics(merged.analysisBars)?.withExecutableQuote(now)
-        val context = scannerEngine.evaluateContext(symbol, merged.analysisBars, criteria)
-            ?.forPresentation(merged, effectiveStatus)?.withRecentDynamics(merged.analysisBars)?.withExecutableQuote(now)
+        val primary = scannerEngine.evaluate(symbol, merged.analysisBars, criteria)?.let(prepare)
+        val fallback = if (primary != null) emptyList() else RELAXATION_LEVELS.map { factor ->
+            scannerEngine.evaluateFallback(symbol, merged.analysisBars, criteria, factor)?.let(prepare)
+        }
+        val longTerm = scannerEngine.evaluateLongTerm(symbol, merged.analysisBars, criteria)?.let(prepare)
+        val context = scannerEngine.evaluateContext(symbol, merged.analysisBars, criteria)?.let(prepare)
         val rejectionReason = if (primary == null && fallback.none { it != null } && longTerm == null && context == null) {
             scannerEngine.rejectionReason(merged.analysisBars)
         } else null
         return ScanEvaluation(primary, fallback, rejectionReason, longTerm,
-            ResearchFeatureExtractor.extract(merged.analysisBars), merged.latestSource.name,
+            researchFeatures, merged.latestSource.name,
             merged.latestAnalysisEpochSeconds, context)
     }
 
@@ -187,6 +190,18 @@ internal class MarketDataService(
     }
 
     private fun ScanResult.withRecentDynamics(bars: List<MinuteBar>): ScanResult = RecentPriceDynamics.apply(this, bars)
+
+    private fun ScanResult.withEntryQuality(features: ResearchFeatures?): ScanResult {
+        if (features == null) return this
+        val assessment = EntryQualityModel.assess(EntryQualityModel.input(this, features))
+        return copy(
+            entryQualityScore = assessment.score,
+            entryQualityConfidence = assessment.confidence,
+            entryQualityLabel = assessment.label,
+            entryCooldownMinutes = assessment.cooldownMinutes,
+            entryQualityDetails = assessment.details
+        )
+    }
 
     private companion object {
         val RELAXATION_LEVELS = listOf(0.85, 0.70, 0.55)

@@ -68,6 +68,11 @@ internal object WatchScorePresentation {
             value = value.coerceAtMost(29)
         }
         if (result.signalSource.contains("context", true)) value = value.coerceAtMost(49)
+        if (result.entryQualityScore >= 0 && result.entryQualityConfidence >= 43) {
+            if (result.entryCooldownMinutes > 0 || result.entryQualityScore < 35) value = value.coerceAtMost(29)
+            else if (result.entryQualityScore < 52) value = value.coerceAtMost(49)
+            else if (result.entryQualityScore < 72) value = value.coerceAtMost(59)
+        }
 
         val color = when {
             value >= 80 -> "#075f3b"
@@ -144,7 +149,18 @@ internal object WatchScorePresentation {
             components.timing * 100, components.volume * 100, components.outcome * 100
         ) + "Volume confirmed: ${if (volumeConfirmed) "yes" else "no"} · representative outcomes: " +
         (if (outcomeConfirmed) "yes" else "no") + " · executable spread: " +
-        (spreadPercent?.let { "%.2f%%".format(it) } ?: "unavailable") + recentDynamicsText(result)
+        (spreadPercent?.let { "%.2f%%".format(it) } ?: "unavailable") + recentDynamicsText(result) +
+        entryQualityText(result)
+
+    private fun entryQualityText(result: ScanResult): String {
+        if (result.entryQualityScore < 0) return ""
+        val cooldown = if (result.entryCooldownMinutes > 0) {
+            " · cooldown ${result.entryCooldownMinutes}m"
+        } else {
+            ""
+        }
+        return "\nEntry quality: ${result.entryQualityScore}% · ${result.entryQualityLabel}$cooldown"
+    }
 
     private fun recentDynamicsText(result: ScanResult): String {
         val three = result.recentThreeMinutePercent.takeIf(Double::isFinite)?.let { "%+.2f%%".format(it) } ?: "n/a"

@@ -6,6 +6,19 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class SignalMetricPresentationTest {
+    @Test fun `entry quality presents a separate pullback decision`() {
+        val metric = SignalMetricPresentation.entryQuality(TestScanResult.create().copy(
+            entryQualityScore = 31,
+            entryQualityConfidence = 86,
+            entryQualityLabel = "Wait for pullback",
+            entryCooldownMinutes = 5,
+            entryQualityDetails = "cooldown 5m"
+        ))
+
+        assertEquals("31% · Wait", metric.label)
+        assertTrue(metric.details.contains("Wait for pullback"))
+    }
+
     @Test fun `shows validated model metadata instead of beta interval`() {
         val result = TestScanResult.create().copy(
             continuationProbability = 0.64,

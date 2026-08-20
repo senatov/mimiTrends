@@ -5,6 +5,24 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 class WatchScorePresentationTest {
+    @Test fun `poor entry quality prevents a buy despite a positive signal`() {
+        val score = WatchScorePresentation.calculate(
+            TestScanResult.create(anomalyScore = 6.0, signalSource = "Steady rise ↑").copy(
+                relativeVolume = 3.0,
+                bidPrice = 100.0,
+                askPrice = 100.03,
+                entryQualityScore = 28,
+                entryQualityConfidence = 100,
+                entryQualityLabel = "Wait for pullback",
+                entryCooldownMinutes = 6
+            )
+        )
+
+        assertTrue(score.value <= 29)
+        assertTrue(score.label.endsWith("(avoid)"))
+        assertTrue(score.details.contains("Entry quality: 28%"))
+    }
+
     @Test fun `formats a precise readiness percentage before the category`() {
         val score = WatchScorePresentation.calculate(TestScanResult.create())
 

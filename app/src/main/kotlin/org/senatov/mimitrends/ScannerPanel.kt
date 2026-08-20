@@ -128,6 +128,9 @@ class ScannerPanel(
         val freshness = columnFactory.freshness()
         val symbol = columnFactory.symbol()
         val signal = columnFactory.pattern()
+        val entryQuality = columnFactory.metric(
+            "Entry quality", SignalMetricPresentation::entryQualitySeverity, SignalMetricPresentation::entryQuality
+        )
         val move = columnFactory.number("Move 10m", ScanResult::windowChangePercent, ::percent)
         val price = columnFactory.number("Price", { convertPrice(it.symbol, it.price) }) { "${currency.symbol}%,.2f".format(it) }
         val scoreColumn = columnFactory.metric("Anomaly", ScanResult::anomalyScore, SignalMetricPresentation::strength)
@@ -139,8 +142,8 @@ class ScannerPanel(
         }
         val turnover = columnFactory.number("Turnover", { convertPrice(it.symbol, it.sessionTurnover) }, ::compactMoney)
         val updated = columnFactory.updated { time.format(Instant.ofEpochMilli(it)) }
-        listOf(freshness, symbol, signal, move, price, scoreColumn, outcome, priceAction, volume, age, turnover, updated)
-            .zip(listOf("delay", "company", "pattern", "move", "price", "anomaly", "outcome", "price_action",
+        listOf(freshness, symbol, signal, entryQuality, move, price, scoreColumn, outcome, priceAction, volume, age, turnover, updated)
+            .zip(listOf("delay", "company", "pattern", "entry_quality", "move", "price", "anomaly", "outcome", "price_action",
                 "volume", "age", "turnover", "updated"))
             .forEach { (column, id) -> column.id = id }
         columnLayout = TableColumnLayout(table, savedColumns).also(TableColumnLayout<ScanResult>::install)
@@ -148,6 +151,7 @@ class ScannerPanel(
             TableColumnAutoFitter.Spec(freshness, { FeedFreshness.ageLabel(it.updatedAtMillis) }, 68.0, 96.0),
             TableColumnAutoFitter.Spec(symbol, columnFactory::companyName, 145.0, 360.0, flexible = true, reserveWidth = 32.0),
             TableColumnAutoFitter.Spec(signal, { WatchScorePresentation.calculate(it).label }, 76.0, 110.0),
+            TableColumnAutoFitter.Spec(entryQuality, { SignalMetricPresentation.entryQuality(it).label }, 82.0, 118.0),
             TableColumnAutoFitter.Spec(move, { percent(it.windowChangePercent) }, 62.0, 105.0, reserveWidth = 4.0),
             TableColumnAutoFitter.Spec(price, { "${currency.symbol}%,.2f".format(convertPrice(it.symbol, it.price)) }, 62.0, 110.0, reserveWidth = 4.0),
             TableColumnAutoFitter.Spec(scoreColumn, { SignalMetricPresentation.strength(it).label }, 68.0, 115.0),

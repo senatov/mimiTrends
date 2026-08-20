@@ -19,6 +19,8 @@ internal class ModerateCandidatePanel(
     private val names = ConcurrentHashMap<String, String>()
     private val candidates = VBox(4.0)
     private var displayed = emptyList<ShortMove>()
+    private var recentSymbols = emptySet<String>()
+    private val anomalySymbols = linkedSetOf<String>()
 
     init {
         children.setAll(
@@ -33,9 +35,21 @@ internal class ModerateCandidatePanel(
     }
 
     fun show(moves: Collection<ShortMove>) {
+        recentSymbols = moves.take(RECENT_TABLE_LIMIT).mapTo(linkedSetOf(), ShortMove::symbol)
         displayed = ModeratePositiveCandidateSelector.select(moves.toList()).take(MAX_CANDIDATES)
         render()
         displayed.forEach(::requestName)
+    }
+
+    fun setAnomalySymbols(symbols: Collection<String>) {
+        anomalySymbols.clear()
+        symbols.mapTo(anomalySymbols, String::uppercase)
+        render()
+    }
+
+    fun setAnomalyPresent(symbol: String, present: Boolean) {
+        if (present) anomalySymbols += symbol.uppercase() else anomalySymbols -= symbol.uppercase()
+        render()
     }
 
     private fun render() {
@@ -49,6 +63,22 @@ internal class ModerateCandidatePanel(
             styleClass += "positive-watch-company"
             maxWidth = Double.MAX_VALUE
         }
+        val confirmations = 1 + (if (move.symbol in recentSymbols) 1 else 0) +
+            (if (move.symbol in anomalySymbols) 1 else 0)
+        val confirmation = Label("$confirmations/3 confirmed").apply {
+            styleClass += "positive-watch-confirmation"
+        }
+        val entry = Label(
+            if (move.entryQualityScore >= 0) {
+                "Entry ${move.entryQualityScore}% · ${move.entryQualityLabel}"
+            } else {
+                "Entry quality unavailable"
+            }
+        ).apply {
+            styleClass += "positive-watch-entry-quality"
+            if (move.entryQualityDetails.isNotBlank()) tooltip = Tooltip(move.entryQualityDetails)
+        }
+        val identity = VBox(1.0, company, confirmation, entry)
         val spacer = Region().also { HBox.setHgrow(it, Priority.ALWAYS) }
         val score = Label("${ModeratePositiveCandidateSelector.positivityPercent(move)}%").apply {
             styleClass += "positive-watch-score"
@@ -61,7 +91,7 @@ internal class ModerateCandidatePanel(
                     "Trend score, not a profit forecast."
             )
         }
-        return HBox(7.0, company, spacer, score).apply {
+        return HBox(7.0, identity, spacer, score).apply {
             alignment = Pos.CENTER_LEFT
             styleClass += "positive-watch-row"
             setOnMouseClicked { event ->
@@ -82,5 +112,6 @@ internal class ModerateCandidatePanel(
 
     private companion object {
         const val MAX_CANDIDATES = 7
+        const val RECENT_TABLE_LIMIT = 10
     }
 }

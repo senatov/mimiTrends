@@ -393,6 +393,16 @@
 }
 .positive-watch-row:hover { -fx-background-color: rgba(217,229,242,0.96); -fx-border-color: #7890aa; }
 .positive-watch-company { -fx-font-size: 12px; -fx-font-weight: 600; -fx-text-fill: #17365f; }
+.positive-watch-confirmation {
+    -fx-font-size: 9px;
+    -fx-font-weight: 400;
+    -fx-text-fill: #708398;
+}
+.positive-watch-entry-quality {
+    -fx-font-size: 9px;
+    -fx-font-weight: 600;
+    -fx-text-fill: #8a5a12;
+}
 .positive-watch-score {
     -fx-font-family: "SF Pro Text", "Helvetica Neue", "System";
     -fx-font-size: 13px;

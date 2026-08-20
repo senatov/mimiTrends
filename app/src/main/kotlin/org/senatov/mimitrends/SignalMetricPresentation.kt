@@ -10,16 +10,36 @@ internal data class SignalMetric(
 )
 
 internal object SignalMetricPresentation {
+    fun entryQuality(result: ScanResult): SignalMetric {
+        if (result.entryQualityScore < 0) return SignalMetric(
+            "—", "#52606d", 400, "Entry-quality inputs are unavailable for this result."
+        )
+        val color = when {
+            result.entryQualityScore >= 72 -> "#137b50"
+            result.entryQualityScore >= 52 -> "#9a6717"
+            else -> "#b23b48"
+        }
+        val shortLabel = when {
+            result.entryQualityConfidence < 43 -> "Limited"
+            result.entryCooldownMinutes > 0 -> "Wait"
+            result.entryQualityScore >= 72 -> "Good"
+            result.entryQualityScore >= 52 -> "Fair"
+            else -> "Poor"
+        }
+        return SignalMetric(
+            "${result.entryQualityScore}% · $shortLabel",
+            color,
+            if (result.entryQualityScore < 52) 600 else 500,
+            "${result.entryQualityLabel}\n${result.entryQualityDetails}"
+        )
+    }
+
+    fun entryQualitySeverity(result: ScanResult): Double = result.entryQualityScore.toDouble()
+
     fun strength(result: ScanResult): SignalMetric {
         val score = result.anomalyScore
         val percentile = result.rankingPercentile.takeIf(Double::isFinite)?.times(10.0)
-            ?: (1.0 - kotlin.math.exp(-score.coerceAtLeast(0.0) / 3.0)) * 100.0
-        val level = when {
-            score >= 6.0 -> Level.EXTREME
-            score >= 4.0 -> Level.STRONG
-            score >= 2.5 -> Level.NOTABLE
-            else -> Level.WATCH
-        }
+            ?: ((1.0 - kotlin.math.exp(-score.coerceAtLeast(0.0) / 3.0)) * 100.0)
         val calibration = if (result.continuationProbability.isFinite() && result.predictionSource == "LOGISTIC")
             ("\nValidated logistic ${result.calibrationHorizonMinutes}m probability: %.0f%% " +
                 "(model #${result.predictionModelVersion}, ${result.predictionSamples} training samples).")
