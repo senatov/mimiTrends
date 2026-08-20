@@ -23,8 +23,8 @@ internal class RecentEventRetainer(
             retainActive(active, nowMillis)
             return events.getValue(symbol).result
         }
-        events.remove(symbol)
-        return null
+        val previous = events[symbol] ?: return null
+        return previous.result.takeIf { nowMillis - previous.lastActiveAtMillis < stabilityGraceMillis }
     }
 
     @Synchronized
@@ -43,7 +43,11 @@ internal class RecentEventRetainer(
             .map(Event::result)
             .sortedByDescending(ScanResult::anomalyScore)
             .toList()
-        return active.take(limit)
+        val cooling = events.values.asSequence()
+            .filter { it.result.symbol !in activeSymbols && nowMillis - it.lastActiveAtMillis < stabilityGraceMillis }
+            .map(Event::result)
+            .sortedByDescending(ScanResult::anomalyScore)
+        return (active.asSequence() + cooling).take(limit).toList()
     }
 
     private fun removeExpired(nowMillis: Long) {
@@ -69,5 +73,8 @@ internal class RecentEventRetainer(
     private companion object {
         const val V_REVERSAL = "V-Reversal"
         const val DEFAULT_RETENTION_MILLIS = 20 * 60_000L
+        const val DEFAULT_STABILITY_GRACE_MILLIS = 2 * 60_000L
     }
+
+    private val stabilityGraceMillis = minOf(retentionMillis, DEFAULT_STABILITY_GRACE_MILLIS)
 }

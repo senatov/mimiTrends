@@ -62,6 +62,13 @@ class MainController(private val apiKey: String?, initialSymbol: String = "AAPL"
         shortMoveColumns, { symbol -> profileService.load(symbol) }, ClipboardText::copy,
         stockPageOpener::open
     )
+    private val moderateCandidatePanel = ModerateCandidatePanel(
+        { symbol, moveEpochSeconds ->
+            trendChart.showSignalFocus(moveEpochSeconds)
+            shortMoveSelection.open(symbol)
+        },
+        { symbol -> profileService.load(symbol) }
+    )
     private val scannerPanel = ScannerPanel(
         onOpen = ::openScannerResult,
         shortMovePanel = shortMovePanel,
@@ -77,7 +84,10 @@ class MainController(private val apiKey: String?, initialSymbol: String = "AAPL"
             currencyConverter::price, { loadLocalChart(currentSymbol) }, status::update, log)
     }
     private val shortMoveRefresh = ShortMoveRefreshCoordinator(shortMoveLoader::load, log) { moves ->
-        Platform.runLater { if (!closing.get()) shortMovePanel.show(moves) }
+        Platform.runLater { if (!closing.get()) {
+            shortMovePanel.show(moves)
+            moderateCandidatePanel.show(moves)
+        } }
     }
     private val batchScheduler = Executors.newSingleThreadScheduledExecutor { task ->
         Thread(task, "mimitrends-scanner-rotation").apply { isDaemon = true }
@@ -162,7 +172,7 @@ class MainController(private val apiKey: String?, initialSymbol: String = "AAPL"
         importTradesButton.setOnAction { scalableImport.chooseAndImport(importTradesButton.scene?.window, ::handleScalableImport) }
         researchReport.start()
         val appLayers = MainViewFactory.create(refreshButton, settingsButton, importTradesButton,
-            aboutButton, scannerPanel, trendChart, contentSplitPane, requestStatus, initialDivider)
+            aboutButton, scannerPanel, trendChart, moderateCandidatePanel, contentSplitPane, requestStatus, initialDivider)
         apiKey?.takeIf(String::isNotBlank)?.let(::restartFinnhubLive)
         analytics.applyRetention()
         DatabaseStartupMaintenance.schedule(analytics, batchScheduler, log)
@@ -298,6 +308,7 @@ class MainController(private val apiKey: String?, initialSymbol: String = "AAPL"
             Platform.runLater {
                 if (generation != scanGeneration.get()) return@runLater
                 shortMovePanel.show(shortMoves)
+                moderateCandidatePanel.show(shortMoves)
                 if (active.isEmpty() && errors.size == symbols.size && symbols.isNotEmpty()) {
                     scannerPanel.abortScan()
                     status.update("Yahoo scan produced no data; previous table retained", true, errors.joinToString("\n"))

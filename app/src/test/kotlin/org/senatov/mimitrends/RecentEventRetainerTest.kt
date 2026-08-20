@@ -6,6 +6,16 @@ import kotlin.test.assertTrue
 
 class RecentEventRetainerTest {
     @Test
+    fun `keeps a briefly missing candidate stable between refreshes`() {
+        val retainer = RecentEventRetainer()
+        retainer.merge(listOf(result("SAP.DE", 8.0)), 0L, 15)
+
+        val displayed = retainer.merge(emptyList(), 30_000L, 15)
+
+        assertEquals("SAP.DE", displayed.single().symbol)
+    }
+
+    @Test
     fun `does not retain an inactive event as a candidate`() {
         val retainer = RecentEventRetainer(retentionMillis = 20 * MINUTE)
         retainer.merge(listOf(result("SAP.DE", 8.0)), 0L, 15)

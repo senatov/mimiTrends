@@ -34,7 +34,7 @@ class ShortMovePanel(
     private val sortedRows = SortedList(rows)
     private val table = TableView(sortedRows)
     private val time = DateTimeFormatter.ofPattern("HH:mm").withZone(ZoneId.systemDefault())
-    private val updateCaption = Label("moderate positive movement · waiting").apply {
+    private val updateCaption = Label("5-minute moves + recent post-drop · waiting").apply {
         styleClass += "short-move-caption"
     }
     private val companyNames = java.util.concurrent.ConcurrentHashMap<String, String>()
@@ -46,7 +46,7 @@ class ShortMovePanel(
         sortedRows.comparatorProperty().bind(table.comparatorProperty())
         val spacer = javafx.scene.layout.Region().also { HBox.setHgrow(it, Priority.ALWAYS) }
         val header = HBox(8.0,
-            Label("Steady positive candidates").apply { styleClass += "table-section-title" }, spacer,
+            Label("Recent price battles").apply { styleClass += "table-section-title" }, spacer,
             updateCaption
         ).apply {
             alignment = Pos.CENTER_LEFT
@@ -115,7 +115,7 @@ class ShortMovePanel(
                 "${time.format(Instant.ofEpochSecond(it.startedAtEpochSeconds))}–${time.format(Instant.ofEpochSecond(it.endedAtEpochSeconds))}"
             }, 82.0, 105.0)
         ), columnLayout.savedWidths(), columnLayout.manuallySizedColumnIds())
-        table.placeholder = Label("No steady positive candidates right now")
+        table.placeholder = Label("Waiting for recent minute bars…")
         table.columnResizePolicy = TableView.UNCONSTRAINED_RESIZE_POLICY
         table.fixedCellSize = -1.0
         VBox.setVgrow(table, Priority.ALWAYS)
@@ -156,9 +156,9 @@ class ShortMovePanel(
     }
 
     internal fun show(moves: Collection<ShortMove>, nowEpochSeconds: Long = Instant.now().epochSecond) {
-        val displayed = eventRetainer.merge(moves, nowEpochSeconds)
+        val displayed = eventRetainer.merge(moves.take(MAX_VISIBLE_MOVES), nowEpochSeconds)
         rows.setAll(displayed)
-        updateCaption.text = "moderate positive movement · updated ${time.format(Instant.ofEpochSecond(nowEpochSeconds))}"
+        updateCaption.text = "5-minute moves + recurring jumps · updated ${time.format(Instant.ofEpochSecond(nowEpochSeconds))}"
         displayed.forEach(::requestCompanyName)
         autoFitter.request()
     }
@@ -232,6 +232,10 @@ class ShortMovePanel(
                 styleClass += if (item.changePercent >= 0.0) "short-move-up" else "short-move-down"
             }
         }
+    }
+
+    private companion object {
+        const val MAX_VISIBLE_MOVES = 10
     }
 }
 

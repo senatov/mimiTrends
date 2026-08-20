@@ -28,6 +28,7 @@ internal object MainViewFactory {
         aboutButton: Button,
         scannerPanel: ScannerPanel,
         trendChart: TrendChartView,
+        moderateCandidatePanel: ModerateCandidatePanel,
         contentSplitPane: SplitPane,
         requestStatus: RequestStatusPane,
         initialDivider: Double
@@ -55,9 +56,13 @@ internal object MainViewFactory {
         }
         contentSplitPane.apply {
             orientation = javafx.geometry.Orientation.VERTICAL
-            items.setAll(scannerPanel, trendChart)
+            val chartArea = HBox(8.0, trendChart, moderateCandidatePanel).apply {
+                HBox.setHgrow(trendChart, Priority.ALWAYS)
+                minHeight = 0.0
+            }
+            items.setAll(scannerPanel, chartArea)
             SplitPane.setResizableWithParent(scannerPanel, true)
-            SplitPane.setResizableWithParent(trendChart, true)
+            SplitPane.setResizableWithParent(chartArea, true)
             styleClass += "content-split-pane"
         }
         Platform.runLater { contentSplitPane.setDividerPosition(0, initialDivider) }

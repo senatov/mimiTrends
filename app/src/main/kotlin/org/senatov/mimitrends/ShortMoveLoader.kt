@@ -19,14 +19,18 @@ internal class ShortMoveLoader(
                 nowEpochSeconds
             )
         }
-        return ShortMoveCompanyRanking.distinct(
-            ModeratePositiveCandidateSelector.select(ShortMoveDetector.rank(bars, nowEpochSeconds, Int.MAX_VALUE)),
-            MAX_MOVES
-        ) { symbol -> repository.loadCompanyProfile(symbol)?.name }
+        val ranked = ShortMoveDetector.rank(bars, nowEpochSeconds, Int.MAX_VALUE)
+        val companyName = { symbol: String -> repository.loadCompanyProfile(symbol)?.name }
+        val recent = ShortMoveCompanyRanking.distinct(ranked, MAX_MOVES, companyName)
+        val moderate = ShortMoveCompanyRanking.distinct(
+            ModeratePositiveCandidateSelector.select(ranked), MAX_MODERATE_CANDIDATES, companyName
+        )
+        return (recent + moderate).distinctBy(ShortMove::symbol)
     }
 
     private companion object {
-        const val MAX_MOVES = 6
+        const val MAX_MOVES = 10
+        const val MAX_MODERATE_CANDIDATES = 6
         const val PATTERN_LOOKBACK_DAYS = 30L
     }
 }
