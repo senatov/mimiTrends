@@ -17,6 +17,7 @@ import kotlin.concurrent.withLock
 class EmbeddedDatabase private constructor(private val state: State) : AutoCloseable {
     private val closed = AtomicBoolean()
     internal val connection: Connection get() = state.connection
+    internal val path: Path get() = state.path
 
     fun <T> locked(block: (Connection) -> T): T {
         check(!closed.get()) { "Embedded database lease is closed" }
@@ -69,6 +70,30 @@ class EmbeddedDatabase private constructor(private val state: State) : AutoClose
         }
         target
     }
+
+    fun backupForMigration(label: String): Path = locked { connection ->
+        val backupDirectory = state.path.parent.resolve("backups")
+        Files.createDirectories(backupDirectory)
+        val safeLabel = label.lowercase().replace(Regex("[^a-z0-9-]+"), "-").trim('-')
+        val target = backupDirectory.resolve("mimitrends-before-$safeLabel.db")
+        if (!Files.isRegularFile(target)) connection.createStatement().use { statement ->
+            statement.execute("VACUUM INTO '${target.toString().replace("'", "''")}'")
+        }
+        target
+    }
+
+    fun compactIfWorthwhile(minimumFreeRatio: Double = 0.12, minimumBytes: Long = 128L * 1_048_576L): Boolean =
+        locked { connection ->
+            if (Files.size(state.path) < minimumBytes) return@locked false
+            val counts = connection.createStatement().use { statement ->
+                val pages = statement.executeQuery("PRAGMA page_count").use { it.next(); it.getLong(1) }
+                val free = statement.executeQuery("PRAGMA freelist_count").use { it.next(); it.getLong(1) }
+                pages to free
+            }
+            if (counts.first == 0L || counts.second.toDouble() / counts.first < minimumFreeRatio) return@locked false
+            connection.createStatement().use { it.execute("VACUUM") }
+            true
+        }
 
     override fun close() {
         if (!closed.compareAndSet(false, true)) return

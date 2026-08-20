@@ -8,6 +8,7 @@ log4j = "2.26.1"
 jackson = "2.22.1"
 smile = "6.2.5"
 sqlite = "3.53.2.1"
+duckdb = "1.5.5.1"
 slf4j = "2.0.18"
 jfreechartFx = "2.0.2"
 junit = "5.14.4"
@@ -32,6 +33,7 @@ log4j-slf4j = { module = "org.apache.logging.log4j:log4j-slf4j2-impl" }
 slf4j-api = { module = "org.slf4j:slf4j-api", version.ref = "slf4j" }
 smile-core = { module = "com.github.haifengl:smile-core", version.ref = "smile" }
 sqlite-jdbc = { module = "org.xerial:sqlite-jdbc", version.ref = "sqlite" }
+duckdb-jdbc = { module = "org.duckdb:duckdb_jdbc", version.ref = "duckdb" }
 
 [plugins]
 kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }

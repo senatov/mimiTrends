@@ -31,19 +31,23 @@ class AnalyticsRepository(
     private val researchSamples: ResearchSampleStore
     private val scanCandidates: ScanCandidateStore
     private val predictionAnalytics: PredictionAnalyticsStore
-    private val downsideSafety: DownsideSafetyStore
+    private val duckAnalytics: DuckDbAnalyticsStore
     private val todayDetections: TodayDetectionStore
 
     init {
         migrate()
         recoverInterruptedScans()
+        duckAnalytics = DuckDbAnalyticsStore.open(database.path)
+        duckAnalytics.synchronize(connection)
         brokerTransactions = BrokerTransactionStore(connection)
         signalOutcomes = SignalOutcomeStore(connection)
         researchSamples = ResearchSampleStore(connection)
         scanCandidates = ScanCandidateStore(connection, researchSamples)
         predictionAnalytics = PredictionAnalyticsStore(connection)
-        downsideSafety = DownsideSafetyStore(connection)
         todayDetections = TodayDetectionStore(connection)
+        duckAnalytics.stats().also { stats -> log.info(LogTag.DB,
+            "DuckDB analytics ready size={}MiB aggregateBars={} researchSamples={} researchOutcomes={}",
+            stats.databaseBytes / 1_048_576L, stats.aggregateBars, stats.researchSamples, stats.researchOutcomes) }
     }
 
     fun upsertInstrument(value: InstrumentMetadata) = locked { upsertInstrumentInternal(value) }
@@ -172,7 +176,10 @@ class AnalyticsRepository(
     fun needsResearchBackfill(): Boolean = locked { researchSamples.needsHistoricalBackfill() }
 
     fun downsideSafetyCalibration(european: Boolean): DownsideSafetyCalibration =
-        locked { downsideSafety.calibration(european) }
+        locked {
+            duckAnalytics.synchronizeRecentResearch(connection)
+            duckAnalytics.downsideSafetyCalibration(european)
+        }
 
     fun walkForwardResearchReport(horizonMinutes: Int = 10, frictionPercent: Double = 0.20): WalkForwardResearchReport =
         locked { predictionAnalytics.report(horizonMinutes, frictionPercent) }
@@ -205,12 +212,7 @@ class AnalyticsRepository(
     }
 
     fun loadAggregatedBars(symbol: String, resolutionMinutes: Int, fromEpoch: Long): List<AggregatedBar> = locked {
-        connection.prepareStatement("""SELECT bucket_epoch, open, high, low, close, volume FROM aggregate_bars
-            WHERE symbol=? AND resolution_minutes=? AND bucket_epoch>=? ORDER BY bucket_epoch""").use { s ->
-            s.setString(1, symbol.uppercase()); s.setInt(2, resolutionMinutes); s.setLong(3, fromEpoch)
-            s.executeQuery().use { r -> buildList { while (r.next()) add(AggregatedBar(symbol.uppercase(), resolutionMinutes,
-                r.getLong(1), r.getDouble(2), r.getDouble(3), r.getDouble(4), r.getDouble(5), r.getDouble(6))) } }
-        }
+        duckAnalytics.loadAggregatedBars(symbol, resolutionMinutes, fromEpoch)
     }
 
     fun loadLatestPublishedResults(limit: Int): List<ScanResult> = locked {
@@ -255,9 +257,17 @@ class AnalyticsRepository(
     fun applyRetention(nowEpoch: Long = Instant.now().epochSecond) = locked {
         connection.prepareStatement("DELETE FROM minute_bars WHERE minute_epoch < ?").use { it.setLong(1, nowEpoch - RAW_RETENTION_DAYS * 86_400L); it.executeUpdate() }
         connection.prepareStatement("DELETE FROM provider_minute_bars WHERE minute_epoch < ?").use { it.setLong(1, nowEpoch - PROVIDER_RETENTION_DAYS * 86_400L); it.executeUpdate() }
-        connection.prepareStatement("DELETE FROM aggregate_bars WHERE bucket_epoch < ?").use { it.setLong(1, nowEpoch - AGGREGATE_RETENTION_DAYS * 86_400L); it.executeUpdate() }
+        if (duckAnalytics.aggregateArchiveVerified(connection)) {
+            database.backupForMigration("duckdb-aggregate-archive")
+            connection.prepareStatement("DELETE FROM aggregate_bars WHERE bucket_epoch < ?").use {
+                it.setLong(1, nowEpoch - SQLITE_AGGREGATE_TAIL_DAYS * 86_400L)
+                it.executeUpdate()
+            }
+        }
+        duckAnalytics.applyRetention(nowEpoch)
         connection.prepareStatement("DELETE FROM scan_runs WHERE started_at < ?").use { it.setLong(1, nowEpoch - SCAN_RETENTION_DAYS * 86_400L); it.executeUpdate() }
         connection.prepareStatement("DELETE FROM data_quality WHERE observed_at < ?").use { it.setLong(1, nowEpoch - DATA_QUALITY_RETENTION_DAYS * 86_400L); it.executeUpdate() }
+        if (database.compactIfWorthwhile()) log.info(LogTag.DB, "SQLite storage compacted after DuckDB archival")
     }
 
     fun stats(): AnalyticsStats = locked {
@@ -292,7 +302,10 @@ class AnalyticsRepository(
 
     fun backupIfDue(): Path? = database.backupIfDue()
 
-    override fun close() = database.close()
+    override fun close() {
+        duckAnalytics.close()
+        database.close()
+    }
 
     private fun migrate() = locked {
         connection.createStatement().use { it.executeUpdate("CREATE TABLE IF NOT EXISTS schema_migrations(version INTEGER PRIMARY KEY, applied_at INTEGER NOT NULL)") }
@@ -343,18 +356,26 @@ class AnalyticsRepository(
     }
 
     private fun upsertAggregates(symbol: String, bars: List<MinuteBar>) {
-        connection.prepareStatement("""INSERT INTO aggregate_bars(symbol, resolution_minutes, bucket_epoch, open, high, low, close, volume)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(symbol, resolution_minutes, bucket_epoch) DO UPDATE SET
-            open=excluded.open, high=excluded.high, low=excluded.low, close=excluded.close, volume=excluded.volume""").use { s ->
+        val aggregates = buildList {
             for (resolution in listOf(5, 15, 60)) {
                 val seconds = resolution * 60L
                 bars.groupBy { it.minuteEpochSeconds / seconds * seconds }.forEach { (bucket, values) ->
-                    s.setString(1, symbol); s.setInt(2, resolution); s.setLong(3, bucket); s.setDouble(4, values.first().open)
-                    s.setDouble(5, values.maxOf(MinuteBar::high)); s.setDouble(6, values.minOf(MinuteBar::low)); s.setDouble(7, values.last().close)
-                    s.setDouble(8, values.sumOf(MinuteBar::volume)); s.addBatch()
+                    add(AggregatedBar(symbol, resolution, bucket, values.first().open, values.maxOf(MinuteBar::high),
+                        values.minOf(MinuteBar::low), values.last().close, values.sumOf(MinuteBar::volume)))
                 }
-            }; s.executeBatch()
+            }
         }
+        connection.prepareStatement("""INSERT INTO aggregate_bars(symbol, resolution_minutes, bucket_epoch, open, high, low, close, volume)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(symbol, resolution_minutes, bucket_epoch) DO UPDATE SET
+            open=excluded.open, high=excluded.high, low=excluded.low, close=excluded.close, volume=excluded.volume""").use { s ->
+            aggregates.forEach { value ->
+                s.setString(1, value.symbol); s.setInt(2, value.resolutionMinutes); s.setLong(3, value.bucketEpochSeconds)
+                s.setDouble(4, value.open); s.setDouble(5, value.high); s.setDouble(6, value.low)
+                s.setDouble(7, value.close); s.setDouble(8, value.volume); s.addBatch()
+            }
+            s.executeBatch()
+        }
+        duckAnalytics.upsertAggregates(aggregates)
     }
 
     private fun upsertBaselines(symbol: String, bars: List<MinuteBar>) {
@@ -402,9 +423,9 @@ class AnalyticsRepository(
     private companion object {
         const val RAW_RETENTION_DAYS = 90
         const val PROVIDER_RETENTION_DAYS = 90
-        const val AGGREGATE_RETENTION_DAYS = 730
+        const val SQLITE_AGGREGATE_TAIL_DAYS = 45L
         const val SCAN_RETENTION_DAYS = 180
-        const val DATA_QUALITY_RETENTION_DAYS = 30
+        const val DATA_QUALITY_RETENTION_DAYS = 14
         const val OUTCOME_TRACKING_BARS = 35
         const val UPSERT_INSTRUMENT = """INSERT INTO instrument_metadata(symbol, name, exchange, currency, timezone, isin, wkn, aliases, tradable, updated_at)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(symbol) DO UPDATE SET name=excluded.name, exchange=excluded.exchange,
