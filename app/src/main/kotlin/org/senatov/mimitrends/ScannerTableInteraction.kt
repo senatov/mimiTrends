@@ -29,7 +29,8 @@ internal object ScannerTableInteraction {
                 setOnMouseExited { hoverDelay.stop() }
                 setOnMouseClicked { event ->
                     if (!isEmpty && event.button == MouseButton.PRIMARY && event.clickCount == 1) {
-                        hoverDelay.stop(); open(item); inspect(item)
+                        hoverDelay.stop()
+                        open(item)
                     }
                 }
                 contextMenu = ContextMenu(

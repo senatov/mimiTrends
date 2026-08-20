@@ -146,6 +146,7 @@ class MainController(private val apiKey: String?, initialSymbol: String = "AAPL"
             currentSymbol = it
             status.setLoading(true)
             status.update("Refreshing market data: $it")
+            loadLocalChart(it)
         }
     ) { symbol, result, error ->
         if (error != null) {
