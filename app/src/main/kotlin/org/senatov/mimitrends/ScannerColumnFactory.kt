@@ -303,9 +303,8 @@ internal class ScannerColumnFactory(
     }
 
     private fun companyGraphic(symbol: String, name: String, logo: ByteArray?, result: ScanResult?): HBox {
-        val content = HBox(7.0, logoBadge(symbol, logo, 22.0), Label(name)).apply {
-            alignment = Pos.CENTER_LEFT
-        }
+        val content = HBox(7.0).apply { alignment = Pos.CENTER_LEFT }
+        content.children += logoBadge(symbol, logo, 22.0)
         if (result?.repeatingCycleStrength?.isFinite() == true) {
             content.children += Label(REPEATING_CYCLE_GLYPH).apply {
                 style = "-fx-text-fill: #ef233c; -fx-font-size: 16px; -fx-font-weight: 700;"
@@ -315,6 +314,7 @@ internal class ScannerColumnFactory(
                 )
             }
         }
+        content.children += Label(name)
         return content
     }
 

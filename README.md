@@ -327,8 +327,10 @@ consolidation.
 ### Repeating short price cycles
 
 The latest 12–24 completed minute bars are also checked for bounded paths that repeat after two or three
-minutes. The detector requires at least five direction changes, low net displacement relative to the travelled
-price path, and autocorrelation of at least `0.72` at lag two or three. A directional rise therefore does not
+minutes. The detector requires at least four direction changes across at least nine bars, low net displacement
+relative to the travelled price path, and autocorrelation of at least `0.60` at lag two or three. A second pass
+removes the fitted local center before measuring correlation, allowing the same repeating traffic pattern to
+be recognized while its price band shifts and later returns. A directional rise therefore does not
 qualify merely because adjacent returns are similar. Detected cycles remain candidates for inspection but are
 marked with a bright-red `↻` beside the company name; the marker describes observed structure and is not a
 prediction that the next phase will repeat.

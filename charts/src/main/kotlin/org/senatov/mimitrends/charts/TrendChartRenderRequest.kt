@@ -14,6 +14,9 @@ internal data class TrendChartRenderRequest(
     val signal: ScanResult?,
     val trades: List<BrokerTrade>
 ) {
+    val matchingTrades: List<BrokerTrade>
+        get() = trades.filter { it.symbol.equals(symbol, ignoreCase = true) }
+
     val tradeEpochSeconds: List<Long>
-        get() = trades.flatMap { trade -> listOfNotNull(trade.entryEpochSeconds, trade.exitEpochSeconds) }
+        get() = matchingTrades.flatMap { trade -> listOfNotNull(trade.entryEpochSeconds, trade.exitEpochSeconds) }
 }

@@ -231,10 +231,10 @@ class TrendChartView : StackPane() {
         latestPriceMarker.show(closes.last(), request.currencySymbol)
         showSignalWindow(request.bars.last().minuteEpochSeconds, request.signal, timeline)
         if (focused) signalTrendOverlay.render(timeline, request.priceMultiplier) else signalTrendOverlay.clear()
-        if (tradesButton.isSelected) tradeAnnotations.render(request.trades, visible, plotted,
+        if (tradesButton.isSelected) tradeAnnotations.render(request.matchingTrades, visible, plotted,
             request.priceMultiplier, timeline::displayMillis)
         else tradeAnnotations.clear()
-        priceAxis.upperMargin = if (tradesButton.isSelected && request.trades.isNotEmpty()) 0.28 else 0.04
+        priceAxis.upperMargin = if (tradesButton.isSelected && request.matchingTrades.isNotEmpty()) 0.28 else 0.04
         refreshAxisRanges()
         chart.fireChartChanged()
     }
