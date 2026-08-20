@@ -200,9 +200,9 @@ internal class ScannerColumnFactory(
                         return
                     }
                     renderedSymbol = symbol
-                    text = symbol
+                    text = null
                     contentDisplay = ContentDisplay.LEFT
-                    graphic = logoBadge(symbol, null, 22.0)
+                    graphic = companyGraphic(symbol, symbol, null, tableRow.item)
                     tooltip = companyTooltip(symbol, null)
                     loadProfile?.invoke(symbol)?.whenComplete(
                         BiConsumer<CompanyProfile?, Throwable?> { profile, error ->
@@ -210,8 +210,8 @@ internal class ScannerColumnFactory(
                             val displayName = CompanySearchTerm.normalizeDisplay(profile.name)
                             companyNames[symbol] = displayName
                             if (renderedSymbol == symbol && item == symbol) {
-                                text = displayName
-                                graphic = logoBadge(symbol, profile.logoBytes, 22.0)
+                                text = null
+                                graphic = companyGraphic(symbol, displayName, profile.logoBytes, tableRow.item)
                                 tooltip = companyTooltip(symbol, profile.copy(name = displayName))
                                 if (table.sortOrder.any { it.id == "company" }) table.sort()
                                 onContentChanged()
@@ -302,6 +302,22 @@ internal class ScannerColumnFactory(
         }
     }
 
+    private fun companyGraphic(symbol: String, name: String, logo: ByteArray?, result: ScanResult?): HBox {
+        val content = HBox(7.0, logoBadge(symbol, logo, 22.0), Label(name)).apply {
+            alignment = Pos.CENTER_LEFT
+        }
+        if (result?.repeatingCycleStrength?.isFinite() == true) {
+            content.children += Label(REPEATING_CYCLE_GLYPH).apply {
+                style = "-fx-text-fill: #ef233c; -fx-font-size: 16px; -fx-font-weight: 700;"
+                tooltip = Tooltip(
+                    "Repeating 2–3 minute price cycle · statistical strength " +
+                        "${"%.0f".format(result.repeatingCycleStrength * 100.0)}%"
+                )
+            }
+        }
+        return content
+    }
+
     private data class SignalVisual(val color: String, val weight: Int, val description: String)
 
     private companion object {
@@ -309,5 +325,6 @@ internal class ScannerColumnFactory(
         const val TABLE_TEXT_COLOR = "#1f2933"
         const val STEADY_RISE_COLOR = "#0B5D3B"
         const val IMPULSE_COLOR = "#4B1F6F"
+        const val REPEATING_CYCLE_GLYPH = "↻"
     }
 }

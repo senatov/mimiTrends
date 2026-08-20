@@ -188,6 +188,7 @@ data class ScanResult(
     val recentThreeMinutePercent: Double = Double.NaN,
     val recentFiveMinutePercent: Double = Double.NaN,
     val recentDirectionChanges: Int = 0,
+    val repeatingCycleStrength: Double = Double.NaN,
     val entryQualityScore: Int = -1,
     val entryQualityConfidence: Int = 0,
     val entryQualityLabel: String = "Unavailable",

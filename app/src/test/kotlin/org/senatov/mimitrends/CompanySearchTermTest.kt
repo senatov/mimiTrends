@@ -4,8 +4,8 @@ import org.junit.jupiter.api.Test
 import kotlin.test.assertEquals
 
 class CompanySearchTermTest {
-    @Test fun `normalizes whitespace without shortening the displayed company name`() {
-        assertEquals("BEIERSDORF AG I", CompanySearchTerm.normalizeDisplay("  BEIERSDORF AG                 I  "))
+    @Test fun `normalizes and shortens the displayed company name`() {
+        assertEquals("Beiersdorf", CompanySearchTerm.normalizeDisplay("  BEIERSDORF AG                 I  "))
     }
 
     @Test fun `removes legal form and exchange class from a company name`() {
@@ -16,8 +16,8 @@ class CompanySearchTermTest {
         assertEquals("BNP Paribas", CompanySearchTerm.from("BNP PARIBAS ACT.A", "BNP.PA"))
     }
 
-    @Test fun `preserves a multi-word searchable brand name`() {
-        assertEquals("The Trade Desk", CompanySearchTerm.from("The Trade Desk, Inc.", "TTD"))
+    @Test fun `removes a leading article from a multi-word brand name`() {
+        assertEquals("Trade Desk", CompanySearchTerm.from("The Trade Desk, Inc.", "TTD"))
     }
 
     @Test fun `preserves meaningful group wording`() {
@@ -34,5 +34,16 @@ class CompanySearchTermTest {
 
     @Test fun `falls back to ticker when company name is empty`() {
         assertEquals("BMW", CompanySearchTerm.from(" ", "BMW.DE"))
+    }
+
+    @Test fun `removes legal suffixes punctuation and parenthesized article`() {
+        val name = "Example Company Corporation, Inc. Co. Plc GmbH (The)"
+
+        assertEquals("Example", CompanySearchTerm.normalizeDisplay(name))
+        assertEquals("Example", CompanySearchTerm.from(name, "EXM"))
+    }
+
+    @Test fun `does not remove legal text embedded in a real word`() {
+        assertEquals("Incyte Compass", CompanySearchTerm.normalizeDisplay("Incyte Compass, Inc."))
     }
 }

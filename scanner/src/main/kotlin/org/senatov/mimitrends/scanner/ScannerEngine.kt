@@ -37,6 +37,9 @@ class ScannerEngine(private val zoneOverride: ZoneId? = null) {
         log.debug(LogTag.DB, "evaluate(symbol={}, bars={}, maxAge={}m)", symbol, bars.size, criteria.maxSignalAgeMinutes)
         val sorted = cleanBars(bars)
         val latest = sorted.lastOrNull() ?: return null
+        val repeatingCycleStrength = RepeatingPriceCycleDetector.strength(sorted)
+        fun withCycle(result: ScanResult?): ScanResult? =
+            result?.copy(repeatingCycleStrength = repeatingCycleStrength)
         val features = features(sorted)
         if (features.size < MIN_FEATURES) return null
         if (features.map { local(it.bar).toLocalDate() }.distinct().size < MIN_IMPULSE_SESSIONS) {
@@ -72,18 +75,18 @@ class ScannerEngine(private val zoneOverride: ZoneId? = null) {
         val sessionBars = sameSession(sorted, latest)
         val turnover = sessionBars.sumOf { it.close * it.volume }
         if (latest.close < criteria.minPrice || turnover < criteria.minSessionTurnover) return null
-        if (oversoldWatch != null) return oversoldWatch
+        if (oversoldWatch != null) return withCycle(oversoldWatch)
         if (gapContinuation != null) return longCandidateSafety.classify(sorted, gapContinuation)
         val impulseScore = signal?.score ?: Double.NEGATIVE_INFINITY
         if (reversal != null && reversal.score >= max(impulseScore, momentum?.score ?: Double.NEGATIVE_INFINITY)) {
             return reversalResult(symbol, latest, sessionBars, turnover, reversal)
-                .let { longCandidateSafety.classify(sorted, it) }
+                .let { longCandidateSafety.classify(sorted, it) }.let { withCycle(it) }
         }
         if (momentum != null && momentum.score > impulseScore) {
             return momentumResult(symbol, latest, sessionBars, turnover, momentum)
-                .let { longCandidateSafety.classify(sorted, it) }
+                .let { longCandidateSafety.classify(sorted, it) }.let { withCycle(it) }
         }
-        if (signal == null) return earlyRecovery ?: requireNotNull(oversoldWatch)
+        if (signal == null) return withCycle(earlyRecovery ?: requireNotNull(oversoldWatch))
         val selected = signal
         return ScanResult(
             symbol = symbol,
@@ -108,7 +111,7 @@ class ScannerEngine(private val zoneOverride: ZoneId? = null) {
             },
             signalPrice = selected.feature.bar.close,
             signalEpochMillis = selected.feature.bar.minuteEpochSeconds * 1_000
-        ).let { longCandidateSafety.classify(sorted, it) }
+        ).let { longCandidateSafety.classify(sorted, it) }.let { withCycle(it) }
     }
 
     private fun momentumResult(
