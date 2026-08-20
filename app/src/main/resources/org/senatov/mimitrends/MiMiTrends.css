@@ -178,8 +178,42 @@
     -fx-background-radius: 8px;
     -fx-padding: 8px;
 }
+.trend-chart-card {
+    -fx-background-color: rgba(255,255,255,0.84);
+    -fx-background-radius: 12px;
+    -fx-border-color: #c8d0da;
+    -fx-border-radius: 12px;
+    -fx-border-width: 1px;
+    -fx-padding: 7px;
+    -fx-effect: dropshadow(gaussian, rgba(31,54,79,0.10), 8, 0.10, 0, 2);
+}
+.chart-card-content { -fx-background-color: transparent; }
+.chart-card-header {
+    -fx-background-color: rgba(247,250,253,0.96);
+    -fx-background-radius: 8px;
+    -fx-border-color: #d6dee7;
+    -fx-border-radius: 8px;
+    -fx-padding: 8px 10px;
+}
+.chart-viewer-shell {
+    -fx-background-color: white;
+    -fx-background-radius: 8px;
+    -fx-padding: 5px 0 0 0;
+}
+.chart-instrument-title {
+    -fx-font-family: "SF Pro Display", "SansSerif";
+    -fx-font-size: 14px;
+    -fx-font-weight: 600;
+    -fx-text-fill: #1f3c59;
+}
+.chart-context-details {
+    -fx-font-family: "SF Pro Display", "SansSerif";
+    -fx-font-size: 11px;
+    -fx-font-weight: 400;
+    -fx-text-fill: #667789;
+}
 .chart-signal-summary {
-    -fx-font-size: 12px;
+    -fx-font-size: 11px;
     -fx-font-weight: 600;
     -fx-text-fill: #805018;
 }
@@ -197,7 +231,7 @@
     -fx-background-radius: 7px;
     -fx-border-color: rgba(183, 196, 208, 0.72);
     -fx-border-radius: 7px;
-    -fx-padding: 5 9 5 9;
+    -fx-padding: 4 8;
 }
 .chart-mode-switch {
     -fx-background-color: #dce3ea;
@@ -216,8 +250,8 @@
     -fx-padding: 0 0 0 4px;
 }
 .chart-mode-button {
-    -fx-min-height: 28px;
-    -fx-padding: 5px 13px;
+    -fx-min-height: 26px;
+    -fx-padding: 4px 11px;
     -fx-font-family: "SF Pro Text", "Helvetica Neue", "System";
     -fx-font-size: 11.5px;
     -fx-font-weight: 500;
@@ -342,12 +376,28 @@
     -fx-text-fill: #7a1424;
     -fx-font-weight: 700;
 }
-.moderate-candidate-panel { -fx-padding: 8px; }
-.moderate-candidate-table .table-cell,
-.moderate-candidate-table .table-row-cell:selected .table-cell {
-    -fx-text-fill: #17365f;
-    -fx-font-weight: 600;
+.moderate-candidate-panel { -fx-padding: 11px; }
+.positive-watch-title { -fx-font-size: 14px; -fx-font-weight: 650; -fx-text-fill: #17365f; }
+.positive-watch-caption { -fx-font-size: 10px; -fx-text-fill: #64778b; -fx-padding: 0 0 4px 0; }
+.positive-watch-row {
+    -fx-background-color: rgba(232,239,247,0.82);
+    -fx-background-radius: 8px;
+    -fx-border-color: rgba(173,188,204,0.68);
+    -fx-border-radius: 8px;
+    -fx-padding: 8px 9px;
+    -fx-cursor: hand;
 }
+.positive-watch-row:hover { -fx-background-color: rgba(217,229,242,0.96); -fx-border-color: #7890aa; }
+.positive-watch-company { -fx-font-size: 11.5px; -fx-font-weight: 550; -fx-text-fill: #17365f; }
+.positive-watch-score {
+    -fx-font-size: 12px;
+    -fx-font-weight: 700;
+    -fx-text-fill: #ffffff;
+    -fx-background-color: #17365f;
+    -fx-background-radius: 999px;
+    -fx-padding: 3px 7px;
+}
+.positive-watch-empty { -fx-font-size: 11px; -fx-text-fill: #758596; -fx-padding: 12px 4px; }
 .scanner-cycle { -fx-text-fill: #777b81; -fx-font-size: 12px; }
 .scanner-cycle.market-closed {
     -fx-text-fill: #a36a00;

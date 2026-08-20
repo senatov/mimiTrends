@@ -41,9 +41,16 @@ internal object ModeratePositiveCandidateSelector {
             move.changePercent in MIN_MOVE_PERCENT..MAX_MOVE_PERCENT && move.barCount >= MIN_BARS
     }
 
-    private const val MIN_MOVE_PERCENT = 0.15
-    private const val MAX_MOVE_PERCENT = 1.25
-    private const val MIN_BARS = 4
+    fun positivityPercent(move: ShortMove): Int {
+        val movement = ((move.changePercent - MIN_MOVE_PERCENT) /
+            (MAX_MOVE_PERCENT - MIN_MOVE_PERCENT)).coerceIn(0.0, 1.0)
+        val continuity = (move.barCount / 5.0).coerceIn(0.0, 1.0)
+        return (52.0 + movement * 34.0 + continuity * 10.0).toInt().coerceIn(50, 96)
+    }
+
+    private const val MIN_MOVE_PERCENT = 0.03
+    private const val MAX_MOVE_PERCENT = 1.75
+    private const val MIN_BARS = 3
 }
 
 internal object ShortMoveCompanyRanking {

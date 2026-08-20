@@ -9,7 +9,6 @@ import javafx.scene.layout.StackPane
 import javafx.scene.layout.VBox
 import javafx.scene.layout.HBox
 import javafx.scene.layout.Priority
-import javafx.geometry.Insets
 import org.jfree.chart.JFreeChart
 import org.jfree.chart.axis.DateAxis
 import org.jfree.chart.axis.NumberAxis
@@ -91,6 +90,7 @@ class TrendChartView : StackPane() {
     private val signalTrendOverlay = SignalTrendOverlay(pricePlot)
     init {
         log.debug(LogTag.UI, "init()")
+        styleClass += "trend-chart-card"
         minHeight = 0.0
         maxHeight = Double.MAX_VALUE
         configureChart()
@@ -132,18 +132,24 @@ class TrendChartView : StackPane() {
         cursorDetailsLabel.isWrapText = true
         cursorDetailsLabel.maxWidth = Double.MAX_VALUE
         currentPriceLabel.styleClass += "chart-current-price"
-        val spacer = javafx.scene.layout.Region().apply { HBox.setHgrow(this, Priority.ALWAYS) }
-        val identityRow = HBox(10.0, instrumentLabel, currentPriceLabel, chartDetailsLabel, spacer, modeSwitch).apply {
+        instrumentLabel.styleClass += "chart-instrument-title"
+        chartDetailsLabel.styleClass += "chart-context-details"
+        val titleRow = HBox(9.0, instrumentLabel, currentPriceLabel).apply {
             alignment = javafx.geometry.Pos.CENTER_LEFT
         }
-        val header = VBox(2.0, identityRow, signalSummaryLabel, cursorDetailsLabel).apply {
-            padding = Insets(7.0, 14.0, 7.0, 14.0)
-            style = "-fx-background-color: rgba(248,250,253,0.96); -fx-border-color: transparent transparent #d7dde4 transparent;"
-            instrumentLabel.style = "-fx-font-family: 'SF Pro Display'; -fx-font-size: 14px; -fx-font-weight: 500; -fx-text-fill: #1f3c59;"
-            chartDetailsLabel.style = "-fx-font-family: 'SF Pro Display'; -fx-font-size: 12px; -fx-font-weight: 300; -fx-text-fill: #667789;"
+        val metaRow = HBox(8.0, signalSummaryLabel, chartDetailsLabel).apply {
+            alignment = javafx.geometry.Pos.CENTER_LEFT
         }
-        val content = VBox(header, viewer)
-        VBox.setVgrow(viewer, Priority.ALWAYS)
+        val identity = VBox(2.0, titleRow, metaRow).apply { HBox.setHgrow(this, Priority.ALWAYS) }
+        val headerTop = HBox(12.0, identity, modeSwitch).apply {
+            alignment = javafx.geometry.Pos.CENTER_LEFT
+        }
+        val header = VBox(6.0, headerTop, cursorDetailsLabel).apply {
+            styleClass += "chart-card-header"
+        }
+        val viewerShell = StackPane(viewer).apply { styleClass += "chart-viewer-shell" }
+        val content = VBox(header, viewerShell).apply { styleClass += "chart-card-content" }
+        VBox.setVgrow(viewerShell, Priority.ALWAYS)
         children += listOf(content, progress)
     }
     fun renderMinuteBars(
