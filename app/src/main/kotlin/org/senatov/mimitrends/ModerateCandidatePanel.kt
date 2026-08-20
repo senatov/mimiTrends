@@ -52,6 +52,9 @@ internal class ModerateCandidatePanel(
         val spacer = Region().also { HBox.setHgrow(it, Priority.ALWAYS) }
         val score = Label("${ModeratePositiveCandidateSelector.positivityPercent(move)}%").apply {
             styleClass += "positive-watch-score"
+            minWidth = 54.0
+            prefWidth = 54.0
+            alignment = Pos.CENTER
             tooltip = Tooltip("Relative positive-movement score based on the current five-minute move and continuity; not a profit forecast.")
         }
         return HBox(7.0, company, spacer, score).apply {
