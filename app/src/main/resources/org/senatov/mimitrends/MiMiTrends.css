@@ -377,7 +377,7 @@
     -fx-font-weight: 700;
 }
 .moderate-candidate-panel { -fx-padding: 11px; }
-.positive-watch-title { -fx-font-size: 14px; -fx-font-weight: 650; -fx-text-fill: #17365f; }
+.positive-watch-title { -fx-font-size: 14px; -fx-font-weight: 600; -fx-text-fill: #17365f; }
 .positive-watch-caption { -fx-font-size: 10px; -fx-text-fill: #64778b; -fx-padding: 0 0 4px 0; }
 .positive-watch-row {
     -fx-background-color: rgba(232,239,247,0.82);
@@ -388,7 +388,7 @@
     -fx-cursor: hand;
 }
 .positive-watch-row:hover { -fx-background-color: rgba(217,229,242,0.96); -fx-border-color: #7890aa; }
-.positive-watch-company { -fx-font-size: 11.5px; -fx-font-weight: 550; -fx-text-fill: #17365f; }
+.positive-watch-company { -fx-font-size: 11.5px; -fx-font-weight: 500; -fx-text-fill: #17365f; }
 .positive-watch-score {
     -fx-font-size: 12px;
     -fx-font-weight: 700;
