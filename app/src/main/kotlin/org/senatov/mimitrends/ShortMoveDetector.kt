@@ -20,7 +20,11 @@ internal data class ShortMove(
     val entryQualityConfidence: Int = 0,
     val entryQualityLabel: String = "Unavailable",
     val entryCooldownMinutes: Int = 0,
-    val entryQualityDetails: String = ""
+    val entryQualityDetails: String = "",
+    val safetyScore: Int = -1,
+    val safetyConfidence: Int = 0,
+    val safetyLabel: String = "Unavailable",
+    val safetyDetails: String = ""
 )
 
 internal enum class ShortMovePattern {

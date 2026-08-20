@@ -90,6 +90,15 @@ data class ResearchBackfillSample(
     val outcomes: List<ResearchBackfillOutcome>
 )
 
+data class DownsideSafetyCalibration(
+    val probability: Double,
+    val confidence: Int,
+    val samples: Int,
+    val distinctDays: Int,
+    val horizonMinutes: Int,
+    val maximumAcceptableDrawdownPercent: Double
+)
+
 data class PredictiveTrainingResult(
     val horizonMinutes: Int,
     val status: String,

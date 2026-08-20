@@ -81,5 +81,5 @@ internal object HistoricalResearchReplay {
     private const val CONTEXT_DAYS = 10
     private const val SAMPLE_INTERVAL_MINUTES = 15
     private const val MAX_LAG_MINUTES = 4
-    private val HORIZONS = listOf(5, 10, 30)
+    private val HORIZONS = listOf(5, 10, 30, 60, 90)
 }

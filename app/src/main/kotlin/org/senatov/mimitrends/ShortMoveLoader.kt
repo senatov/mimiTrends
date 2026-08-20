@@ -12,6 +12,10 @@ internal class ShortMoveLoader(
     private val exchangeRates: ExchangeRateService
 ) {
     fun load(symbols: Collection<String>, nowEpochSeconds: Long = java.time.Instant.now().epochSecond): List<ShortMove> {
+        val safetyCalibration = mapOf(
+            true to analytics.downsideSafetyCalibration(european = true),
+            false to analytics.downsideSafetyCalibration(european = false)
+        )
         val bars = symbols.associateWith { symbol ->
             val from = nowEpochSeconds - PATTERN_LOOKBACK_DAYS * 86_400L
             ShortMoveBarComposer.compose(
@@ -47,6 +51,10 @@ internal class ShortMoveLoader(
                 vwapDistancePercent = extracted.vwapDistancePercent,
                 sessionHighDistancePercent = extracted.sessionHighDistancePercent
             )) }
+            val safety = if (features != null && entry != null) ShortTermSafetyModel.assess(
+                move.symbol, bars[move.symbol].orEmpty(), features, entry, trend?.score, nowEpochSeconds,
+                safetyCalibration.getValue(move.symbol.contains('.'))
+            ) else null
             move.copy(
                 trendScore = trend?.score,
                 trendConfidence = trend?.confidence ?: 0,
@@ -56,7 +64,11 @@ internal class ShortMoveLoader(
                 entryQualityConfidence = entry?.confidence ?: 0,
                 entryQualityLabel = entry?.label ?: "Unavailable",
                 entryCooldownMinutes = entry?.cooldownMinutes ?: 0,
-                entryQualityDetails = entry?.details.orEmpty()
+                entryQualityDetails = entry?.details.orEmpty(),
+                safetyScore = safety?.score ?: -1,
+                safetyConfidence = safety?.confidence ?: 0,
+                safetyLabel = safety?.label ?: "Unavailable",
+                safetyDetails = safety?.details.orEmpty()
             )
         }
         val companyName = { symbol: String -> repository.loadCompanyProfile(symbol)?.name }
@@ -81,16 +93,18 @@ internal object ModeratePositiveCandidateSelector {
         move.pattern == ShortMovePattern.DIRECTIONAL &&
             move.changePercent in MIN_CURRENT_MOVE_PERCENT..MAX_CURRENT_MOVE_PERCENT &&
             move.barCount >= MIN_BARS &&
-            (move.trendScore ?: 0) >= MIN_TREND_SCORE && move.trendConfidence >= MIN_CONFIDENCE
-    }.sortedWith(compareByDescending<ShortMove> { it.trendScore }.thenByDescending { it.trendConfidence })
+            move.safetyScore >= MIN_SAFETY_SCORE && move.safetyConfidence >= MIN_SAFETY_CONFIDENCE &&
+            move.entryQualityScore >= MIN_ENTRY_QUALITY && move.entryCooldownMinutes == 0
+    }.sortedWith(compareByDescending<ShortMove> { it.safetyScore }.thenByDescending { it.safetyConfidence })
 
-    fun positivityPercent(move: ShortMove): Int = move.trendScore?.coerceIn(0, 100) ?: 0
+    fun positivityPercent(move: ShortMove): Int = move.safetyScore.coerceIn(0, 100)
 
     private const val MIN_CURRENT_MOVE_PERCENT = -0.80
     private const val MAX_CURRENT_MOVE_PERCENT = 1.75
     private const val MIN_BARS = 3
-    private const val MIN_TREND_SCORE = 56
-    private const val MIN_CONFIDENCE = 8
+    private const val MIN_SAFETY_SCORE = 56
+    private const val MIN_SAFETY_CONFIDENCE = 50
+    private const val MIN_ENTRY_QUALITY = 48
 }
 
 internal object ShortMoveCompanyRanking {

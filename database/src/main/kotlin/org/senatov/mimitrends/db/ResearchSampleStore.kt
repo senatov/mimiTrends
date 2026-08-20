@@ -11,9 +11,10 @@ internal class ResearchSampleStore(private val connection: Connection) {
     fun needsHistoricalBackfill(): Boolean = connection.createStatement().use { statement ->
         statement.executeQuery("""SELECT
             (SELECT COUNT(DISTINCT date(minute_epoch, 'unixepoch')) FROM minute_bars),
-            (SELECT COUNT(DISTINCT date(observed_epoch, 'unixepoch')) FROM research_samples WHERE source='HISTORICAL')""").use {
+            (SELECT COUNT(DISTINCT date(observed_epoch, 'unixepoch')) FROM research_samples WHERE source='HISTORICAL'),
+            (SELECT COUNT(*) FROM research_outcomes WHERE horizon_minutes=90)""").use {
             it.next()
-            it.getInt(2) < (it.getInt(1) - REQUIRED_BASELINE_DAYS).coerceAtLeast(0)
+            it.getInt(2) < (it.getInt(1) - REQUIRED_BASELINE_DAYS).coerceAtLeast(0) || it.getInt(3) == 0
         }
     }
 
@@ -177,9 +178,9 @@ internal class ResearchSampleStore(private val connection: Connection) {
         const val HISTORICAL_SOURCE = "HISTORICAL"
         const val REQUIRED_BASELINE_DAYS = 5
         const val EPISODE_SECONDS = 15 * 60L
-        const val MAX_TRACKING_MINUTES = 34
+        const val MAX_TRACKING_MINUTES = 94
         const val OUTCOME_LAG_MINUTES = 4
-        val HORIZONS = listOf(5, 10, 30)
+        val HORIZONS = listOf(5, 10, 30, 60, 90)
         const val INSERT_SQL = """INSERT OR IGNORE INTO research_samples(
             run_id, symbol, observed_epoch, entry_price, family, direction, accepted, source,
             score, jump_z, range_z, volume_z, rvol, return_1m, return_3m, return_5m, return_10m,

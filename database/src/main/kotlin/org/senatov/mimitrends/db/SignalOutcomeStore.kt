@@ -60,8 +60,8 @@ internal class SignalOutcomeStore(private val connection: Connection) {
     }
 
     private companion object {
-        val HORIZONS_MINUTES = listOf(5, 10, 30)
+        val HORIZONS_MINUTES = listOf(5, 10, 30, 60, 90)
         const val OUTCOME_MAX_LAG_MINUTES = 4
-        const val MAX_TRACKING_MINUTES = 34
+        const val MAX_TRACKING_MINUTES = 94
     }
 }

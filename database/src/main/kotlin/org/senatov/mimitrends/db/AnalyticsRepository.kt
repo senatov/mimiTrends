@@ -31,6 +31,7 @@ class AnalyticsRepository(
     private val researchSamples: ResearchSampleStore
     private val scanCandidates: ScanCandidateStore
     private val predictionAnalytics: PredictionAnalyticsStore
+    private val downsideSafety: DownsideSafetyStore
     private val todayDetections: TodayDetectionStore
 
     init {
@@ -41,6 +42,7 @@ class AnalyticsRepository(
         researchSamples = ResearchSampleStore(connection)
         scanCandidates = ScanCandidateStore(connection, researchSamples)
         predictionAnalytics = PredictionAnalyticsStore(connection)
+        downsideSafety = DownsideSafetyStore(connection)
         todayDetections = TodayDetectionStore(connection)
     }
 
@@ -168,6 +170,9 @@ class AnalyticsRepository(
     fun trainPredictiveModels(): List<PredictiveTrainingResult> = locked { transaction { predictionAnalytics.train() } }
 
     fun needsResearchBackfill(): Boolean = locked { researchSamples.needsHistoricalBackfill() }
+
+    fun downsideSafetyCalibration(european: Boolean): DownsideSafetyCalibration =
+        locked { downsideSafety.calibration(european) }
 
     fun walkForwardResearchReport(horizonMinutes: Int = 10, frictionPercent: Double = 0.20): WalkForwardResearchReport =
         locked { predictionAnalytics.report(horizonMinutes, frictionPercent) }
