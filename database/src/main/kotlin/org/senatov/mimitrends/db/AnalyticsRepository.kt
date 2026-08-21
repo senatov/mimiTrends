@@ -146,6 +146,20 @@ class AnalyticsRepository(
             s.executeUpdate(); s.generatedKeys.use { keys -> check(keys.next()); keys.getLong(1) }
         }
     }
+
+    fun recordUniverseSelection(ranks: Map<String, Int>, dynamicSymbols: Collection<String>) = locked {
+        val dynamic = dynamicSymbols.mapTo(hashSetOf(), String::uppercase)
+        connection.prepareStatement("""INSERT OR REPLACE INTO universe_membership
+            (selection_date, region, symbol, rank, source) VALUES (date('now'), ?, ?, ?, ?)""").use { statement ->
+            ranks.forEach { (symbol, rank) ->
+                statement.setString(1, if (symbol.contains('.')) "EUROPE" else "US")
+                statement.setString(2, symbol.uppercase()); statement.setInt(3, rank)
+                statement.setString(4, if (symbol.uppercase() in dynamic) "WALLSTREET_ONLINE" else "CONFIGURED_FALLBACK")
+                statement.addBatch()
+            }
+            statement.executeBatch()
+        }
+    }
     fun recordScanCandidate(
         runId: Long,
         symbol: String,

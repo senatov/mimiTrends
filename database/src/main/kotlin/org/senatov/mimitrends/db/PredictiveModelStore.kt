@@ -15,7 +15,7 @@ internal class PredictiveModelStore(private val connection: Connection) {
 
     fun enrich(result: ScanResult, horizonMinutes: Int = DEFAULT_HORIZON): ScanResult {
         val stored = active[horizonMinutes] ?: return result
-        val probability = stored.model.predict(features(result))
+        val probability = stored.model.predict(features(result, latestUniverseRank(result.symbol)))
         return result.copy(
             continuationProbability = probability,
             calibrationHorizonMinutes = horizonMinutes,
@@ -85,7 +85,7 @@ internal class PredictiveModelStore(private val connection: Connection) {
                     features(
                         rows.nullableDouble("score"), rows.nullableDouble("jump_z"), rows.nullableDouble("range_z"),
                         rows.nullableDouble("volume_z"), rows.nullableDouble("rvol"), rows.nullableDouble("return_10m"),
-                        direction, rows.getString("family")
+                        direction, rows.getString("family"), rows.getInt("universe_rank").takeIf { !rows.wasNull() }
                     ), direction * rawReturn - FRICTION_PERCENT))
             }
         } }
@@ -128,14 +128,23 @@ internal class PredictiveModelStore(private val connection: Connection) {
         statement.executeQuery().use { it.next(); it.getLong(1) }
     }
 
-    private fun features(result: ScanResult): DoubleArray = features(result.anomalyScore, result.priceAnomaly,
+    private fun features(result: ScanResult, universeRank: Int?): DoubleArray = features(result.anomalyScore, result.priceAnomaly,
         result.rangeAnomaly, result.volumeAnomaly, result.relativeVolume, result.windowChangePercent,
-        if (result.signalSource.contains('↓')) -1 else 1, family(result.signalSource))
+        if (result.signalSource.contains('↓')) -1 else 1, family(result.signalSource), universeRank)
 
     private fun features(score: Double, jump: Double, range: Double, volume: Double, rvol: Double,
-        return10m: Double, direction: Int, family: String): DoubleArray {
+        return10m: Double, direction: Int, family: String, universeRank: Int?): DoubleArray {
         val families = FAMILIES.map { if (family == it) 1.0 else 0.0 }
-        return doubleArrayOf(score, jump, range, volume, rvol, return10m, direction.toDouble(), *families.toDoubleArray())
+        val universeStrength = universeRank?.let { (51 - it.coerceIn(1, 50)) / 50.0 } ?: 0.5
+        return doubleArrayOf(score, jump, range, volume, rvol, return10m, direction.toDouble(),
+            universeStrength, *families.toDoubleArray())
+    }
+
+    private fun latestUniverseRank(symbol: String): Int? = connection.prepareStatement(
+        "SELECT rank FROM universe_membership WHERE symbol=? ORDER BY selection_date DESC LIMIT 1"
+    ).use { statement ->
+        statement.setString(1, symbol.uppercase())
+        statement.executeQuery().use { rows -> if (rows.next()) rows.getInt(1) else null }
     }
 
     private fun family(source: String): String = when {
@@ -160,7 +169,7 @@ internal class PredictiveModelStore(private val connection: Connection) {
 
     private companion object {
         const val DEFAULT_HORIZON = 10
-        const val FEATURE_VERSION = 2
+        const val FEATURE_VERSION = 3
         const val FRICTION_PERCENT = 0.20
         const val MIN_TOTAL_SAMPLES = 300
         const val MIN_TRAINING_SAMPLES = 200
@@ -173,8 +182,10 @@ internal class PredictiveModelStore(private val connection: Connection) {
         val HORIZONS = listOf(5, 10, 30)
         val FAMILIES = listOf("Control", "Impulse", "Momentum", "V-Reversal", "Steady rise", "Early recovery")
         const val LOAD_SAMPLES_SQL = """SELECT s.observed_epoch, s.family, s.direction, s.score, s.jump_z,
-            s.range_z, s.volume_z, s.rvol, s.return_10m, o.return_percent
+            s.range_z, s.volume_z, s.rvol, s.return_10m, o.return_percent, u.rank AS universe_rank
             FROM research_samples s JOIN research_outcomes o ON o.sample_id=s.id
+            LEFT JOIN universe_membership u ON u.symbol=s.symbol
+                AND u.selection_date=date(s.observed_epoch, 'unixepoch')
             WHERE o.horizon_minutes=? ORDER BY s.observed_epoch"""
         const val INSERT_MODEL_SQL = """INSERT INTO predictive_models(horizon_minutes, feature_version,
             trained_at, training_cutoff, training_samples, validation_samples, validation_days,

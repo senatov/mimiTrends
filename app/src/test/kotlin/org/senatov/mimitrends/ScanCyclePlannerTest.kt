@@ -26,4 +26,26 @@ class ScanCyclePlannerTest {
         }
         assertTrue(planner.order(listOf("A", "B", "C.DE", "D.DE")).first() != "C.DE")
     }
+
+    @Test fun `bounds large cycles and rotates through the full universe`() {
+        val planner = ScanCyclePlanner(maximumSymbolsPerCycle = 4)
+        val symbols = (1..12).map { "S$it" }
+
+        val covered = buildSet {
+            repeat(3) { addAll(planner.order(symbols)) }
+        }
+
+        assertEquals(symbols.toSet(), covered)
+    }
+
+    @Test fun `rotates both regions without starving either one`() {
+        val planner = ScanCyclePlanner(maximumSymbolsPerCycle = 4)
+        val symbols = (1..6).map { "U$it" } + (1..6).map { "E$it.DE" }
+
+        val covered = buildSet {
+            repeat(3) { addAll(planner.order(symbols)) }
+        }
+
+        assertEquals(symbols.toSet(), covered)
+    }
 }

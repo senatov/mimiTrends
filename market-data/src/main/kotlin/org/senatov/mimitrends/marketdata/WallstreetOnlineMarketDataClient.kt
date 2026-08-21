@@ -35,11 +35,14 @@ class WallstreetOnlineMarketDataClient(
         .followRedirects(HttpClient.Redirect.NORMAL)
         .build()
 ) {
-    fun loadMovers(): List<WallstreetOnlineMover> = MOVER_PATHS.flatMap { path ->
-        parseMovers(send("$BASE_URL$path"))
-    }.distinctBy(WallstreetOnlineMover::path)
-        .sortedByDescending(WallstreetOnlineMover::changePercent)
-        .take(DISCOVERY_RESULT_LIMIT)
+    fun loadMovers(): List<WallstreetOnlineMover> {
+        val rankings = MOVER_PATHS.mapNotNull { path ->
+            runCatching { parseMovers(send("$BASE_URL$path")) }.getOrNull()
+        }
+        return rankings.maxOfOrNull(List<WallstreetOnlineMover>::size)?.let { maximum ->
+            (0 until maximum).flatMap { rank -> rankings.mapNotNull { it.getOrNull(rank) } }
+        }.orEmpty().distinctBy(WallstreetOnlineMover::path).take(DISCOVERY_RESULT_LIMIT)
+    }
 
     fun loadQuote(path: String): WallstreetOnlineQuote {
         require(DETAIL_PATH.matches(path)) { "Invalid wallstreetONLINE instrument path" }
@@ -149,10 +152,12 @@ class WallstreetOnlineMarketDataClient(
         const val MAX_MOVERS_PER_PAGE = 50
         const val FUTURE_TOLERANCE_MILLIS = 5 * 60_000L
         val QUOTE_ZONE: ZoneId = ZoneId.of("Europe/Berlin")
-        const val DISCOVERY_RESULT_LIMIT = 30
+        const val DISCOVERY_RESULT_LIMIT = 100
         val MOVER_PATHS = listOf(
-            "/statistik/top-aktien-performance",
-            "/statistik/top-aktien-meistgehandelt"
+            "/statistik/top-sp500-aktien-performance",
+            "/statistik/top-sp500-aktien-meistgehandelt",
+            "/statistik/top-eurostoxx-aktien-performance",
+            "/statistik/top-eurostoxx-aktien-meistgehandelt"
         )
         val DETAIL_PATH = Regex("/aktien/[a-z0-9-]+-aktie")
         val ISIN_QUERY = Regex("[A-Z]{2}[A-Z0-9]{9}[0-9]", RegexOption.IGNORE_CASE)

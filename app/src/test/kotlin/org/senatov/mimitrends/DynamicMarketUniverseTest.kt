@@ -30,7 +30,23 @@ class DynamicMarketUniverseTest {
             ScannerCriteria(symbols = listOf("AAPL"))
         )
 
-        assertEquals(listOf("AAPL", "MU", "SRT3.DE"), selection.symbols)
+        assertEquals(listOf("MU", "AAPL", "SRT3.DE"), selection.symbols)
         assertEquals(listOf("MU", "SRT3.DE"), selection.discovered)
+    }
+
+    @Test
+    fun `limits each region to its fifty highest ranked symbols`() {
+        val us = (1..60).map { "U$it" }
+        val europe = (1..60).map { "E$it.DE" }
+
+        val selection = DynamicMarketUniverse { us + europe }.select(
+            ScannerCriteria(symbols = us.reversed() + europe.reversed())
+        )
+
+        assertEquals(100, selection.symbols.size)
+        assertEquals(us.take(50), selection.symbols.take(50))
+        assertEquals(europe.take(50), selection.symbols.drop(50))
+        assertEquals(1, selection.ranks["U1"])
+        assertEquals(1, selection.ranks["E1.DE"])
     }
 }

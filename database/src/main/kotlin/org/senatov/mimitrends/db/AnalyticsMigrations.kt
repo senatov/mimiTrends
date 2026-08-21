@@ -112,6 +112,13 @@ internal object AnalyticsMigrations {
         ),
         11 to listOf(
             "UPDATE instrument_metadata SET isin='US8825081040' WHERE symbol='TXN' AND isin='US69349H1077'"
+        ),
+        12 to listOf(
+            """CREATE TABLE universe_membership(
+                selection_date TEXT NOT NULL, region TEXT NOT NULL, symbol TEXT NOT NULL,
+                rank INTEGER NOT NULL, source TEXT NOT NULL,
+                PRIMARY KEY(selection_date, region, symbol))""",
+            "CREATE INDEX idx_universe_symbol_date ON universe_membership(symbol, selection_date DESC)"
         )
     )
 }

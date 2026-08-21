@@ -244,8 +244,9 @@ class MainController(private val apiKey: String?, initialSymbol: String = "AAPL"
             val cycleStartedNanos = System.nanoTime()
             val universe = dynamicUniverse.select(scannerCriteria)
             val selectedSymbols = universe.symbols
-            shortMoveRefresh.replaceSymbols(selectedSymbols)
+            analytics.recordUniverseSelection(universe.ranks, universe.discovered)
             val symbols = scanCyclePlanner.order(selectedSymbols.filter { MarketCalendar.isOpen(it) })
+            shortMoveRefresh.replaceSymbols(symbols)
             log.info(LogTag.API, "scan started symbols={} discovered={} recentWindow={}m",
                 symbols.size, universe.discovered.size, criteria.maxSignalAgeMinutes)
             if (symbols.isEmpty()) {
