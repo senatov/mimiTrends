@@ -169,6 +169,8 @@ internal class SteadyRiseDetector(private val zoneOverride: ZoneId? = null) {
         return -tailReturn <= permittedPullback
     }
 
+    // Ordinary least squares slope and R²; NIST Engineering Statistics Handbook, section 4.1.4.1.
+    // https://www.itl.nist.gov/div898/handbook/pmd/section1/pmd141.htm
     private fun regression(bars: List<MinuteBar>): Regression {
         val values = bars.map { it.close }
         val firstEpoch = bars.first().minuteEpochSeconds

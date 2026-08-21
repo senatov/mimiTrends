@@ -15,7 +15,8 @@ internal object ScanCyclePresentation {
             .sortedByDescending(Map.Entry<String, Int>::value)
             .joinToString(", ") { "${it.key} ${it.value}" }
             .ifEmpty { "no source data" }
-        return "$duration · oldest $oldest · $sources"
+        val reused = if (batch.reusedAnalyses > 0) " · reused ${batch.reusedAnalyses}" else ""
+        return "$duration · oldest $oldest · $sources$reused"
     }
 
     private fun age(seconds: Long): String = when {

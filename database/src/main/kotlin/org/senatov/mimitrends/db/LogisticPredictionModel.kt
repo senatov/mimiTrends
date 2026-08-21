@@ -27,6 +27,9 @@ internal data class LogisticPredictionModel(
     }
 
     companion object {
+        // Joseph Berkson, "Application of the Logistic Function to Bio-Assay" (1944).
+        // The implementation uses L2-regularized binomial logistic regression from Smile.
+        // https://doi.org/10.1080/01621459.1944.10500699
         fun fit(samples: List<PredictiveSample>): LogisticPredictionModel {
             require(samples.isNotEmpty())
             val size = samples.first().rawFeatures.size

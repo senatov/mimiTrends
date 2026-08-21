@@ -98,6 +98,9 @@ class ScannerPanel(
     }
     private val empty = Label("Waiting for the first local/Yahoo scan…")
     private val cycleStatus = Label()
+    private val usMarketBadge = Label("US —").apply { styleClass += "market-pulse-badge" }
+    private val europeMarketBadge = Label("EU —").apply { styleClass += "market-pulse-badge" }
+    private val dataPulseBadge = Label("DATA waiting").apply { styleClass += "market-pulse-badge" }
     private val scanIndicator = ScanClockIndicator()
     private val stagedRows = linkedMapOf<String, ScanResult>()
     private val refreshingStatuses = mutableMapOf<String, String>()
@@ -118,7 +121,7 @@ class ScannerPanel(
     init {
         log.debug(LogTag.UI, "init()")
         val header = javafx.scene.layout.HBox(8.0, Label("Anomaly signals").apply { styleClass += "table-section-title" },
-            scanIndicator, cycleStatus.apply { styleClass += "scanner-cycle" },
+            scanIndicator, cycleStatus.apply { styleClass += "scanner-cycle" }, usMarketBadge, europeMarketBadge, dataPulseBadge,
             javafx.scene.layout.Region().also { javafx.scene.layout.HBox.setHgrow(it, Priority.ALWAYS) },
             detectedTodayButton).apply {
             alignment = Pos.CENTER_LEFT
@@ -279,12 +282,23 @@ class ScannerPanel(
         cycleStatus.text = "Batch $number/$total · ${symbols.size} symbols"
         cycleStatus.tooltip = Tooltip(symbols.joinToString(", "))
         scanIndicator.showScanning()
+        val us = symbols.count { !it.contains('.') }
+        val europe = symbols.size - us
+        usMarketBadge.text = "US $us"
+        europeMarketBadge.text = "EU $europe"
+        dataPulseBadge.text = "DATA scanning"
+        dataPulseBadge.styleClass.removeAll("market-pulse-live", "market-pulse-warning")
+        dataPulseBadge.styleClass += "market-pulse-warning"
     }
 
     fun completeScan(resultLimit: Int = 50) {
         log.debug(LogTag.UI, "completeScan(results={})", stagedRows.size)
         replaceRows(stagedRows.values.sortedByDescending(ScanResult::anomalyScore).take(resultLimit))
         stagedRows.clear(); scanning = false
+        val freshest = rows.minOfOrNull { FeedFreshness.ageMinutes(it.analysisUpdatedAtMillis) }
+        dataPulseBadge.text = freshest?.let { "DATA ${it}m" } ?: "DATA no signals"
+        dataPulseBadge.styleClass.removeAll("market-pulse-live", "market-pulse-warning")
+        dataPulseBadge.styleClass += if (freshest != null && freshest <= 3) "market-pulse-live" else "market-pulse-warning"
         autoFitter.request()
     }
 

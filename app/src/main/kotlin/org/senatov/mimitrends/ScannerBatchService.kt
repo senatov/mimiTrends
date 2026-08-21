@@ -11,7 +11,8 @@ internal data class ScannerBatchResult(
     val adaptiveCount: Int,
     val errors: List<String>,
     val sourceCoverage: Map<String, Int>,
-    val oldestDataAgeSeconds: Long?
+    val oldestDataAgeSeconds: Long?,
+    val reusedAnalyses: Int = 0
 )
 
 internal class ScannerBatchService(
@@ -34,6 +35,7 @@ internal class ScannerBatchService(
         val errors = mutableListOf<String>()
         val sourceCoverage = linkedMapOf<String, Int>()
         var oldestDataAgeSeconds: Long? = null
+        var reusedAnalyses = 0
         val nowEpochSeconds = java.time.Instant.now().epochSecond
         symbols.forEachIndexed { index, symbol ->
             if (!isCurrent()) {
@@ -42,6 +44,7 @@ internal class ScannerBatchService(
             }
             runCatching { evaluate(symbol, criteria) }
                 .onSuccess { evaluation ->
+                    if (evaluation.reusedAnalysis) reusedAnalyses++
                     sourceCoverage.compute(evaluation.sourceStatus) { _, count -> (count ?: 0) + 1 }
                     evaluation.latestDataEpochSeconds?.let { latest ->
                         val age = (nowEpochSeconds - latest).coerceAtLeast(0L)
@@ -83,6 +86,6 @@ internal class ScannerBatchService(
         val strictSymbols = calibratedStrict.mapTo(hashSetOf(), ScanResult::symbol)
         val qualifiedStrictCount = selection.results.count { it.symbol in strictSymbols }
         return ScannerBatchResult(selection.results, qualifiedStrictCount, selection.adaptiveCount, errors,
-            sourceCoverage.toMap(), oldestDataAgeSeconds)
+            sourceCoverage.toMap(), oldestDataAgeSeconds, reusedAnalyses)
     }
 }

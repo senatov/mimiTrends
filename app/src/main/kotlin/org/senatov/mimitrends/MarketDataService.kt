@@ -25,6 +25,7 @@ internal class MarketDataService(
     private val dataStatus: (String) -> String
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
+    private val analysisCache = MarketAnalysisCache()
 
     fun backfillCachedAnalytics() {
         val from = java.time.Instant.now().epochSecond - 90 * 86_400L
@@ -123,6 +124,7 @@ internal class MarketDataService(
             return ScanEvaluation(null, emptyList(), "ANALYSIS_BEHIND_QUOTE", sourceStatus = merged.latestSource.name,
                 latestDataEpochSeconds = merged.latestAnalysisEpochSeconds)
         }
+        analysisCache.reuse(symbol, merged.analysisBars, criteria, now * 1_000L)?.let { return it }
         val researchFeatures = ResearchFeatureExtractor.extract(merged.analysisBars)
         val prepare: (ScanResult) -> ScanResult = { result ->
             result.forPresentation(merged, effectiveStatus, now)
@@ -141,7 +143,9 @@ internal class MarketDataService(
         } else null
         return ScanEvaluation(primary, fallback, rejectionReason, longTerm,
             researchFeatures, merged.latestSource.name,
-            merged.latestAnalysisEpochSeconds, context)
+            merged.latestAnalysisEpochSeconds, context).also {
+            analysisCache.record(symbol, merged.analysisBars, criteria, it)
+        }
     }
 
     fun loadPriorityResult(symbol: String, criteria: ScannerCriteria): ScanResult? {
@@ -182,6 +186,7 @@ internal class MarketDataService(
         val observation = snapshot.latestObservation ?: return copy(
             signalAgeMinutes = actualSignalAgeMinutes,
             analysisUpdatedAtMillis = analysisEpoch * 1_000L,
+            scanEvaluatedAtMillis = nowEpochSeconds * 1_000L,
             dataStatus = status
         )
         return copy(
@@ -189,6 +194,7 @@ internal class MarketDataService(
             signalAgeMinutes = actualSignalAgeMinutes,
             updatedAtMillis = observation.observedAtMillis,
             analysisUpdatedAtMillis = analysisEpoch * 1_000L,
+            scanEvaluatedAtMillis = nowEpochSeconds * 1_000L,
             dataStatus = status
         )
     }
@@ -233,5 +239,6 @@ internal data class ScanEvaluation(
     val researchFeatures: ResearchFeatures? = null,
     val sourceStatus: String = "UNKNOWN",
     val latestDataEpochSeconds: Long? = null,
-    val context: ScanResult? = null
+    val context: ScanResult? = null,
+    val reusedAnalysis: Boolean = false
 )

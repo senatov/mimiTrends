@@ -70,6 +70,7 @@ class MainController(private val apiKey: String?, initialSymbol: String = "AAPL"
         },
         { symbol -> profileService.load(symbol) }
     )
+    private val insightSidebar = InsightSidebar(moderateCandidatePanel)
     private val scannerPanel = ScannerPanel(
         onOpen = ::openScannerResult,
         shortMovePanel = shortMovePanel,
@@ -178,7 +179,7 @@ class MainController(private val apiKey: String?, initialSymbol: String = "AAPL"
         importTradesButton.setOnAction { scalableImport.chooseAndImport(importTradesButton.scene?.window, ::handleScalableImport) }
         researchReport.start()
         val appLayers = MainViewFactory.create(refreshButton, settingsButton, importTradesButton,
-            aboutButton, scannerPanel, trendChart, moderateCandidatePanel, contentSplitPane, requestStatus, initialDivider)
+            aboutButton, scannerPanel, trendChart, insightSidebar, contentSplitPane, requestStatus, initialDivider)
         apiKey?.takeIf(String::isNotBlank)?.let(::restartFinnhubLive)
         analytics.applyRetention()
         DatabaseStartupMaintenance.schedule(analytics, batchScheduler, log)
@@ -245,6 +246,10 @@ class MainController(private val apiKey: String?, initialSymbol: String = "AAPL"
             val universe = dynamicUniverse.select(scannerCriteria)
             val selectedSymbols = universe.symbols
             analytics.recordUniverseSelection(universe.ranks, universe.discovered)
+            Platform.runLater {
+                insightSidebar.showUniverse(universe)
+                moderateCandidatePanel.showBuildingContext(selectedSymbols.size)
+            }
             val symbols = scanCyclePlanner.order(selectedSymbols.filter { MarketCalendar.isOpen(it) })
             shortMoveRefresh.replaceSymbols(symbols)
             log.info(LogTag.API, "scan started symbols={} discovered={} recentWindow={}m",
@@ -361,6 +366,7 @@ class MainController(private val apiKey: String?, initialSymbol: String = "AAPL"
         log.debug(LogTag.UI, "openScannerResult(symbol={}, age={})", result.symbol, result.signalAgeMinutes)
         currentSymbol = result.symbol
         currentSignal = result
+        insightSidebar.showSignal(result)
         trendChart.showSignalFocus()
         loadLocalChart(result.symbol)
     }

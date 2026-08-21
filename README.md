@@ -28,6 +28,9 @@ logistic probabilities, Brier scores, and walk-forward evaluation. The exact com
 thresholds, gap/reversal rules, and UI classifications are MiMiTrends-specific heuristics and should be
 treated as experiments, not formulas endorsed by the cited authors.
 
+See [Financial and statistical methods](Doc/FinancialMathReferences.md) for method-level sources and the exact
+implementation locations they support.
+
 <img src="./Doc/AppIcon-1024.png" alt="MiMiTrends application icon" width="128">
 
 **A local-first desktop scanner for fresh US and European market anomalies.**

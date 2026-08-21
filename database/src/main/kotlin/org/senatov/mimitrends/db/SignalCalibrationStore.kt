@@ -119,6 +119,8 @@ internal class SignalCalibrationStore(private val connection: Connection) {
         return sorted[lower] + (sorted[upper] - sorted[lower]) * (position - lower)
     }
 
+    // Edwin B. Wilson, "Probable Inference, the Law of Succession, and Statistical Inference" (1927).
+    // https://doi.org/10.1080/01621459.1927.10502953
     private fun wilsonInterval(wins: Double, samples: Double): Pair<Double, Double> {
         val observed = wins / samples
         val denominator = 1.0 + Z95 * Z95 / samples

@@ -26,6 +26,8 @@ object ResearchFeatureExtractor {
         val recentVolumes = session.dropLast(10).takeLast(30).map { it.volume }.filter { it > 0.0 }
         val currentVolume = session.takeLast(10).sumOf(MinuteBar::volume)
         val referenceVolume = recentVolumes.average().takeIf { it.isFinite() && it > 0.0 }?.times(10.0)
+        // Ananth Madhavan, "VWAP Strategies" (2002), volume-weighted execution benchmark.
+        // https://www.pm-research.com/content/iijtrade/2002/1/32
         val vwapDenominator = session.sumOf(MinuteBar::volume)
         val vwap = if (vwapDenominator > 0.0) session.sumOf { it.close * it.volume } / vwapDenominator else Double.NaN
         return ResearchFeatures(

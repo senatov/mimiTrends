@@ -289,6 +289,8 @@ class ScannerEngine(private val zoneOverride: ZoneId? = null) {
         )
     }.mapIndexed { index, feature -> feature.copy(index = index) }
 
+    // Scaled MAD (1 / Phi^-1(0.75) ~= 1.4826), a robust alternative to standard deviation.
+    // NIST Engineering Statistics Handbook: https://itl.nist.gov/div898/software/dataplot/refman2/auxillar/mad.htm
     private fun robustScale(values: List<Double>, floor: Double): Double {
         val center = median(values)
         val mad = median(values.map { abs(it - center) })

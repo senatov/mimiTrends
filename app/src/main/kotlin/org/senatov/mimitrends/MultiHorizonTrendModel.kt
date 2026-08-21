@@ -73,6 +73,8 @@ internal object MultiHorizonTrendModel {
         return Component(horizon, (50.0 + normalized * 50.0).coerceIn(0.0, 100.0), (exp(logReturn) - 1.0) * 100.0)
     }
 
+    // J.P. Morgan/Reuters, RiskMetrics Technical Document, 4th ed. (1996), EWMA variance recursion.
+    // https://www.msci.com/documents/10199/5915b101-4206-4ba0-aee2-3449d5c7e95a
     private fun ewmaVolatility(returns: List<Double>): Double {
         var variance = returns.firstOrNull()?.let { it * it } ?: return 0.0
         returns.drop(1).forEach { value -> variance = EWMA_LAMBDA * variance + (1.0 - EWMA_LAMBDA) * value * value }

@@ -33,6 +33,11 @@ internal object FeedFreshness {
         }
     }
 
+    fun timeline(result: org.senatov.mimitrends.model.ScanResult, nowMillis: Long = System.currentTimeMillis()): String =
+        "Quote ${ageLabel(result.updatedAtMillis, nowMillis)} · " +
+            "analysis ${ageLabel(result.analysisUpdatedAtMillis, nowMillis)} · " +
+            "evaluated ${ageLabel(result.scanEvaluatedAtMillis, nowMillis)}"
+
     private fun expectedDelayMinutes(status: String): Long =
         DELAY_MINUTES.find(status)?.groupValues?.get(1)?.toLongOrNull() ?: 0L
 

@@ -28,7 +28,7 @@ internal object MainViewFactory {
         aboutButton: Button,
         scannerPanel: ScannerPanel,
         trendChart: TrendChartView,
-        moderateCandidatePanel: ModerateCandidatePanel,
+        insightSidebar: InsightSidebar,
         contentSplitPane: SplitPane,
         requestStatus: RequestStatusPane,
         initialDivider: Double
@@ -56,7 +56,7 @@ internal object MainViewFactory {
         }
         contentSplitPane.apply {
             orientation = javafx.geometry.Orientation.VERTICAL
-            val chartArea = HBox(8.0, trendChart, moderateCandidatePanel).apply {
+            val chartArea = HBox(8.0, trendChart, insightSidebar).apply {
                 HBox.setHgrow(trendChart, Priority.ALWAYS)
                 minHeight = 0.0
             }

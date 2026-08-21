@@ -155,6 +155,8 @@ internal class PredictiveModelStore(private val connection: Connection) {
         else -> "Impulse"
     }
 
+    // Glenn W. Brier, "Verification of Forecasts Expressed in Terms of Probability" (1950).
+    // https://doi.org/10.1175/1520-0493(1950)078%3C0001:VOFEIT%3E2.0.CO;2
     private fun brier(samples: List<PredictiveSample>, probability: (PredictiveSample) -> Double): Double =
         samples.map { val error = probability(it) - it.target; error * error }.average()
     private fun hasClassBalance(samples: List<PredictiveSample>, minimum: Int): Boolean {

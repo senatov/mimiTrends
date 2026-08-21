@@ -21,6 +21,7 @@ internal class ModerateCandidatePanel(
     private var displayed = emptyList<ShortMove>()
     private var recentSymbols = emptySet<String>()
     private val anomalySymbols = linkedSetOf<String>()
+    private var stateMessage = "Building fresh market context…"
 
     init {
         children.setAll(
@@ -35,10 +36,17 @@ internal class ModerateCandidatePanel(
     }
 
     fun show(moves: Collection<ShortMove>) {
+        stateMessage = "No candidates meet the current safety and entry thresholds"
         recentSymbols = moves.take(RECENT_TABLE_LIMIT).mapTo(linkedSetOf(), ShortMove::symbol)
         displayed = ModeratePositiveCandidateSelector.select(moves.toList()).take(MAX_CANDIDATES)
         render()
         displayed.forEach(::requestName)
+    }
+
+    fun showBuildingContext(symbolCount: Int) {
+        displayed = emptyList()
+        stateMessage = "Building fresh context for $symbolCount symbols…"
+        render()
     }
 
     fun setAnomalySymbols(symbols: Collection<String>) {
@@ -54,7 +62,10 @@ internal class ModerateCandidatePanel(
 
     private fun render() {
         candidates.children.setAll(if (displayed.isEmpty()) {
-            listOf(Label("No positive candidates right now").apply { styleClass += "positive-watch-empty" })
+            listOf(Label(stateMessage).apply {
+                isWrapText = true
+                styleClass += "positive-watch-empty"
+            })
         } else displayed.map(::candidateRow))
     }
 

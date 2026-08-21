@@ -54,6 +54,7 @@ internal class ScannerColumnFactory(
                         FeedFreshness.ageLabel(result.analysisUpdatedAtMillis, now)
                     tooltip = Tooltip(
                         FeedFreshness.tooltip(result.analysisUpdatedAtMillis, result.dataStatus, now) +
+                            "\n${FeedFreshness.timeline(result, now)}" +
                             "\nAge of the latest candle used for analysis; Updated shows the latest displayed quote."
                     )
                     styleClass.remove("stale-feed-cell")
