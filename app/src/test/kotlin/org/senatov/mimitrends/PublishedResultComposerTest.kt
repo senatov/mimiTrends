@@ -28,9 +28,15 @@ class PublishedResultComposerTest {
 
     @Test
     fun `excludes stale saved results from an open-market table`() {
-        val current = TestScanResult.create(symbol = "LIVE").copy(updatedAtMillis = 10_000_000)
-        val recent = TestScanResult.create(symbol = "RECENT").copy(updatedAtMillis = 9_100_000)
-        val stale = TestScanResult.create(symbol = "STALE").copy(updatedAtMillis = 8_700_000)
+        val current = TestScanResult.create(symbol = "LIVE").copy(
+            updatedAtMillis = 10_000_000, analysisUpdatedAtMillis = 10_000_000
+        )
+        val recent = TestScanResult.create(symbol = "RECENT").copy(
+            updatedAtMillis = 9_880_000, analysisUpdatedAtMillis = 9_880_000
+        )
+        val stale = TestScanResult.create(symbol = "STALE").copy(
+            updatedAtMillis = 10_000_000, analysisUpdatedAtMillis = 9_759_000
+        )
 
         val displayed = PublishedResultComposer.compose(
             listOf(current), listOf(recent, stale), 5, nowEpochSeconds = 10_000

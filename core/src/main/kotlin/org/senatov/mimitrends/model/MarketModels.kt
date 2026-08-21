@@ -193,7 +193,8 @@ data class ScanResult(
     val entryQualityConfidence: Int = 0,
     val entryQualityLabel: String = "Unavailable",
     val entryCooldownMinutes: Int = 0,
-    val entryQualityDetails: String = "Entry-quality inputs are unavailable."
+    val entryQualityDetails: String = "Entry-quality inputs are unavailable.",
+    val analysisUpdatedAtMillis: Long = updatedAtMillis
 )
 
 data class CompanyProfile(

@@ -148,7 +148,7 @@ class ScannerPanel(
             .forEach { (column, id) -> column.id = id }
         columnLayout = TableColumnLayout(table, savedColumns).also(TableColumnLayout<ScanResult>::install)
         autoFitter = TableColumnAutoFitter(table, listOf(
-            TableColumnAutoFitter.Spec(freshness, { FeedFreshness.ageLabel(it.updatedAtMillis) }, 68.0, 96.0),
+            TableColumnAutoFitter.Spec(freshness, { FeedFreshness.ageLabel(it.analysisUpdatedAtMillis) }, 68.0, 96.0),
             TableColumnAutoFitter.Spec(symbol, columnFactory::companyName, 145.0, 360.0, flexible = true, reserveWidth = 32.0),
             TableColumnAutoFitter.Spec(signal, { WatchScorePresentation.calculate(it).label }, 76.0, 110.0),
             TableColumnAutoFitter.Spec(entryQuality, { SignalMetricPresentation.entryQuality(it).label }, 82.0, 118.0),

@@ -125,7 +125,7 @@ internal class MarketDataService(
         }
         val researchFeatures = ResearchFeatureExtractor.extract(merged.analysisBars)
         val prepare: (ScanResult) -> ScanResult = { result ->
-            result.forPresentation(merged, effectiveStatus)
+            result.forPresentation(merged, effectiveStatus, now)
                 .withRecentDynamics(merged.analysisBars)
                 .withExecutableQuote(now)
                 .withEntryQuality(researchFeatures)
@@ -172,11 +172,23 @@ internal class MarketDataService(
 
     private fun currency(symbol: String) = if (symbol.contains('.')) "EUR" else "USD"
 
-    private fun ScanResult.forPresentation(snapshot: MarketDataSnapshot, status: String): ScanResult {
-        val observation = snapshot.latestObservation ?: return copy(dataStatus = status)
+    private fun ScanResult.forPresentation(
+        snapshot: MarketDataSnapshot,
+        status: String,
+        nowEpochSeconds: Long
+    ): ScanResult {
+        val analysisEpoch = snapshot.latestAnalysisEpochSeconds ?: (updatedAtMillis / 1_000L)
+        val actualSignalAgeMinutes = ((nowEpochSeconds - signalEpochMillis / 1_000L).coerceAtLeast(0L) / 60L).toInt()
+        val observation = snapshot.latestObservation ?: return copy(
+            signalAgeMinutes = actualSignalAgeMinutes,
+            analysisUpdatedAtMillis = analysisEpoch * 1_000L,
+            dataStatus = status
+        )
         return copy(
             price = observation.bar.close,
+            signalAgeMinutes = actualSignalAgeMinutes,
             updatedAtMillis = observation.observedAtMillis,
+            analysisUpdatedAtMillis = analysisEpoch * 1_000L,
             dataStatus = status
         )
     }

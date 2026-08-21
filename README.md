@@ -489,14 +489,15 @@ a minute-bar pattern. A provider tail needs at least five continuous recent minu
 series used by the detectors. Freshness validation likewise follows the analytical series, so a current
 snapshot cannot disguise stale candle history.
 
-European quotes may be delayed. MiMiTrends labels data as live, delayed, Yahoo, or cached rather than assuming that every last bar is current.
+European quotes may be delayed. MiMiTrends labels data as live, delayed, Yahoo, or cached rather than assuming that every last bar is current. Open-market recommendations require the analytical candle history to be no more than three minutes old; an isolated newer quote can update the displayed price but cannot make stale analysis current.
 
 ### European quote correction
 
 Timestamped public observations from Tradegate, Euronext, Lang & Schwarz, and wallstreetONLINE can correct the visible tail
-of European instruments. The leading `Delay` value is
-calculated from the quote timestamp, not from the moment MiMiTrends downloaded the page. A provider
-that returns an old quote therefore remains visibly stale and cannot displace a newer observation.
+of European instruments. The leading `Delay` value is calculated from the timestamp of the latest candle
+used by the detectors, not from the moment MiMiTrends downloaded a page or from a newer isolated quote.
+`Updated` separately shows the timestamp of the latest displayed price. A provider that returns an old quote
+therefore remains visibly stale and cannot displace a newer observation or make stale analysis appear current.
 
 ### Finnhub
 

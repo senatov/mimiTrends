@@ -10,10 +10,11 @@ class MarketObservationOverlayTest {
         val overlay = MarketObservationOverlay()
         overlay.record("BNP.PA", 114.25, 12_000L, "EURONEXT")
 
-        val result = overlay.apply(result(updatedAtMillis = 9_000L))
+        val result = overlay.apply(result(updatedAtMillis = 9_000L).copy(analysisUpdatedAtMillis = 8_000L))
 
         assertEquals(114.25, result.price)
         assertEquals(12_000L, result.updatedAtMillis)
+        assertEquals(8_000L, result.analysisUpdatedAtMillis)
         assertEquals("EURONEXT", result.dataStatus)
     }
 

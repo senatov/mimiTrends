@@ -7,6 +7,6 @@ internal object OpenMarketDataFreshness {
         return age >= -FUTURE_TOLERANCE_SECONDS && age <= MAX_AGE_SECONDS
     }
 
-    const val MAX_AGE_SECONDS = 20 * 60L
+    const val MAX_AGE_SECONDS = 3 * 60L
     private const val FUTURE_TOLERANCE_SECONDS = 60L
 }

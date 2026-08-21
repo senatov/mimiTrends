@@ -30,6 +30,25 @@ class BrokerTradeAnnotationsTest {
         assertEquals(listOf(foreign), plot.annotations)
     }
 
+    @Test fun `clears the previous instrument cards before a replacement render`() {
+        val renderer = BrokerTradeAnnotations(XYPlot())
+        val bars = (0L..10L).map { minute ->
+            MinuteBar("TEST", minute * 60L, 100.0, 101.0, 99.0, 100.0, 1_000.0)
+        }
+        val trade = BrokerTrade(
+            "SAP.DE", null, 1.0, 120L, 100.0, null, null,
+            null, null, 0.0, "EUR"
+        )
+
+        renderer.render(listOf(trade), bars, bars, 1.0)
+        assertEquals(1, renderer.renderedCardBounds().size)
+
+        renderer.clear()
+
+        assertTrue(renderer.renderedCardBounds().isEmpty())
+        assertTrue(renderer.renderedTradePoints().isEmpty())
+    }
+
     @Test fun `keeps a large trade card inside the visible chart edges`() {
         val renderer = BrokerTradeAnnotations(XYPlot())
 

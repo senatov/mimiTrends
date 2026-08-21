@@ -174,6 +174,8 @@ class TrendChartView : StackPane() {
     }
 
     private fun renderRequest(request: TrendChartRenderRequest) {
+        // A failed or interrupted render must never leave cards from the previously selected instrument.
+        tradeAnnotations.clear()
         val focusEpoch = requestedFocusEpochSeconds ?: request.signal?.signalEpochMillis?.div(1_000L)
         val focused = focusButton.isSelected && focusEpoch != null
         val timeline = if (focused) ChartTimeline.focused(request.bars, requireNotNull(focusEpoch), request.tradeEpochSeconds)

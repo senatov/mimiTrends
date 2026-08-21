@@ -35,7 +35,7 @@ internal class ScannerColumnFactory(
     fun companyName(result: ScanResult): String = companyNames[result.symbol] ?: result.symbol
 
     fun freshness(): TableColumn<ScanResult, Number> = TableColumn<ScanResult, Number>("Delay").apply {
-        setCellValueFactory { ReadOnlyLongWrapper(FeedFreshness.ageMinutes(it.value.updatedAtMillis)) }
+        setCellValueFactory { ReadOnlyLongWrapper(FeedFreshness.ageMinutes(it.value.analysisUpdatedAtMillis)) }
         comparator = Comparator { left, right -> left.toLong().compareTo(right.toLong()) }
         isSortable = true
         setCellFactory {
@@ -48,11 +48,14 @@ internal class ScannerColumnFactory(
                         return
                     }
                     val now = System.currentTimeMillis()
-                    val stale = FeedFreshness.isStale(result.updatedAtMillis, result.dataStatus, now)
+                    val stale = FeedFreshness.isStale(result.analysisUpdatedAtMillis, result.dataStatus, now)
                     text = if (result.dataStatus == FeedFreshness.REFRESHING) "⌛ refreshing"
-                    else "${FeedFreshness.icon(result.updatedAtMillis, result.dataStatus, now)} " +
-                        FeedFreshness.ageLabel(result.updatedAtMillis, now)
-                    tooltip = Tooltip(FeedFreshness.tooltip(result.updatedAtMillis, result.dataStatus, now))
+                    else "${FeedFreshness.icon(result.analysisUpdatedAtMillis, result.dataStatus, now)} " +
+                        FeedFreshness.ageLabel(result.analysisUpdatedAtMillis, now)
+                    tooltip = Tooltip(
+                        FeedFreshness.tooltip(result.analysisUpdatedAtMillis, result.dataStatus, now) +
+                            "\nAge of the latest candle used for analysis; Updated shows the latest displayed quote."
+                    )
                     styleClass.remove("stale-feed-cell")
                     if (stale) styleClass += "stale-feed-cell"
                 }

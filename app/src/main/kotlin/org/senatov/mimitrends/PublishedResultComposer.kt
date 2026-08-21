@@ -13,7 +13,7 @@ internal object PublishedResultComposer {
         val results = linkedMapOf<String, ScanResult>()
         current.forEach { result -> if (results.size < limit) results.putIfAbsent(result.symbol, result) }
         saved.asSequence()
-            .filter { OpenMarketDataFreshness.isUsable(it.updatedAtMillis / 1_000L, nowEpochSeconds) }
+            .filter { OpenMarketDataFreshness.isUsable(it.analysisUpdatedAtMillis / 1_000L, nowEpochSeconds) }
             .forEach { result -> if (results.size < limit) results.putIfAbsent(result.symbol, result) }
         return results.values.toList()
     }
