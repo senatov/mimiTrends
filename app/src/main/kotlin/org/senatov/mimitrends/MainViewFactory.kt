@@ -4,7 +4,6 @@ import javafx.application.Platform
 import javafx.geometry.Insets
 import javafx.geometry.Pos
 import javafx.scene.Parent
-import javafx.scene.control.Button
 import javafx.scene.control.Label
 import javafx.scene.control.SplitPane
 import javafx.scene.layout.BorderPane
@@ -16,10 +15,7 @@ import org.senatov.mimitrends.charts.TrendChartView
 
 internal object MainViewFactory {
     fun create(
-        refreshButton: Button,
-        settingsButton: Button,
-        importButton: Button,
-        aboutButton: Button,
+        actions: WorkspaceActionButtons,
         scannerPanel: ScannerPanel,
         trendChart: TrendChartView,
         insightSidebar: InsightSidebarHost,
@@ -31,13 +27,10 @@ internal object MainViewFactory {
             Label("MiMiTrends").apply { styleClass += "app-title" },
             Label("v${BuildInfo.version}").apply { styleClass += "app-version" }
         ).apply { alignment = Pos.BASELINE_LEFT }
-        val titleActions = HBox(10.0, refreshButton, settingsButton, importButton, aboutButton).apply {
-            alignment = Pos.CENTER_RIGHT
-        }
         val titleBar = BorderPane().apply {
             styleClass += "title-toolbar"
             left = titleIdentity
-            right = titleActions
+            right = actions.createToolbar()
         }
         contentSplitPane.apply {
             orientation = javafx.geometry.Orientation.VERTICAL

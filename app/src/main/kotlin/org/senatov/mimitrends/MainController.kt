@@ -31,16 +31,13 @@ class MainController(private val apiKey: String?, initialSymbol: String = "AAPL"
     private val shortMoveLoader = ShortMoveLoader(repository, analytics, exchangeRates)
     private var currentSymbol = initialSymbol
     private var currentSignal: ScanResult? = null
-    private val refreshButton = Button("↻")
-    private val settingsButton = Button("⚙")
-    private val aboutButton = Button("ⓘ")
-    private val importTradesButton = Button("⇩")
+    private val actions = WorkspaceActionButtons()
     private val requestStatus = RequestStatusPane { chartSelection.selectedRange }
     private val trendChart = TrendChartView({ chartSelection.selectRange(it) }, { loadLocalChart(currentSymbol) })
     private val scannerSettings = ScannerSettingsService()
     private var scannerCriteria: ScannerCriteria = scannerSettings.load()
     private val currencyConverter = ScanResultCurrencyConverter(exchangeRates) { scannerCriteria }
-    private val status = MainStatusController(requestStatus, trendChart, refreshButton, log)
+    private val status = MainStatusController(requestStatus, trendChart, actions.refresh, log)
     private val scannerEngine = ScannerEngine()
     private val yahooFinance = YahooFinanceClient()
     private val wallstreetOnlineClient = WallstreetOnlineMarketDataClient()
@@ -99,7 +96,7 @@ class MainController(private val apiKey: String?, initialSymbol: String = "AAPL"
         analytics, repository, scannerEngine, { scannerCriteria }, status::update
     )
     private val scalableImportResults = ScalableImportResultHandler(
-        importTradesButton, status::update, requestStatus::formatError, log
+        actions.importTrades, status::update, requestStatus::formatError, log
     )
     private var rotationTask: ScheduledFuture<*>? = null
     private val scanGeneration = AtomicLong()
@@ -180,14 +177,15 @@ class MainController(private val apiKey: String?, initialSymbol: String = "AAPL"
         tradegateProvider.configure(scannerCriteria)
         euronextProvider.configure(scannerCriteria)
         researchReport.start()
-        val appLayers = MainViewFactory.create(refreshButton, settingsButton, importTradesButton,
-            aboutButton, scannerPanel, trendChart, insightSidebarHost, contentSplitPane, requestStatus, initialDivider
+        val appLayers = MainViewFactory.create(
+            actions, scannerPanel, trendChart,
+            insightSidebarHost, contentSplitPane, requestStatus, initialDivider
         )
         WorkspaceToolbar.configure(
-            appLayers, refreshButton, settingsButton, importTradesButton, aboutButton,
+            appLayers, actions,
             { loadLocalChart(currentSymbol) }, ::showScannerSettings,
-            { scalableImport.chooseAndImport(importTradesButton.scene?.window, scalableImportResults::handle) },
-            { AboutDialog.show(aboutButton.scene?.window) { researchReport.show(aboutButton.scene?.window) } })
+            { scalableImport.chooseAndImport(actions.importTrades.scene?.window, scalableImportResults::handle) },
+            { AboutDialog.show(actions.about.scene?.window) { researchReport.show(actions.about.scene?.window) } })
         WorkspaceAppearance.apply(appLayers, scannerCriteria.tableAppearance)
         trendChart.setDarkTheme(scannerCriteria.tableAppearance.theme == UiTheme.DARK)
         apiKey?.takeIf(String::isNotBlank)?.let(::restartFinnhubLive)
@@ -213,8 +211,7 @@ class MainController(private val apiKey: String?, initialSymbol: String = "AAPL"
         return appLayers
     }
     fun showClosing() {
-        ClosingPresentation.show(scannerPanel,
-            listOf(refreshButton, settingsButton, aboutButton, importTradesButton))
+        ClosingPresentation.show(scannerPanel, actions.all)
     }
     fun close() {
         log.debug(LogTag.UI, "close()")
@@ -371,7 +368,8 @@ class MainController(private val apiKey: String?, initialSymbol: String = "AAPL"
     }
     private fun showScannerSettings() {
         log.debug(LogTag.UI, "showScannerSettings()")
-        ScannerSettingsDialog(refreshButton.scene?.window, scannerCriteria, scannerSettings,
+        ScannerSettingsDialog(
+            actions.settings.scene?.window, scannerCriteria, scannerSettings,
             ApiKeyResolver.resolve() != null, wallstreetOnlineClient::validateStockSearchUrl)
             .showAndWait()?.let { result ->
             result.finnhubApiKey?.let { key ->
@@ -383,7 +381,7 @@ class MainController(private val apiKey: String?, initialSymbol: String = "AAPL"
             euronextProvider.configure(result.criteria)
             scannerPanel.setCurrency(result.criteria.displayCurrency, currencyConverter::price)
             scannerPanel.setAppearance(result.criteria.tableAppearance)
-                settingsButton.scene?.root?.let { WorkspaceAppearance.apply(it, result.criteria.tableAppearance) }
+                actions.settings.scene?.root?.let { WorkspaceAppearance.apply(it, result.criteria.tableAppearance) }
                 trendChart.setDarkTheme(result.criteria.tableAppearance.theme == UiTheme.DARK)
             loadLocalChart(currentSymbol)
             startScanner()

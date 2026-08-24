@@ -151,6 +151,15 @@
     -fx-border-color: #7aa5d8;
 }
 
+.title-actions > .toolbar-action-separator {
+    -fx-padding: 3px 2px;
+}
+
+.title-actions > .toolbar-action-separator .line {
+    -fx-border-color: -mimi-border-strong;
+    -fx-border-width: 0 0 0 1px;
+}
+
 .table-section, .trend-chart-card, .insight-sidebar {
     -fx-background-color: -mimi-surface;
     -fx-background-radius: 7px;

@@ -385,9 +385,7 @@ class ScannerPanel(
         """.trimIndent()
         table.refresh(); autoFitter.request()
     }
-
     private fun percent(value: Double?) = value?.let { "%+.2f%%".format(it) } ?: "N/A"
-
     private fun copyText(value: String) {
         log.debug(LogTag.UI, "copyText(chars={})", value.length)
         ClipboardText.copy(value)
