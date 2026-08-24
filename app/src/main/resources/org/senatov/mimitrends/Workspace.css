@@ -223,6 +223,15 @@
     -fx-border-color: -mimi-accent;
     -fx-background-color: -mimi-surface;
 }
+
+.table-filter-count {
+    -fx-font-size: 10px;
+    -fx-font-weight: 500;
+    -fx-text-fill: -mimi-accent;
+    -fx-background-color: -mimi-accent-soft;
+    -fx-background-radius: 8px;
+    -fx-padding: 3px 6px;
+}
 .table-section-title, .positive-watch-title, .inspector-title {
     -fx-font-size: 13px;
     -fx-font-weight: 600;

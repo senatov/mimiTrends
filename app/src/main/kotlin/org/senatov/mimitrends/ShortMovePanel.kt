@@ -4,6 +4,7 @@ import javafx.beans.property.ReadOnlyDoubleWrapper
 import javafx.beans.property.ReadOnlyObjectWrapper
 import javafx.beans.property.ReadOnlyStringWrapper
 import javafx.collections.FXCollections
+import javafx.collections.ListChangeListener
 import javafx.collections.transformation.SortedList
 import javafx.collections.transformation.FilteredList
 import javafx.geometry.Pos
@@ -41,6 +42,19 @@ class ShortMovePanel(
     }
     private val companyNames = java.util.concurrent.ConcurrentHashMap<String, String>()
     private val search = TableSearchField.create("Find move…", ::applyFilter)
+    private val filterCount = Label().apply {
+        styleClass += "table-filter-count"
+        isVisible = false
+        isManaged = false
+    }
+    private val empty = WorkspaceEmptyState.create(
+        "No recent price battles",
+        "This panel will populate when fresh minute bars form a directional move or recurring jump."
+    )
+    private val noMatches = WorkspaceEmptyState.create(
+        "No matching movements",
+        "Try another company, ticker, or direction."
+    )
     private val eventRetainer = ShortMoveEventRetainer()
     private val columnLayout: TableColumnLayout<ShortMove>
     private val autoFitter: TableColumnAutoFitter<ShortMove>
@@ -125,11 +139,10 @@ class ShortMovePanel(
         ), columnLayout.savedWidths(), columnLayout.manuallySizedColumnIds())
         val headerActionIndex = header.children.lastIndex
         header.children.add(headerActionIndex, search)
-        header.children.add(headerActionIndex + 1, columnLayout.menuButton(autoFitter::resetManualSizing))
-        table.placeholder = WorkspaceEmptyState.create(
-            "No recent price battles",
-            "This panel will populate when fresh minute bars form a directional move or recurring jump."
-        )
+        header.children.add(headerActionIndex + 1, filterCount)
+        header.children.add(headerActionIndex + 2, columnLayout.menuButton(autoFitter::resetManualSizing))
+        rows.addListener(ListChangeListener<ShortMove> { updateFilterPresentation() })
+        table.placeholder = empty
         table.columnResizePolicy = TableView.UNCONSTRAINED_RESIZE_POLICY
         table.fixedCellSize = -1.0
         VBox.setVgrow(table, Priority.ALWAYS)
@@ -211,6 +224,15 @@ class ShortMovePanel(
                     (companyNames[move.symbol] ?: move.symbol).lowercase().contains(query) ||
                     directionLabel(move).lowercase().contains(query)
         }
+        updateFilterPresentation()
+    }
+
+    private fun updateFilterPresentation() {
+        val filtering = search.text.isNotBlank()
+        table.placeholder = if (filtering) noMatches else empty
+        filterCount.text = "${filteredRows.size}/${rows.size}"
+        filterCount.isVisible = filtering
+        filterCount.isManaged = filtering
     }
 
     private class DirectionCell : TableCell<ShortMove, ShortMove>() {

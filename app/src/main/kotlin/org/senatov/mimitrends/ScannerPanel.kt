@@ -2,6 +2,7 @@ package org.senatov.mimitrends
 
 import javafx.application.Platform
 import javafx.collections.FXCollections
+import javafx.collections.ListChangeListener
 import javafx.collections.transformation.SortedList
 import javafx.collections.transformation.FilteredList
 import javafx.geometry.*
@@ -41,6 +42,10 @@ class ScannerPanel(
         "No anomaly signals yet",
         "The scanner is collecting market data. Qualifying instruments will appear here automatically."
     )
+    private val noMatches = WorkspaceEmptyState.create(
+        "No matching signals",
+        "Try a company name, ticker, or a broader signal term."
+    )
     private val cycleStatus = Label()
     private val usMarketBadge = Label("US —").apply { styleClass += "market-pulse-badge" }
     private val europeMarketBadge = Label("EU —").apply { styleClass += "market-pulse-badge" }
@@ -55,6 +60,11 @@ class ScannerPanel(
     private var convertPrice: (String, Double) -> Double = { _, value -> value }
     private val columnFactory = ScannerColumnFactory(table, loadProfile)
     private val search = TableSearchField.create("Find signal…", ::applyFilter)
+    private val filterCount = Label().apply {
+        styleClass += "table-filter-count"
+        isVisible = false
+        isManaged = false
+    }
     private val autoFitter: TableColumnAutoFitter<ScanResult>
     private val columnLayout: TableColumnLayout<ScanResult>
     private val tableSplit = SplitPane()
@@ -112,7 +122,9 @@ class ScannerPanel(
         ), columnLayout.savedWidths(), columnLayout.manuallySizedColumnIds())
         val headerActionIndex = header.children.lastIndex
         header.children.add(headerActionIndex, search)
-        header.children.add(headerActionIndex + 1, columnLayout.menuButton(autoFitter::resetManualSizing))
+        header.children.add(headerActionIndex + 1, filterCount)
+        header.children.add(headerActionIndex + 2, columnLayout.menuButton(autoFitter::resetManualSizing))
+        rows.addListener(ListChangeListener<ScanResult> { updateFilterPresentation() })
         columnFactory.onContentChanged = { applyFilter(); autoFitter.request() }
         signal.sortType = TableColumn.SortType.DESCENDING
         table.sortOrder += signal
@@ -164,6 +176,15 @@ class ScannerPanel(
                     columnFactory.companyName(result).lowercase().contains(query) ||
                     result.signalSource.lowercase().contains(query)
         }
+        updateFilterPresentation()
+    }
+
+    private fun updateFilterPresentation() {
+        val filtering = search.text.isNotBlank()
+        table.placeholder = if (filtering) noMatches else empty
+        filterCount.text = "${filteredRows.size}/${rows.size}"
+        filterCount.isVisible = filtering
+        filterCount.isManaged = filtering
     }
 
     fun update(result: ScanResult) {
