@@ -62,7 +62,7 @@
     -fx-text-fill: #c4ced8;
 }
 
-.theme-dark .chart-loading-overlay {
+.theme-dark .chart-state-overlay {
     -fx-background-color: rgba(23, 30, 38, 0.90);
 }
 

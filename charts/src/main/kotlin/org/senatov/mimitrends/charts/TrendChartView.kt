@@ -52,10 +52,15 @@ class TrendChartView(onRangeChanged: (String) -> Unit = {}) : StackPane() {
         maxWidth = 32.0
         maxHeight = 32.0
     }
-    private val loadingLabel = Label("Loading chart…").apply { styleClass += "chart-loading-label" }
-    private val loadingOverlay = VBox(9.0, progress, loadingLabel).apply {
+    private val stateTitle = Label("Loading chart…").apply { styleClass += "chart-state-title" }
+    private val stateDetail = Label().apply {
+        styleClass += "chart-state-detail"
+        isWrapText = true
+        maxWidth = 420.0
+    }
+    private val stateOverlay = VBox(9.0, progress, stateTitle, stateDetail).apply {
         alignment = Pos.CENTER
-        styleClass += "chart-loading-overlay"
+        styleClass += "chart-state-overlay"
         isVisible = false
         isManaged = false
     }
@@ -102,7 +107,7 @@ class TrendChartView(onRangeChanged: (String) -> Unit = {}) : StackPane() {
         viewer.minHeight = 0.0
         viewer.maxWidth = Double.MAX_VALUE
         viewer.maxHeight = Double.MAX_VALUE
-        val viewerShell = StackPane(viewer, loadingOverlay).apply { styleClass += "chart-viewer-shell" }
+        val viewerShell = StackPane(viewer, stateOverlay).apply { styleClass += "chart-viewer-shell" }
         val content = VBox(header, viewerShell).apply { styleClass += "chart-card-content" }
         VBox.setVgrow(viewerShell, Priority.ALWAYS)
         children += content
@@ -210,8 +215,38 @@ class TrendChartView(onRangeChanged: (String) -> Unit = {}) : StackPane() {
 
     fun setLoading(loading: Boolean) {
         log.debug(LogTag.UI, "setLoading(loading={})", loading)
-        loadingOverlay.isVisible = loading
-        loadingOverlay.isManaged = loading
+        progress.isVisible = loading
+        stateTitle.text = "Loading chart…"
+        stateDetail.text = "Reading collected bars and broker activity"
+        stateOverlay.styleClass.removeAll("chart-state-empty", "chart-state-error")
+        stateOverlay.isVisible = loading
+        stateOverlay.isManaged = loading
+    }
+
+    fun showEmpty(symbol: String, range: String) {
+        clear()
+        header.showUnavailable(symbol, "No collected minute bars · $range")
+        showState("No chart data for $symbol", "Try a wider range or wait for the next collection cycle.", "chart-state-empty")
+    }
+
+    fun showError(symbol: String) {
+        clear()
+        header.showUnavailable(symbol, "Chart data could not be loaded")
+        showState(
+            "Unable to load $symbol",
+            "Use Refresh to try again. Diagnostic details are available in the status bar.",
+            "chart-state-error"
+        )
+    }
+
+    private fun showState(title: String, detail: String, styleClass: String) {
+        progress.isVisible = false
+        stateTitle.text = title
+        stateDetail.text = detail
+        stateOverlay.styleClass.removeAll("chart-state-empty", "chart-state-error")
+        stateOverlay.styleClass += styleClass
+        stateOverlay.isVisible = true
+        stateOverlay.isManaged = true
     }
 
     fun setDarkTheme(dark: Boolean) {

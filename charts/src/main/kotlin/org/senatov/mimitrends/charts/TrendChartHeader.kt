@@ -142,6 +142,19 @@ internal class TrendChartHeader(
         cursor.text = "Preparing chart…"
     }
 
+    fun showUnavailable(symbol: String, detail: String) {
+        instrument.text = symbol
+        instrument.tooltip = null
+        price.text = ""
+        context.text = detail
+        context.tooltip = null
+        signal.text = ""
+        signal.tooltip = null
+        signal.isVisible = false
+        signal.isManaged = false
+        cursor.text = CURSOR_PROMPT
+    }
+
     fun clear() {
         instrument.text = "No collected market data"
         price.text = ""

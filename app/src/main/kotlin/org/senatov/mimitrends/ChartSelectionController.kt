@@ -74,12 +74,13 @@ internal class ChartSelectionController(
     }
 
     private fun showEmpty(symbol: String, range: String) {
-        chart.clear()
+        chart.showEmpty(symbol, range)
         status.update("Read SQLite: no collected minute bars for $symbol · $range")
     }
 
     private fun showError(symbol: String, error: Throwable) {
         log.error(LogTag.DB, "local chart load failed symbol={}", symbol, error)
+        chart.showError(symbol)
         status.update("SQLite read failed: ${error.message ?: "unknown error"}", true, formatError(symbol, error))
     }
 }

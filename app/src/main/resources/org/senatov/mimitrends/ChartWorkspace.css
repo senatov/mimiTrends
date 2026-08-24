@@ -45,14 +45,26 @@
     -fx-padding: 0 2px 1px 2px;
 }
 
-.chart-loading-overlay {
+.chart-state-overlay {
     -fx-background-color: rgba(247, 248, 250, 0.88);
+    -fx-padding: 28px;
 }
 
-.chart-loading-label {
+.chart-state-title {
+    -fx-font-size: 15px;
+    -fx-font-weight: 500;
+    -fx-text-fill: -mimi-text;
+}
+
+.chart-state-detail {
     -fx-font-size: 13px;
-    -fx-font-weight: 400;
+    -fx-font-weight: 300;
     -fx-text-fill: -mimi-text-secondary;
+    -fx-text-alignment: center;
+}
+
+.chart-state-error .chart-state-title {
+    -fx-text-fill: -mimi-negative;
 }
 
 .chart-mode-switch {
