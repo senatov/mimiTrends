@@ -56,21 +56,27 @@ internal class BrokerTradeAnnotations(private val plot: XYPlot) {
         val rangeMax = candleRangeMax + priceSpan * CARD_LANE_SHARE
         visible.forEach { trade ->
             val entryX = displayMillis(trade.entryEpochSeconds)
-            val exitX = displayMillis(trade.exitEpochSeconds ?: lastEpoch)
             val entryY = trade.entryPrice
-            val exitY = trade.exitPrice ?: trade.entryPrice
-            val controlX = (entryX + exitX) / 2.0
-            addTradeHighlight(trade, bars, entryX, exitX, timeStep, priceSpan, barPriceMultiplier)
+            val exit = trade.exitEpochSeconds?.let { epoch ->
+                trade.exitPrice?.let { price -> epoch to price }
+            }
+            val exitX = exit?.first?.let(displayMillis)
+            val controlX = exitX?.let { (entryX + it) / 2.0 } ?: entryX
+            if (exitX != null) {
+                addTradeHighlight(trade, bars, entryX, exitX, timeStep, priceSpan, barPriceMultiplier)
+            }
             val entryAlignment = alignToCandle(trade.entryEpochSeconds, trade.entryPrice,
                 bars, timeStep, barPriceMultiplier, displayMillis)
-            val exitAlignment = trade.exitEpochSeconds?.let { epoch ->
-                alignToCandle(epoch, requireNotNull(trade.exitPrice), bars,
+            val exitAlignment = exit?.let { (epoch, price) ->
+                alignToCandle(epoch, price, bars,
                     timeStep, barPriceMultiplier, displayMillis)
             }
             val entryPoint = entryAlignment?.candlePoint ?: TradePoint(entryX, entryY)
-            val exitPoint = exitAlignment?.candlePoint ?: TradePoint(exitX, exitY)
+            val exitPoint = exit?.let { (epoch, price) ->
+                exitAlignment?.candlePoint ?: TradePoint(displayMillis(epoch), price)
+            }
             addPoint(entryPoint.x, entryPoint.y, timeStep, priceSpan, ORANGE)
-            addPoint(exitPoint.x, exitPoint.y, timeStep, priceSpan, if (trade.isOpen) ORANGE else pnlColor(trade))
+            exitPoint?.let { addPoint(it.x, it.y, timeStep, priceSpan, pnlColor(trade)) }
             val key = TradeKey(trade.symbol, trade.entryEpochSeconds, trade.exitEpochSeconds)
             val stored = cardPositions[key]
             val preferredX = stored?.let { domainMin + (it.x * (domainMax - domainMin)) } ?: controlX
@@ -79,7 +85,7 @@ internal class BrokerTradeAnnotations(private val plot: XYPlot) {
             val connectorPoints = listOfNotNull(
                 entryAlignment?.candlePoint,
                 exitAlignment?.candlePoint
-            ).ifEmpty { listOf(entryPoint, exitPoint) }
+            ).ifEmpty { listOfNotNull(entryPoint, exitPoint) }
             addCard(key, trade, connectorPoints, preferredX, preferredBottom, timeStep, priceSpan,
                 domainMin, domainMax, rangeMin, rangeMax, entryAlignment, exitAlignment)
         }

@@ -49,6 +49,23 @@ class BrokerTradeAnnotationsTest {
         assertTrue(renderer.renderedTradePoints().isEmpty())
     }
 
+    @Test fun `open position renders only its entry without a fabricated exit range`() {
+        val renderer = BrokerTradeAnnotations(XYPlot())
+        val bars = (0L..10L).map { minute ->
+            MinuteBar("TEST", minute * 60L, 100.0, 101.0, 99.0, 100.0, 1_000.0)
+        }
+        val trade = BrokerTrade(
+            "TEST", null, 1.0, 120L, 100.0, null, null,
+            null, null, 0.0, "EUR"
+        )
+
+        renderer.render(listOf(trade), bars, bars, 1.0)
+
+        assertEquals(listOf(BrokerTradeAnnotations.TradePoint(120_000.0, 100.0)),
+            renderer.renderedTradePoints())
+        assertEquals(1, renderer.renderedCardBounds().size)
+    }
+
     @Test fun `keeps a large trade card inside the visible chart edges`() {
         val renderer = BrokerTradeAnnotations(XYPlot())
 
