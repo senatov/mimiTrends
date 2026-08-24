@@ -1,8 +1,5 @@
 package org.senatov.mimitrends.charts
 
-import javafx.geometry.Pos
-import javafx.scene.control.Label
-import javafx.scene.control.ProgressIndicator
 import javafx.scene.layout.StackPane
 import javafx.scene.layout.VBox
 import javafx.scene.layout.Priority
@@ -36,7 +33,11 @@ import java.text.DecimalFormat
 import java.text.SimpleDateFormat
 import java.util.Date
 private const val MAX_CANDLES = 360
-class TrendChartView(onRangeChanged: (String) -> Unit = {}) : StackPane() {
+
+class TrendChartView(
+    private val onRangeChanged: (String) -> Unit = {},
+    private val onRetry: () -> Unit = {}
+) : StackPane() {
     private val log = LoggerFactory.getLogger(javaClass)
     private val dateAxis = DateAxis()
     private val priceAxis = NumberAxis()
@@ -48,22 +49,7 @@ class TrendChartView(onRangeChanged: (String) -> Unit = {}) : StackPane() {
     private val combinedPlot = CombinedDomainXYPlot(dateAxis)
     private val chart = JFreeChart("", Font("SansSerif", Font.PLAIN, 14), combinedPlot, false)
     private val viewer = ChartViewer(chart)
-    private val progress = ProgressIndicator().apply {
-        maxWidth = 32.0
-        maxHeight = 32.0
-    }
-    private val stateTitle = Label("Loading chart…").apply { styleClass += "chart-state-title" }
-    private val stateDetail = Label().apply {
-        styleClass += "chart-state-detail"
-        isWrapText = true
-        maxWidth = 420.0
-    }
-    private val stateOverlay = VBox(9.0, progress, stateTitle, stateDetail).apply {
-        alignment = Pos.CENTER
-        styleClass += "chart-state-overlay"
-        isVisible = false
-        isManaged = false
-    }
+    private val stateOverlay = ChartStateOverlay()
     private val header = TrendChartHeader(
         { lastRequest?.let(::renderRequest) },
         { lastRequest?.let(::renderRequest) },
@@ -215,18 +201,16 @@ class TrendChartView(onRangeChanged: (String) -> Unit = {}) : StackPane() {
 
     fun setLoading(loading: Boolean) {
         log.debug(LogTag.UI, "setLoading(loading={})", loading)
-        progress.isVisible = loading
-        stateTitle.text = "Loading chart…"
-        stateDetail.text = "Reading collected bars and broker activity"
-        stateOverlay.styleClass.removeAll("chart-state-empty", "chart-state-error")
-        stateOverlay.isVisible = loading
-        stateOverlay.isManaged = loading
+        stateOverlay.showLoading(loading)
     }
 
     fun showEmpty(symbol: String, range: String) {
         clear()
         header.showUnavailable(symbol, "No collected minute bars · $range")
         showState("No chart data for $symbol", "Try a wider range or wait for the next collection cycle.", "chart-state-empty")
+        stateOverlay.showAction(if (range == "1Y") "Try again" else "Show 1Y") {
+            if (range == "1Y") onRetry() else onRangeChanged("1Y")
+        }
     }
 
     fun showError(symbol: String) {
@@ -237,16 +221,11 @@ class TrendChartView(onRangeChanged: (String) -> Unit = {}) : StackPane() {
             "Use Refresh to try again. Diagnostic details are available in the status bar.",
             "chart-state-error"
         )
+        stateOverlay.showAction("Try again", onRetry)
     }
 
     private fun showState(title: String, detail: String, styleClass: String) {
-        progress.isVisible = false
-        stateTitle.text = title
-        stateDetail.text = detail
-        stateOverlay.styleClass.removeAll("chart-state-empty", "chart-state-error")
-        stateOverlay.styleClass += styleClass
-        stateOverlay.isVisible = true
-        stateOverlay.isManaged = true
+        stateOverlay.showMessage(title, detail, styleClass)
     }
 
     fun setDarkTheme(dark: Boolean) {
