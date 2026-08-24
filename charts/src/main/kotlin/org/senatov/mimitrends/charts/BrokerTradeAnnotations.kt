@@ -1,7 +1,6 @@
 package org.senatov.mimitrends.charts
 
 import org.jfree.chart.annotations.XYAnnotation
-import org.jfree.chart.annotations.XYShapeAnnotation
 import org.jfree.chart.plot.XYPlot
 import org.senatov.mimitrends.model.BrokerTrade
 import org.senatov.mimitrends.model.MinuteBar
@@ -120,7 +119,9 @@ internal class BrokerTradeAnnotations(private val plot: XYPlot) {
     }
 
     private fun clearAnnotations() {
-        annotations.forEach(plot::removeAnnotation)
+        // The plot is the source of truth. A re-entrant chart repaint or drag must not leave an
+        // orphaned trade card behind when the selected instrument changes.
+        plot.annotations.toList().filter { it is BrokerTradeOwnedAnnotation }.forEach(plot::removeAnnotation)
         annotations.clear()
         renderedCards.clear()
         renderedTradePoints.clear()
@@ -130,7 +131,7 @@ internal class BrokerTradeAnnotations(private val plot: XYPlot) {
         renderedTradePoints += TradePoint(x, y)
         val dot = Ellipse2D.Double(x - timeStep * 0.30, y - priceSpan * 0.010,
             timeStep * 0.60, priceSpan * 0.020)
-        add(XYShapeAnnotation(dot, BasicStroke(1.6f), color.darker(), color))
+        add(BrokerTradeShapeAnnotation(dot, BasicStroke(1.6f), color.darker(), color))
     }
 
     private fun addCard(

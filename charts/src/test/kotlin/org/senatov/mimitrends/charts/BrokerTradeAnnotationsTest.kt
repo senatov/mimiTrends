@@ -8,6 +8,9 @@ import org.senatov.mimitrends.model.BrokerTrade
 import org.senatov.mimitrends.model.MinuteBar
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
+import java.awt.BasicStroke
+import java.awt.Color
+import java.awt.geom.Ellipse2D
 
 class BrokerTradeAnnotationsTest {
     @Test fun `renders trade markers and clears only trade annotations`() {
@@ -24,6 +27,11 @@ class BrokerTradeAnnotationsTest {
         )
 
         renderer.render(listOf(trade), bars, bars, 1.0)
+        plot.addAnnotation(
+            BrokerTradeShapeAnnotation(
+                Ellipse2D.Double(0.0, 0.0, 1.0, 1.0), BasicStroke(1.0f), Color.RED
+            )
+        )
 
         assertTrue(plot.annotations.any { it is XYShapeAnnotation })
         renderer.clear()

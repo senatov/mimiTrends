@@ -18,7 +18,7 @@ internal class TradeCardAnnotation(
     private val title: String,
     private val detail: String,
     private val detailColor: Color
-) : AbstractXYAnnotation() {
+) : AbstractXYAnnotation(), BrokerTradeOwnedAnnotation {
     override fun draw(
         graphics: Graphics2D,
         plot: XYPlot,

@@ -1,7 +1,6 @@
 package org.senatov.mimitrends.charts
 
 import org.jfree.chart.annotations.XYAnnotation
-import org.jfree.chart.annotations.XYShapeAnnotation
 import java.awt.BasicStroke
 import java.awt.Color
 import java.awt.geom.Ellipse2D
@@ -30,7 +29,7 @@ internal object TradeCardConnector {
             )
         }
         return buildList {
-            add(XYShapeAnnotation(path, CONNECTOR_STROKE, CONNECTOR_COLOR))
+            add(BrokerTradeShapeAnnotation(path, CONNECTOR_STROKE, CONNECTOR_COLOR))
             addAll(fastener(geometry.start, geometry.domainUnit, geometry.rangeUnit))
             addAll(fastener(geometry.end, geometry.domainUnit, geometry.rangeUnit))
         }
@@ -107,8 +106,8 @@ internal object TradeCardConnector {
             outerHeight * 0.34
         )
         return listOf(
-            XYShapeAnnotation(outer, FASTENER_STROKE, FASTENER_BORDER, FASTENER_FILL),
-            XYShapeAnnotation(shine, BasicStroke(0.4f), FASTENER_SHINE, FASTENER_SHINE)
+            BrokerTradeShapeAnnotation(outer, FASTENER_STROKE, FASTENER_BORDER, FASTENER_FILL),
+            BrokerTradeShapeAnnotation(shine, BasicStroke(0.4f), FASTENER_SHINE, FASTENER_SHINE)
         )
     }
 
