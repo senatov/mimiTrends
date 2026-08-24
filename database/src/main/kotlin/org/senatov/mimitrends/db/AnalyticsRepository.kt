@@ -4,7 +4,6 @@ package org.senatov.mimitrends.db
 
 import org.senatov.mimitrends.log.LogTag
 import org.senatov.mimitrends.model.MinuteBar
-import org.senatov.mimitrends.model.MarketTimeZone
 import org.senatov.mimitrends.model.MarketObservationQuality
 import org.senatov.mimitrends.model.ResearchFeatures
 import org.senatov.mimitrends.model.BrokerTrade
@@ -16,8 +15,6 @@ import java.sql.Connection
 import java.sql.Statement
 import java.time.Instant
 import java.time.ZoneId
-import kotlin.math.abs
-import kotlin.math.ln1p
 
 class AnalyticsRepository(
     private val database: EmbeddedDatabase = EmbeddedDatabase.open()
@@ -32,12 +29,14 @@ class AnalyticsRepository(
     private val scanCandidates: ScanCandidateStore
     private val predictionAnalytics: PredictionAnalyticsStore
     private val duckAnalytics: DuckDbAnalyticsStore
+    private val derivedAnalytics: DerivedMarketAnalyticsStore
     private val todayDetections: TodayDetectionStore
 
     init {
         migrate()
         recoverInterruptedScans()
         duckAnalytics = DuckDbAnalyticsStore.open(database.path)
+        derivedAnalytics = DerivedMarketAnalyticsStore(connection, duckAnalytics)
         brokerTransactions = BrokerTransactionStore(connection)
         signalOutcomes = SignalOutcomeStore(connection)
         researchSamples = ResearchSampleStore(connection)
@@ -114,9 +113,7 @@ class AnalyticsRepository(
             recordDataQualityInternal(symbol, observedSource, status, latestObservedEpoch, clean.size,
                 observationQuality.name)
             if (clean.isNotEmpty()) {
-                upsertSessions(symbol.uppercase(), clean, historySource)
-                upsertAggregates(symbol.uppercase(), clean)
-                upsertBaselines(symbol.uppercase(), clean)
+                derivedAnalytics.upsert(symbol.uppercase(), clean, historySource)
                 clean.takeLast(OUTCOME_TRACKING_BARS).forEach {
                     signalOutcomes.record(symbol, it.close, it.high, it.low, it.minuteEpochSeconds)
                     researchSamples.recordOutcomes(symbol, it.close, it.high, it.low, it.minuteEpochSeconds)
@@ -132,9 +129,7 @@ class AnalyticsRepository(
         if (clean.isEmpty()) return
         locked {
             transaction {
-                upsertSessions(normalized, clean, source)
-                upsertAggregates(normalized, clean)
-                upsertBaselines(normalized, clean)
+                derivedAnalytics.upsert(normalized, clean, source)
             }
         }
     }
@@ -229,26 +224,8 @@ class AnalyticsRepository(
 
     fun loadAggregatedBars(symbol: String, resolutionMinutes: Int, fromEpoch: Long): List<AggregatedBar> = locked {
         duckAnalytics.loadAggregatedBars(symbol, resolutionMinutes, fromEpoch).ifEmpty {
-            loadAggregatedBarsFromSqlite(symbol, resolutionMinutes, fromEpoch)
+            derivedAnalytics.loadAggregatedBars(symbol, resolutionMinutes, fromEpoch)
         }
-    }
-
-    private fun loadAggregatedBarsFromSqlite(
-        symbol: String,
-        resolutionMinutes: Int,
-        fromEpoch: Long
-    ): List<AggregatedBar> = connection.prepareStatement("""SELECT bucket_epoch, open, high, low, close, volume
-        FROM aggregate_bars WHERE symbol=? AND resolution_minutes=? AND bucket_epoch>=?
-        ORDER BY bucket_epoch""").use { statement ->
-        statement.setString(1, symbol.uppercase())
-        statement.setInt(2, resolutionMinutes)
-        statement.setLong(3, fromEpoch)
-        statement.executeQuery().use { rows -> buildList {
-            while (rows.next()) add(AggregatedBar(
-                symbol.uppercase(), resolutionMinutes, rows.getLong(1), rows.getDouble(2), rows.getDouble(3),
-                rows.getDouble(4), rows.getDouble(5), rows.getDouble(6)
-            ))
-        } }
     }
 
     fun loadLatestPublishedResults(limit: Int): List<ScanResult> = locked {
@@ -377,70 +354,6 @@ class AnalyticsRepository(
         }
     }
 
-    private fun upsertSessions(symbol: String, bars: List<MinuteBar>, source: String) {
-        val zone = zoneFor(symbol)
-        val groups = bars.groupBy { Instant.ofEpochSecond(it.minuteEpochSeconds).atZone(zone).toLocalDate().toString() }
-        connection.prepareStatement("""INSERT INTO trading_sessions(symbol, session_date, open_epoch, close_epoch, bar_count, volume, turnover, source)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(symbol, session_date) DO UPDATE SET open_epoch=excluded.open_epoch,
-            close_epoch=excluded.close_epoch, bar_count=excluded.bar_count, volume=excluded.volume, turnover=excluded.turnover, source=excluded.source""").use { s ->
-            groups.forEach { (date, values) ->
-                s.setString(1, symbol); s.setString(2, date); s.setLong(3, values.first().minuteEpochSeconds); s.setLong(4, values.last().minuteEpochSeconds)
-                s.setInt(5, values.size); s.setDouble(6, values.sumOf(MinuteBar::volume)); s.setDouble(7, values.sumOf { it.close * it.volume })
-                s.setString(8, source); s.addBatch()
-            }; s.executeBatch()
-        }
-    }
-
-    private fun upsertAggregates(symbol: String, bars: List<MinuteBar>) {
-        val aggregates = buildList {
-            for (resolution in listOf(5, 15, 60)) {
-                val seconds = resolution * 60L
-                bars.groupBy { it.minuteEpochSeconds / seconds * seconds }.forEach { (bucket, values) ->
-                    add(AggregatedBar(symbol, resolution, bucket, values.first().open, values.maxOf(MinuteBar::high),
-                        values.minOf(MinuteBar::low), values.last().close, values.sumOf(MinuteBar::volume)))
-                }
-            }
-        }
-        connection.prepareStatement("""INSERT INTO aggregate_bars(symbol, resolution_minutes, bucket_epoch, open, high, low, close, volume)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(symbol, resolution_minutes, bucket_epoch) DO UPDATE SET
-            open=excluded.open, high=excluded.high, low=excluded.low, close=excluded.close, volume=excluded.volume""").use { s ->
-            aggregates.forEach { value ->
-                s.setString(1, value.symbol); s.setInt(2, value.resolutionMinutes); s.setLong(3, value.bucketEpochSeconds)
-                s.setDouble(4, value.open); s.setDouble(5, value.high); s.setDouble(6, value.low)
-                s.setDouble(7, value.close); s.setDouble(8, value.volume); s.addBatch()
-            }
-            s.executeBatch()
-        }
-        duckAnalytics.upsertAggregates(aggregates)
-    }
-
-    private fun upsertBaselines(symbol: String, bars: List<MinuteBar>) {
-        val zone = zoneFor(symbol)
-        val features = bars.zipWithNext().mapNotNull { (a, b) ->
-            if (a.close <= 0 || b.minuteEpochSeconds - a.minuteEpochSeconds !in 1..180) null else {
-                val minute = Instant.ofEpochSecond(b.minuteEpochSeconds).atZone(zone).let { it.hour * 60 + it.minute }
-                BaselineSample(minute, (b.close / a.close - 1.0) * 100.0,
-                    b.volume.takeIf { b.volumeStatus.isReliable && it > 0.0 }?.let(::ln1p))
-            }
-        }.groupBy(BaselineSample::minute)
-        connection.prepareStatement("""INSERT INTO baseline_stats(symbol, minute_of_session, sample_count, median_return, mad_return, median_log_volume, mad_log_volume, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(symbol, minute_of_session) DO UPDATE SET sample_count=excluded.sample_count,
-            median_return=excluded.median_return, mad_return=excluded.mad_return, median_log_volume=excluded.median_log_volume,
-            mad_log_volume=excluded.mad_log_volume, updated_at=excluded.updated_at""").use { s ->
-            features.forEach { (minute, samples) ->
-                val returns = samples.map(BaselineSample::returnPercent)
-                val volumes = samples.mapNotNull(BaselineSample::logVolume)
-                val medianReturn = RobustStatistics.median(returns); val medianVolume = RobustStatistics.median(volumes)
-                s.setString(1, symbol); s.setInt(2, minute); s.setInt(3, samples.size); s.setDouble(4, medianReturn)
-                s.setDouble(5, RobustStatistics.median(returns.map { abs(it - medianReturn) })); s.setDouble(6, medianVolume)
-                s.setDouble(7, RobustStatistics.median(volumes.map { abs(it - medianVolume) }))
-                s.setLong(8, Instant.now().epochSecond); s.addBatch()
-            }; s.executeBatch()
-        }
-    }
-
-    private fun zoneFor(symbol: String) = MarketTimeZone.forSymbol(symbol)
-    private data class BaselineSample(val minute: Int, val returnPercent: Double, val logVolume: Double?)
     private fun <T> transaction(block: () -> T): T {
         check(connection.autoCommit) { "Nested analytics transactions are not supported" }
         connection.createStatement().use { it.execute("BEGIN IMMEDIATE") }

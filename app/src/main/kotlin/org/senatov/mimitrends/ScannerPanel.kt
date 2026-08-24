@@ -4,11 +4,7 @@ import javafx.application.Platform
 import javafx.collections.FXCollections
 import javafx.collections.transformation.SortedList
 import javafx.geometry.*
-import javafx.scene.image.Image
-import javafx.scene.image.ImageView
 import javafx.scene.control.*
-import javafx.scene.input.KeyCode
-import javafx.scene.input.KeyEvent
 import javafx.scene.layout.*
 import org.senatov.mimitrends.log.LogTag
 import org.senatov.mimitrends.model.CompanyProfile
@@ -36,66 +32,8 @@ class ScannerPanel(
     private val sortedRows = SortedList(rows)
     private val table = TableView(sortedRows)
     private val tableContainer = StackPane()
-    private val closeMarketOverlayButton = Button("Close").apply {
-        styleClass += "market-closed-close"
-        setOnAction { hideMarketClosedOverlay() }
-    }
-    private val marketClosedSubtitle = Label("Saved closing snapshot · not live").apply {
-        styleClass += "market-closed-subtitle"
-    }
-    private val marketClosedTitle = Label("ALL SELECTED MARKETS ARE CLOSED").apply {
-        styleClass += "market-closed-title"
-    }
     private var closing = false
-    private val marketHoursTitle = Label().apply { styleClass += "market-hours-title" }
-    private val marketHoursLabel = Label().apply { styleClass += "market-hours-list" }
-    private val brokerHoursTitle = Label("SCALABLE VENUES").apply { styleClass += "market-hours-title" }
-    private val brokerHoursLabel = Label().apply { styleClass += "market-hours-list" }
-    private val marketHoursPanel = VBox(4.0, marketHoursTitle, marketHoursLabel,
-        Region().apply { minHeight = 5.0 }, brokerHoursTitle, brokerHoursLabel).apply {
-        alignment = Pos.TOP_LEFT
-        minWidth = 270.0
-        prefWidth = 270.0
-        maxWidth = 270.0
-        maxHeight = Region.USE_PREF_SIZE
-        isMouseTransparent = true
-        styleClass += "market-hours-panel"
-    }
-    private val marketClosedFooter = StackPane(closeMarketOverlayButton).apply {
-        alignment = Pos.BOTTOM_CENTER
-        maxWidth = Double.MAX_VALUE
-        maxHeight = Region.USE_PREF_SIZE
-        styleClass += "market-closed-footer"
-    }
-    val marketClosedOverlay = StackPane(
-        ImageView(Image(requireNotNull(javaClass.getResourceAsStream("/images/sleeping-dog-market-closed.png")))).apply {
-            fitWidth = 590.0; fitHeight = 500.0; isPreserveRatio = true
-            styleClass += "market-closed-dog"
-        },
-        VBox(
-            7.0,
-            marketClosedTitle,
-            marketClosedSubtitle
-        ).apply {
-            alignment = Pos.TOP_CENTER
-            styleClass += "market-closed-content"
-        },
-        marketHoursPanel,
-        marketClosedFooter
-    ).apply {
-        alignment = Pos.CENTER
-        maxWidth = 680.0
-        maxHeight = 570.0
-        prefWidth = 680.0
-        prefHeight = 570.0
-        isVisible = false
-        isManaged = false
-        styleClass += "market-closed-overlay"
-        StackPane.setAlignment(marketHoursPanel, Pos.TOP_LEFT)
-        StackPane.setMargin(marketHoursPanel, Insets(108.0, 0.0, 0.0, 28.0))
-        StackPane.setAlignment(marketClosedFooter, Pos.BOTTOM_CENTER)
-        marketClosedFooter.prefHeightProperty().bind(heightProperty().multiply(0.15))
-    }
+    internal val marketClosedOverlay = MarketClosedOverlay(table::requestFocus)
     private val empty = Label("Waiting for the first local/Yahoo scan…")
     private val cycleStatus = Label()
     private val usMarketBadge = Label("US —").apply { styleClass += "market-pulse-badge" }
@@ -185,12 +123,6 @@ class ScannerPanel(
             styleClass += "table-section"
             VBox.setVgrow(tableContainer, Priority.ALWAYS)
         }
-        marketClosedOverlay.addEventFilter(KeyEvent.KEY_PRESSED) { event ->
-            if (event.code == KeyCode.ESCAPE) {
-                hideMarketClosedOverlay()
-                event.consume()
-            }
-        }
         tableSplit.apply {
             items.setAll(scannerSection, shortMovePanel)
             orientation = javafx.geometry.Orientation.HORIZONTAL
@@ -270,14 +202,14 @@ class ScannerPanel(
         log.debug(LogTag.UI, "clear()")
         rows.clear(); stagedRows.clear(); refreshingStatuses.clear(); scanning = false
         scanIndicator.clearIndicator()
-        marketClosedOverlay.isVisible = false; marketClosedOverlay.isManaged = false
+        marketClosedOverlay.hide()
     }
 
     fun beginScan(number: Int, total: Int, symbols: List<String>) {
         if (closing) return
         log.debug(LogTag.UI, "beginScan(number={}, total={}, symbols={})", number, total, symbols.size)
         stagedRows.clear(); scanning = true
-        marketClosedOverlay.isVisible = false; marketClosedOverlay.isManaged = false
+        marketClosedOverlay.hide()
         cycleStatus.styleClass.remove("market-closed")
         cycleStatus.text = "Batch $number/$total · ${symbols.size} symbols"
         cycleStatus.tooltip = Tooltip(symbols.joinToString(", "))
@@ -338,7 +270,6 @@ class ScannerPanel(
         brokerHours: List<String>
     ) {
         if (closing) return
-        marketClosedTitle.text = "ALL SELECTED MARKETS ARE CLOSED"
         cycleStatus.styleClass.remove("market-closed")
         cycleStatus.styleClass += "market-closed"
         cycleStatus.text = "ALL SELECTED MARKETS ARE CLOSED · " + when {
@@ -347,39 +278,14 @@ class ScannerPanel(
             else -> "$snapshotSize cached close results · NOT LIVE"
         }
         cycleStatus.tooltip = Tooltip("The scanner is not presenting cached closing bars as current market signals.")
-        marketClosedSubtitle.text = "Saved closing snapshot · scanner resumes $nextOpening"
-        marketHoursTitle.text = "PRICE DATA MARKETS · $localZone"
-        marketHoursLabel.text = marketHours.joinToString("\n")
-        brokerHoursTitle.text = "SCALABLE VENUES · $localZone"
-        brokerHoursLabel.text = brokerHours.joinToString("\n")
-        marketHoursPanel.isVisible = marketHours.isNotEmpty() || brokerHours.isNotEmpty()
-        marketHoursPanel.isManaged = marketHoursPanel.isVisible
-        marketClosedOverlay.isVisible = true
-        marketClosedOverlay.isManaged = true
-        marketClosedOverlay.toFront()
-        Platform.runLater { closeMarketOverlayButton.requestFocus() }
+        marketClosedOverlay.showSnapshot(nextOpening, localZone, marketHours, brokerHours)
     }
 
     fun showClosing() {
         closing = true
         scanIndicator.clearIndicator()
         cycleStatus.text = "Closing · waiting for current operations"
-        marketClosedTitle.text = "APPLICATION IS CLOSING"
-        marketClosedSubtitle.text = "Finishing current transactions and saving market data…"
-        marketHoursPanel.isVisible = false
-        marketHoursPanel.isManaged = false
-        marketClosedFooter.isVisible = false
-        marketClosedFooter.isManaged = false
-        marketClosedOverlay.isVisible = true
-        marketClosedOverlay.isManaged = true
-        marketClosedOverlay.toFront()
-    }
-
-    private fun hideMarketClosedOverlay() {
-        if (closing) return
-        marketClosedOverlay.isVisible = false
-        marketClosedOverlay.isManaged = false
-        table.requestFocus()
+        marketClosedOverlay.showClosing()
     }
 
     fun setCurrency(value: DisplayCurrency, converter: (String, Double) -> Double) {

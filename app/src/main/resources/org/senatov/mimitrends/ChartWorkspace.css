@@ -1,0 +1,119 @@
+/* Instrument identity, chart controls, and analysis inspector. */
+.chart-card-header {
+    -fx-background-color: -mimi-surface-muted;
+    -fx-background-radius: 5px;
+    -fx-border-color: -mimi-border;
+    -fx-border-radius: 5px;
+    -fx-padding: 9px 11px;
+}
+
+.chart-instrument-title {
+    -fx-font-family: "System";
+    -fx-font-size: 16px;
+    -fx-font-weight: 500;
+    -fx-text-fill: -mimi-text;
+}
+
+.chart-current-price {
+    -fx-font-family: "System";
+    -fx-font-size: 15px;
+    -fx-font-weight: 500;
+    -fx-text-fill: -mimi-positive;
+}
+
+.chart-context-details, .chart-signal-summary, .chart-cursor-details {
+    -fx-font-family: "System";
+    -fx-font-size: 12px;
+    -fx-font-weight: 300;
+}
+
+.chart-context-details { -fx-text-fill: -mimi-text-secondary; }
+.chart-signal-summary { -fx-font-weight: 500; -fx-text-fill: -mimi-warning; }
+.chart-cursor-details {
+    -fx-text-fill: #405164;
+    -fx-background-color: transparent;
+    -fx-border-color: transparent;
+    -fx-padding: 3px 0 0 0;
+}
+
+.chart-mode-switch {
+    -fx-background-color: #e9edf2;
+    -fx-background-radius: 6px;
+    -fx-border-color: #c8d0d9;
+    -fx-border-radius: 6px;
+}
+
+.chart-mode-button {
+    -fx-font-family: "System";
+    -fx-font-size: 12px;
+    -fx-font-weight: 400;
+    -fx-background-radius: 4px;
+    -fx-border-radius: 4px;
+}
+
+.chart-range-button { -fx-min-width: 32px; -fx-padding: 4px 7px; }
+.chart-range-button:selected {
+    -fx-text-fill: white;
+    -fx-font-weight: 500;
+    -fx-background-color: -mimi-accent;
+    -fx-border-color: -mimi-accent-hover;
+    -fx-effect: null;
+}
+.chart-range-button:selected:hover, .chart-range-button:selected:focused {
+    -fx-text-fill: white;
+    -fx-background-color: -mimi-accent-hover;
+    -fx-border-color: #173f73;
+}
+.chart-range-row { -fx-padding: 1px 0 0 0; }
+.chart-view-button:selected {
+    -fx-background-color: -mimi-accent;
+    -fx-border-color: -mimi-accent;
+    -fx-effect: null;
+}
+.chart-overlay-switch { -fx-background-color: #f1ece5; -fx-border-color: #d7c4aa; }
+.chart-overlay-button:selected {
+    -fx-background-color: #a65d18;
+    -fx-border-color: #a65d18;
+    -fx-effect: null;
+}
+
+.insight-sidebar .tab-header-area { -fx-padding: 0 0 7px 0; }
+.insight-sidebar .tab-header-background { -fx-background-color: transparent; }
+.insight-sidebar .tab {
+    -fx-background-color: transparent;
+    -fx-background-radius: 4px;
+    -fx-padding: 6px 9px;
+}
+.insight-sidebar .tab:selected { -fx-background-color: -mimi-accent-soft; }
+.insight-sidebar .tab .tab-label {
+    -fx-font-family: "System";
+    -fx-font-size: 12px;
+    -fx-font-weight: 400;
+    -fx-text-fill: -mimi-text-secondary;
+}
+.insight-sidebar .tab:selected .tab-label { -fx-font-weight: 500; -fx-text-fill: -mimi-accent; }
+
+.signal-inspector { -fx-padding: 9px; }
+.inspector-heading { -fx-padding: 0 1px 2px 1px; }
+.inspector-title {
+    -fx-font-family: "System";
+    -fx-font-size: 17px;
+    -fx-font-weight: 500;
+    -fx-text-fill: -mimi-text;
+}
+.inspector-subtitle { -fx-font-size: 13px; -fx-font-weight: 300; -fx-text-fill: -mimi-text-secondary; }
+.inspector-section {
+    -fx-padding: 9px 10px;
+    -fx-background-color: -mimi-surface-muted;
+    -fx-background-radius: 5px;
+    -fx-border-color: #e1e5ea;
+    -fx-border-radius: 5px;
+}
+.inspector-section-caption { -fx-font-size: 10px; -fx-font-weight: 500; -fx-text-fill: #6b7b8b; }
+.inspector-line {
+    -fx-font-family: "System";
+    -fx-font-size: 14px;
+    -fx-font-weight: 300;
+    -fx-text-fill: #263646;
+    -fx-padding: 0;
+}
