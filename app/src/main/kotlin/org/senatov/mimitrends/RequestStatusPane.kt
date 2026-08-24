@@ -11,6 +11,8 @@ import javafx.scene.control.Tooltip
 import javafx.scene.layout.HBox
 import javafx.scene.layout.Priority
 import javafx.scene.layout.Region
+import javafx.animation.PauseTransition
+import javafx.util.Duration
 import java.io.PrintWriter
 import java.io.StringWriter
 import java.time.ZonedDateTime
@@ -25,6 +27,9 @@ internal class RequestStatusPane(private val selectedRange: () -> String) : HBox
     private val statusLabel = Label()
     private val detailsButton = Button("!")
     private var lastDetails: String? = null
+    private var currentState = StatusState.INFO
+    private var transientMessage: PauseTransition? = null
+    private var transientRestore: Presentation? = null
 
     init {
         alignment = Pos.CENTER_LEFT
@@ -47,6 +52,33 @@ internal class RequestStatusPane(private val selectedRange: () -> String) : HBox
         details: String? = null,
         state: StatusState = if (error) StatusState.ERROR else StatusState.INFO
     ) {
+        transientMessage?.stop()
+        transientMessage = null
+        transientRestore = null
+        present(message, error, details, state)
+    }
+
+    fun showTransient(message: String, state: StatusState = StatusState.SUCCESS) {
+        val previous = transientRestore ?: Presentation(
+            statusLabel.text, currentState, lastDetails,
+            detailsButton.isVisible, statusLabel.styleClass.contains("status-error")
+        )
+        transientMessage?.stop()
+        transientRestore = previous
+        present(message, false, null, state)
+        transientMessage = PauseTransition(Duration.seconds(2.6)).apply {
+            setOnFinished {
+                present(previous.message, previous.error, previous.details, previous.state)
+                detailsButton.isVisible = previous.detailsVisible
+                detailsButton.isManaged = previous.detailsVisible
+                transientMessage = null
+                transientRestore = null
+            }
+            play()
+        }
+    }
+
+    private fun present(message: String, error: Boolean, details: String?, state: StatusState) {
         statusLabel.text = message
         statusLabel.styleClass.removeAll("status-error")
         if (error) statusLabel.styleClass += "status-error"
@@ -57,6 +89,9 @@ internal class RequestStatusPane(private val selectedRange: () -> String) : HBox
     }
 
     fun setLoading(loading: Boolean) {
+        transientMessage?.stop()
+        transientMessage = null
+        transientRestore = null
         progress.isVisible = loading
         progress.isManaged = loading
         indicator.isVisible = !loading
@@ -65,9 +100,18 @@ internal class RequestStatusPane(private val selectedRange: () -> String) : HBox
     }
 
     private fun setState(state: StatusState) {
+        currentState = state
         indicator.styleClass.removeAll(*StatusState.entries.map(StatusState::styleClass).toTypedArray())
         indicator.styleClass += state.styleClass
     }
+
+    private data class Presentation(
+        val message: String,
+        val state: StatusState,
+        val details: String?,
+        val detailsVisible: Boolean,
+        val error: Boolean
+    )
 
     fun formatError(query: String, error: Throwable?, message: String? = null): String {
         val stackTrace = if (error == null) message ?: "No exception stack trace is available."

@@ -22,6 +22,8 @@ internal class MainStatusController(
 
     fun warning(message: String) = pane.update(message, state = StatusState.WARNING)
 
+    fun transientSuccess(message: String) = pane.showTransient(message)
+
     fun setLoading(value: Boolean) {
         log.debug(LogTag.UI, "chart loading value={}", value)
         chart.setLoading(value)

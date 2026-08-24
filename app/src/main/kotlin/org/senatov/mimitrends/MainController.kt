@@ -17,7 +17,8 @@ import java.util.concurrent.atomic.*
 import java.util.concurrent.ConcurrentHashMap
 class MainController(private val apiKey: String?, initialSymbol: String = "AAPL", initialRange: String = "3M",
     initialDividerPosition: Double = 0.34, scannerColumns: String = "", shortMoveColumns: String = "",
-                     initialTableDivider: Double = 0.68, initialSidebarVisible: Boolean = true,
+                     initialTableDivider: Double = 0.68,
+                     initialSidebarVisible: Boolean = true,
                      private val openExternal: (String) -> Unit = {}
 ) {
     private val log = LoggerFactory.getLogger(MainController::class.java)
@@ -170,7 +171,11 @@ class MainController(private val apiKey: String?, initialSymbol: String = "AAPL"
         repository.upsertMinuteBar(bar)
         liveTicks[bar.symbol] = System.currentTimeMillis()
     }
-    init { scannerPanel.onInspect = focusedSignals::request }
+
+    init {
+        ClipboardText.onCopied = { status.transientSuccess("Copied to clipboard") }
+        scannerPanel.onInspect = focusedSignals::request
+    }
     fun createView(): Parent {
         log.debug(LogTag.UI, "createView()")
         scannerPanel.setCurrency(scannerCriteria.displayCurrency, currencyConverter::price)
@@ -184,7 +189,7 @@ class MainController(private val apiKey: String?, initialSymbol: String = "AAPL"
         WorkspaceToolbar.configure(
             appLayers, refreshButton, settingsButton, importTradesButton, aboutButton,
             { loadLocalChart(currentSymbol) }, ::showScannerSettings,
-            { scalableImport.chooseAndImport(importTradesButton.scene?.window, ::handleScalableImport) },
+            { scalableImport.chooseAndImport(importTradesButton.scene?.window, scalableImportResults::handle) },
             { AboutDialog.show(aboutButton.scene?.window) { researchReport.show(aboutButton.scene?.window) } })
         WorkspaceAppearance.apply(appLayers, scannerCriteria.tableAppearance)
         trendChart.setDarkTheme(scannerCriteria.tableAppearance.theme == UiTheme.DARK)
@@ -209,9 +214,6 @@ class MainController(private val apiKey: String?, initialSymbol: String = "AAPL"
         Platform.runLater { loadLocalChart(currentSymbol) }
         exchangeRateStartup.start()
         return appLayers
-    }
-    private fun handleScalableImport(event: ScalableImportEvent) {
-        scalableImportResults.handle(event)
     }
     fun showClosing() {
         ClosingPresentation.show(scannerPanel,
