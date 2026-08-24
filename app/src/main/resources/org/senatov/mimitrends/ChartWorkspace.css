@@ -45,6 +45,16 @@
     -fx-padding: 0 2px 1px 2px;
 }
 
+.chart-loading-overlay {
+    -fx-background-color: rgba(247, 248, 250, 0.88);
+}
+
+.chart-loading-label {
+    -fx-font-size: 13px;
+    -fx-font-weight: 400;
+    -fx-text-fill: -mimi-text-secondary;
+}
+
 .chart-mode-switch {
     -fx-background-color: #e9edf2;
     -fx-background-radius: 6px;

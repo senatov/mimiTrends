@@ -62,6 +62,10 @@
     -fx-text-fill: #c4ced8;
 }
 
+.theme-dark .chart-loading-overlay {
+    -fx-background-color: rgba(23, 30, 38, 0.90);
+}
+
 .theme-dark .inspector-section-caption {
     -fx-text-fill: #8797a8;
 }

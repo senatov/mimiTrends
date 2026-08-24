@@ -1,5 +1,7 @@
 package org.senatov.mimitrends.charts
 
+import javafx.geometry.Pos
+import javafx.scene.control.Label
 import javafx.scene.control.ProgressIndicator
 import javafx.scene.layout.StackPane
 import javafx.scene.layout.VBox
@@ -46,7 +48,17 @@ class TrendChartView(onRangeChanged: (String) -> Unit = {}) : StackPane() {
     private val combinedPlot = CombinedDomainXYPlot(dateAxis)
     private val chart = JFreeChart("", Font("SansSerif", Font.PLAIN, 14), combinedPlot, false)
     private val viewer = ChartViewer(chart)
-    private val progress = ProgressIndicator()
+    private val progress = ProgressIndicator().apply {
+        maxWidth = 32.0
+        maxHeight = 32.0
+    }
+    private val loadingLabel = Label("Loading chart…").apply { styleClass += "chart-loading-label" }
+    private val loadingOverlay = VBox(9.0, progress, loadingLabel).apply {
+        alignment = Pos.CENTER
+        styleClass += "chart-loading-overlay"
+        isVisible = false
+        isManaged = false
+    }
     private val header = TrendChartHeader(
         { lastRequest?.let(::renderRequest) },
         { lastRequest?.let(::renderRequest) },
@@ -90,13 +102,10 @@ class TrendChartView(onRangeChanged: (String) -> Unit = {}) : StackPane() {
         viewer.minHeight = 0.0
         viewer.maxWidth = Double.MAX_VALUE
         viewer.maxHeight = Double.MAX_VALUE
-        progress.maxWidth = 32.0
-        progress.maxHeight = 32.0
-        progress.isVisible = false
-        val viewerShell = StackPane(viewer).apply { styleClass += "chart-viewer-shell" }
+        val viewerShell = StackPane(viewer, loadingOverlay).apply { styleClass += "chart-viewer-shell" }
         val content = VBox(header, viewerShell).apply { styleClass += "chart-card-content" }
         VBox.setVgrow(viewerShell, Priority.ALWAYS)
-        children += listOf(content, progress)
+        children += content
     }
     fun renderMinuteBars(
         symbol: String,
@@ -121,11 +130,8 @@ class TrendChartView(onRangeChanged: (String) -> Unit = {}) : StackPane() {
 
     fun prepareForInstrument(symbol: String) {
         if (lastRequest?.symbol == symbol) return
-        lastRequest = null
-        requestedFocusEpochSeconds = null
-        tradeAnnotations.clear()
-        signalTrendOverlay.clear()
-        chart.fireChartChanged()
+        clear()
+        header.showLoading(symbol)
     }
 
     private fun renderRequest(request: TrendChartRenderRequest) {
@@ -204,7 +210,8 @@ class TrendChartView(onRangeChanged: (String) -> Unit = {}) : StackPane() {
 
     fun setLoading(loading: Boolean) {
         log.debug(LogTag.UI, "setLoading(loading={})", loading)
-        progress.isVisible = loading
+        loadingOverlay.isVisible = loading
+        loadingOverlay.isManaged = loading
     }
 
     fun setDarkTheme(dark: Boolean) {
@@ -213,6 +220,8 @@ class TrendChartView(onRangeChanged: (String) -> Unit = {}) : StackPane() {
 
     fun clear() {
         log.debug(LogTag.UI, "clear()")
+        lastRequest = null
+        requestedFocusEpochSeconds = null
         pricePlot.dataset = null
         volumePlot.dataset = null
         latestPriceMarker.clear()

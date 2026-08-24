@@ -129,6 +129,19 @@ internal class TrendChartHeader(
         rangeButtons[range]?.let { button -> button.toggleGroup.selectToggle(button) }
     }
 
+    fun showLoading(symbol: String) {
+        instrument.text = "$symbol  ·  Loading market data"
+        instrument.tooltip = null
+        price.text = ""
+        context.text = "Reading collected bars and broker activity…"
+        context.tooltip = null
+        signal.text = ""
+        signal.tooltip = null
+        signal.isVisible = false
+        signal.isManaged = false
+        cursor.text = "Preparing chart…"
+    }
+
     fun clear() {
         instrument.text = "No collected market data"
         price.text = ""
