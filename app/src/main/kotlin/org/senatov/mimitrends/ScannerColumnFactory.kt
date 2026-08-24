@@ -93,7 +93,7 @@ internal class ScannerColumnFactory(
             configure(115.0, 55.0)
         }
 
-    fun pattern(): TableColumn<ScanResult, ScanResult> = TableColumn<ScanResult, ScanResult>("Buy?").apply {
+    fun pattern(): TableColumn<ScanResult, ScanResult> = TableColumn<ScanResult, ScanResult>("Watch").apply {
         styleClass += "status-column"
         setCellValueFactory { ReadOnlyObjectWrapper(it.value) }
         comparator = Comparator { left, right ->
@@ -194,7 +194,7 @@ internal class ScannerColumnFactory(
             configure(105.0, 75.0)
         }
 
-    fun symbol(): TableColumn<ScanResult, String> = TableColumn<ScanResult, String>("Symbol").apply {
+    fun symbol(): TableColumn<ScanResult, String> = TableColumn<ScanResult, String>("Company").apply {
         styleClass += "company-column"
         setCellValueFactory { ReadOnlyObjectWrapper(it.value.symbol) }
         comparator = Comparator { left, right ->
@@ -213,22 +213,28 @@ internal class ScannerColumnFactory(
                     renderedSymbol = symbol
                     text = null
                     contentDisplay = ContentDisplay.LEFT
-                    graphic = companyGraphic(symbol, symbol, null, tableRow.item)
+                    graphic = companyGraphic(symbol, "Loading company…", null, tableRow.item)
                     tooltip = companyTooltip(symbol, null)
                     loadProfile?.invoke(symbol)?.whenComplete(
                         BiConsumer<CompanyProfile?, Throwable?> { profile, error ->
-                        if (error == null && profile != null) Platform.runLater {
-                            val displayName = CompanySearchTerm.normalizeDisplay(profile.name)
-                            companyNames[symbol] = displayName
-                            if (renderedSymbol == symbol && item == symbol) {
-                                text = null
-                                graphic = companyGraphic(symbol, displayName, profile.logoBytes, tableRow.item)
-                                tooltip = companyTooltip(symbol, profile.copy(name = displayName))
-                                if (table.sortOrder.any { it.id == "company" }) table.sort()
-                                onContentChanged()
+                            Platform.runLater {
+                                if (renderedSymbol == symbol && item == symbol) {
+                                    if (error == null && profile != null) {
+                                        val normalized = CompanySearchTerm.normalizeDisplay(profile.name)
+                                        val displayName = normalized.takeUnless { it.isBlank() || it.equals(symbol, true) }
+                                            ?: "Company unavailable"
+                                        displayName.takeUnless { it == "Company unavailable" }
+                                            ?.let { companyNames[symbol] = it }
+                                        graphic = companyGraphic(symbol, displayName, profile.logoBytes, tableRow.item)
+                                        tooltip = companyTooltip(symbol, profile.copy(name = displayName))
+                                        if (table.sortOrder.any { it.id == "company" }) table.sort()
+                                        onContentChanged()
+                                    } else {
+                                        graphic = companyGraphic(symbol, "Company unavailable", null, tableRow.item)
+                                    }
+                                }
                             }
-                        }
-                    })
+                        })
                 }
             }
         }

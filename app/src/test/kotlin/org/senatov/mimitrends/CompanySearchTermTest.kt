@@ -46,4 +46,9 @@ class CompanySearchTermTest {
     @Test fun `does not remove legal text embedded in a real word`() {
         assertEquals("Incyte Compass", CompanySearchTerm.normalizeDisplay("Incyte Compass, Inc."))
     }
+
+    @Test
+    fun `removes provider listing marker from mixed case company name`() {
+        assertEquals("Symrise", CompanySearchTerm.normalizeDisplay("Symrise AG                 I"))
+    }
 }

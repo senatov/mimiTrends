@@ -15,7 +15,7 @@ internal class ChartDataLoader(
     fun load(symbol: String, days: Long, targetCurrency: DisplayCurrency): ChartData {
         val bars = repository.loadMinuteBars(symbol, Instant.now().minusSeconds(days * 86_400).epochSecond)
             .map { exchangeRates.convertBar(symbol, it, targetCurrency) }
-        val companyName = repository.loadCompanyProfile(symbol)?.name ?: symbol
+        val companyName = CompanySearchTerm.from(repository.loadCompanyProfile(symbol)?.name.orEmpty(), symbol)
         val trades = analytics.loadBrokerTrades(symbol, companyName).map { it.convertTo(targetCurrency) }
         return ChartData(bars, companyName, trades)
     }
