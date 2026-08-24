@@ -2,6 +2,9 @@ package org.senatov.mimitrends
 
 import javafx.scene.control.CheckMenuItem
 import javafx.scene.control.ContextMenu
+import javafx.scene.control.MenuButton
+import javafx.scene.control.MenuItem
+import javafx.scene.control.SeparatorMenuItem
 import javafx.scene.control.TableColumn
 import javafx.scene.control.TableView
 
@@ -10,6 +13,8 @@ internal class TableColumnLayout<T>(
     saved: String
 ) {
     private val savedEntries = parse(saved)
+    private val defaultColumns = table.columns.toList()
+    private val defaultWidths = defaultColumns.associateWith { it.prefWidth }
 
     fun install() {
         val known = table.columns.associateBy { it.id }
@@ -21,9 +26,29 @@ internal class TableColumnLayout<T>(
                 if (entry.width.isFinite() && entry.width >= minWidth) prefWidth = entry.width
             }
         }
-        val menu = ContextMenu()
-        known.values.forEach { column ->
-            menu.items += CheckMenuItem(column.text).apply {
+        val menu = ContextMenu().apply { items += visibilityItems(known.values) }
+        known.values.forEach { it.contextMenu = menu }
+    }
+
+    fun menuButton(onReset: () -> Unit = {}): MenuButton = MenuButton("Columns").apply {
+        styleClass += "table-columns-button"
+        items += visibilityItems(table.columns)
+        items += SeparatorMenuItem()
+        items += MenuItem("Restore default columns").apply {
+            setOnAction {
+                table.columns.setAll(defaultColumns)
+                defaultColumns.forEach { column ->
+                    column.isVisible = true
+                    column.prefWidth = defaultWidths.getValue(column)
+                }
+                onReset()
+            }
+        }
+    }
+
+    private fun visibilityItems(columns: Collection<TableColumn<T, *>>): List<CheckMenuItem> =
+        columns.map { column ->
+            CheckMenuItem(column.text).apply {
                 isSelected = column.isVisible
                 selectedProperty().addListener { _, _, visible ->
                     if (!visible && table.columns.count(TableColumn<T, *>::isVisible) == 1) {
@@ -35,8 +60,6 @@ internal class TableColumnLayout<T>(
                 column.visibleProperty().addListener { _, _, visible -> isSelected = visible }
             }
         }
-        known.values.forEach { it.contextMenu = menu }
-    }
 
     fun savedWidths(): Map<String, Double> = savedEntries.associate { it.id to it.width }
 

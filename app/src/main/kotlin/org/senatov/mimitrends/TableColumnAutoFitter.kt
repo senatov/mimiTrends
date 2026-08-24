@@ -61,6 +61,11 @@ class TableColumnAutoFitter<T>(
 
     fun manuallySizedColumnIds(): Set<String> = manuallySized.mapTo(mutableSetOf()) { it.id }
 
+    fun resetManualSizing() {
+        manuallySized.clear()
+        request()
+    }
+
     private fun rememberManualResize() {
         if (applying) return
         widthsBeforePointerAction.forEach { (column, width) ->

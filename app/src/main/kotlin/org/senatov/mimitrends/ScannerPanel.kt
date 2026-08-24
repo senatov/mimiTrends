@@ -107,6 +107,10 @@ class ScannerPanel(
             TableColumnAutoFitter.Spec(turnover, { compactMoney(convertPrice(it.symbol, it.sessionTurnover)) }, 88.0, 145.0, reserveWidth = 8.0),
             TableColumnAutoFitter.Spec(updated, { time.format(Instant.ofEpochMilli(it.updatedAtMillis)) }, 88.0, 125.0, reserveWidth = 8.0)
         ), columnLayout.savedWidths(), columnLayout.manuallySizedColumnIds())
+        header.children.add(
+            header.children.lastIndex,
+            columnLayout.menuButton(autoFitter::resetManualSizing)
+        )
         columnFactory.onContentChanged = autoFitter::request
         signal.sortType = TableColumn.SortType.DESCENDING
         table.sortOrder += signal

@@ -120,6 +120,10 @@ class ShortMovePanel(
                 "${time.format(Instant.ofEpochSecond(it.startedAtEpochSeconds))}–${time.format(Instant.ofEpochSecond(it.endedAtEpochSeconds))}"
             }, 82.0, 105.0)
         ), columnLayout.savedWidths(), columnLayout.manuallySizedColumnIds())
+        header.children.add(
+            header.children.lastIndex,
+            columnLayout.menuButton(autoFitter::resetManualSizing)
+        )
         table.placeholder = WorkspaceEmptyState.create(
             "No recent price battles",
             "This panel will populate when fresh minute bars form a directional move or recurring jump."

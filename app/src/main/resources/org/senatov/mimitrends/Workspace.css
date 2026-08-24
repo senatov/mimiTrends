@@ -190,6 +190,22 @@
 }
 
 .table-section-header { -fx-padding: 1px 3px 6px 3px; }
+
+.table-columns-button {
+    -fx-font-size: 11px;
+    -fx-font-weight: 400;
+    -fx-text-fill: -mimi-text-secondary;
+    -fx-background-color: -mimi-surface-muted;
+    -fx-background-radius: 5px;
+    -fx-border-color: -mimi-border;
+    -fx-border-radius: 5px;
+    -fx-padding: 4px 7px;
+}
+
+.table-columns-button:hover {
+    -fx-text-fill: -mimi-accent;
+    -fx-border-color: -mimi-accent;
+}
 .table-section-title, .positive-watch-title, .inspector-title {
     -fx-font-size: 13px;
     -fx-font-weight: 600;
