@@ -35,6 +35,7 @@ internal object DetectedTodayDialog {
             title = "Detected today"
             headerText = "Signals published at least once today · ${detections.size} symbols"
             initOwner(owner)
+            WorkspaceDialogAppearance.apply(this, owner)
             dialogPane.content = table
             dialogPane.buttonTypes += ButtonType.CLOSE
             isResizable = true

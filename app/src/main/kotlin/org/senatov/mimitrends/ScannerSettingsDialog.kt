@@ -86,7 +86,7 @@ class ScannerSettingsDialog(
         dialog.title = "Scanner Settings"
         dialog.headerText = "Anomaly Scanner"
         dialog.isResizable = true
-        dialog.dialogPane.stylesheets += requireNotNull(javaClass.getResource("/org/senatov/mimitrends/MiMiTrends.css")).toExternalForm()
+        WorkspaceDialogAppearance.apply(dialog, owner)
         dialog.dialogPane.styleClass += "glass-settings-dialog"
 
         val scanner = VBox(14.0,

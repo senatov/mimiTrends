@@ -23,6 +23,23 @@
     -fx-background-color: -mimi-canvas;
 }
 
+.workspace-dialog {
+    -fx-background-color: -mimi-canvas;
+    -fx-font-family: "System";
+    -fx-font-size: 14px;
+    -fx-font-weight: 300;
+}
+
+.workspace-dialog > .header-panel,
+.workspace-dialog > .button-bar > .container {
+    -fx-background-color: -mimi-surface;
+}
+
+.workspace-dialog > .content,
+.workspace-dialog .tab-pane {
+    -fx-background-color: -mimi-canvas;
+}
+
 .title-toolbar {
     -fx-min-height: 48px;
     -fx-padding: 7px 14px;

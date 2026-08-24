@@ -84,8 +84,10 @@ internal class RequestStatusPane(private val selectedRange: () -> String) : HBox
 
     private fun showErrorDetails() {
         val details = lastDetails ?: return
+        val owner = detailsButton.scene?.window
         Dialog<ButtonType>().apply {
-            detailsButton.scene?.window?.let(::initOwner)
+            owner?.let(::initOwner)
+            WorkspaceDialogAppearance.apply(this, owner)
             title = "MiMiTrends error log"
             headerText = statusLabel.text
             dialogPane.content = TextArea(details).apply {

@@ -32,6 +32,7 @@ class FinnhubSetupDialog(
         // JavaFX 26 cannot bind a heavyweight Dialog to a Stage before that Stage
         // has a Scene. The first-run dialog is intentionally ownerless at that point.
         if (owner.scene != null) dialog.initOwner(owner)
+        WorkspaceDialogAppearance.apply(dialog, owner)
         dialog.title = "Connect MiMiTrends to Finnhub"
         dialog.headerText = "Finnhub credentials were not found"
         dialog.dialogPane.buttonTypes += listOf(saveButtonType, ButtonType.CANCEL)

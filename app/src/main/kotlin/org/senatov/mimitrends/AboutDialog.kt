@@ -14,6 +14,7 @@ internal object AboutDialog {
         val diagnostics = ButtonType("Prediction diagnostics")
         val dialog = Dialog<ButtonType>().apply {
             owner?.let(::initOwner)
+            WorkspaceDialogAppearance.apply(this, owner)
             title = "About MiMiTrends"
             dialogPane.buttonTypes.setAll(diagnostics, ButtonType.OK)
             dialogPane.headerText = "MiMiTrends ${BuildInfo.displayVersion}"

@@ -43,6 +43,20 @@
     -fx-background-color: -mimi-surface;
 }
 
+.theme-dark.workspace-dialog .label,
+.theme-dark.workspace-dialog .check-box,
+.theme-dark.workspace-dialog .radio-button {
+    -fx-text-fill: -mimi-text;
+}
+
+.theme-dark.workspace-dialog .text-input,
+.theme-dark.workspace-dialog .combo-box,
+.theme-dark.workspace-dialog .spinner,
+.theme-dark.workspace-dialog .table-view {
+    -fx-background-color: #202934;
+    -fx-text-fill: -mimi-text;
+}
+
 .theme-dark .toolbar-icon-button {
     -fx-text-fill: #c7d2de;
 }

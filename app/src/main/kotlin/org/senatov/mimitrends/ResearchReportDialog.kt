@@ -24,6 +24,7 @@ internal object ResearchReportDialog {
     fun show(owner: Window?, reports: List<WalkForwardResearchReport>): ResearchReportChoice {
         val dialog = Dialog<ButtonType>().apply {
             owner?.let(::initOwner)
+            WorkspaceDialogAppearance.apply(this, owner)
             title = "Prediction research"
             dialogPane.headerText = "Walk-forward signal evaluation"
             dialogPane.buttonTypes.setAll(backfillButton, exportButton, ButtonType.CLOSE)
