@@ -88,6 +88,18 @@
     -fx-text-fill: #c4ced8;
 }
 
+.theme-dark .inspector-status-positive {
+    -fx-text-fill: -mimi-positive;
+}
+
+.theme-dark .inspector-status-warning {
+    -fx-text-fill: -mimi-warning;
+}
+
+.theme-dark .inspector-status-muted {
+    -fx-text-fill: -mimi-text-secondary;
+}
+
 .theme-dark .chart-state-overlay {
     -fx-background-color: rgba(23, 30, 38, 0.90);
 }

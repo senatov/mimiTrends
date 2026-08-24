@@ -138,27 +138,55 @@
 }
 .insight-sidebar .tab:selected .tab-label { -fx-font-weight: 500; -fx-text-fill: -mimi-accent; }
 
-.signal-inspector { -fx-padding: 9px; }
-.inspector-heading { -fx-padding: 0 1px 2px 1px; }
+.signal-inspector {
+    -fx-padding: 10px;
+}
+
+.inspector-heading {
+    -fx-padding: 1px 2px 4px 2px;
+}
 .inspector-title {
     -fx-font-family: "System";
     -fx-font-size: 17px;
     -fx-font-weight: 500;
     -fx-text-fill: -mimi-text;
 }
-.inspector-subtitle { -fx-font-size: 13px; -fx-font-weight: 300; -fx-text-fill: -mimi-text-secondary; }
-.inspector-section {
-    -fx-padding: 9px 10px;
-    -fx-background-color: -mimi-surface-muted;
-    -fx-background-radius: 5px;
-    -fx-border-color: #e1e5ea;
-    -fx-border-radius: 5px;
+
+.inspector-subtitle {
+    -fx-font-size: 13px;
+    -fx-font-weight: 300;
+    -fx-text-fill: -mimi-text-secondary;
+    -fx-padding: 1px 0 0 0;
 }
-.inspector-section-caption { -fx-font-size: 10px; -fx-font-weight: 500; -fx-text-fill: #6b7b8b; }
+.inspector-section {
+    -fx-padding: 10px 11px;
+    -fx-background-color: -mimi-surface-muted;
+    -fx-background-radius: 6px;
+    -fx-border-color: -mimi-border;
+    -fx-border-radius: 6px;
+}
+
+.inspector-section-caption {
+    -fx-font-size: 11px;
+    -fx-font-weight: 500;
+    -fx-text-fill: -mimi-text-secondary;
+}
 .inspector-line {
     -fx-font-family: "System";
     -fx-font-size: 14px;
     -fx-font-weight: 300;
     -fx-text-fill: #263646;
     -fx-padding: 0;
+}
+
+.inspector-status-positive {
+    -fx-text-fill: -mimi-positive;
+}
+
+.inspector-status-warning {
+    -fx-text-fill: -mimi-warning;
+}
+
+.inspector-status-muted {
+    -fx-text-fill: -mimi-text-secondary;
 }

@@ -29,6 +29,7 @@ class MarketRepository(
         Thread(task, "mimitrends-sqlite-writer").apply { isDaemon = true }
     }
     private val connection: Connection = database.connection
+    private val companyProfiles = CompanyProfileStore(database)
 
     init {
         log.debug(LogTag.DB, "init()")
@@ -215,42 +216,14 @@ class MarketRepository(
     fun loadLatestProviderQuote(symbol: String, notBeforeMillis: Long): ProviderQuoteSnapshot? =
         database.locked { LatestProviderQuoteReader.load(connection, symbol, notBeforeMillis) }
 
-    fun loadCompanyProfile(symbol: String): CompanyProfile? {
-        log.debug(LogTag.DB, "loadCompanyProfile(symbol={})", symbol)
-        return database.locked {
-            connection.prepareStatement(
-                "SELECT name, exchange, logo_url, logo, updated_at FROM company_profiles WHERE symbol = ?"
-            ).use { statement ->
-                val normalized = symbol.trim().uppercase()
-                statement.setString(1, normalized)
-                statement.executeQuery().use { result ->
-                    if (!result.next()) null else CompanyProfile(
-                        symbol = normalized,
-                        name = result.getString(1),
-                        exchange = result.getString(2),
-                        logoUrl = result.getString(3),
-                        logoBytes = result.getBytes(4),
-                        updatedAtMillis = result.getLong(5)
-                    )
-                }
-            }
-        }
-    }
+    fun loadCompanyProfile(symbol: String): CompanyProfile? = companyProfiles.load(symbol)
+
+    fun loadCompanyProfiles(): Map<String, CompanyProfile> = companyProfiles.loadAll()
 
     fun upsertCompanyProfile(profile: CompanyProfile) {
         log.debug(LogTag.DB, "upsertCompanyProfile(symbol={}, logoBytes={})", profile.symbol, profile.logoBytes?.size ?: 0)
         check(!closed.get()) { "MarketRepository is closed" }
-        database.locked {
-            connection.prepareStatement(UPSERT_PROFILE_SQL).use { statement ->
-                statement.setString(1, profile.symbol.trim().uppercase())
-                statement.setString(2, profile.name)
-                statement.setString(3, profile.exchange)
-                statement.setString(4, profile.logoUrl)
-                statement.setBytes(5, profile.logoBytes)
-                statement.setLong(6, profile.updatedAtMillis)
-                statement.executeUpdate()
-            }
-        }
+        companyProfiles.upsert(profile)
     }
 
     fun flushPending(): Int {

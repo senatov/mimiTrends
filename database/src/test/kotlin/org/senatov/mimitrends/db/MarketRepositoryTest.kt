@@ -184,6 +184,7 @@ class MarketRepositoryTest {
         val repository = MarketRepository(Files.createTempDirectory("mimitrends-profiles").resolve("test.db"))
         val logo = byteArrayOf(1, 3, 5, 7)
         repository.upsertCompanyProfile(CompanyProfile("aapl", "Apple Inc", "NASDAQ", "https://logo", logo, 42))
+        repository.upsertCompanyProfile(CompanyProfile("sap.de", "SAP SE", "XETRA", null, null, 43))
 
         val stored = requireNotNull(repository.loadCompanyProfile("AAPL"))
         assertEquals("AAPL", stored.symbol)
@@ -192,6 +193,9 @@ class MarketRepositoryTest {
         assertEquals("https://logo", stored.logoUrl)
         assertEquals(42, stored.updatedAtMillis)
         assertContentEquals(logo, stored.logoBytes)
+        val catalog = repository.loadCompanyProfiles()
+        assertEquals(setOf("AAPL", "SAP.DE"), catalog.keys)
+        assertEquals("SAP SE", catalog.getValue("SAP.DE").name)
         repository.close()
     }
 

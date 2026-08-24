@@ -30,6 +30,8 @@ internal class ScannerColumnFactory(
 ) {
     private val logoImages = ConcurrentHashMap<String, Image>()
     private val companyNames = ConcurrentHashMap<String, String>()
+    private val companyProfiles = ConcurrentHashMap<String, CompanyProfile>()
+    private val profileRequestTimes = ConcurrentHashMap<String, Long>()
     var onContentChanged: () -> Unit = {}
 
     fun companyName(result: ScanResult): String = companyNames[result.symbol] ?: result.symbol
@@ -213,20 +215,33 @@ internal class ScannerColumnFactory(
                     renderedSymbol = symbol
                     text = null
                     contentDisplay = ContentDisplay.LEFT
-                    graphic = companyGraphic(symbol, "Loading company…", null, tableRow.item)
-                    tooltip = companyTooltip(symbol, null)
+                    val cachedProfile = companyProfiles[symbol]
+                    val cachedName = cachedProfile?.name ?: "Loading company…"
+                    graphic = companyGraphic(symbol, cachedName, cachedProfile?.logoBytes, tableRow.item)
+                    tooltip = companyTooltip(symbol, cachedProfile)
+                    val now = System.currentTimeMillis()
+                    val lastRequest = profileRequestTimes[symbol] ?: 0L
+                    if (cachedProfile?.logoBytes != null || now - lastRequest < PROFILE_RETRY_MILLIS) return
+                    profileRequestTimes[symbol] = now
                     loadProfile?.invoke(symbol)?.whenComplete(
                         BiConsumer<CompanyProfile?, Throwable?> { profile, error ->
+                            val displayProfile = if (error == null && profile != null) {
+                                val normalized = CompanySearchTerm.normalizeDisplay(profile.name)
+                                val displayName = normalized.takeUnless { it.isBlank() || it.equals(symbol, true) }
+                                    ?: "Company unavailable"
+                                profile.copy(name = displayName).also { resolved ->
+                                    companyProfiles[symbol] = resolved
+                                    displayName.takeUnless { it == "Company unavailable" }
+                                        ?.let { companyNames[symbol] = it }
+                                }
+                            } else null
                             Platform.runLater {
                                 if (renderedSymbol == symbol && item == symbol) {
-                                    if (error == null && profile != null) {
-                                        val normalized = CompanySearchTerm.normalizeDisplay(profile.name)
-                                        val displayName = normalized.takeUnless { it.isBlank() || it.equals(symbol, true) }
-                                            ?: "Company unavailable"
-                                        displayName.takeUnless { it == "Company unavailable" }
-                                            ?.let { companyNames[symbol] = it }
-                                        graphic = companyGraphic(symbol, displayName, profile.logoBytes, tableRow.item)
-                                        tooltip = companyTooltip(symbol, profile.copy(name = displayName))
+                                    if (displayProfile != null) {
+                                        graphic = companyGraphic(
+                                            symbol, displayProfile.name, displayProfile.logoBytes, tableRow.item
+                                        )
+                                        tooltip = companyTooltip(symbol, displayProfile)
                                         if (table.sortOrder.any { it.id == "company" }) table.sort()
                                         onContentChanged()
                                     } else {
@@ -345,5 +360,6 @@ internal class ScannerColumnFactory(
         const val STEADY_RISE_COLOR = "#0B5D3B"
         const val IMPULSE_COLOR = "#4B1F6F"
         const val REPEATING_CYCLE_GLYPH = "↻"
+        const val PROFILE_RETRY_MILLIS = 2_000L
     }
 }

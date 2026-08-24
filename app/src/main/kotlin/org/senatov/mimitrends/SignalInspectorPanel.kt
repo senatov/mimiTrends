@@ -16,10 +16,10 @@ internal class SignalInspectorPanel : VBox(10.0) {
         listOf(rationale, risk, model).forEach(::configureValueLabel)
         children.setAll(
             VBox(2.0, title, subtitle).apply { styleClass += "inspector-heading" },
-            section("TIMELINE", timing),
-            section("WHY SELECTED", rationale),
-            section("ENTRY & RISK", risk),
-            section("MODEL", model)
+            section("Data timeline", timing),
+            section("Signal rationale", rationale),
+            section("Entry & risk", risk),
+            section("Model confidence", model)
         )
         styleClass += "signal-inspector"
     }
@@ -32,12 +32,20 @@ internal class SignalInspectorPanel : VBox(10.0) {
         risk.text = result.entryQualityLabel + if (result.entryCooldownMinutes > 0) {
             " · Wait ${result.entryCooldownMinutes}m"
         } else " · Ready for review"
+        setTone(
+            risk, when {
+                result.entryQualityLabel.equals("Unavailable", ignoreCase = true) -> "muted"
+                result.entryCooldownMinutes > 0 -> "warning"
+                else -> "positive"
+            }
+        )
         model.text = when {
             result.continuationProbability.isFinite() ->
                 "%.0f%% continuation · %s · %d samples".format(
                     result.continuationProbability * 100.0, result.predictionSource, result.predictionSamples)
             else -> "Insufficient validated history"
         }
+        setTone(model, if (result.continuationProbability.isFinite()) "positive" else "muted")
     }
 
     private fun section(caption: String, value: Label) = VBox(5.0,
@@ -50,5 +58,16 @@ internal class SignalInspectorPanel : VBox(10.0) {
         label.isWrapText = true
         label.maxWidth = Double.MAX_VALUE
         label.styleClass += "inspector-line"
+    }
+
+    private fun setTone(label: Label, tone: String) {
+        label.styleClass.removeAll(STATUS_STYLE_CLASSES)
+        label.styleClass += "inspector-status-$tone"
+    }
+
+    private companion object {
+        val STATUS_STYLE_CLASSES = listOf(
+            "inspector-status-positive", "inspector-status-warning", "inspector-status-muted"
+        )
     }
 }

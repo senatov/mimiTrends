@@ -19,30 +19,33 @@ class CompanyProfileService(
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
     private val requests = ConcurrentHashMap<String, CompletableFuture<CompanyProfile>>()
+    private val storedProfiles = CompletableFuture.supplyAsync(repository::loadCompanyProfiles)
 
     fun load(symbol: String): CompletableFuture<CompanyProfile> {
         log.debug(LogTag.DB, "load(symbol={})", symbol)
         val normalized = symbol.trim().uppercase()
-        return requests.computeIfAbsent(normalized, ::loadFromDatabase)
+        return storedProfiles.thenCompose { stored ->
+            requests.computeIfAbsent(normalized) { loadProfile(normalized, stored[normalized]) }
+        }
     }
 
-    private fun loadFromDatabase(symbol: String): CompletableFuture<CompanyProfile> =
-        CompletableFuture.supplyAsync { repository.loadCompanyProfile(symbol) }.thenCompose { stored ->
+    private fun loadProfile(symbol: String, stored: CompanyProfile?): CompletableFuture<CompanyProfile> =
+        CompletableFuture.completedFuture(stored).thenCompose {
             val freshAfter = System.currentTimeMillis() - maxAge.toMillis()
             if (stored != null && stored.updatedAtMillis >= freshAfter) {
                 log.debug(LogTag.DB, "company profile cache hit symbol={}", symbol)
-                CompletableFuture.completedFuture(presentProfile(symbol, stored))
+                CompletableFuture.completedFuture(presentProfile(symbol, stored, persist = false))
             } else {
                 if (remote == null) return@thenCompose CompletableFuture.completedFuture(
-                    presentProfile(symbol, stored ?: CompanyProfile(symbol, symbol, "Yahoo Finance", null))
+                    presentProfile(symbol, stored ?: CompanyProfile(symbol, symbol, "Yahoo Finance", null), stored == null)
                 )
                 log.debug(LogTag.API, "company profile cache miss symbol={}", symbol)
                 remote.load(symbol).thenApply { loaded ->
-                    presentProfile(symbol, CompanyProfileMerger.merge(stored, loaded))
+                    presentProfile(symbol, CompanyProfileMerger.merge(stored, loaded), persist = true)
                 }.exceptionally { error ->
                     if (stored != null) {
                         log.warn(LogTag.API, "using stale company profile symbol={}", symbol, error)
-                        presentProfile(symbol, stored)
+                        presentProfile(symbol, stored, persist = false)
                     } else {
                         throw error
                     }
@@ -52,8 +55,8 @@ class CompanyProfileService(
             if (error != null) requests.remove(symbol)
         })
 
-    private fun presentProfile(symbol: String, profile: CompanyProfile): CompanyProfile {
-        repository.upsertCompanyProfile(profile)
+    private fun presentProfile(symbol: String, profile: CompanyProfile, persist: Boolean): CompanyProfile {
+        if (persist) repository.upsertCompanyProfile(profile)
         if (profile.logoBytes == null) logos.load(symbol, profile.name).whenComplete { logo, error ->
             if (error != null) log.warn(LogTag.API, "background logo load failed symbol={}", symbol, error)
             if (logo != null) {
