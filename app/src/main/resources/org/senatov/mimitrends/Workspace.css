@@ -176,6 +176,23 @@
     -fx-padding: 5px 6px;
 }
 
+.scanner-table .table-cell.numeric-column,
+.scanner-table .column-header.numeric-column .label {
+    -fx-alignment: center-right;
+}
+
+.scanner-table .table-cell.temporal-column,
+.scanner-table .column-header.temporal-column .label,
+.scanner-table .table-cell.status-column,
+.scanner-table .column-header.status-column .label {
+    -fx-alignment: center;
+}
+
+.scanner-table .table-cell.company-column,
+.scanner-table .column-header.company-column .label {
+    -fx-alignment: center-left;
+}
+
 .scanner-table .table-row-cell:hover {
     -fx-background-color: #eef3f8;
 }
@@ -185,6 +202,10 @@
     -fx-border-color: -mimi-accent;
     -fx-border-width: 0 0 0 3px;
     -fx-border-insets: 0;
+}
+
+.scanner-table:focused .table-row-cell:selected {
+    -fx-background-color: #dceafb;
 }
 
 .scanner-table .table-row-cell:selected .table-cell {

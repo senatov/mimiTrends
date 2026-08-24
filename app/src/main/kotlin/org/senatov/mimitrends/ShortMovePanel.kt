@@ -54,6 +54,7 @@ class ShortMovePanel(
         }
         val company = TableColumn<ShortMove, String>("Company").apply {
             id = "company"
+            styleClass += "company-column"
             setCellValueFactory { ReadOnlyStringWrapper(companyNames[it.value.symbol] ?: it.value.symbol) }
             comparator = Comparator { left, right -> left.compareTo(right, ignoreCase = true) }
             setCellFactory {
@@ -73,6 +74,7 @@ class ShortMovePanel(
         }
         val priceRange = TableColumn<ShortMove, ShortMove>("From → To").apply {
             id = "price_range"
+            styleClass += "numeric-column"
             setCellValueFactory { ReadOnlyObjectWrapper(it.value) }
             comparator = ShortMoveSort.priceRange
             isSortable = true
@@ -81,18 +83,21 @@ class ShortMovePanel(
         }
         val direction = TableColumn<ShortMove, ShortMove>("Direction").apply {
             id = "direction"
+            styleClass += "status-column"
             setCellValueFactory { ReadOnlyObjectWrapper(it.value) }
             comparator = ShortMoveSort.direction
             setCellFactory { DirectionCell() }; prefWidth = 105.0
         }
         val move = TableColumn<ShortMove, Number>("Move").apply {
             id = "move"
+            styleClass += "numeric-column"
             setCellValueFactory { ReadOnlyDoubleWrapper(it.value.changePercent) }
             comparator = Comparator.comparingDouble(Number::toDouble)
             setCellFactory { PercentCell() }; prefWidth = 105.0
         }
         val period = TableColumn<ShortMove, ShortMove>("Period").apply {
             id = "period"
+            styleClass += "temporal-column"
             setCellValueFactory { ReadOnlyObjectWrapper(it.value) }
             comparator = ShortMoveSort.period
             setCellFactory { object : TableCell<ShortMove, ShortMove>() {

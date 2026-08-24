@@ -35,6 +35,7 @@ internal class ScannerColumnFactory(
     fun companyName(result: ScanResult): String = companyNames[result.symbol] ?: result.symbol
 
     fun freshness(): TableColumn<ScanResult, Number> = TableColumn<ScanResult, Number>("Delay").apply {
+        styleClass += "temporal-column"
         setCellValueFactory { ReadOnlyLongWrapper(FeedFreshness.ageMinutes(it.value.analysisUpdatedAtMillis)) }
         comparator = Comparator { left, right -> left.toLong().compareTo(right.toLong()) }
         isSortable = true
@@ -71,6 +72,7 @@ internal class ScannerColumnFactory(
         sortValue: (ScanResult) -> Double
     ): TableColumn<ScanResult, ScanResult> =
         TableColumn<ScanResult, ScanResult>(title).apply {
+            styleClass += "status-column"
             setCellValueFactory { ReadOnlyObjectWrapper(it.value) }
             comparator = Comparator { left, right -> sortValue(left).compareTo(sortValue(right)) }
             setCellFactory {
@@ -92,6 +94,7 @@ internal class ScannerColumnFactory(
         }
 
     fun pattern(): TableColumn<ScanResult, ScanResult> = TableColumn<ScanResult, ScanResult>("Buy?").apply {
+        styleClass += "status-column"
         setCellValueFactory { ReadOnlyObjectWrapper(it.value) }
         comparator = Comparator { left, right ->
             WatchScorePresentation.calculate(left).value.compareTo(WatchScorePresentation.calculate(right).value)
@@ -125,6 +128,7 @@ internal class ScannerColumnFactory(
         sortValue: (ScanResult) -> Double,
         metric: (ScanResult) -> SignalMetric
     ): TableColumn<ScanResult, ScanResult> = TableColumn<ScanResult, ScanResult>(title).apply {
+        styleClass += "status-column"
         setCellValueFactory { ReadOnlyObjectWrapper(it.value) }
         comparator = Comparator { left, right -> sortValue(left).compareTo(sortValue(right)) }
         isSortable = true
@@ -157,6 +161,7 @@ internal class ScannerColumnFactory(
         value: (ScanResult) -> Double,
         format: (Double) -> String
     ): TableColumn<ScanResult, Number> = TableColumn<ScanResult, Number>(title).apply {
+        styleClass += "numeric-column"
         setCellValueFactory { ReadOnlyDoubleWrapper(value(it.value)) }
         comparator = Comparator { left, right -> left.toDouble().compareTo(right.toDouble()) }
         isSortable = true
@@ -175,6 +180,7 @@ internal class ScannerColumnFactory(
 
     fun updated(format: (Long) -> String): TableColumn<ScanResult, Number> =
         TableColumn<ScanResult, Number>("Updated").apply {
+            styleClass += "temporal-column"
             setCellValueFactory { ReadOnlyLongWrapper(it.value.updatedAtMillis) }
             comparator = Comparator { left, right -> left.toLong().compareTo(right.toLong()) }
             setCellFactory {
@@ -189,6 +195,7 @@ internal class ScannerColumnFactory(
         }
 
     fun symbol(): TableColumn<ScanResult, String> = TableColumn<ScanResult, String>("Symbol").apply {
+        styleClass += "company-column"
         setCellValueFactory { ReadOnlyObjectWrapper(it.value.symbol) }
         comparator = Comparator { left, right ->
             (companyNames[left] ?: left).compareTo(companyNames[right] ?: right, ignoreCase = true)

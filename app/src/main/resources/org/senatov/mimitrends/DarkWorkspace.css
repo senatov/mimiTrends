@@ -102,6 +102,14 @@
     -fx-text-fill: #b8c4d0;
 }
 
+.theme-dark .scanner-table:focused .table-row-cell:selected {
+    -fx-background-color: #294b70;
+}
+
+.theme-dark .scanner-table .table-row-cell:selected .table-cell {
+    -fx-text-fill: #f2f6fa;
+}
+
 .theme-dark .insight-sidebar .tab .tab-label {
     -fx-text-fill: #a9b5c1;
 }
