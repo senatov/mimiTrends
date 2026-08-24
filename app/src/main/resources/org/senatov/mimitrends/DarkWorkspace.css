@@ -110,6 +110,10 @@
     -fx-text-fill: #f2f6fa;
 }
 
+.theme-dark .workspace-empty-mark {
+    -fx-border-color: #365978;
+}
+
 .theme-dark .insight-sidebar .tab .tab-label {
     -fx-text-fill: #a9b5c1;
 }

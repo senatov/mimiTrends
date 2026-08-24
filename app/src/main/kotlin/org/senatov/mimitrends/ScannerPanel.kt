@@ -35,7 +35,10 @@ class ScannerPanel(
     private val tableContainer = StackPane()
     private var closing = false
     internal val marketClosedOverlay = MarketClosedOverlay(table::requestFocus)
-    private val empty = Label("Waiting for the first local/Yahoo scan…")
+    private val empty = WorkspaceEmptyState.create(
+        "No anomaly signals yet",
+        "The scanner is collecting market data. Qualifying instruments will appear here automatically."
+    )
     private val cycleStatus = Label()
     private val usMarketBadge = Label("US —").apply { styleClass += "market-pulse-badge" }
     private val europeMarketBadge = Label("EU —").apply { styleClass += "market-pulse-badge" }

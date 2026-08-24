@@ -15,7 +15,10 @@ internal object DetectedTodayDialog {
     fun show(owner: Window?, detections: List<TodayDetection>) {
         val table = TableView<TodayDetection>().apply {
             items.setAll(detections)
-            placeholder = javafx.scene.control.Label("No signals have been published today")
+            placeholder = WorkspaceEmptyState.create(
+                "No signals published today",
+                "Published signals will be listed here as scanner cycles complete."
+            )
             prefWidth = 760.0
             prefHeight = 430.0
         }

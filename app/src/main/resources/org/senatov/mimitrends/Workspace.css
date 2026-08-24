@@ -212,6 +212,43 @@
     -fx-text-fill: #12263b;
 }
 
+.workspace-empty-state {
+    -fx-padding: 24px;
+    -fx-opacity: 0.92;
+}
+
+.workspace-empty-mark {
+    -fx-min-width: 34px;
+    -fx-pref-width: 34px;
+    -fx-max-width: 34px;
+    -fx-min-height: 34px;
+    -fx-pref-height: 34px;
+    -fx-max-height: 34px;
+    -fx-background-color: -mimi-accent-soft;
+    -fx-background-radius: 17px;
+    -fx-border-color: #c9d8e9;
+    -fx-border-radius: 17px;
+}
+
+.workspace-empty-mark .label {
+    -fx-font-size: 16px;
+    -fx-font-weight: 400;
+    -fx-text-fill: -mimi-accent;
+}
+
+.workspace-empty-title {
+    -fx-font-size: 14px;
+    -fx-font-weight: 500;
+    -fx-text-fill: -mimi-text;
+}
+
+.workspace-empty-detail {
+    -fx-font-size: 12px;
+    -fx-font-weight: 300;
+    -fx-text-fill: -mimi-text-secondary;
+    -fx-text-alignment: center;
+}
+
 .content-split-pane > .split-pane-divider,
 .table-split-pane > .split-pane-divider {
     -fx-background-color: transparent;

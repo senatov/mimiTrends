@@ -120,7 +120,10 @@ class ShortMovePanel(
                 "${time.format(Instant.ofEpochSecond(it.startedAtEpochSeconds))}–${time.format(Instant.ofEpochSecond(it.endedAtEpochSeconds))}"
             }, 82.0, 105.0)
         ), columnLayout.savedWidths(), columnLayout.manuallySizedColumnIds())
-        table.placeholder = Label("Waiting for recent minute bars…")
+        table.placeholder = WorkspaceEmptyState.create(
+            "No recent price battles",
+            "This panel will populate when fresh minute bars form a directional move or recurring jump."
+        )
         table.columnResizePolicy = TableView.UNCONSTRAINED_RESIZE_POLICY
         table.fixedCellSize = -1.0
         VBox.setVgrow(table, Priority.ALWAYS)
