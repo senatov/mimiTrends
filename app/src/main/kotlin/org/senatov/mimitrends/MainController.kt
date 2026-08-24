@@ -13,7 +13,6 @@ import org.senatov.mimitrends.marketdata.*
 import org.slf4j.LoggerFactory
 import javafx.util.Duration
 import java.util.concurrent.*
-import java.util.function.BiConsumer
 import java.util.concurrent.atomic.*
 import java.util.concurrent.ConcurrentHashMap
 class MainController(private val apiKey: String?, initialSymbol: String = "AAPL", initialRange: String = "3M",
@@ -31,13 +30,12 @@ class MainController(private val apiKey: String?, initialSymbol: String = "AAPL"
     private val shortMoveLoader = ShortMoveLoader(repository, analytics, exchangeRates)
     private var currentSymbol = initialSymbol
     private var currentSignal: ScanResult? = null
-    private var selectedRangeValue = ChartRange.normalize(initialRange)
     private val refreshButton = Button("↻")
     private val settingsButton = Button("⚙")
     private val aboutButton = Button("ⓘ")
     private val importTradesButton = Button("⇩")
-    private val requestStatus = RequestStatusPane { selectedRangeValue }
-    private val trendChart = TrendChartView(::selectChartRange)
+    private val requestStatus = RequestStatusPane { chartSelection.selectedRange }
+    private val trendChart = TrendChartView { chartSelection.selectRange(it) }
     private val scannerSettings = ScannerSettingsService()
     private var scannerCriteria: ScannerCriteria = scannerSettings.load()
     private val currencyConverter = ScanResultCurrencyConverter(exchangeRates) { scannerCriteria }
@@ -103,10 +101,14 @@ class MainController(private val apiKey: String?, initialSymbol: String = "AAPL"
     )
     private var rotationTask: ScheduledFuture<*>? = null
     private val scanGeneration = AtomicLong()
-    private val chartLoadGeneration = AtomicLong()
     private val scanCyclePlanner = ScanCyclePlanner()
     private val closing = AtomicBoolean()
     private val chartDataLoader = ChartDataLoader(repository, analytics, exchangeRates)
+    private val chartSelection: ChartSelectionController by lazy {
+        ChartSelectionController(initialRange, trendChart, chartDataLoader,
+            { scannerCriteria.displayCurrency }, { currentSymbol }, { currentSignal }, currencyConverter::result,
+            closing::get, status, { symbol, error -> requestStatus.formatError(symbol, error) }, log)
+    }
     private val initialDivider = initialDividerPosition.coerceIn(0.15, 0.75)
     private val contentSplitPane = SplitPane()
     private var finnhubClient: FinnhubWebSocketClient? = null
@@ -115,7 +117,10 @@ class MainController(private val apiKey: String?, initialSymbol: String = "AAPL"
     private val marketData = MarketDataService(repository, analytics, scannerEngine, yahooFinance, feedStatus::status)
     private val scannerBatch = ScannerBatchService(marketData::loadAndEvaluate, analytics, repository, feedStatus::status)
     private val observationBus = MarketObservationBus()
-    private val observationUiBridge = MarketObservationUiBridge(observationBus.observations, ::applyProviderObservation)
+    private val observationPresenter = ProviderObservationPresenter(
+        scannerPanel, { currentSignal }, { currentSignal = it }, shortMoveRefresh::request
+    )
+    private val observationUiBridge = MarketObservationUiBridge(observationBus.observations, observationPresenter::apply)
     private val tradegateProvider = TradegatePollingService(repository, observationSink = observationBus)
     private val euronextProvider = EuronextPollingService(repository, observationSink = observationBus)
     private val langSchwarzProvider = LangSchwarzPollingService(repository, observationBus)
@@ -213,6 +218,7 @@ class MainController(private val apiKey: String?, initialSymbol: String = "AAPL"
         log.debug(LogTag.UI, "close()")
         if (!closing.compareAndSet(false, true)) return
         scanGeneration.incrementAndGet()
+        chartSelection.invalidate()
         rotationTask?.cancel(false)
         researchReport.close()
         observationUiBridge.close()
@@ -226,7 +232,7 @@ class MainController(private val apiKey: String?, initialSymbol: String = "AAPL"
         }
     }
     fun selectedSymbol(): String = currentSymbol.ifEmpty { "AAPL" }
-    fun selectedRange(): String = selectedRangeValue
+    fun selectedRange(): String = chartSelection.selectedRange
     fun dividerPosition(): Double = contentSplitPane.dividers.firstOrNull()?.position ?: initialDivider
     fun scannerColumnLayout(): String = scannerPanel.savedColumnLayout()
     fun shortMoveColumnLayout(): String = shortMovePanel.savedColumnLayout()
@@ -347,21 +353,6 @@ class MainController(private val apiKey: String?, initialSymbol: String = "AAPL"
         }
         batchScheduler.execute { runCatching(scan).onFailure { log.error(LogTag.API, "initial Yahoo scan failed", it) } }
     }
-    private fun applyProviderObservation(observation: ProviderMinuteBar) {
-        scannerPanel.applyMarketObservation(
-            observation.symbol, observation.bar.close, observation.observedAtMillis, observation.provider
-        )
-        currentSignal?.takeIf {
-            it.symbol == observation.symbol && observation.observedAtMillis > it.updatedAtMillis
-        }?.let { signal ->
-            currentSignal = signal.copy(
-                price = observation.bar.close,
-                updatedAtMillis = observation.observedAtMillis,
-                dataStatus = observation.provider
-            )
-        }
-        shortMoveRefresh.request()
-    }
     private fun openScannerResult(result: ScanResult) {
         log.debug(LogTag.UI, "openScannerResult(symbol={}, age={})", result.symbol, result.signalAgeMinutes)
         currentSymbol = result.symbol
@@ -400,46 +391,5 @@ class MainController(private val apiKey: String?, initialSymbol: String = "AAPL"
         finnhubClient = FinnhubLiveStarter.restart(key, finnhubClient, scannerCriteria, liveTicks,
             liveAggregator, log, status::update)
     }
-    private fun loadLocalChart(symbol: String) {
-        log.debug(LogTag.UI, "loadLocalChart(symbol={})", symbol)
-        if (symbol.isBlank()) return
-        trendChart.prepareForInstrument(symbol)
-        val requestGeneration = chartLoadGeneration.incrementAndGet()
-        status.setLoading(true)
-        val days = ChartRange.days(selectedRangeValue)
-        status.update("Requesting SQLite: $symbol · $selectedRangeValue")
-        CompletableFuture.supplyAsync {
-            chartDataLoader.load(symbol, days, scannerCriteria.displayCurrency)
-        }.whenComplete(BiConsumer<ChartData?, Throwable?> { chartData, error ->
-                Platform.runLater {
-                    if (requestGeneration != chartLoadGeneration.get() || symbol != currentSymbol || closing.get()) {
-                        log.debug(LogTag.UI, "discard stale chart load symbol={} generation={}", symbol, requestGeneration)
-                        return@runLater
-                    }
-                    status.setLoading(false)
-                    if (error != null) {
-                        log.error(LogTag.DB, "local chart load failed symbol={}", symbol, error)
-                        status.update("SQLite read failed: ${error.message ?: "unknown error"}", true, requestStatus.formatError(symbol, error))
-                    } else if (chartData != null && chartData.bars.isNotEmpty()) {
-                        val bars = chartData.bars
-                        val currency = scannerCriteria.displayCurrency
-                        trendChart.renderMinuteBars(
-                            symbol, bars, selectedRangeValue, 1.0, currency.symbol,
-                            currentSignal?.takeIf { it.symbol == symbol }?.let(currencyConverter::result),
-                            chartData.companyName, chartData.trades
-                        )
-                        status.update("Read SQLite: $symbol · ${bars.size} minute bars · $selectedRangeValue")
-                    } else {
-                        trendChart.clear()
-                        status.update("Read SQLite: no collected minute bars for $symbol · $selectedRangeValue")
-                    }
-                }
-            })
-    }
-
-    private fun selectChartRange(range: String) {
-        if (range == selectedRangeValue || range !in ChartRange.values) return
-        selectedRangeValue = range
-        loadLocalChart(currentSymbol)
-    }
+    private fun loadLocalChart(symbol: String) = chartSelection.load(symbol)
 }

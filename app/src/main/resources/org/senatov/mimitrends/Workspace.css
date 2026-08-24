@@ -260,10 +260,18 @@
 }
 
 .chart-range-button:selected {
-    -fx-text-fill: -mimi-accent;
-    -fx-background-color: -mimi-surface;
-    -fx-border-color: #9db9da;
+    -fx-text-fill: white;
+    -fx-font-weight: 500;
+    -fx-background-color: -mimi-accent;
+    -fx-border-color: -mimi-accent-hover;
     -fx-effect: null;
+}
+
+.chart-range-button:selected:hover,
+.chart-range-button:selected:focused {
+    -fx-text-fill: white;
+    -fx-background-color: -mimi-accent-hover;
+    -fx-border-color: #173f73;
 }
 
 .chart-range-row {
