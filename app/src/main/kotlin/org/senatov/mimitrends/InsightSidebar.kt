@@ -18,9 +18,9 @@ internal class InsightSidebar(
         )
         tabs.forEach { it.isClosable = false }
         tabClosingPolicy = TabClosingPolicy.UNAVAILABLE
-        minWidth = 250.0
-        prefWidth = 285.0
-        maxWidth = 340.0
+        minWidth = 280.0
+        prefWidth = 315.0
+        maxWidth = 380.0
         styleClass += "insight-sidebar"
     }
 

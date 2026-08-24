@@ -1,13 +1,8 @@
 package org.senatov.mimitrends.charts
 
 import javafx.scene.control.ProgressIndicator
-import javafx.scene.control.Label
-import javafx.scene.control.ToggleButton
-import javafx.scene.control.ToggleGroup
-import javafx.scene.control.Tooltip
 import javafx.scene.layout.StackPane
 import javafx.scene.layout.VBox
-import javafx.scene.layout.HBox
 import javafx.scene.layout.Priority
 import org.jfree.chart.JFreeChart
 import org.jfree.chart.axis.DateAxis
@@ -52,14 +47,10 @@ class TrendChartView : StackPane() {
     private val chart = JFreeChart("", Font("SansSerif", Font.PLAIN, 14), combinedPlot, false)
     private val viewer = ChartViewer(chart)
     private val progress = ProgressIndicator()
-    private val instrumentLabel = Label("Select a scanner result")
-    private val currentPriceLabel = Label()
-    private val chartDetailsLabel = Label("Price and volume history")
-    private val signalSummaryLabel = Label()
-    private val cursorDetailsLabel = Label("Move anywhere above a candle to inspect it · click to pin")
-    private val focusButton = ToggleButton("Signal focus")
-    private val historyButton = ToggleButton("Full history")
-    private val tradesButton = ToggleButton("Trades").apply { isSelected = true }
+    private val header = TrendChartHeader(
+        { lastRequest?.let(::renderRequest) },
+        { lastRequest?.let(::renderRequest) }
+    )
     private val priceCursor = ValueMarker(0.0)
     private val priceTimeCursor = ValueMarker(0.0)
     private val volumeTimeCursor = ValueMarker(0.0)
@@ -101,52 +92,6 @@ class TrendChartView : StackPane() {
         progress.maxWidth = 32.0
         progress.maxHeight = 32.0
         progress.isVisible = false
-        val viewModes = ToggleGroup().apply {
-            focusButton.toggleGroup = this
-            historyButton.toggleGroup = this
-            selectToggle(focusButton)
-        }
-        focusButton.styleClass += listOf("chart-mode-button", "chart-view-button")
-        historyButton.styleClass += listOf("chart-mode-button", "chart-view-button")
-        tradesButton.styleClass += listOf("chart-mode-button", "chart-overlay-button")
-        focusButton.tooltip = Tooltip("Show detailed candles around the selected signal")
-        historyButton.tooltip = Tooltip("Show the complete loaded chart range")
-        tradesButton.tooltip = Tooltip("Show or hide executed broker trades")
-        focusButton.setOnAction {
-            if (viewModes.selectedToggle == null) focusButton.isSelected = true
-            lastRequest?.let(::renderRequest)
-        }
-        historyButton.setOnAction {
-            if (viewModes.selectedToggle == null) historyButton.isSelected = true
-            lastRequest?.let(::renderRequest)
-        }
-        tradesButton.setOnAction { lastRequest?.let(::renderRequest) }
-        val viewSwitch = HBox(focusButton, historyButton).apply { styleClass += "chart-mode-switch" }
-        val overlaySwitch = HBox(tradesButton).apply { styleClass += listOf("chart-mode-switch", "chart-overlay-switch") }
-        val modeSwitch = HBox(8.0,
-            VBox(1.0, Label("VIEW").apply { styleClass += "chart-mode-caption" }, viewSwitch),
-            VBox(1.0, Label("OVERLAY").apply { styleClass += "chart-mode-caption" }, overlaySwitch)
-        ).apply { alignment = javafx.geometry.Pos.BOTTOM_LEFT }
-        signalSummaryLabel.styleClass += "chart-signal-summary"
-        cursorDetailsLabel.styleClass += "chart-cursor-details"
-        cursorDetailsLabel.isWrapText = true
-        cursorDetailsLabel.maxWidth = Double.MAX_VALUE
-        currentPriceLabel.styleClass += "chart-current-price"
-        instrumentLabel.styleClass += "chart-instrument-title"
-        chartDetailsLabel.styleClass += "chart-context-details"
-        val titleRow = HBox(9.0, instrumentLabel, currentPriceLabel).apply {
-            alignment = javafx.geometry.Pos.CENTER_LEFT
-        }
-        val metaRow = HBox(8.0, signalSummaryLabel, chartDetailsLabel).apply {
-            alignment = javafx.geometry.Pos.CENTER_LEFT
-        }
-        val identity = VBox(2.0, titleRow, metaRow).apply { HBox.setHgrow(this, Priority.ALWAYS) }
-        val headerTop = HBox(12.0, identity, modeSwitch).apply {
-            alignment = javafx.geometry.Pos.CENTER_LEFT
-        }
-        val header = VBox(6.0, headerTop, cursorDetailsLabel).apply {
-            styleClass += "chart-card-header"
-        }
         val viewerShell = StackPane(viewer).apply { styleClass += "chart-viewer-shell" }
         val content = VBox(header, viewerShell).apply { styleClass += "chart-card-content" }
         VBox.setVgrow(viewerShell, Priority.ALWAYS)
@@ -170,7 +115,7 @@ class TrendChartView : StackPane() {
 
     fun showSignalFocus(epochSeconds: Long? = null) {
         requestedFocusEpochSeconds = epochSeconds
-        focusButton.isSelected = true
+        header.selectFocus()
     }
 
     fun prepareForInstrument(symbol: String) {
@@ -186,7 +131,7 @@ class TrendChartView : StackPane() {
         // A failed or interrupted render must never leave cards from the previously selected instrument.
         tradeAnnotations.clear()
         val focusEpoch = requestedFocusEpochSeconds ?: request.signal?.signalEpochMillis?.div(1_000L)
-        val focused = focusButton.isSelected && focusEpoch != null
+        val focused = header.focused && focusEpoch != null
         val timeline = if (focused) ChartTimeline.focused(request.bars, requireNotNull(focusEpoch), request.tradeEpochSeconds)
         else ChartTimeline.linear(TrendChartSupport.aggregate(request.bars, MAX_CANDLES))
         val visible = timeline.actualBars
@@ -228,24 +173,22 @@ class TrendChartView : StackPane() {
         priceAxis.numberFormatOverride = DecimalFormat("${request.currencySymbol}#,##0.00")
         cursorDateFormat = SimpleDateFormat("dd MMM yyyy  HH:mm")
         cursorPriceFormat = DecimalFormat("${request.currencySymbol}#,##0.00")
-        instrumentLabel.text = "${request.companyName}  (${request.symbol})"
-        currentPriceLabel.text = "${request.currencySymbol}${"%,.2f".format(closes.last())} current"
-        chartDetailsLabel.text = if (focused) "Signal focus · expanded recent impulse · ${visible.size} candles"
+        val details = if (focused) "Signal focus · expanded recent impulse · ${visible.size} candles"
             else "${request.rangeLabel} · ${request.bars.size} minute bars"
         val signalBar = request.signal?.let { SignalChartPresentation.nearestBar(request.bars, it) }
-        signalSummaryLabel.text = request.signal?.let {
+        val signalSummary = request.signal?.let {
             SignalChartPresentation.summary(it, signalBar, closes.last(), request.priceMultiplier, request.currencySymbol)
-        }.orEmpty()
-        signalSummaryLabel.isVisible = request.signal != null
-        signalSummaryLabel.isManaged = request.signal != null
+        }
+        header.showInstrument(request.companyName, request.symbol,
+            "${request.currencySymbol}${"%,.2f".format(closes.last())}", details, signalSummary)
         log.debug(LogTag.UI, "showLatestPrice(value={})", closes.last())
         latestPriceMarker.show(closes.last(), request.currencySymbol)
         showSignalWindow(request.bars.last().minuteEpochSeconds, request.signal, timeline)
         if (focused) signalTrendOverlay.render(timeline, request.priceMultiplier) else signalTrendOverlay.clear()
-        if (tradesButton.isSelected) tradeAnnotations.render(request.matchingTrades, visible, plotted,
+        if (header.tradesVisible) tradeAnnotations.render(request.matchingTrades, visible, plotted,
             request.priceMultiplier, timeline::displayMillis)
         else tradeAnnotations.clear()
-        priceAxis.upperMargin = if (tradesButton.isSelected && request.matchingTrades.isNotEmpty()) 0.28 else 0.04
+        priceAxis.upperMargin = if (header.tradesVisible && request.matchingTrades.isNotEmpty()) 0.28 else 0.04
         refreshAxisRanges()
         chart.fireChartChanged()
     }
@@ -268,13 +211,7 @@ class TrendChartView : StackPane() {
         volumePlot.dataset = null
         latestPriceMarker.clear()
         showSignalWindow(0, null, renderedTimeline)
-        instrumentLabel.text = "No collected market data"
-        currentPriceLabel.text = ""
-        chartDetailsLabel.text = ""
-        signalSummaryLabel.text = ""
-        signalSummaryLabel.isVisible = false
-        signalSummaryLabel.isManaged = false
-        cursorDetailsLabel.text = "Move anywhere above a candle to inspect it · click to pin"
+        header.clear()
         cursorPinned = false
         renderedBars = emptyList()
         renderedTimeline = ChartTimeline.linear(emptyList())
@@ -345,12 +282,12 @@ class TrendChartView : StackPane() {
     private fun togglePinnedCursor(x: Double, y: Double) {
         if (cursorPinned) {
             cursorPinned = false
-            cursorDetailsLabel.text = cursorDetailsLabel.text.substringBefore("  ·  PINNED") + "  ·  LIVE"
+            header.cursorText = header.cursorText.substringBefore("  ·  PINNED") + "  ·  LIVE"
             return
         }
         if (showCursorAt(x, y)) {
             cursorPinned = true
-            cursorDetailsLabel.text = cursorDetailsLabel.text.substringBefore("  ·  LIVE") + "  ·  PINNED"
+            header.cursorText = header.cursorText.substringBefore("  ·  LIVE") + "  ·  PINNED"
         }
     }
 
@@ -385,7 +322,7 @@ class TrendChartView : StackPane() {
     }
 
     private fun showBarDetails(bar: MinuteBar) {
-        cursorDetailsLabel.text = CandleInspectorPresentation.text(
+        header.cursorText = CandleInspectorPresentation.text(
             bar, renderedPriceMultiplier, renderedCurrencySymbol, cursorDateFormat
         )
     }

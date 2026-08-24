@@ -1,0 +1,102 @@
+package org.senatov.mimitrends.charts
+
+import javafx.geometry.Pos
+import javafx.scene.control.Label
+import javafx.scene.control.ToggleButton
+import javafx.scene.control.ToggleGroup
+import javafx.scene.control.Tooltip
+import javafx.scene.layout.HBox
+import javafx.scene.layout.Priority
+import javafx.scene.layout.VBox
+
+internal class TrendChartHeader(onViewChanged: () -> Unit, onTradesChanged: () -> Unit) : VBox(6.0) {
+    private val instrument = Label("Select a scanner result")
+    private val price = Label()
+    private val context = Label("Price and volume history")
+    private val signal = Label()
+    private val cursor = Label(CURSOR_PROMPT)
+    private val focus = ToggleButton("Signal focus")
+    private val history = ToggleButton("Full history")
+    private val trades = ToggleButton("Trades").apply { isSelected = true }
+
+    val focused: Boolean get() = focus.isSelected
+    val tradesVisible: Boolean get() = trades.isSelected
+    var cursorText: String
+        get() = cursor.text
+        set(value) { cursor.text = value }
+
+    init {
+        val viewModes = ToggleGroup().apply {
+            focus.toggleGroup = this
+            history.toggleGroup = this
+            selectToggle(focus)
+        }
+        configureButton(focus, "Show detailed candles around the selected signal") {
+            if (viewModes.selectedToggle == null) focus.isSelected = true
+            onViewChanged()
+        }
+        configureButton(history, "Show the complete loaded chart range") {
+            if (viewModes.selectedToggle == null) history.isSelected = true
+            onViewChanged()
+        }
+        trades.styleClass += listOf("chart-mode-button", "chart-overlay-button")
+        trades.tooltip = Tooltip("Show or hide executed broker trades")
+        trades.setOnAction { onTradesChanged() }
+
+        signal.styleClass += "chart-signal-summary"
+        context.styleClass += "chart-context-details"
+        cursor.styleClass += "chart-cursor-details"
+        cursor.isWrapText = true
+        cursor.maxWidth = Double.MAX_VALUE
+        price.styleClass += "chart-current-price"
+        instrument.styleClass += "chart-instrument-title"
+
+        val titleRow = HBox(10.0, instrument, price).apply { alignment = Pos.BASELINE_LEFT }
+        val metaRow = HBox(8.0, signal, context).apply { alignment = Pos.CENTER_LEFT }
+        val identity = VBox(2.0, titleRow, metaRow).apply { HBox.setHgrow(this, Priority.ALWAYS) }
+        val viewSwitch = HBox(focus, history).apply { styleClass += "chart-mode-switch" }
+        val overlaySwitch = HBox(trades).apply { styleClass += listOf("chart-mode-switch", "chart-overlay-switch") }
+        val controls = HBox(8.0,
+            controlGroup("VIEW", viewSwitch), controlGroup("OVERLAY", overlaySwitch)
+        ).apply { alignment = Pos.BOTTOM_LEFT }
+        children += listOf(HBox(12.0, identity, controls).apply { alignment = Pos.CENTER_LEFT }, cursor)
+        styleClass += "chart-card-header"
+    }
+
+    fun selectFocus() {
+        focus.isSelected = true
+    }
+
+    fun showInstrument(name: String, symbol: String, currentPrice: String, details: String, summary: String?) {
+        instrument.text = "$symbol  ·  $name"
+        price.text = currentPrice
+        context.text = details
+        signal.text = summary.orEmpty()
+        signal.isVisible = summary != null
+        signal.isManaged = summary != null
+    }
+
+    fun clear() {
+        instrument.text = "No collected market data"
+        price.text = ""
+        context.text = ""
+        signal.text = ""
+        signal.isVisible = false
+        signal.isManaged = false
+        cursor.text = CURSOR_PROMPT
+    }
+
+    private fun configureButton(button: ToggleButton, help: String, action: () -> Unit) {
+        button.styleClass += listOf("chart-mode-button", "chart-view-button")
+        button.tooltip = Tooltip(help)
+        button.setOnAction { action() }
+    }
+
+    private fun controlGroup(title: String, controls: HBox) = VBox(1.0,
+        Label(title).apply { styleClass += "chart-mode-caption" }, controls
+    )
+
+    private companion object {
+        const val CURSOR_PROMPT = "Move above a candle to inspect it · click to pin"
+    }
+}
