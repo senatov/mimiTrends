@@ -61,6 +61,45 @@
 
 .request-status-bar .status-error { -fx-text-fill: -mimi-negative; }
 
+.status-indicator {
+    -fx-min-width: 7px;
+    -fx-pref-width: 7px;
+    -fx-max-width: 7px;
+    -fx-min-height: 7px;
+    -fx-pref-height: 7px;
+    -fx-max-height: 7px;
+    -fx-background-radius: 4px;
+}
+
+.status-indicator.status-info {
+    -fx-background-color: #8997a5;
+}
+
+.status-indicator.status-loading {
+    -fx-background-color: -mimi-accent;
+}
+
+.status-indicator.status-success {
+    -fx-background-color: -mimi-positive;
+}
+
+.status-indicator.status-warning {
+    -fx-background-color: -mimi-warning;
+}
+
+.status-indicator.status-error-state {
+    -fx-background-color: -mimi-negative;
+}
+
+.status-progress {
+    -fx-min-width: 13px;
+    -fx-pref-width: 13px;
+    -fx-max-width: 13px;
+    -fx-min-height: 13px;
+    -fx-pref-height: 13px;
+    -fx-max-height: 13px;
+}
+
 .toolbar-icon-button {
     -fx-min-width: 32px;
     -fx-pref-width: 32px;

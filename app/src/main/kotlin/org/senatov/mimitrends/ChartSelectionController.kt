@@ -70,12 +70,12 @@ internal class ChartSelectionController(
     private fun showData(symbol: String, data: ChartData, currency: DisplayCurrency, range: String) {
         val signal = selectedSignal()?.takeIf { it.symbol == symbol }?.let(convertSignal)
         chart.renderMinuteBars(symbol, data.bars, range, 1.0, currency.symbol, signal, data.companyName, data.trades)
-        status.update("Read SQLite: $symbol · ${data.bars.size} minute bars · $range")
+        status.success("Read SQLite: $symbol · ${data.bars.size} minute bars · $range")
     }
 
     private fun showEmpty(symbol: String, range: String) {
         chart.showEmpty(symbol, range)
-        status.update("Read SQLite: no collected minute bars for $symbol · $range")
+        status.warning("Read SQLite: no collected minute bars for $symbol · $range")
     }
 
     private fun showError(symbol: String, error: Throwable) {

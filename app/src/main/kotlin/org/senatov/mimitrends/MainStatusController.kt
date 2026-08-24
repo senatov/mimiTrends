@@ -18,9 +18,14 @@ internal class MainStatusController(
         pane.update(message, error, details)
     }
 
+    fun success(message: String) = pane.update(message, state = StatusState.SUCCESS)
+
+    fun warning(message: String) = pane.update(message, state = StatusState.WARNING)
+
     fun setLoading(value: Boolean) {
         log.debug(LogTag.UI, "chart loading value={}", value)
         chart.setLoading(value)
         refreshButton.isDisable = value
+        pane.setLoading(value)
     }
 }
