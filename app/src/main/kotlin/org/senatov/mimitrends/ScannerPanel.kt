@@ -295,10 +295,15 @@ class ScannerPanel(
             table.selectionModel.select(retainedIndex)
             return
         }
+        if (selectedSymbol != null) {
+            table.selectionModel.clearSelection()
+            log.debug(LogTag.UI, "selectionCleared(previous={} reason=not-present)", selectedSymbol)
+            return
+        }
         sortedRows.firstOrNull()?.let { first ->
             table.selectionModel.select(0)
             table.scrollTo(0)
-            log.debug(LogTag.UI, "selectionFallback(symbol={}, previous={})", first.symbol, selectedSymbol)
+            log.debug(LogTag.UI, "initialSelection(symbol={})", first.symbol)
             onOpen(first)
         }
     }

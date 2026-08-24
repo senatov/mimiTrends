@@ -10,6 +10,8 @@ import javafx.scene.layout.HBox
 import javafx.scene.layout.Priority
 import javafx.scene.layout.Region
 import javafx.scene.layout.VBox
+import javafx.scene.input.KeyCode
+import javafx.scene.input.KeyEvent
 
 internal class TrendChartHeader(
     onViewChanged: () -> Unit,
@@ -48,14 +50,23 @@ internal class TrendChartHeader(
         }
         trades.styleClass += listOf("chart-mode-button", "chart-overlay-button")
         trades.tooltip = Tooltip("Show or hide executed broker trades")
+        trades.accessibleText = "Executed broker trades"
+        trades.accessibleHelp = "Show or hide trade markers on the chart"
         trades.setOnAction { onTradesChanged() }
         val ranges = ToggleGroup()
         rangeButtons.forEach { (range, button) ->
             button.toggleGroup = ranges
             button.styleClass += listOf("chart-range-button", "chart-mode-button")
+            val description = RANGE_DESCRIPTIONS.getValue(range)
+            button.tooltip = Tooltip("Show $description of chart history")
+            button.accessibleText = "Chart range: $description"
+            button.accessibleHelp = "Use Left, Right, Home, or End to change the chart range"
             button.setOnAction {
                 if (ranges.selectedToggle == null) ranges.selectToggle(button)
                 onRangeChanged(range)
+            }
+            button.addEventHandler(KeyEvent.KEY_PRESSED) { event ->
+                navigateRanges(range, event, onRangeChanged)
             }
         }
 
@@ -177,7 +188,24 @@ internal class TrendChartHeader(
     private fun configureButton(button: ToggleButton, help: String, action: () -> Unit) {
         button.styleClass += listOf("chart-mode-button", "chart-view-button")
         button.tooltip = Tooltip(help)
+        button.accessibleText = button.text
+        button.accessibleHelp = help
         button.setOnAction { action() }
+    }
+
+    private fun navigateRanges(current: String, event: KeyEvent, onRangeChanged: (String) -> Unit) {
+        val currentIndex = RANGE_LABELS.indexOf(current)
+        val targetIndex = when (event.code) {
+            KeyCode.LEFT -> (currentIndex - 1).coerceAtLeast(0)
+            KeyCode.RIGHT -> (currentIndex + 1).coerceAtMost(RANGE_LABELS.lastIndex)
+            KeyCode.HOME -> 0
+            KeyCode.END -> RANGE_LABELS.lastIndex
+            else -> return
+        }
+        val target = RANGE_LABELS[targetIndex]
+        rangeButtons.getValue(target).apply { isSelected = true; requestFocus() }
+        if (target != current) onRangeChanged(target)
+        event.consume()
     }
 
     private fun controlGroup(title: String, controls: HBox) = VBox(1.0,
@@ -187,5 +215,9 @@ internal class TrendChartHeader(
     private companion object {
         const val CURSOR_PROMPT = "Move above a candle to inspect it · click to pin"
         val RANGE_LABELS = listOf("1D", "5D", "1M", "3M", "6M", "1Y")
+        val RANGE_DESCRIPTIONS = mapOf(
+            "1D" to "1 day", "5D" to "5 days", "1M" to "1 month",
+            "3M" to "3 months", "6M" to "6 months", "1Y" to "1 year"
+        )
     }
 }

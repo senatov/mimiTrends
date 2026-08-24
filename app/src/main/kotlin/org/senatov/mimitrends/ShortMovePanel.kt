@@ -191,8 +191,12 @@ class ShortMovePanel(
     }
 
     internal fun show(moves: Collection<ShortMove>, nowEpochSeconds: Long = Instant.now().epochSecond) {
+        val selected = table.selectionModel.selectedItem?.identity()
         val displayed = eventRetainer.merge(moves.take(MAX_VISIBLE_MOVES), nowEpochSeconds)
         rows.setAll(displayed)
+        selected?.let { identity ->
+            sortedRows.firstOrNull { it.identity() == identity }?.let(table.selectionModel::select)
+        }
         updateCaption.text = "5-minute moves + recurring jumps · updated ${time.format(Instant.ofEpochSecond(nowEpochSeconds))}"
         displayed.forEach(::requestCompanyName)
         autoFitter.request()
@@ -302,6 +306,8 @@ class ShortMovePanel(
         const val MAX_VISIBLE_MOVES = 10
     }
 }
+
+private fun ShortMove.identity() = symbol to endedAtEpochSeconds
 
 private fun recurringDirection(move: ShortMove): String =
     if (move.changePercent >= 0.0) "⚠ RECURRING UP" else "⚠ RECURRING DOWN"
