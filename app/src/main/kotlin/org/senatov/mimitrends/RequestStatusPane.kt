@@ -1,10 +1,12 @@
 package org.senatov.mimitrends
 
 import javafx.geometry.Pos
+import javafx.scene.AccessibleRole
 import javafx.scene.control.Button
 import javafx.scene.control.ButtonType
 import javafx.scene.control.Dialog
 import javafx.scene.control.Label
+import javafx.scene.control.OverrunStyle
 import javafx.scene.control.ProgressIndicator
 import javafx.scene.control.TextArea
 import javafx.scene.control.Tooltip
@@ -25,6 +27,7 @@ internal class RequestStatusPane(private val selectedRange: () -> String) : HBox
         isManaged = false
     }
     private val statusLabel = Label()
+    private val statusTooltip = Tooltip().apply { showDelay = Duration.millis(450.0) }
     private val detailsButton = Button("!")
     private var lastDetails: String? = null
     private var currentState = StatusState.INFO
@@ -34,16 +37,23 @@ internal class RequestStatusPane(private val selectedRange: () -> String) : HBox
     init {
         alignment = Pos.CENTER_LEFT
         styleClass += "request-status-bar"
+        statusLabel.apply {
+            minWidth = 0.0
+            maxWidth = Double.MAX_VALUE
+            textOverrun = OverrunStyle.ELLIPSIS
+            accessibleRole = AccessibleRole.TEXT
+            tooltip = statusTooltip
+        }
+        HBox.setHgrow(statusLabel, Priority.ALWAYS)
+        progress.accessibleText = "Market data operation in progress"
         detailsButton.styleClass += "error-details-button"
         detailsButton.tooltip = Tooltip("Show complete error log")
+        detailsButton.accessibleText = "Show complete error log"
         detailsButton.isVisible = false
         detailsButton.isManaged = false
         detailsButton.setOnAction { showErrorDetails() }
         setState(StatusState.INFO)
-        children += listOf(
-            indicator, progress, statusLabel,
-            Region().also { HBox.setHgrow(it, Priority.ALWAYS) }, detailsButton
-        )
+        children += listOf(indicator, progress, statusLabel, detailsButton)
     }
 
     fun update(
@@ -80,6 +90,8 @@ internal class RequestStatusPane(private val selectedRange: () -> String) : HBox
 
     private fun present(message: String, error: Boolean, details: String?, state: StatusState) {
         statusLabel.text = message
+        statusLabel.accessibleText = message
+        statusTooltip.text = message
         statusLabel.styleClass.removeAll("status-error")
         if (error) statusLabel.styleClass += "status-error"
         setState(if (error) StatusState.ERROR else state)
@@ -101,6 +113,7 @@ internal class RequestStatusPane(private val selectedRange: () -> String) : HBox
 
     private fun setState(state: StatusState) {
         currentState = state
+        statusLabel.accessibleHelp = "Status: ${state.name.lowercase()}"
         indicator.styleClass.removeAll(*StatusState.entries.map(StatusState::styleClass).toTypedArray())
         indicator.styleClass += state.styleClass
     }
