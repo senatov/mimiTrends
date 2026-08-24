@@ -174,17 +174,14 @@ class MainController(private val apiKey: String?, initialSymbol: String = "AAPL"
         scannerPanel.setAppearance(scannerCriteria.tableAppearance)
         tradegateProvider.configure(scannerCriteria)
         euronextProvider.configure(scannerCriteria)
-        ToolbarIconButton.configure(refreshButton, ToolbarIcon.REFRESH, "Refresh local chart")
-        refreshButton.setOnAction { loadLocalChart(currentSymbol) }
-        ToolbarIconButton.configure(settingsButton, ToolbarIcon.SETTINGS, "Scanner and currency settings")
-        settingsButton.setOnAction { showScannerSettings() }
-        ToolbarIconButton.configure(aboutButton, ToolbarIcon.ABOUT, "About MiMiTrends")
-        aboutButton.setOnAction { AboutDialog.show(aboutButton.scene?.window) { researchReport.show(aboutButton.scene?.window) } }
-        ToolbarIconButton.configure(importTradesButton, ToolbarIcon.IMPORT, "Import Scalable transactions CSV")
-        importTradesButton.setOnAction { scalableImport.chooseAndImport(importTradesButton.scene?.window, ::handleScalableImport) }
         researchReport.start()
         val appLayers = MainViewFactory.create(refreshButton, settingsButton, importTradesButton,
             aboutButton, scannerPanel, trendChart, insightSidebar, contentSplitPane, requestStatus, initialDivider)
+        WorkspaceToolbar.configure(
+            appLayers, refreshButton, settingsButton, importTradesButton, aboutButton,
+            { loadLocalChart(currentSymbol) }, ::showScannerSettings,
+            { scalableImport.chooseAndImport(importTradesButton.scene?.window, ::handleScalableImport) },
+            { AboutDialog.show(aboutButton.scene?.window) { researchReport.show(aboutButton.scene?.window) } })
         WorkspaceAppearance.apply(appLayers, scannerCriteria.tableAppearance)
         trendChart.setDarkTheme(scannerCriteria.tableAppearance.theme == UiTheme.DARK)
         apiKey?.takeIf(String::isNotBlank)?.let(::restartFinnhubLive)

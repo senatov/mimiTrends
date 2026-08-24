@@ -17,15 +17,19 @@ import javafx.scene.shape.Circle
 import javafx.scene.shape.Polygon
 import javafx.scene.shape.Rectangle
 import javafx.util.Duration
+import javafx.scene.input.KeyCombination
 
 object ToolbarIconButton {
-    fun configure(button: Button, icon: ToolbarIcon, tooltipText: String) {
+    fun configure(button: Button, icon: ToolbarIcon, tooltipText: String, shortcut: KeyCombination? = null) {
+        val shortcutText = shortcut?.displayText?.takeIf(String::isNotBlank)
+        val completeTooltip = shortcutText?.let { "$tooltipText  ·  $it" } ?: tooltipText
         button.styleClass += "toolbar-icon-button"
         button.accessibleText = tooltipText
+        button.accessibleHelp = shortcutText?.let { "Keyboard shortcut: $it" }
         button.text = null
         button.graphic = graphic(icon)
         button.contentDisplay = ContentDisplay.GRAPHIC_ONLY
-        button.tooltip = Tooltip(tooltipText).apply {
+        button.tooltip = Tooltip(completeTooltip).apply {
             showDelay = Duration.millis(350.0)
             hideDelay = Duration.millis(120.0)
             styleClass += "mimi-tooltip"
