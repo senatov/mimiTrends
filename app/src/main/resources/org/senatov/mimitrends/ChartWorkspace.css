@@ -36,6 +36,15 @@
     -fx-padding: 3px 0 0 0;
 }
 
+.chart-primary-controls {
+    -fx-alignment: bottom-right;
+}
+
+.chart-primary-controls .chart-mode-caption,
+.chart-range-row .chart-mode-caption {
+    -fx-padding: 0 2px 1px 2px;
+}
+
 .chart-mode-switch {
     -fx-background-color: #e9edf2;
     -fx-background-radius: 6px;

@@ -5,8 +5,10 @@ import javafx.scene.control.Label
 import javafx.scene.control.ToggleButton
 import javafx.scene.control.ToggleGroup
 import javafx.scene.control.Tooltip
+import javafx.scene.control.OverrunStyle
 import javafx.scene.layout.HBox
 import javafx.scene.layout.Priority
+import javafx.scene.layout.Region
 import javafx.scene.layout.VBox
 
 internal class TrendChartHeader(
@@ -59,15 +61,28 @@ internal class TrendChartHeader(
 
         signal.styleClass += "chart-signal-summary"
         context.styleClass += "chart-context-details"
+        configureFlexibleText(instrument)
+        configureFlexibleText(signal)
+        configureFlexibleText(context)
         cursor.styleClass += "chart-cursor-details"
         cursor.isWrapText = true
+        cursor.minWidth = 0.0
         cursor.maxWidth = Double.MAX_VALUE
         price.styleClass += "chart-current-price"
         instrument.styleClass += "chart-instrument-title"
 
-        val titleRow = HBox(10.0, instrument, price).apply { alignment = Pos.BASELINE_LEFT }
-        val metaRow = HBox(8.0, signal, context).apply { alignment = Pos.CENTER_LEFT }
-        val identity = VBox(2.0, titleRow, metaRow).apply { HBox.setHgrow(this, Priority.ALWAYS) }
+        val titleRow = HBox(10.0, instrument, price).apply {
+            alignment = Pos.BASELINE_LEFT
+            HBox.setHgrow(instrument, Priority.ALWAYS)
+        }
+        val metaRow = HBox(8.0, signal, context).apply {
+            alignment = Pos.CENTER_LEFT
+            HBox.setHgrow(context, Priority.ALWAYS)
+        }
+        val identity = VBox(2.0, titleRow, metaRow).apply {
+            minWidth = 0.0
+            HBox.setHgrow(this, Priority.ALWAYS)
+        }
         val viewSwitch = HBox(focus, history).apply { styleClass += "chart-mode-switch" }
         val overlaySwitch = HBox(trades).apply { styleClass += listOf("chart-mode-switch", "chart-overlay-switch") }
         val rangeSwitch = HBox().apply {
@@ -76,7 +91,11 @@ internal class TrendChartHeader(
         }
         val controls = HBox(8.0,
             controlGroup("VIEW", viewSwitch), controlGroup("OVERLAY", overlaySwitch)
-        ).apply { alignment = Pos.BOTTOM_LEFT }
+        ).apply {
+            alignment = Pos.BOTTOM_LEFT
+            minWidth = Region.USE_PREF_SIZE
+            styleClass += "chart-primary-controls"
+        }
         val rangeRow = HBox(12.0, cursor, controlGroup("RANGE", rangeSwitch)).apply {
             alignment = Pos.BOTTOM_LEFT
             HBox.setHgrow(this@TrendChartHeader.cursor, Priority.ALWAYS)
@@ -94,10 +113,14 @@ internal class TrendChartHeader(
     }
 
     fun showInstrument(name: String, symbol: String, currentPrice: String, details: String, summary: String?) {
-        instrument.text = "$symbol  ·  $name"
+        val instrumentText = "$symbol  ·  $name"
+        instrument.text = instrumentText
+        instrument.tooltip = Tooltip(instrumentText)
         price.text = currentPrice
         context.text = details
+        context.tooltip = Tooltip(details)
         signal.text = summary.orEmpty()
+        signal.tooltip = summary?.let { Tooltip(it) }
         signal.isVisible = summary != null
         signal.isManaged = summary != null
     }
@@ -113,7 +136,16 @@ internal class TrendChartHeader(
         signal.text = ""
         signal.isVisible = false
         signal.isManaged = false
+        instrument.tooltip = null
+        context.tooltip = null
+        signal.tooltip = null
         cursor.text = CURSOR_PROMPT
+    }
+
+    private fun configureFlexibleText(label: Label) {
+        label.minWidth = 0.0
+        label.maxWidth = Double.MAX_VALUE
+        label.textOverrun = OverrunStyle.ELLIPSIS
     }
 
     private fun configureButton(button: ToggleButton, help: String, action: () -> Unit) {
