@@ -171,7 +171,6 @@ class MainController(private val apiKey: String?, initialSymbol: String = "AAPL"
         repository.upsertMinuteBar(bar)
         liveTicks[bar.symbol] = System.currentTimeMillis()
     }
-
     init {
         ClipboardText.onCopied = { status.transientSuccess("Copied to clipboard") }
         scannerPanel.onInspect = focusedSignals::request

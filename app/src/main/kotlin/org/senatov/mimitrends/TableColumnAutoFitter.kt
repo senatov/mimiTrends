@@ -96,7 +96,7 @@ class TableColumnAutoFitter<T>(
     private fun measure(spec: Spec<T>, rows: List<T>, cellFont: Font, headerFont: Font): Double {
         val contentWidth = rows.asSequence().map(spec.text).filter(String::isNotBlank)
             .maxOfOrNull { textWidth(it, cellFont) } ?: 0.0
-        val headerWidth = textWidth(spec.column.text.orEmpty(), headerFont) + HEADER_RESERVE
+        val headerWidth = textWidth(TableColumnHelp.title(spec.column), headerFont) + HEADER_RESERVE
         return ceil(maxOf(contentWidth + CONTENT_INSETS + spec.reserveWidth, headerWidth))
             .coerceIn(spec.minWidth, spec.maxWidth)
     }

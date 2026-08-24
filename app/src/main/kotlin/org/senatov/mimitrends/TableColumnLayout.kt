@@ -48,7 +48,7 @@ internal class TableColumnLayout<T>(
 
     private fun visibilityItems(columns: Collection<TableColumn<T, *>>): List<CheckMenuItem> =
         columns.map { column ->
-            CheckMenuItem(column.text).apply {
+            CheckMenuItem(TableColumnHelp.title(column)).apply {
                 isSelected = column.isVisible
                 selectedProperty().addListener { _, _, visible ->
                     if (!visible && table.columns.count(TableColumn<T, *>::isVisible) == 1) {

@@ -129,6 +129,12 @@ class ShortMovePanel(
             prefWidth = 135.0
         }
         table.columns.setAll(company, priceRange, direction, move, period)
+        listOf(
+            priceRange to "Price at the beginning and end of the detected movement.",
+            direction to "Detected movement type and its observed direction.",
+            move to "Percentage price change across the displayed period.",
+            period to "Local start and end time of the detected movement."
+        ).forEach { (column, description) -> TableColumnHelp.install(column, description) }
         columnLayout = TableColumnLayout(table, savedColumns).also(TableColumnLayout<ShortMove>::install)
         autoFitter = TableColumnAutoFitter(table, listOf(
             TableColumnAutoFitter.Spec(company, { companyNames[it.symbol] ?: it.symbol }, 80.0, 240.0),

@@ -104,6 +104,19 @@ class ScannerPanel(
             .zip(listOf("delay", "company", "pattern", "entry_quality", "move", "price", "anomaly", "outcome", "price_action",
                 "volume", "age", "turnover", "updated"))
             .forEach { (column, id) -> column.id = id }
+        listOf(
+            freshness to "Age of the newest candle used by the scanner.",
+            signal to "Current watch score and detected signal pattern; this is not a buy recommendation.",
+            entryQuality to "Entry timing assessment based on extension, confirmation, and freshness.",
+            move to "Price change measured across the latest ten-minute analysis window.",
+            scoreColumn to "Composite rarity and confirmation strength of the detected anomaly.",
+            outcome to "Observed continuation after comparable historical signals.",
+            priceAction to "Current price direction derived from the latest market observations.",
+            volume to "Reported or estimated trading activity available for this instrument.",
+            age to "Elapsed time since the signal was first detected.",
+            turnover to "Approximate session turnover converted to the selected display currency.",
+            updated to "Time of the latest quote or result update shown in this row."
+        ).forEach { (column, description) -> TableColumnHelp.install(column, description) }
         columnLayout = TableColumnLayout(table, savedColumns).also(TableColumnLayout<ScanResult>::install)
         autoFitter = TableColumnAutoFitter(table, listOf(
             TableColumnAutoFitter.Spec(freshness, { FeedFreshness.ageLabel(it.analysisUpdatedAtMillis) }, 68.0, 96.0),
@@ -129,7 +142,9 @@ class ScannerPanel(
         signal.sortType = TableColumn.SortType.DESCENDING
         table.sortOrder += signal
         table.setOnSort {
-            log.debug(LogTag.UI, "tableSort(columns={})", table.sortOrder.joinToString { "${it.text}:${it.sortType}" })
+            log.debug(
+                LogTag.UI, "tableSort(columns={})",
+                table.sortOrder.joinToString { "${TableColumnHelp.title(it)}:${it.sortType}" })
         }
         table.placeholder = empty
         table.columnResizePolicy = TableView.UNCONSTRAINED_RESIZE_POLICY
