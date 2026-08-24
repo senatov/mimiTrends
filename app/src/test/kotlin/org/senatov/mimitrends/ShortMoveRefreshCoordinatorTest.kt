@@ -112,6 +112,22 @@ class ShortMoveRefreshCoordinatorTest {
         }
     }
 
+    @Test
+    fun `late scanner callbacks are ignored after coordinator close`() {
+        val loads = AtomicInteger()
+        val coordinator = ShortMoveRefreshCoordinator(
+            loadMoves = { loads.incrementAndGet(); emptyList() },
+            log = LoggerFactory.getLogger(javaClass),
+            publish = {}
+        )
+        coordinator.close()
+
+        coordinator.replaceSymbols(listOf("AAPL"))
+        coordinator.request()
+
+        assertEquals(0, loads.get())
+    }
+
     private fun waitUntil(condition: () -> Boolean): Boolean {
         val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(1)
         while (System.nanoTime() < deadline) {

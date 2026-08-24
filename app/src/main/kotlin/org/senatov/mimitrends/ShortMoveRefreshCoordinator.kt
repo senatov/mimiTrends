@@ -24,6 +24,7 @@ internal class ShortMoveRefreshCoordinator(
 
     @Synchronized
     fun replaceSymbols(values: Collection<String>) {
+        if (closed.get()) return
         val replacement = values.map(String::uppercase).distinct()
         symbols = replacement
         if (periodicTask == null) {

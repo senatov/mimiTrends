@@ -250,6 +250,7 @@ class MainController(private val apiKey: String?, initialSymbol: String = "AAPL"
             if (closing.get()) return@scan
             val cycleStartedNanos = System.nanoTime()
             val universe = dynamicUniverse.select(scannerCriteria)
+            if (closing.get() || generation != scanGeneration.get()) return@scan
             val selectedSymbols = universe.symbols
             analytics.recordUniverseSelection(universe.ranks, universe.discovered)
             Platform.runLater {
@@ -352,7 +353,7 @@ class MainController(private val apiKey: String?, initialSymbol: String = "AAPL"
                 nextDelayMillis, TimeUnit.MILLISECONDS
             )
         }
-        batchScheduler.execute { runCatching(scan).onFailure { log.error(LogTag.API, "initial Yahoo scan failed", it) } }
+        batchScheduler.execute { runCatching(scan).onFailure { log.error(LogTag.API, "initial scanner cycle failed", it) } }
     }
     private fun openScannerResult(result: ScanResult) {
         log.debug(LogTag.UI, "openScannerResult(symbol={}, age={})", result.symbol, result.signalAgeMinutes)
