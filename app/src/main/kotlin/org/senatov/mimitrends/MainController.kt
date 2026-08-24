@@ -403,6 +403,7 @@ class MainController(private val apiKey: String?, initialSymbol: String = "AAPL"
     private fun loadLocalChart(symbol: String) {
         log.debug(LogTag.UI, "loadLocalChart(symbol={})", symbol)
         if (symbol.isBlank()) return
+        trendChart.prepareForInstrument(symbol)
         val requestGeneration = chartLoadGeneration.incrementAndGet()
         status.setLoading(true)
         val days = ChartRange.days(selectedRangeValue)

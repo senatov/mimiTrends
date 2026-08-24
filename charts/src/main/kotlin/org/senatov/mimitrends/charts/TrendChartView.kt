@@ -173,6 +173,15 @@ class TrendChartView : StackPane() {
         focusButton.isSelected = true
     }
 
+    fun prepareForInstrument(symbol: String) {
+        if (lastRequest?.symbol == symbol) return
+        lastRequest = null
+        requestedFocusEpochSeconds = null
+        tradeAnnotations.clear()
+        signalTrendOverlay.clear()
+        chart.fireChartChanged()
+    }
+
     private fun renderRequest(request: TrendChartRenderRequest) {
         // A failed or interrupted render must never leave cards from the previously selected instrument.
         tradeAnnotations.clear()
