@@ -1,6 +1,7 @@
 package org.senatov.mimitrends
 
 import org.senatov.mimitrends.model.ProviderInstrument
+import org.senatov.mimitrends.text.HtmlEntities
 
 internal object ProviderInstrumentSelector {
     fun select(
@@ -36,7 +37,9 @@ internal object ProviderInstrumentSelector {
     }
 
     private fun normalizedCore(name: String, symbol: String): String =
-        CompanySearchTerm.from(name, symbol).uppercase().replace(NON_ALPHANUMERIC, " ")
+        CompanySearchTerm.from(HtmlEntities.decode(name), symbol).uppercase()
+            .replace("Ä", "AE").replace("Ö", "OE").replace("Ü", "UE").replace("ẞ", "SS")
+            .replace(NON_ALPHANUMERIC, " ")
             .split(WHITESPACE).filter { it.length >= MIN_TOKEN_LENGTH }.joinToString(" ")
 
     private fun providerPriority(symbol: String, provider: String): Int {

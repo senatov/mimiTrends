@@ -24,6 +24,15 @@ class ProviderInstrumentSelectorTest {
         ))
     }
 
+    @Test
+    fun `accepts Tradegate names containing html entities`() {
+        assertEquals(
+            true, ProviderInstrumentSelector.matchesCompany(
+                "MUV2.DE", "MUENCHENER RUECKVERS.-GES. AG N", "M&uuml;nchener R&uuml;ckvers.-Ges. AG"
+            )
+        )
+    }
+
     @Test fun `rejects TXNM Energy for Texas Instruments ticker`() {
         assertFalse(ProviderInstrumentSelector.matchesCompany(
             "TXN", "Texas Instruments Incorporated", "TXNM Energy Inc."

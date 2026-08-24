@@ -3,6 +3,7 @@ package org.senatov.mimitrends.marketdata
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.ObjectMapper
 import org.senatov.mimitrends.log.LogTag
+import org.senatov.mimitrends.text.HtmlEntities
 import org.slf4j.LoggerFactory
 import java.net.CookieManager
 import java.net.CookiePolicy
@@ -143,8 +144,7 @@ class TradegateMarketDataClient(
         runCatching { ZonedDateTime.parse(it, DateTimeFormatter.RFC_1123_DATE_TIME).toInstant().toEpochMilli() }.getOrNull()
     }
 
-    private fun String.decodeHtml(): String = replace("&amp;", "&").replace("&quot;", "\"")
-        .replace("&#39;", "'").replace("&nbsp;", " ").replace("&eacute;", "é").replace("&euml;", "ë")
+    private fun String.decodeHtml(): String = HtmlEntities.decode(this)
 
     private fun String.withoutLegalSuffix(): String = replace(
         Regex("(?i)\\s+(inc\\.?|corp\\.?|corporation|ag|se|n\\.?v\\.?|s\\.?a\\.?|plc|ltd\\.?)\\s*[A-Z]?$"),

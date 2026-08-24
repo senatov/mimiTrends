@@ -42,6 +42,18 @@ class TradegateMarketDataClientTest {
     }
 
     @Test
+    fun `decodes German html entities in resolved instrument name`() {
+        val html = """
+            <tr class="kurssuche_ergebnis"><td><a href="orderbuch.php?lang=en&amp;isin=DE0008430026">
+            <b>M&amp;uuml;nchener R&amp;uuml;ckvers.-Ges.</b> AG <img src="images/basiswert.png" /></a></td></tr>
+        """.trimIndent().replace("&amp;uuml;", "&uuml;")
+
+        val instrument = client.parseInstrumentPage("MUV2", html)
+
+        assertEquals("Münchener Rückvers.-Ges. AG", instrument?.name)
+    }
+
+    @Test
     fun `rejects a directly opened debt instrument`() {
         val html = """
             <script>var isin = "US11135FCM14";</script>
