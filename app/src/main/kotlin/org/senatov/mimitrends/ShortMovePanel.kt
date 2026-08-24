@@ -41,6 +41,8 @@ class ShortMovePanel(
     private val time = DateTimeFormatter.ofPattern("HH:mm").withZone(ZoneId.systemDefault())
     private val updateCaption = Label("5-minute moves + recent post-drop · waiting").apply {
         styleClass += "short-move-caption"
+        maxWidth = Double.MAX_VALUE
+        tooltip = javafx.scene.control.Tooltip(text)
     }
     private val companyNames = java.util.concurrent.ConcurrentHashMap<String, String>()
     private val search = TableSearchField.create("Find move…", ::applyFilter, ::openFirstMatch, table::requestFocus)
@@ -64,12 +66,16 @@ class ShortMovePanel(
     init {
         sortedRows.comparatorProperty().bind(table.comparatorProperty())
         val spacer = javafx.scene.layout.Region().also { HBox.setHgrow(it, Priority.ALWAYS) }
-        val header = HBox(8.0,
-            Label("Recent price battles").apply { styleClass += "table-section-title" }, spacer,
+        val headerActions = HBox(7.0)
+        val header = VBox(
+            2.0,
+            HBox(
+                8.0,
+                Label("Recent price battles").apply { styleClass += "table-section-title" }, spacer, headerActions
+            ).apply { alignment = Pos.CENTER_LEFT },
             updateCaption
         ).apply {
-            alignment = Pos.CENTER_LEFT
-            styleClass += "table-section-header"
+            styleClass += listOf("table-section-header", "short-move-header")
         }
         val company = TableColumn<ShortMove, String>("Company").apply {
             id = "company"
@@ -145,10 +151,7 @@ class ShortMovePanel(
                 "${time.format(Instant.ofEpochSecond(it.startedAtEpochSeconds))}–${time.format(Instant.ofEpochSecond(it.endedAtEpochSeconds))}"
             }, 82.0, 105.0)
         ), columnLayout.savedWidths(), columnLayout.manuallySizedColumnIds())
-        val headerActionIndex = header.children.lastIndex
-        header.children.add(headerActionIndex, search)
-        header.children.add(headerActionIndex + 1, filterCount)
-        header.children.add(headerActionIndex + 2, columnLayout.menuButton(autoFitter::resetManualSizing))
+        headerActions.children += listOf(search, filterCount, columnLayout.menuButton(autoFitter::resetManualSizing))
         rows.addListener(ListChangeListener<ShortMove> { updateFilterPresentation() })
         table.placeholder = empty
         table.columnResizePolicy = TableView.UNCONSTRAINED_RESIZE_POLICY
@@ -205,6 +208,7 @@ class ShortMovePanel(
             sortedRows.firstOrNull { it.identity() == identity }?.let(table.selectionModel::select)
         }
         updateCaption.text = "5-minute moves + recurring jumps · updated ${time.format(Instant.ofEpochSecond(nowEpochSeconds))}"
+        updateCaption.tooltip?.text = updateCaption.text
         displayed.forEach(::requestCompanyName)
         autoFitter.request()
     }

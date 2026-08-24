@@ -173,12 +173,6 @@
 .trend-chart-card { -fx-padding: 6px; }
 .insight-sidebar { -fx-padding: 5px; }
 
-.table-column-help-icon {
-    -fx-font-size: 10px;
-    -fx-text-fill: -mimi-text-secondary;
-    -fx-opacity: 0.72;
-}
-
 .insight-sidebar-host {
     -fx-background-color: transparent;
 }
@@ -205,6 +199,10 @@
 }
 
 .table-section-header { -fx-padding: 1px 3px 6px 3px; }
+
+.short-move-header .short-move-caption {
+    -fx-padding: 0 2px;
+}
 
 .table-columns-button {
     -fx-font-size: 11px;

@@ -1,10 +1,8 @@
 package org.senatov.mimitrends
 
-import javafx.geometry.Pos
 import javafx.scene.control.Label
 import javafx.scene.control.TableColumn
 import javafx.scene.control.Tooltip
-import javafx.scene.layout.HBox
 import javafx.util.Duration
 
 internal object TableColumnHelp {
@@ -14,10 +12,7 @@ internal object TableColumnHelp {
         val title = title(column)
         column.properties[TITLE_KEY] = title
         column.text = ""
-        val graphic = HBox(4.0, Label(title), Label("ⓘ").apply {
-            styleClass += "table-column-help-icon"
-        }).apply {
-            alignment = Pos.CENTER_LEFT
+        val graphic = Label(title).apply {
             styleClass += "table-column-title"
             accessibleText = "$title column"
             accessibleHelp = description
