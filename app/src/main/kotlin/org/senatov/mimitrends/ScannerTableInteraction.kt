@@ -7,6 +7,8 @@ import javafx.scene.control.TableRow
 import javafx.scene.control.TableView
 import javafx.scene.input.KeyCode
 import javafx.scene.input.MouseButton
+import javafx.scene.input.KeyCodeCombination
+import javafx.scene.input.KeyCombination
 import javafx.util.Duration
 import org.senatov.mimitrends.model.ScanResult
 
@@ -34,9 +36,15 @@ internal object ScannerTableInteraction {
                     }
                 }
                 contextMenu = ContextMenu(
-                    MenuItem("Copy search keyword").apply { setOnAction { contextItem?.let(copySearch) } },
+                    MenuItem("Copy search keyword").apply {
+                        accelerator = KeyCodeCombination(KeyCode.C, KeyCombination.SHORTCUT_DOWN)
+                        setOnAction { contextItem?.let(copySearch) }
+                    },
                     MenuItem("Copy ticker").apply { setOnAction { contextItem?.symbol?.let(copyTicker) } },
-                    MenuItem("Open Stock").apply { setOnAction { contextItem?.symbol?.let(openStock) } }
+                    MenuItem("Open Stock").apply {
+                        accelerator = KeyCodeCombination(KeyCode.O, KeyCombination.SHORTCUT_DOWN)
+                        setOnAction { contextItem?.symbol?.let(openStock) }
+                    }
                 ).apply {
                     setOnShowing {
                         contextItem = item.takeUnless { isEmpty }
@@ -47,9 +55,15 @@ internal object ScannerTableInteraction {
             }
         }
         table.setOnKeyPressed { event ->
-            if (event.code == KeyCode.C && event.isShortcutDown) {
-                table.selectionModel.selectedItem?.let(copySearch); event.consume()
+            val selected = table.selectionModel.selectedItem
+            when {
+                event.code == KeyCode.ENTER -> selected?.let(open)
+                event.code == KeyCode.SPACE -> selected?.let(inspect)
+                event.code == KeyCode.O && event.isShortcutDown -> selected?.symbol?.let(openStock)
+                event.code == KeyCode.C && event.isShortcutDown -> selected?.let(copySearch)
+                else -> return@setOnKeyPressed
             }
+            event.consume()
         }
     }
 }

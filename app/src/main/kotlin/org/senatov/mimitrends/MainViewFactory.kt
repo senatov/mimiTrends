@@ -51,6 +51,7 @@ internal object MainViewFactory {
             styleClass += "content-split-pane"
         }
         Platform.runLater { contentSplitPane.setDividerPosition(0, initialDivider) }
+        SplitPaneReset.install(contentSplitPane, initialDivider)
         val content = VBox(contentSplitPane).apply {
             padding = Insets(12.0, 14.0, 12.0, 14.0)
             VBox.setVgrow(contentSplitPane, Priority.ALWAYS)
@@ -61,6 +62,12 @@ internal object MainViewFactory {
         return StackPane(root, scannerPanel.marketClosedOverlay).apply {
             styleClass += "app-layers"
             StackPane.setAlignment(scannerPanel.marketClosedOverlay, Pos.CENTER)
+            WorkspaceShortcuts.install(
+                this, mapOf(
+                    WorkspaceShortcuts.findSignals to scannerPanel::focusSignalSearch,
+                    WorkspaceShortcuts.findMoves to scannerPanel::focusMoveSearch
+                )
+            )
         }
     }
 

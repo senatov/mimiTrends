@@ -59,7 +59,7 @@ class ScannerPanel(
     private var currency = DisplayCurrency.EUR
     private var convertPrice: (String, Double) -> Double = { _, value -> value }
     private val columnFactory = ScannerColumnFactory(table, loadProfile)
-    private val search = TableSearchField.create("Find signal…", ::applyFilter)
+    private val search = TableSearchField.create("Find signal…", ::applyFilter, ::openFirstMatch)
     private val filterCount = Label().apply {
         styleClass += "table-filter-count"
         isVisible = false
@@ -151,6 +151,7 @@ class ScannerPanel(
             styleClass += "table-split-pane"
             Platform.runLater { setDividerPosition(0, initialTableDivider.coerceIn(0.45, 0.82)) }
         }
+        SplitPaneReset.install(tableSplit, initialTableDivider.coerceIn(0.45, 0.82))
         SplitPane.setResizableWithParent(scannerSection, true)
         SplitPane.setResizableWithParent(shortMovePanel, true)
         children += tableSplit
@@ -161,6 +162,8 @@ class ScannerPanel(
 
     fun savedColumnLayout(): String = columnLayout.capture(autoFitter.manuallySizedColumnIds())
     fun tableDividerPosition(): Double = tableSplit.dividers.firstOrNull()?.position ?: 0.68
+    internal fun focusSignalSearch() = search.focusField()
+    internal fun focusMoveSearch() = shortMovePanel.focusSearch()
     fun setDetectedTodayCount(count: Int) {
         detectedTodayButton.text = "Detected today · $count"
     }
@@ -185,6 +188,15 @@ class ScannerPanel(
         filterCount.text = "${filteredRows.size}/${rows.size}"
         filterCount.isVisible = filtering
         filterCount.isManaged = filtering
+    }
+
+    private fun openFirstMatch() {
+        sortedRows.firstOrNull()?.let { first ->
+            table.selectionModel.select(first)
+            table.scrollTo(first)
+            table.requestFocus()
+            onOpen(first)
+        }
     }
 
     fun update(result: ScanResult) {

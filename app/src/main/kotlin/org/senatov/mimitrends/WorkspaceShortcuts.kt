@@ -14,6 +14,10 @@ internal object WorkspaceShortcuts {
         KeyCode.I, KeyCombination.SHORTCUT_DOWN, KeyCombination.SHIFT_DOWN
     )
     val about: KeyCombination = KeyCodeCombination(KeyCode.F1)
+    val findSignals: KeyCombination = KeyCodeCombination(KeyCode.F, KeyCombination.SHORTCUT_DOWN)
+    val findMoves: KeyCombination = KeyCodeCombination(
+        KeyCode.F, KeyCombination.SHORTCUT_DOWN, KeyCombination.SHIFT_DOWN
+    )
 
     fun install(root: Parent, actions: Map<KeyCombination, () -> Unit>) {
         fun apply(scene: Scene?, add: Boolean) {

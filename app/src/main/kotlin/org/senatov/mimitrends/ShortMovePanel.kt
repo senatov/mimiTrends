@@ -16,6 +16,8 @@ import javafx.scene.control.TableView
 import javafx.scene.control.ContextMenu
 import javafx.scene.control.MenuItem
 import javafx.scene.input.KeyCode
+import javafx.scene.input.KeyCodeCombination
+import javafx.scene.input.KeyCombination
 import javafx.scene.input.MouseButton
 import javafx.scene.layout.HBox
 import javafx.scene.layout.Priority
@@ -41,7 +43,7 @@ class ShortMovePanel(
         styleClass += "short-move-caption"
     }
     private val companyNames = java.util.concurrent.ConcurrentHashMap<String, String>()
-    private val search = TableSearchField.create("Find move…", ::applyFilter)
+    private val search = TableSearchField.create("Find move…", ::applyFilter, ::openFirstMatch)
     private val filterCount = Label().apply {
         styleClass += "table-filter-count"
         isVisible = false
@@ -157,10 +159,12 @@ class ShortMovePanel(
                 }
                 contextMenu = ContextMenu(
                     MenuItem("Copy search keyword").apply {
+                        accelerator = KeyCodeCombination(KeyCode.C, KeyCombination.SHORTCUT_DOWN)
                         setOnAction { contextItem?.let { move -> copyText(searchKeyword(move)) } }
                     },
                     MenuItem("Copy ticker").apply { setOnAction { contextItem?.symbol?.let(copyText) } },
                     MenuItem("Open Stock").apply {
+                        accelerator = KeyCodeCombination(KeyCode.O, KeyCombination.SHORTCUT_DOWN)
                         setOnAction { contextItem?.symbol?.let(openExternalChart) }
                     }
                 ).apply {
@@ -173,10 +177,14 @@ class ShortMovePanel(
             }
         }
         table.setOnKeyPressed { event ->
-            if (event.code == KeyCode.C && event.isShortcutDown) {
-                table.selectionModel.selectedItem?.let { copyText(searchKeyword(it)) }
-                event.consume()
+            val selected = table.selectionModel.selectedItem
+            when {
+                event.code == KeyCode.ENTER -> selected?.let { onOpen(it.symbol, it.endedAtEpochSeconds) }
+                event.code == KeyCode.O && event.isShortcutDown -> selected?.symbol?.let(openExternalChart)
+                event.code == KeyCode.C && event.isShortcutDown -> selected?.let { copyText(searchKeyword(it)) }
+                else -> return@setOnKeyPressed
             }
+            event.consume()
         }
         styleClass += "table-section"
         children.setAll(header, table)
@@ -191,6 +199,7 @@ class ShortMovePanel(
     }
 
     internal fun savedColumnLayout(): String = columnLayout.capture(autoFitter.manuallySizedColumnIds())
+    internal fun focusSearch() = search.focusField()
 
     private fun directionLabel(move: ShortMove): String = when (move.pattern) {
         ShortMovePattern.RECURRING_SHARP_JUMP -> recurringDirection(move)
@@ -233,6 +242,15 @@ class ShortMovePanel(
         filterCount.text = "${filteredRows.size}/${rows.size}"
         filterCount.isVisible = filtering
         filterCount.isManaged = filtering
+    }
+
+    private fun openFirstMatch() {
+        sortedRows.firstOrNull()?.let { first ->
+            table.selectionModel.select(first)
+            table.scrollTo(first)
+            table.requestFocus()
+            onOpen(first.symbol, first.endedAtEpochSeconds)
+        }
     }
 
     private class DirectionCell : TableCell<ShortMove, ShortMove>() {
