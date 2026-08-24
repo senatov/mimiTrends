@@ -65,6 +65,12 @@
     -fx-background-color: #263240;
 }
 
+.theme-dark .table-search-field {
+    -fx-background-color: #202934;
+    -fx-text-fill: -mimi-text;
+    -fx-prompt-text-fill: #7f8d9c;
+}
+
 .theme-dark .chart-card-header,
 .theme-dark .inspector-section {
     -fx-background-color: -mimi-surface-muted;

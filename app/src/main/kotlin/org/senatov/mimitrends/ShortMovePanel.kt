@@ -5,6 +5,7 @@ import javafx.beans.property.ReadOnlyObjectWrapper
 import javafx.beans.property.ReadOnlyStringWrapper
 import javafx.collections.FXCollections
 import javafx.collections.transformation.SortedList
+import javafx.collections.transformation.FilteredList
 import javafx.geometry.Pos
 import javafx.scene.control.Label
 import javafx.scene.control.TableCell
@@ -31,13 +32,15 @@ class ShortMovePanel(
     private val openExternalChart: (String) -> Unit = {}
 ) : VBox(5.0) {
     private val rows = FXCollections.observableArrayList<ShortMove>()
-    private val sortedRows = SortedList(rows)
+    private val filteredRows = FilteredList(rows)
+    private val sortedRows = SortedList(filteredRows)
     private val table = TableView(sortedRows)
     private val time = DateTimeFormatter.ofPattern("HH:mm").withZone(ZoneId.systemDefault())
     private val updateCaption = Label("5-minute moves + recent post-drop · waiting").apply {
         styleClass += "short-move-caption"
     }
     private val companyNames = java.util.concurrent.ConcurrentHashMap<String, String>()
+    private val search = TableSearchField.create("Find move…", ::applyFilter)
     private val eventRetainer = ShortMoveEventRetainer()
     private val columnLayout: TableColumnLayout<ShortMove>
     private val autoFitter: TableColumnAutoFitter<ShortMove>
@@ -120,10 +123,9 @@ class ShortMovePanel(
                 "${time.format(Instant.ofEpochSecond(it.startedAtEpochSeconds))}–${time.format(Instant.ofEpochSecond(it.endedAtEpochSeconds))}"
             }, 82.0, 105.0)
         ), columnLayout.savedWidths(), columnLayout.manuallySizedColumnIds())
-        header.children.add(
-            header.children.lastIndex,
-            columnLayout.menuButton(autoFitter::resetManualSizing)
-        )
+        val headerActionIndex = header.children.lastIndex
+        header.children.add(headerActionIndex, search)
+        header.children.add(headerActionIndex + 1, columnLayout.menuButton(autoFitter::resetManualSizing))
         table.placeholder = WorkspaceEmptyState.create(
             "No recent price battles",
             "This panel will populate when fresh minute bars form a directional move or recurring jump."
@@ -191,6 +193,7 @@ class ShortMovePanel(
         loadProfile?.invoke(move.symbol)?.whenComplete { profile, error ->
             if (error == null && profile != null) javafx.application.Platform.runLater {
                 companyNames[move.symbol] = CompanySearchTerm.normalizeDisplay(profile.name)
+                applyFilter()
                 table.refresh()
                 if (table.sortOrder.isNotEmpty()) table.sort()
                 autoFitter.request()
@@ -200,6 +203,15 @@ class ShortMovePanel(
 
     private fun searchKeyword(move: ShortMove): String =
         CompanySearchTerm.from(companyNames[move.symbol] ?: move.symbol, move.symbol)
+
+    private fun applyFilter() {
+        val query = search.text.trim().lowercase()
+        filteredRows.setPredicate { move ->
+            query.isBlank() || move.symbol.lowercase().contains(query) ||
+                    (companyNames[move.symbol] ?: move.symbol).lowercase().contains(query) ||
+                    directionLabel(move).lowercase().contains(query)
+        }
+    }
 
     private class DirectionCell : TableCell<ShortMove, ShortMove>() {
         override fun updateItem(item: ShortMove?, empty: Boolean) {
