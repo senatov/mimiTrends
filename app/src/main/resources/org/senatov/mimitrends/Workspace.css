@@ -266,6 +266,10 @@
     -fx-effect: null;
 }
 
+.chart-range-row {
+    -fx-padding: 1px 0 0 0;
+}
+
 .chart-view-button:selected {
     -fx-background-color: -mimi-accent;
     -fx-border-color: -mimi-accent;

@@ -75,10 +75,17 @@ internal class TrendChartHeader(
             styleClass += "chart-mode-switch"
         }
         val controls = HBox(8.0,
-            controlGroup("RANGE", rangeSwitch), controlGroup("VIEW", viewSwitch),
-            controlGroup("OVERLAY", overlaySwitch)
+            controlGroup("VIEW", viewSwitch), controlGroup("OVERLAY", overlaySwitch)
         ).apply { alignment = Pos.BOTTOM_LEFT }
-        children += listOf(HBox(12.0, identity, controls).apply { alignment = Pos.CENTER_LEFT }, cursor)
+        val rangeRow = HBox(controlGroup("RANGE", rangeSwitch)).apply {
+            alignment = Pos.CENTER_RIGHT
+            styleClass += "chart-range-row"
+        }
+        children += listOf(
+            HBox(12.0, identity, controls).apply { alignment = Pos.CENTER_LEFT },
+            rangeRow,
+            cursor
+        )
         styleClass += "chart-card-header"
     }
 
