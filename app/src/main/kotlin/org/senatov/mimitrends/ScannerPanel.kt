@@ -11,6 +11,7 @@ import org.senatov.mimitrends.model.CompanyProfile
 import org.senatov.mimitrends.model.ScanResult
 import org.senatov.mimitrends.model.DisplayCurrency
 import org.senatov.mimitrends.model.TableAppearance
+import org.senatov.mimitrends.model.UiTheme
 import org.slf4j.LoggerFactory
 import java.time.Instant
 import java.time.ZoneId
@@ -296,14 +297,19 @@ class ScannerPanel(
     fun setAppearance(value: TableAppearance) {
         log.debug(LogTag.UI, "setAppearance(font={}, size={})", value.fontFamily, value.fontSize)
         val safeFont = value.fontFamily.replace("\"", "")
+        val colors = if (value.theme == UiTheme.DARK) {
+            listOf("#D7DEE7", "#19212B", "#202A35", "#254A70", "#354250")
+        } else {
+            listOf(value.textColor, value.evenRowColor, value.oddRowColor, value.selectionColor, value.gridColor)
+        }
         table.style = """
             -fx-font-family: "$safeFont";
             -fx-font-size: ${value.fontSize}px;
-            -mimi-table-text: ${value.textColor};
-            -mimi-row-even: ${value.evenRowColor};
-            -mimi-row-odd: ${value.oddRowColor};
-            -mimi-selection: ${value.selectionColor};
-            -mimi-table-grid: ${value.gridColor};
+            -mimi-table-text: ${colors[0]};
+            -mimi-row-even: ${colors[1]};
+            -mimi-row-odd: ${colors[2]};
+            -mimi-selection: ${colors[3]};
+            -mimi-table-grid: ${colors[4]};
         """.trimIndent()
         table.refresh(); autoFitter.request()
     }

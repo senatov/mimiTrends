@@ -7,6 +7,8 @@ import org.senatov.mimitrends.model.FinancialTransactionTaxExclusions
 import org.senatov.mimitrends.model.TableAppearance
 import org.senatov.mimitrends.model.AnomalyWindow
 import org.senatov.mimitrends.model.MarketRegion
+import org.senatov.mimitrends.model.UiDensity
+import org.senatov.mimitrends.model.UiTheme
 import org.slf4j.LoggerFactory
 import java.nio.file.Files
 import java.nio.file.Path
@@ -48,6 +50,8 @@ class ScannerSettingsService(private val path: Path = Path.of(System.getProperty
                     .toLong().coerceIn(750, 15_000),
                 stockSearchUrl = p.getProperty("stock.searchUrl", ScannerCriteria().stockSearchUrl),
                 tableAppearance = TableAppearance(
+                    theme = enumValue(p.getProperty("ui.theme"), UiTheme.LIGHT),
+                    density = enumValue(p.getProperty("ui.density"), UiDensity.COMPACT),
                     fontFamily = p.getProperty("table.fontFamily", "SF Pro Display"),
                     fontSize = p.getProperty("table.fontSize", "12.0").toDouble().coerceIn(9.0, 22.0),
                     textColor = color(p.getProperty("table.textColor"), "#263238"),
@@ -98,6 +102,8 @@ class ScannerSettingsService(private val path: Path = Path.of(System.getProperty
             setProperty("provider.euronext.enabled", value.euronextEnabled.toString())
             setProperty("provider.euronext.intervalMillis", value.euronextRequestIntervalMillis.toString())
             setProperty("stock.searchUrl", value.stockSearchUrl)
+            setProperty("ui.theme", value.tableAppearance.theme.name)
+            setProperty("ui.density", value.tableAppearance.density.name)
             setProperty("table.fontFamily", value.tableAppearance.fontFamily)
             setProperty("table.fontSize", value.tableAppearance.fontSize.toString())
             setProperty("table.textColor", value.tableAppearance.textColor)

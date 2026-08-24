@@ -107,8 +107,23 @@ enum class MarketRegion(val label: String) {
     BOTH("US + Europe"), US("United States"), EUROPE("Europe");
     override fun toString(): String = label
 }
+enum class UiTheme(val label: String) {
+    LIGHT("Light"),
+    DARK("Dark");
+
+    override fun toString(): String = label
+}
+
+enum class UiDensity(val label: String) {
+    COMPACT("Compact"),
+    COMFORTABLE("Comfortable");
+
+    override fun toString(): String = label
+}
 
 data class TableAppearance(
+    val theme: UiTheme = UiTheme.LIGHT,
+    val density: UiDensity = UiDensity.COMPACT,
     val fontFamily: String = "SF Pro Display",
     val fontSize: Double = 12.0,
     val textColor: String = "#263238",

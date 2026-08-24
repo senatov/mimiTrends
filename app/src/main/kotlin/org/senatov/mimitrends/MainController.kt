@@ -185,6 +185,8 @@ class MainController(private val apiKey: String?, initialSymbol: String = "AAPL"
         researchReport.start()
         val appLayers = MainViewFactory.create(refreshButton, settingsButton, importTradesButton,
             aboutButton, scannerPanel, trendChart, insightSidebar, contentSplitPane, requestStatus, initialDivider)
+        WorkspaceAppearance.apply(appLayers, scannerCriteria.tableAppearance)
+        trendChart.setDarkTheme(scannerCriteria.tableAppearance.theme == UiTheme.DARK)
         apiKey?.takeIf(String::isNotBlank)?.let(::restartFinnhubLive)
         analytics.applyRetention()
         DatabaseStartupMaintenance.schedule(analytics, batchScheduler, log)
@@ -380,6 +382,8 @@ class MainController(private val apiKey: String?, initialSymbol: String = "AAPL"
             euronextProvider.configure(result.criteria)
             scannerPanel.setCurrency(result.criteria.displayCurrency, currencyConverter::price)
             scannerPanel.setAppearance(result.criteria.tableAppearance)
+                settingsButton.scene?.root?.let { WorkspaceAppearance.apply(it, result.criteria.tableAppearance) }
+                trendChart.setDarkTheme(result.criteria.tableAppearance.theme == UiTheme.DARK)
             loadLocalChart(currentSymbol)
             startScanner()
         }

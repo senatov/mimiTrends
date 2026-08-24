@@ -2,11 +2,31 @@ package org.senatov.mimitrends.scanner
 
 import org.junit.jupiter.api.Test
 import org.senatov.mimitrends.model.ScannerCriteria
+import org.senatov.mimitrends.model.TableAppearance
+import org.senatov.mimitrends.model.UiDensity
+import org.senatov.mimitrends.model.UiTheme
 import java.nio.file.Files
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 class ScannerSettingsServiceTest {
+    @Test
+    fun `persists workspace theme and density`() {
+        val path = Files.createTempDirectory("mimitrends-appearance").resolve("scanner.properties")
+        val service = ScannerSettingsService(path)
+
+        service.save(
+            ScannerCriteria(
+                tableAppearance = TableAppearance(
+                    theme = UiTheme.DARK, density = UiDensity.COMFORTABLE
+                )
+            )
+        )
+
+        assertEquals(UiTheme.DARK, service.load().tableAppearance.theme)
+        assertEquals(UiDensity.COMFORTABLE, service.load().tableAppearance.density)
+    }
+
     @Test
     fun `persists additional provider configuration`() {
         val path = Files.createTempDirectory("mimitrends-settings").resolve("scanner.properties")

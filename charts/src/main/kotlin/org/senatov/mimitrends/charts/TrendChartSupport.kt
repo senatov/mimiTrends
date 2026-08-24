@@ -27,6 +27,37 @@ import java.text.SimpleDateFormat
 import kotlin.math.ceil
 
 internal object TrendChartSupport {
+    fun applyTheme(
+        dark: Boolean,
+        chart: JFreeChart,
+        dateAxis: DateAxis,
+        priceAxis: NumberAxis,
+        volumeAxis: NumberAxis,
+        pricePlot: XYPlot,
+        volumePlot: XYPlot,
+        combinedPlot: CombinedDomainXYPlot
+    ) {
+        val background = if (dark) Color(23, 30, 38) else Color(247, 248, 250)
+        val plotBackground = if (dark) Color(27, 35, 44) else Color.WHITE
+        val labels = if (dark) Color(184, 197, 210) else Color(82, 94, 106)
+        val axisLine = if (dark) Color(67, 81, 96) else Color(190, 198, 207)
+        val domainGrid = if (dark) Color(47, 59, 72) else Color(232, 235, 239)
+        val rangeGrid = if (dark) Color(55, 68, 82) else Color(218, 223, 229)
+        chart.backgroundPaint = background
+        combinedPlot.backgroundPaint = background
+        listOf(dateAxis, priceAxis, volumeAxis).forEach { axis ->
+            axis.tickLabelPaint = labels
+            axis.axisLinePaint = axisLine
+            axis.labelPaint = labels
+        }
+        listOf(pricePlot, volumePlot).forEach { plot ->
+            plot.backgroundPaint = plotBackground
+            plot.domainGridlinePaint = domainGrid
+            plot.rangeGridlinePaint = rangeGrid
+        }
+        chart.fireChartChanged()
+    }
+
     fun configure(
         chart: JFreeChart,
         viewer: ChartViewer,

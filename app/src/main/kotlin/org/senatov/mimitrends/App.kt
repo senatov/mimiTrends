@@ -43,6 +43,7 @@ class App : Application() {
         scene.stylesheets += requireNotNull(javaClass.getResource("/org/senatov/mimitrends/MiMiTrends.css")).toExternalForm()
         scene.stylesheets += requireNotNull(javaClass.getResource("/org/senatov/mimitrends/Workspace.css")).toExternalForm()
         scene.stylesheets += requireNotNull(javaClass.getResource("/org/senatov/mimitrends/ChartWorkspace.css")).toExternalForm()
+        scene.stylesheets += requireNotNull(javaClass.getResource("/org/senatov/mimitrends/DarkWorkspace.css")).toExternalForm()
 
         stage.title = "MiMiTrends"
         listOf("/icons/icon_512x512.png", "/icons/icon_128x128.png").forEach { path ->

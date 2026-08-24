@@ -14,6 +14,8 @@ import org.senatov.mimitrends.model.DisplayCurrency
 import org.senatov.mimitrends.model.TableAppearance
 import org.senatov.mimitrends.model.AnomalyWindow
 import org.senatov.mimitrends.model.MarketRegion
+import org.senatov.mimitrends.model.UiDensity
+import org.senatov.mimitrends.model.UiTheme
 import javafx.collections.FXCollections
 import javafx.scene.paint.Color
 import javafx.scene.text.Font
@@ -62,6 +64,12 @@ class ScannerSettingsDialog(
         promptText = if (finnhubConfigured) "Configured — leave blank to keep" else "Optional API key"
     }
     private val symbols = TextArea(current.symbols.joinToString(", ")).apply { prefRowCount = 3; isWrapText = true }
+    private val theme = ComboBox(FXCollections.observableArrayList(UiTheme.entries)).apply {
+        value = current.tableAppearance.theme
+    }
+    private val density = ComboBox(FXCollections.observableArrayList(UiDensity.entries)).apply {
+        value = current.tableAppearance.density
+    }
     private val fontFamily = ComboBox(FXCollections.observableArrayList(Font.getFamilies())).apply {
         value = current.tableAppearance.fontFamily
         prefWidth = 240.0
@@ -144,6 +152,11 @@ class ScannerSettingsDialog(
         ).apply { padding = Insets(18.0) }
 
         val appearance = VBox(14.0,
+            section(
+                "Workspace",
+                settingRow("Theme", "Light or dark colours for the main workspace.", theme),
+                settingRow("Density", "Compact maximizes visible market data; Comfortable adds spacing.", density)
+            ),
             section("Typography",
                 settingRow("System font", "Use a light macOS system face or another installed family.", fontFamily),
                 settingRow("Text size", "Scanner table font size in points.", fontSize)
@@ -258,6 +271,8 @@ class ScannerSettingsDialog(
         euronextInterval.valueFactory.value = defaults.euronextRequestIntervalMillis.toInt()
         stockSearchUrl.text = defaults.stockSearchUrl
         symbols.text = defaults.symbols.joinToString(", ")
+        theme.value = defaults.tableAppearance.theme
+        density.value = defaults.tableAppearance.density
         fontFamily.value = defaults.tableAppearance.fontFamily
         fontSize.valueFactory.value = defaults.tableAppearance.fontSize
         textColor.value = Color.web(defaults.tableAppearance.textColor)
@@ -293,6 +308,8 @@ class ScannerSettingsDialog(
             euronextRequestIntervalMillis = euronextInterval.value.toLong(),
             stockSearchUrl = stockSearchUrl.text.trim().also { require(it.isNotEmpty()) },
             tableAppearance = TableAppearance(
+                theme = theme.value ?: UiTheme.LIGHT,
+                density = density.value ?: UiDensity.COMPACT,
                 fontFamily = fontFamily.value ?: "SF Pro Display",
                 fontSize = fontSize.value,
                 textColor = hex(textColor.value),

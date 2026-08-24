@@ -1,0 +1,111 @@
+/* Optional workspace variants. Applied through root style classes. */
+.density-comfortable .scanner-table .table-cell {
+    -fx-padding: 8px 7px;
+}
+
+.density-comfortable .scanner-table .column-header {
+    -fx-padding: 7px;
+}
+
+.density-comfortable .table-section {
+    -fx-padding: 11px;
+}
+
+.density-comfortable .chart-card-header {
+    -fx-padding: 12px 14px;
+}
+
+.density-comfortable .inspector-section {
+    -fx-padding: 12px;
+}
+
+.theme-dark {
+    -mimi-canvas: #10151b;
+    -mimi-surface: #171e26;
+    -mimi-surface-muted: #1d2630;
+    -mimi-border: #303c49;
+    -mimi-border-strong: #465566;
+    -mimi-text: #e5eaf0;
+    -mimi-text-secondary: #9eabb9;
+    -mimi-accent: #3f82d2;
+    -mimi-accent-hover: #5796df;
+    -mimi-accent-soft: #203b59;
+    -mimi-positive: #50bd83;
+    -mimi-warning: #e0a84d;
+    -mimi-negative: #e16873;
+}
+
+.theme-dark .title-toolbar,
+.theme-dark .request-status-bar,
+.theme-dark .table-section,
+.theme-dark .trend-chart-card,
+.theme-dark .insight-sidebar {
+    -fx-background-color: -mimi-surface;
+}
+
+.theme-dark .toolbar-icon-button {
+    -fx-text-fill: #c7d2de;
+}
+
+.theme-dark .toolbar-icon-button:hover {
+    -fx-background-color: #263240;
+}
+
+.theme-dark .chart-card-header,
+.theme-dark .inspector-section {
+    -fx-background-color: -mimi-surface-muted;
+    -fx-border-color: -mimi-border;
+}
+
+.theme-dark .chart-cursor-details,
+.theme-dark .inspector-line {
+    -fx-text-fill: #c4ced8;
+}
+
+.theme-dark .inspector-section-caption {
+    -fx-text-fill: #8797a8;
+}
+
+.theme-dark .chart-mode-switch {
+    -fx-background-color: #26313d;
+    -fx-border-color: #465566;
+}
+
+.theme-dark .chart-mode-button {
+    -fx-text-fill: #d5dde6;
+    -fx-background-color: #202a35;
+    -fx-border-color: #465566;
+}
+
+.theme-dark .chart-mode-button:selected {
+    -fx-text-fill: white;
+    -fx-background-color: -mimi-accent;
+}
+
+.theme-dark .chart-overlay-switch {
+    -fx-background-color: #3a2b20;
+    -fx-border-color: #75502f;
+}
+
+.theme-dark .chart-overlay-button:selected {
+    -fx-background-color: #b8661d;
+}
+
+.theme-dark .scanner-table,
+.theme-dark .scanner-table .column-header-background,
+.theme-dark .scanner-table .column-header,
+.theme-dark .scanner-table .filler {
+    -fx-background-color: #202934;
+}
+
+.theme-dark .scanner-table .column-header .label {
+    -fx-text-fill: #b8c4d0;
+}
+
+.theme-dark .insight-sidebar .tab .tab-label {
+    -fx-text-fill: #a9b5c1;
+}
+
+.theme-dark .insight-sidebar .tab:selected .tab-label {
+    -fx-text-fill: #82b6ef;
+}

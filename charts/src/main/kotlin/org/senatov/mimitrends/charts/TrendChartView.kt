@@ -207,6 +207,10 @@ class TrendChartView(onRangeChanged: (String) -> Unit = {}) : StackPane() {
         progress.isVisible = loading
     }
 
+    fun setDarkTheme(dark: Boolean) {
+        TrendChartSupport.applyTheme(dark, chart, dateAxis, priceAxis, volumeAxis, pricePlot, volumePlot, combinedPlot)
+    }
+
     fun clear() {
         log.debug(LogTag.UI, "clear()")
         pricePlot.dataset = null
