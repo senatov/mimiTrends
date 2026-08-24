@@ -33,6 +33,17 @@ internal class ScannerColumnFactory(
     private val companyProfiles = ConcurrentHashMap<String, CompanyProfile>()
     private val profileRequestTimes = ConcurrentHashMap<String, Long>()
     var onContentChanged: () -> Unit = {}
+    private val profileUpdates by lazy {
+        UiUpdateBatcher<String, CompanyProfile>({ task -> Platform.runLater(task) }) { profiles ->
+            profiles.forEach { profile ->
+                companyProfiles[profile.symbol] = profile
+                profile.name.takeUnless { it == "Company unavailable" }?.let { companyNames[profile.symbol] = it }
+            }
+            table.refresh()
+            if (table.sortOrder.any { it.id == "company" }) table.sort()
+            onContentChanged()
+        }
+    }
 
     fun companyName(result: ScanResult): String = companyNames[result.symbol] ?: result.symbol
 
@@ -204,15 +215,12 @@ internal class ScannerColumnFactory(
         }
         setCellFactory {
             object : TableCell<ScanResult, String>() {
-                private var renderedSymbol: String? = null
-
                 override fun updateItem(symbol: String?, empty: Boolean) {
                     super.updateItem(symbol, empty)
                     if (empty || symbol == null) {
-                        renderedSymbol = null; text = null; graphic = null; tooltip = null
+                        text = null; graphic = null; tooltip = null
                         return
                     }
-                    renderedSymbol = symbol
                     text = null
                     contentDisplay = ContentDisplay.LEFT
                     val cachedProfile = companyProfiles[symbol]
@@ -225,29 +233,11 @@ internal class ScannerColumnFactory(
                     profileRequestTimes[symbol] = now
                     loadProfile?.invoke(symbol)?.whenComplete(
                         BiConsumer<CompanyProfile?, Throwable?> { profile, error ->
-                            val displayProfile = if (error == null && profile != null) {
+                            if (error == null && profile != null) {
                                 val normalized = CompanySearchTerm.normalizeDisplay(profile.name)
                                 val displayName = normalized.takeUnless { it.isBlank() || it.equals(symbol, true) }
                                     ?: "Company unavailable"
-                                profile.copy(name = displayName).also { resolved ->
-                                    companyProfiles[symbol] = resolved
-                                    displayName.takeUnless { it == "Company unavailable" }
-                                        ?.let { companyNames[symbol] = it }
-                                }
-                            } else null
-                            Platform.runLater {
-                                if (renderedSymbol == symbol && item == symbol) {
-                                    if (displayProfile != null) {
-                                        graphic = companyGraphic(
-                                            symbol, displayProfile.name, displayProfile.logoBytes, tableRow.item
-                                        )
-                                        tooltip = companyTooltip(symbol, displayProfile)
-                                        if (table.sortOrder.any { it.id == "company" }) table.sort()
-                                        onContentChanged()
-                                    } else {
-                                        graphic = companyGraphic(symbol, "Company unavailable", null, tableRow.item)
-                                    }
-                                }
+                                profileUpdates.offer(symbol, profile.copy(name = displayName))
                             }
                         })
                 }

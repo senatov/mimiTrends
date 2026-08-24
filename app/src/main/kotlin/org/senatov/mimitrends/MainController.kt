@@ -313,6 +313,7 @@ class MainController(private val apiKey: String?, initialSymbol: String = "AAPL"
                 log.warn(LogTag.API, "scan completed with failures count={} sample={}", errors.size, errors.take(3).joinToString("; "))
             }
             val active = resultDeduplicator.deduplicate(batch.active)
+            dynamicUniverse.record(active)
             scanCyclePlanner.replacePriority(active.map(ScanResult::symbol))
             val shortMoves = shortMoveLoader.load(symbols)
             val retained = recentEvents.merge(active, System.currentTimeMillis(), criteria.resultLimit)

@@ -62,6 +62,15 @@ class ShortMovePanel(
     private val eventRetainer = ShortMoveEventRetainer()
     private val columnLayout: TableColumnLayout<ShortMove>
     private val autoFitter: TableColumnAutoFitter<ShortMove>
+    private val profileUpdates by lazy {
+        UiUpdateBatcher<String, CompanyProfile>({ task -> javafx.application.Platform.runLater(task) }) { profiles ->
+            profiles.forEach { companyNames[it.symbol] = CompanySearchTerm.normalizeDisplay(it.name) }
+            applyFilter()
+            table.refresh()
+            if (table.sortOrder.any { it.id == "company" }) table.sort()
+            autoFitter.request()
+        }
+    }
 
     init {
         sortedRows.comparatorProperty().bind(table.comparatorProperty())
@@ -228,13 +237,7 @@ class ShortMovePanel(
         if (companyNames.containsKey(move.symbol)) return
         companyNames[move.symbol] = move.symbol
         loadProfile?.invoke(move.symbol)?.whenComplete { profile, error ->
-            if (error == null && profile != null) javafx.application.Platform.runLater {
-                companyNames[move.symbol] = CompanySearchTerm.normalizeDisplay(profile.name)
-                applyFilter()
-                table.refresh()
-                if (table.sortOrder.isNotEmpty()) table.sort()
-                autoFitter.request()
-            }
+            if (error == null && profile != null) profileUpdates.offer(move.symbol, profile)
         }
     }
 

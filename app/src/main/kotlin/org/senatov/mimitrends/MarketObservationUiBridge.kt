@@ -14,11 +14,14 @@ internal class MarketObservationUiBridge(
     private val applyObservation: (ProviderMinuteBar) -> Unit
 ) : AutoCloseable {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    private val uiUpdates = UiUpdateBatcher<String, ProviderMinuteBar>({ task -> Platform.runLater(task) }) { batch ->
+        batch.forEach(applyObservation)
+    }
 
     init {
         scope.launch {
             observations.collect { observation ->
-                Platform.runLater { applyObservation(observation) }
+                uiUpdates.offer(observation.symbol, observation)
             }
         }
     }

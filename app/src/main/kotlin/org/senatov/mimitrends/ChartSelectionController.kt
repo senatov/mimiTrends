@@ -7,7 +7,6 @@ import org.senatov.mimitrends.model.DisplayCurrency
 import org.senatov.mimitrends.model.ScanResult
 import org.slf4j.Logger
 import java.util.concurrent.CompletableFuture
-import java.util.concurrent.atomic.AtomicLong
 import java.util.function.BiConsumer
 
 internal class ChartSelectionController(
@@ -23,7 +22,7 @@ internal class ChartSelectionController(
     private val formatError: (String, Throwable?) -> String,
     private val log: Logger
 ) {
-    private val generation = AtomicLong()
+    private val requests = LatestRequestGate<String>()
     var selectedRange: String = ChartRange.normalize(initialRange)
         private set
 
@@ -37,7 +36,7 @@ internal class ChartSelectionController(
         log.debug(LogTag.UI, "loadLocalChart(symbol={})", symbol)
         if (symbol.isBlank()) return
         chart.prepareForInstrument(symbol)
-        val requestGeneration = generation.incrementAndGet()
+        val request = requests.begin(symbol)
         status.setLoading(true)
         val requestedRange = selectedRange
         val currency = displayCurrency()
@@ -46,7 +45,7 @@ internal class ChartSelectionController(
             loader.load(symbol, ChartRange.days(requestedRange), currency)
         }.whenComplete(BiConsumer<ChartData?, Throwable?> { chartData, error ->
             Platform.runLater {
-                if (isStale(symbol, requestGeneration)) return@runLater
+                if (isStale(request)) return@runLater
                 status.setLoading(false)
                 when {
                     error != null -> showError(symbol, error)
@@ -58,12 +57,14 @@ internal class ChartSelectionController(
     }
 
     fun invalidate() {
-        generation.incrementAndGet()
+        requests.invalidate()
     }
 
-    private fun isStale(symbol: String, requestGeneration: Long): Boolean {
-        val stale = requestGeneration != generation.get() || symbol != selectedSymbol() || isClosing()
-        if (stale) log.debug(LogTag.UI, "discard stale chart load symbol={} generation={}", symbol, requestGeneration)
+    private fun isStale(request: LatestRequestGate.Request<String>): Boolean {
+        val stale = !requests.accepts(request, selectedSymbol()) || isClosing()
+        if (stale) log.debug(
+            LogTag.UI, "discard stale chart load symbol={} generation={}", request.key, request.generation
+        )
         return stale
     }
 

@@ -184,7 +184,6 @@ class ScannerPanel(
     fun setDetectedTodayCount(count: Int) {
         detectedTodayButton.text = "Detected today · $count"
     }
-
     private fun copySearchKeyword(result: ScanResult) {
         copyText(CompanySearchTerm.from(columnFactory.companyName(result), result.symbol))
     }
@@ -198,7 +197,6 @@ class ScannerPanel(
         }
         updateFilterPresentation()
     }
-
     private fun updateFilterPresentation() {
         val filtering = search.text.isNotBlank()
         table.placeholder = if (filtering) noMatches else empty
@@ -206,7 +204,6 @@ class ScannerPanel(
         filterCount.isVisible = filtering
         filterCount.isManaged = filtering
     }
-
     private fun openFirstMatch() {
         sortedRows.firstOrNull()?.let { first ->
             table.selectionModel.select(first)
@@ -215,7 +212,6 @@ class ScannerPanel(
             onOpen(first)
         }
     }
-
     fun update(result: ScanResult) {
         log.debug(LogTag.UI, "update(symbol={}, score={})", result.symbol, result.anomalyScore)
         if (scanning) stagedRows[result.symbol] = observationOverlay.apply(result)
@@ -224,26 +220,30 @@ class ScannerPanel(
     fun applyPriorityResult(symbol: String, result: ScanResult?) {
         log.debug(LogTag.UI, "applyPriorityResult(symbol={}, present={})", symbol, result != null)
         refreshingStatuses.remove(symbol)
-        val target = if (scanning) stagedRows else rows.associateByTo(linkedMapOf(), ScanResult::symbol)
-        if (result == null) target.remove(symbol) else target[symbol] = observationOverlay.apply(result)
-        if (!scanning) {
-            replaceRows(target.values)
-            autoFitter.request()
+        if (scanning) {
+            if (result == null) stagedRows.remove(symbol) else stagedRows[symbol] = observationOverlay.apply(result)
+            return
         }
+        val index = rows.indexOfFirst { it.symbol == symbol }
+        if (result == null && index >= 0) rows.removeAt(index)
+        else if (result != null && index >= 0) rows[index] = observationOverlay.apply(result)
+        else if (result != null) rows += observationOverlay.apply(result)
+        autoFitter.request()
     }
 
     fun setRefreshing(symbol: String, refreshing: Boolean) {
-        val target = if (scanning) stagedRows else rows.associateByTo(linkedMapOf(), ScanResult::symbol)
-        val current = target[symbol] ?: return
+        val current = (if (scanning) stagedRows[symbol] else rows.firstOrNull { it.symbol == symbol }) ?: return
+        val updated: ScanResult
         if (refreshing) {
             refreshingStatuses.putIfAbsent(symbol, current.dataStatus)
-            target[symbol] = current.copy(dataStatus = "REFRESHING")
+            updated = current.copy(dataStatus = "REFRESHING")
         } else if (current.dataStatus == "REFRESHING") {
-            target[symbol] = current.copy(dataStatus = refreshingStatuses.remove(symbol) ?: "CACHE")
+            updated = current.copy(dataStatus = refreshingStatuses.remove(symbol) ?: "CACHE")
         } else {
             refreshingStatuses.remove(symbol)
+            return
         }
-        if (!scanning) replaceRows(target.values)
+        if (scanning) stagedRows[symbol] = updated else rows[rows.indexOf(current)] = updated
     }
 
     fun applyMarketObservation(symbol: String, price: Double, observedAtMillis: Long, source: String) {
@@ -306,7 +306,6 @@ class ScannerPanel(
     private fun replaceRows(replacements: Collection<ScanResult>) {
         val selectedSymbol = table.selectionModel.selectedItem?.symbol
         rows.setAll(replacements.map(observationOverlay::apply))
-        table.sort()
         val retainedIndex = selectedSymbol?.let { symbol -> sortedRows.indexOfFirst { it.symbol == symbol } } ?: -1
         if (retainedIndex >= 0) {
             table.selectionModel.select(retainedIndex)
