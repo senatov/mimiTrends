@@ -7,15 +7,9 @@ import javafx.scene.Parent
 import javafx.scene.control.Button
 import javafx.scene.control.Label
 import javafx.scene.control.SplitPane
-import javafx.scene.control.Tooltip
-import javafx.scene.image.Image
-import javafx.scene.image.ImageView
 import javafx.scene.layout.BorderPane
-import javafx.scene.layout.ColumnConstraints
-import javafx.scene.layout.GridPane
 import javafx.scene.layout.HBox
 import javafx.scene.layout.Priority
-import javafx.scene.layout.Region
 import javafx.scene.layout.StackPane
 import javafx.scene.layout.VBox
 import org.senatov.mimitrends.charts.TrendChartView
@@ -40,19 +34,10 @@ internal object MainViewFactory {
         val titleActions = HBox(10.0, refreshButton, settingsButton, importButton, aboutButton).apply {
             alignment = Pos.CENTER_RIGHT
         }
-        val titleBar = GridPane().apply {
+        val titleBar = BorderPane().apply {
             styleClass += "title-toolbar"
-            columnConstraints += listOf(
-                toolbarColumn(33.0),
-                toolbarColumn(34.0),
-                toolbarColumn(33.0)
-            )
-            add(titleIdentity, 0, 0)
-            add(buildBadge(), 1, 0)
-            add(titleActions, 2, 0)
-            GridPane.setHalignment(titleIdentity, javafx.geometry.HPos.LEFT)
-            GridPane.setHalignment(children[1], javafx.geometry.HPos.CENTER)
-            GridPane.setHalignment(titleActions, javafx.geometry.HPos.RIGHT)
+            left = titleIdentity
+            right = titleActions
         }
         contentSplitPane.apply {
             orientation = javafx.geometry.Orientation.VERTICAL
@@ -67,7 +52,7 @@ internal object MainViewFactory {
         }
         Platform.runLater { contentSplitPane.setDividerPosition(0, initialDivider) }
         val content = VBox(contentSplitPane).apply {
-            padding = Insets(22.0, 24.0, 16.0, 24.0)
+            padding = Insets(12.0, 14.0, 12.0, 14.0)
             VBox.setVgrow(contentSplitPane, Priority.ALWAYS)
         }
         val root = BorderPane(content, VBox(titleBar, requestStatus), null, null, null).apply {
@@ -79,29 +64,4 @@ internal object MainViewFactory {
         }
     }
 
-    private fun toolbarColumn(widthPercent: Double) = ColumnConstraints().apply {
-        percentWidth = widthPercent
-        hgrow = Priority.ALWAYS
-    }
-
-    private fun buildBadge(): HBox {
-        val icon = MainViewFactory::class.java.getResourceAsStream("/icons/icon_128x128.png")?.use { stream ->
-            ImageView(Image(stream)).apply {
-                fitWidth = 30.0; fitHeight = 30.0; isPreserveRatio = true
-                styleClass += "build-badge-icon"
-            }
-        } ?: ImageView()
-        return HBox(7.0, icon, VBox(0.0,
-            Label(BuildInfo.buildType).apply { styleClass += "build-badge-type" },
-            Label("${BuildInfo.buildTime} · #${BuildInfo.buildNumber} at Host: ${BuildInfo.buildHost}").apply {
-                styleClass += "build-badge-details"
-            }
-        ).apply { alignment = Pos.CENTER_LEFT }).apply {
-            alignment = Pos.CENTER_LEFT
-            minWidth = Region.USE_PREF_SIZE
-            maxWidth = Region.USE_PREF_SIZE
-            styleClass += "build-badge"
-            Tooltip.install(this, Tooltip("MiMiTrends ${BuildInfo.displayVersion}\nBuilt ${BuildInfo.buildTime} on ${BuildInfo.buildHost}"))
-        }
-    }
 }

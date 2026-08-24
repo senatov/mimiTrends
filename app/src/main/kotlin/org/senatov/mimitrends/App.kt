@@ -41,6 +41,7 @@ class App : Application() {
             ::openInDefaultBrowser)
         val scene = Scene(controller.createView(), 1120.0, 720.0)
         scene.stylesheets += requireNotNull(javaClass.getResource("/org/senatov/mimitrends/MiMiTrends.css")).toExternalForm()
+        scene.stylesheets += requireNotNull(javaClass.getResource("/org/senatov/mimitrends/Workspace.css")).toExternalForm()
 
         stage.title = "MiMiTrends"
         listOf("/icons/icon_512x512.png", "/icons/icon_128x128.png").forEach { path ->
