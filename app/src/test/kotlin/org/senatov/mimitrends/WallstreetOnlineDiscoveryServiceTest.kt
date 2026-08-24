@@ -5,7 +5,7 @@ import org.senatov.mimitrends.marketdata.WallstreetOnlineMover
 import kotlin.test.assertEquals
 
 class WallstreetOnlineDiscoveryServiceTest {
-    @Test fun `caches the daily table and refreshes expired paths`() {
+    @Test fun `refreshes the activity table every ten minutes`() {
         var table = listOf(mover("/aktien/micron-aktie", "Micron Technology"))
         var now = 0L
         val queries = mutableListOf<String>()
@@ -16,12 +16,13 @@ class WallstreetOnlineDiscoveryServiceTest {
         )
 
         assertEquals(listOf("MU"), service.discover())
-        assertEquals(listOf("MU"), service.discover())
         table = listOf(mover("/aktien/lumentum-aktie", "Lumentum Holdings"))
-        now += 24 * 60 * 60_000L
+        now += 10 * 60_000L - 1L
+        assertEquals(listOf("MU"), service.discover())
+        now += 1L
         assertEquals(listOf("LITE"), service.discover())
         table = listOf(mover("/aktien/micron-aktie", "Micron Technology"))
-        now += 24 * 60 * 60_000L
+        now += 10 * 60_000L
         assertEquals(listOf("MU"), service.discover())
 
         assertEquals(listOf("Micron Technology", "Lumentum Holdings", "Micron Technology"), queries)

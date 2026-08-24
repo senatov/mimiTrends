@@ -50,5 +50,5 @@ internal class WallstreetOnlineDiscoveryService(
             ?.also { symbol -> synchronized(resolvedPaths) { resolvedPaths[mover.path] = symbol } }
     }
 
-    private companion object { const val REFRESH_INTERVAL_MILLIS = 24 * 60 * 60_000L }
+    private companion object { const val REFRESH_INTERVAL_MILLIS = 10 * 60_000L }
 }
