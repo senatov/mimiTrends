@@ -400,6 +400,21 @@
     -fx-text-alignment: center;
 }
 
+.empty-state-action {
+    -fx-padding: 5px 13px;
+    -fx-background-color: -mimi-surface;
+    -fx-background-radius: 5px;
+    -fx-border-color: -mimi-border-strong;
+    -fx-border-radius: 5px;
+    -fx-text-fill: -mimi-accent;
+    -fx-font-weight: 500;
+}
+
+.empty-state-action:hover {
+    -fx-background-color: -mimi-accent-soft;
+    -fx-border-color: -mimi-accent;
+}
+
 .content-split-pane > .split-pane-divider,
 .table-split-pane > .split-pane-divider {
     -fx-background-color: transparent;

@@ -42,10 +42,12 @@ class ScannerPanel(
         "No anomaly signals yet",
         "The scanner is collecting market data. Qualifying instruments will appear here automatically."
     )
-    private val noMatches = WorkspaceEmptyState.create(
+    private val noMatches by lazy {
+        WorkspaceEmptyState.create(
         "No matching signals",
-        "Try a company name, ticker, or a broader signal term."
-    )
+            "Try a company name, ticker, or a broader signal term.", "Clear search"
+        ) { search.clear(); table.requestFocus() }
+    }
     private val cycleStatus = Label()
     private val usMarketBadge = Label("US —").apply { styleClass += "market-pulse-badge" }
     private val europeMarketBadge = Label("EU —").apply { styleClass += "market-pulse-badge" }

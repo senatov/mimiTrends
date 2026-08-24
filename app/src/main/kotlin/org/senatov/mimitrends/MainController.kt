@@ -14,13 +14,9 @@ import org.slf4j.LoggerFactory
 import javafx.util.Duration
 import java.util.concurrent.*
 import java.util.concurrent.atomic.*
-import java.util.concurrent.ConcurrentHashMap
 class MainController(private val apiKey: String?, initialSymbol: String = "AAPL", initialRange: String = "3M",
-                     initialDividerPosition: Double = 0.34,
-                     scannerColumns: String = "",
-                     shortMoveColumns: String = "",
-                     initialTableDivider: Double = 0.68,
-                     initialSidebarVisible: Boolean = true,
+                     initialDividerPosition: Double = 0.34, scannerColumns: String = "", shortMoveColumns: String = "",
+                     initialTableDivider: Double = 0.68, initialSidebarVisible: Boolean = true,
                      private val openExternal: (String) -> Unit = {}
 ) {
     private val log = LoggerFactory.getLogger(MainController::class.java)

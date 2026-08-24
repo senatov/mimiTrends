@@ -55,8 +55,8 @@ class ShortMovePanel(
     )
     private val noMatches = WorkspaceEmptyState.create(
         "No matching movements",
-        "Try another company, ticker, or direction."
-    )
+        "Try another company, ticker, or direction.", "Clear search"
+    ) { search.clear(); table.requestFocus() }
     private val eventRetainer = ShortMoveEventRetainer()
     private val columnLayout: TableColumnLayout<ShortMove>
     private val autoFitter: TableColumnAutoFitter<ShortMove>
