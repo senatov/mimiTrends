@@ -43,7 +43,7 @@ class ShortMovePanel(
         styleClass += "short-move-caption"
     }
     private val companyNames = java.util.concurrent.ConcurrentHashMap<String, String>()
-    private val search = TableSearchField.create("Find move…", ::applyFilter, ::openFirstMatch)
+    private val search = TableSearchField.create("Find move…", ::applyFilter, ::openFirstMatch, table::requestFocus)
     private val filterCount = Label().apply {
         styleClass += "table-filter-count"
         isVisible = false
@@ -188,6 +188,7 @@ class ShortMovePanel(
                 event.code == KeyCode.ENTER -> selected?.let { onOpen(it.symbol, it.endedAtEpochSeconds) }
                 event.code == KeyCode.O && event.isShortcutDown -> selected?.symbol?.let(openExternalChart)
                 event.code == KeyCode.C && event.isShortcutDown -> selected?.let { copyText(searchKeyword(it)) }
+                event.code == KeyCode.ESCAPE && search.clear() -> Unit
                 else -> return@setOnKeyPressed
             }
             event.consume()

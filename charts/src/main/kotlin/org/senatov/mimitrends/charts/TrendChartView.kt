@@ -3,6 +3,9 @@ package org.senatov.mimitrends.charts
 import javafx.scene.layout.StackPane
 import javafx.scene.layout.VBox
 import javafx.scene.layout.Priority
+import javafx.scene.input.KeyCode
+import javafx.scene.input.KeyEvent
+import javafx.scene.input.MouseEvent
 import org.jfree.chart.JFreeChart
 import org.jfree.chart.axis.DateAxis
 import org.jfree.chart.axis.NumberAxis
@@ -93,6 +96,14 @@ class TrendChartView(
         viewer.minHeight = 0.0
         viewer.maxWidth = Double.MAX_VALUE
         viewer.maxHeight = Double.MAX_VALUE
+        viewer.isFocusTraversable = true
+        viewer.addEventHandler(MouseEvent.MOUSE_PRESSED) { viewer.requestFocus() }
+        viewer.addEventHandler(KeyEvent.KEY_PRESSED) { event ->
+            if (event.code == KeyCode.ESCAPE && cursorPinned) {
+                releasePinnedCursor()
+                event.consume()
+            }
+        }
         val viewerShell = StackPane(viewer, stateOverlay).apply { styleClass += "chart-viewer-shell" }
         val content = VBox(header, viewerShell).apply { styleClass += "chart-card-content" }
         VBox.setVgrow(viewerShell, Priority.ALWAYS)
@@ -310,14 +321,18 @@ class TrendChartView(
 
     private fun togglePinnedCursor(x: Double, y: Double) {
         if (cursorPinned) {
-            cursorPinned = false
-            header.cursorText = header.cursorText.substringBefore("  ·  PINNED") + "  ·  LIVE"
+            releasePinnedCursor()
             return
         }
         if (showCursorAt(x, y)) {
             cursorPinned = true
             header.cursorText = header.cursorText.substringBefore("  ·  LIVE") + "  ·  PINNED"
         }
+    }
+
+    private fun releasePinnedCursor() {
+        cursorPinned = false
+        header.cursorText = header.cursorText.substringBefore("  ·  PINNED") + "  ·  LIVE"
     }
 
     private fun showCursorAt(x: Double, y: Double): Boolean {

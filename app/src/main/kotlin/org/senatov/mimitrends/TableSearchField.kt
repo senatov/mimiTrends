@@ -9,11 +9,17 @@ internal object TableSearchField {
     fun create(
         prompt: String,
         onChanged: () -> Unit,
-        onSubmit: () -> Unit = {}
-    ): TableSearchControl = TableSearchControl(prompt, onChanged, onSubmit)
+        onSubmit: () -> Unit = {},
+        onEscape: () -> Unit = {}
+    ): TableSearchControl = TableSearchControl(prompt, onChanged, onSubmit, onEscape)
 }
 
-internal class TableSearchControl(prompt: String, onChanged: () -> Unit, onSubmit: () -> Unit) : HBox() {
+internal class TableSearchControl(
+    prompt: String,
+    onChanged: () -> Unit,
+    onSubmit: () -> Unit,
+    onEscape: () -> Unit
+) : HBox() {
     private val input = TextField()
     private val clear = Button("×")
     val text: String get() = input.text.orEmpty()
@@ -33,8 +39,9 @@ internal class TableSearchControl(prompt: String, onChanged: () -> Unit, onSubmi
                 onChanged()
             }
             setOnKeyPressed { event ->
-                if (event.code == KeyCode.ESCAPE && text.isNotEmpty()) {
-                    clear()
+                if (event.code == KeyCode.ESCAPE) {
+                    input.clear()
+                    onEscape()
                     event.consume()
                 }
             }
@@ -51,4 +58,10 @@ internal class TableSearchControl(prompt: String, onChanged: () -> Unit, onSubmi
     }
 
     fun focusField() = input.requestFocus()
+
+    fun clear(): Boolean {
+        if (text.isEmpty()) return false
+        input.clear()
+        return true
+    }
 }

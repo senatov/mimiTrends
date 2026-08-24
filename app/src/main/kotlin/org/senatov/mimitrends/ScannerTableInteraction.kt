@@ -19,7 +19,8 @@ internal object ScannerTableInteraction {
         inspect: (ScanResult) -> Unit,
         copySearch: (ScanResult) -> Unit,
         copyTicker: (String) -> Unit,
-        openStock: (String) -> Unit
+        openStock: (String) -> Unit,
+        clearSearch: () -> Boolean
     ) {
         table.setRowFactory {
             TableRow<ScanResult>().apply {
@@ -61,6 +62,7 @@ internal object ScannerTableInteraction {
                 event.code == KeyCode.SPACE -> selected?.let(inspect)
                 event.code == KeyCode.O && event.isShortcutDown -> selected?.symbol?.let(openStock)
                 event.code == KeyCode.C && event.isShortcutDown -> selected?.let(copySearch)
+                event.code == KeyCode.ESCAPE && clearSearch() -> Unit
                 else -> return@setOnKeyPressed
             }
             event.consume()

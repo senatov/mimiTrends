@@ -59,7 +59,7 @@ class ScannerPanel(
     private var currency = DisplayCurrency.EUR
     private var convertPrice: (String, Double) -> Double = { _, value -> value }
     private val columnFactory = ScannerColumnFactory(table, loadProfile)
-    private val search = TableSearchField.create("Find signal…", ::applyFilter, ::openFirstMatch)
+    private val search = TableSearchField.create("Find signal…", ::applyFilter, ::openFirstMatch, table::requestFocus)
     private val filterCount = Label().apply {
         styleClass += "table-filter-count"
         isVisible = false
@@ -150,7 +150,7 @@ class ScannerPanel(
         table.columnResizePolicy = TableView.UNCONSTRAINED_RESIZE_POLICY
         table.fixedCellSize = -1.0
         ScannerTableInteraction.install(
-            table, onOpen, { onInspect(it) }, ::copySearchKeyword, ::copyText, openStock
+            table, onOpen, { onInspect(it) }, ::copySearchKeyword, ::copyText, openStock, search::clear
         )
         table.minHeight = 0.0
         table.maxHeight = Double.MAX_VALUE
@@ -174,7 +174,6 @@ class ScannerPanel(
         minHeight = 0.0
         maxHeight = Double.MAX_VALUE
     }
-
     fun savedColumnLayout(): String = columnLayout.capture(autoFitter.manuallySizedColumnIds())
     fun tableDividerPosition(): Double = tableSplit.dividers.firstOrNull()?.position ?: 0.68
     internal fun focusSignalSearch() = search.focusField()
