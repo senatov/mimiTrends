@@ -29,30 +29,16 @@ class CompanyProfileService(
     private fun loadFromDatabase(symbol: String): CompletableFuture<CompanyProfile> =
         CompletableFuture.supplyAsync { repository.loadCompanyProfile(symbol) }.thenCompose { stored ->
             val freshAfter = System.currentTimeMillis() - maxAge.toMillis()
-            if (stored != null && stored.logoBytes == null && stored.name != symbol) {
-                return@thenCompose logos.load(symbol, stored.name).thenApply { logo ->
-                    if (logo == null) stored else stored.copy(
-                        logoUrl = logo.sourceUrl,
-                        logoBytes = logo.pngBytes,
-                        updatedAtMillis = System.currentTimeMillis()
-                    ).also(repository::upsertCompanyProfile)
-                }
-            }
             if (stored != null && stored.updatedAtMillis >= freshAfter) {
                 log.debug(LogTag.DB, "company profile cache hit symbol={}", symbol)
-                CompletableFuture.completedFuture(stored)
+                enrichLogo(symbol, stored)
             } else {
-                if (remote == null) return@thenCompose CompletableFuture.completedFuture(
-                    stored ?: CompanyProfile(symbol, symbol, "Yahoo Finance", null)
+                if (remote == null) return@thenCompose enrichLogo(
+                    symbol, stored ?: CompanyProfile(symbol, symbol, "Yahoo Finance", null)
                 )
                 log.debug(LogTag.API, "company profile cache miss symbol={}", symbol)
-                remote.load(symbol).thenApply { loaded ->
-                    val merged = loaded.copy(
-                        name = stored?.name?.takeUnless { it == symbol } ?: loaded.name,
-                        exchange = stored?.exchange?.takeUnless { it == "Yahoo Finance" } ?: loaded.exchange
-                    )
-                    repository.upsertCompanyProfile(merged)
-                    merged
+                remote.load(symbol).thenCompose { loaded ->
+                    enrichLogo(symbol, CompanyProfileMerger.merge(stored, loaded))
                 }.exceptionally { error ->
                     if (stored != null) {
                         log.warn(LogTag.API, "using stale company profile symbol={}", symbol, error)
@@ -65,4 +51,17 @@ class CompanyProfileService(
         }.whenComplete(BiConsumer<CompanyProfile?, Throwable?> { _, error ->
             if (error != null) requests.remove(symbol)
         })
+
+    private fun enrichLogo(symbol: String, profile: CompanyProfile): CompletableFuture<CompanyProfile> {
+        if (profile.logoBytes != null) return CompletableFuture.completedFuture(profile)
+        return logos.load(symbol, profile.name).thenApply { logo ->
+            val enriched = if (logo == null) profile else profile.copy(
+                logoUrl = logo.sourceUrl,
+                logoBytes = logo.pngBytes,
+                updatedAtMillis = System.currentTimeMillis()
+            )
+            repository.upsertCompanyProfile(enriched)
+            enriched
+        }
+    }
 }

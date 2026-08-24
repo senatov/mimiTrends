@@ -294,18 +294,20 @@ internal class ScannerColumnFactory(
     }
 
     private fun logoBadge(symbol: String, bytes: ByteArray?, size: Double): StackPane {
+        val colors = CompanyBadgePalette.forSymbol(symbol)
         val placeholder = Label(symbol.take(1)).apply {
             minWidth = size; prefWidth = size; maxWidth = size
             minHeight = size; prefHeight = size; maxHeight = size
             alignment = Pos.CENTER
-            style = "-fx-background-color: #dce5f0; -fx-background-radius: ${size / 2}; -fx-text-fill: #17365f; -fx-font-weight: 500;"
+            style = "-fx-background-color: ${colors.background}; -fx-background-radius: ${size / 2}; " +
+                    "-fx-text-fill: ${colors.foreground}; -fx-font-weight: 600;"
         }
         return StackPane(placeholder).apply {
             minWidth = size; prefWidth = size; maxWidth = size
             minHeight = size; prefHeight = size; maxHeight = size
             bytes?.let { logoBytes ->
                 val image = logoImages.computeIfAbsent(symbol) { Image(ByteArrayInputStream(logoBytes)) }
-                children += ImageView(image).apply {
+                if (!image.isError) children += ImageView(image).apply {
                     fitWidth = size; fitHeight = size; isPreserveRatio = true; isSmooth = true
                     styleClass += "company-logo"
                 }
