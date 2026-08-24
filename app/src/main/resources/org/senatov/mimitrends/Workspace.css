@@ -254,6 +254,18 @@
     -fx-border-radius: 4px;
 }
 
+.chart-range-button {
+    -fx-min-width: 32px;
+    -fx-padding: 4px 7px;
+}
+
+.chart-range-button:selected {
+    -fx-text-fill: -mimi-accent;
+    -fx-background-color: -mimi-surface;
+    -fx-border-color: #9db9da;
+    -fx-effect: null;
+}
+
 .chart-view-button:selected {
     -fx-background-color: -mimi-accent;
     -fx-border-color: -mimi-accent;

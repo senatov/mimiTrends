@@ -34,7 +34,7 @@ import java.text.DecimalFormat
 import java.text.SimpleDateFormat
 import java.util.Date
 private const val MAX_CANDLES = 360
-class TrendChartView : StackPane() {
+class TrendChartView(onRangeChanged: (String) -> Unit = {}) : StackPane() {
     private val log = LoggerFactory.getLogger(javaClass)
     private val dateAxis = DateAxis()
     private val priceAxis = NumberAxis()
@@ -49,7 +49,8 @@ class TrendChartView : StackPane() {
     private val progress = ProgressIndicator()
     private val header = TrendChartHeader(
         { lastRequest?.let(::renderRequest) },
-        { lastRequest?.let(::renderRequest) }
+        { lastRequest?.let(::renderRequest) },
+        onRangeChanged
     )
     private val priceCursor = ValueMarker(0.0)
     private val priceTimeCursor = ValueMarker(0.0)
@@ -179,6 +180,7 @@ class TrendChartView : StackPane() {
         val signalSummary = request.signal?.let {
             SignalChartPresentation.summary(it, signalBar, closes.last(), request.priceMultiplier, request.currencySymbol)
         }
+        header.selectRange(request.rangeLabel)
         header.showInstrument(request.companyName, request.symbol,
             "${request.currencySymbol}${"%,.2f".format(closes.last())}", details, signalSummary)
         log.debug(LogTag.UI, "showLatestPrice(value={})", closes.last())

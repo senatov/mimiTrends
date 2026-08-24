@@ -31,13 +31,13 @@ class MainController(private val apiKey: String?, initialSymbol: String = "AAPL"
     private val shortMoveLoader = ShortMoveLoader(repository, analytics, exchangeRates)
     private var currentSymbol = initialSymbol
     private var currentSignal: ScanResult? = null
-    private var selectedRangeValue = initialRange.takeIf { it in setOf("1D", "5D", "1M", "3M", "6M", "1Y") } ?: "3M"
+    private var selectedRangeValue = ChartRange.normalize(initialRange)
     private val refreshButton = Button("↻")
     private val settingsButton = Button("⚙")
     private val aboutButton = Button("ⓘ")
     private val importTradesButton = Button("⇩")
     private val requestStatus = RequestStatusPane { selectedRangeValue }
-    private val trendChart = TrendChartView()
+    private val trendChart = TrendChartView(::selectChartRange)
     private val scannerSettings = ScannerSettingsService()
     private var scannerCriteria: ScannerCriteria = scannerSettings.load()
     private val currencyConverter = ScanResultCurrencyConverter(exchangeRates) { scannerCriteria }
@@ -435,5 +435,11 @@ class MainController(private val apiKey: String?, initialSymbol: String = "AAPL"
                     }
                 }
             })
+    }
+
+    private fun selectChartRange(range: String) {
+        if (range == selectedRangeValue || range !in ChartRange.values) return
+        selectedRangeValue = range
+        loadLocalChart(currentSymbol)
     }
 }

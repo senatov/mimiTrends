@@ -41,17 +41,18 @@ internal object TrendChartSupport {
         onCursorMoved: (Double, Double) -> Unit,
         onCursorClicked: (Double, Double) -> Unit
     ) {
-        val background = Color(250, 250, 251)
-        val grid = Color(196, 204, 213)
+        val background = Color(247, 248, 250)
+        val domainGrid = Color(232, 235, 239)
+        val rangeGrid = Color(218, 223, 229)
         chart.backgroundPaint = background
         chart.setAntiAlias(true)
         chart.title.isVisible = false
         dateAxis.lowerMargin = 0.01
         dateAxis.upperMargin = 0.01
         dateAxis.isAutoTickUnitSelection = true
-        dateAxis.tickLabelFont = Font("SansSerif", Font.PLAIN, 11)
-        dateAxis.tickLabelPaint = Color(54, 65, 76)
-        dateAxis.axisLinePaint = Color(170, 178, 186)
+        dateAxis.tickLabelFont = Font("Dialog", Font.PLAIN, 12)
+        dateAxis.tickLabelPaint = Color(82, 94, 106)
+        dateAxis.axisLinePaint = Color(190, 198, 207)
         priceAxis.autoRangeIncludesZero = false
         priceAxis.lowerMargin = 0.04
         priceAxis.upperMargin = 0.04
@@ -59,9 +60,9 @@ internal object TrendChartSupport {
         pricePlot.rangeAxisLocation = AxisLocation.BOTTOM_OR_RIGHT
         volumePlot.rangeAxisLocation = AxisLocation.BOTTOM_OR_RIGHT
         listOf(priceAxis, volumeAxis).forEach { axis ->
-            axis.tickLabelFont = Font("SansSerif", Font.PLAIN, 11)
-            axis.tickLabelPaint = Color(54, 65, 76)
-            axis.axisLinePaint = Color(170, 178, 186)
+            axis.tickLabelFont = Font("Dialog", Font.PLAIN, 12)
+            axis.tickLabelPaint = Color(82, 94, 106)
+            axis.axisLinePaint = Color(190, 198, 207)
         }
         candleRenderer.upPaint = Color(38, 148, 92)
         candleRenderer.downPaint = Color(211, 70, 82)
@@ -81,10 +82,10 @@ internal object TrendChartSupport {
         )
         listOf(pricePlot, volumePlot).forEach { plot ->
             plot.backgroundPaint = Color.WHITE
-            plot.domainGridlinePaint = grid
-            plot.rangeGridlinePaint = grid
-            plot.domainGridlineStroke = BasicStroke(0.8f)
-            plot.rangeGridlineStroke = BasicStroke(0.8f)
+            plot.domainGridlinePaint = domainGrid
+            plot.rangeGridlinePaint = rangeGrid
+            plot.domainGridlineStroke = BasicStroke(0.5f)
+            plot.rangeGridlineStroke = BasicStroke(0.6f)
             plot.isDomainPannable = true
             plot.isRangePannable = true
         }

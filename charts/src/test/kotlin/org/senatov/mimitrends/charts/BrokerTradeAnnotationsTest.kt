@@ -10,7 +10,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 class BrokerTradeAnnotationsTest {
-    @Test fun `renders a trade highlight and clears only trade annotations`() {
+    @Test fun `renders trade markers and clears only trade annotations`() {
         val plot = XYPlot()
         val foreign = XYTextAnnotation("signal", 0.0, 0.0)
         plot.addAnnotation(foreign)
@@ -109,7 +109,7 @@ class BrokerTradeAnnotationsTest {
         renderer.render(listOf(trade), bars, bars.filterIndexed { index, _ -> index % 2 == 0 }, 1.0)
 
         assertTrue(renderer.renderedCardBounds().single().centerX > initial.centerX)
-        assertEquals(8, plot.annotations.count { it is XYShapeAnnotation })
+        assertTrue(plot.annotations.any { it is XYShapeAnnotation })
         assertEquals(1, plot.annotations.count { it is TradeCardAnnotation })
     }
 

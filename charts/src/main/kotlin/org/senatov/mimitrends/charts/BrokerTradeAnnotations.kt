@@ -8,7 +8,6 @@ import org.senatov.mimitrends.model.MinuteBar
 import java.awt.BasicStroke
 import java.awt.Color
 import java.awt.geom.Ellipse2D
-import java.awt.geom.RoundRectangle2D
 import java.text.DecimalFormat
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -62,9 +61,6 @@ internal class BrokerTradeAnnotations(private val plot: XYPlot) {
             }
             val exitX = exit?.first?.let(displayMillis)
             val controlX = exitX?.let { (entryX + it) / 2.0 } ?: entryX
-            if (exitX != null) {
-                addTradeHighlight(trade, bars, entryX, exitX, timeStep, priceSpan, barPriceMultiplier)
-            }
             val entryAlignment = alignToCandle(trade.entryEpochSeconds, trade.entryPrice,
                 bars, timeStep, barPriceMultiplier, displayMillis)
             val exitAlignment = exit?.let { (epoch, price) ->
@@ -116,32 +112,6 @@ internal class BrokerTradeAnnotations(private val plot: XYPlot) {
 
     internal fun renderedCardBounds(): List<CardBounds> = renderedCards.map(RenderedCard::bounds)
     internal fun renderedTradePoints(): List<TradePoint> = renderedTradePoints.toList()
-
-    private fun addTradeHighlight(
-        trade: BrokerTrade,
-        bars: List<MinuteBar>,
-        entryX: Double,
-        exitX: Double,
-        timeStep: Double,
-        priceSpan: Double,
-        multiplier: Double
-    ) {
-        val exitEpoch = trade.exitEpochSeconds ?: bars.last().minuteEpochSeconds
-        val covered = bars.filter { it.minuteEpochSeconds in trade.entryEpochSeconds..exitEpoch }
-        val exitPrice = trade.exitPrice ?: trade.entryPrice
-        val low = covered.minOfOrNull(MinuteBar::low)?.times(multiplier)
-            ?: minOf(trade.entryPrice, exitPrice)
-        val high = covered.maxOfOrNull(MinuteBar::high)?.times(multiplier)
-            ?: maxOf(trade.entryPrice, exitPrice)
-        val padding = priceSpan * HIGHLIGHT_PADDING
-        val left = minOf(entryX, exitX) - timeStep * 0.38
-        val right = maxOf(entryX, exitX) + timeStep * 0.38
-        val bottom = low - padding
-        val height = high - low + padding * 2.0
-        add(RoundRectangle2D.Double(
-            left, bottom, right - left, height, timeStep * 1.9, height * HIGHLIGHT_CORNER_SHARE
-        ).let { XYShapeAnnotation(it, HIGHLIGHT_STROKE, HIGHLIGHT_ORANGE, HIGHLIGHT_FILL) })
-    }
 
     fun clear() {
         lastRender = null
@@ -295,11 +265,6 @@ internal class BrokerTradeAnnotations(private val plot: XYPlot) {
 
     private companion object {
         val ORANGE = Color(235, 133, 35, 225)
-        val HIGHLIGHT_ORANGE = Color(226, 122, 25, 190)
-        val HIGHLIGHT_FILL = Color(255, 180, 52, 52)
-        val HIGHLIGHT_STROKE = BasicStroke(3.2f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND)
-        const val HIGHLIGHT_PADDING = 0.035
-        const val HIGHLIGHT_CORNER_SHARE = 0.72
         const val PRICE_TOLERANCE_SHARE = 0.25
         const val MIN_PRICE_TOLERANCE_SHARE = 0.002
         const val MAX_ALIGNMENT_SECONDS = 90L

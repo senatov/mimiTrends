@@ -9,7 +9,11 @@ import javafx.scene.layout.HBox
 import javafx.scene.layout.Priority
 import javafx.scene.layout.VBox
 
-internal class TrendChartHeader(onViewChanged: () -> Unit, onTradesChanged: () -> Unit) : VBox(6.0) {
+internal class TrendChartHeader(
+    onViewChanged: () -> Unit,
+    onTradesChanged: () -> Unit,
+    onRangeChanged: (String) -> Unit
+) : VBox(6.0) {
     private val instrument = Label("Select a scanner result")
     private val price = Label()
     private val context = Label("Price and volume history")
@@ -18,6 +22,7 @@ internal class TrendChartHeader(onViewChanged: () -> Unit, onTradesChanged: () -
     private val focus = ToggleButton("Signal focus")
     private val history = ToggleButton("Full history")
     private val trades = ToggleButton("Trades").apply { isSelected = true }
+    private val rangeButtons = RANGE_LABELS.associateWith(::ToggleButton)
 
     val focused: Boolean get() = focus.isSelected
     val tradesVisible: Boolean get() = trades.isSelected
@@ -42,6 +47,15 @@ internal class TrendChartHeader(onViewChanged: () -> Unit, onTradesChanged: () -
         trades.styleClass += listOf("chart-mode-button", "chart-overlay-button")
         trades.tooltip = Tooltip("Show or hide executed broker trades")
         trades.setOnAction { onTradesChanged() }
+        val ranges = ToggleGroup()
+        rangeButtons.forEach { (range, button) ->
+            button.toggleGroup = ranges
+            button.styleClass += listOf("chart-range-button", "chart-mode-button")
+            button.setOnAction {
+                if (ranges.selectedToggle == null) ranges.selectToggle(button)
+                onRangeChanged(range)
+            }
+        }
 
         signal.styleClass += "chart-signal-summary"
         context.styleClass += "chart-context-details"
@@ -56,8 +70,13 @@ internal class TrendChartHeader(onViewChanged: () -> Unit, onTradesChanged: () -
         val identity = VBox(2.0, titleRow, metaRow).apply { HBox.setHgrow(this, Priority.ALWAYS) }
         val viewSwitch = HBox(focus, history).apply { styleClass += "chart-mode-switch" }
         val overlaySwitch = HBox(trades).apply { styleClass += listOf("chart-mode-switch", "chart-overlay-switch") }
+        val rangeSwitch = HBox().apply {
+            children += RANGE_LABELS.map(rangeButtons::getValue)
+            styleClass += "chart-mode-switch"
+        }
         val controls = HBox(8.0,
-            controlGroup("VIEW", viewSwitch), controlGroup("OVERLAY", overlaySwitch)
+            controlGroup("RANGE", rangeSwitch), controlGroup("VIEW", viewSwitch),
+            controlGroup("OVERLAY", overlaySwitch)
         ).apply { alignment = Pos.BOTTOM_LEFT }
         children += listOf(HBox(12.0, identity, controls).apply { alignment = Pos.CENTER_LEFT }, cursor)
         styleClass += "chart-card-header"
@@ -74,6 +93,10 @@ internal class TrendChartHeader(onViewChanged: () -> Unit, onTradesChanged: () -
         signal.text = summary.orEmpty()
         signal.isVisible = summary != null
         signal.isManaged = summary != null
+    }
+
+    fun selectRange(range: String) {
+        rangeButtons[range]?.let { button -> button.toggleGroup.selectToggle(button) }
     }
 
     fun clear() {
@@ -98,5 +121,6 @@ internal class TrendChartHeader(onViewChanged: () -> Unit, onTradesChanged: () -
 
     private companion object {
         const val CURSOR_PROMPT = "Move above a candle to inspect it · click to pin"
+        val RANGE_LABELS = listOf("1D", "5D", "1M", "3M", "6M", "1Y")
     }
 }
