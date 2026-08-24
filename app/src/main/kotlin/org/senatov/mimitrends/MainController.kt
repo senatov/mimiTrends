@@ -17,7 +17,9 @@ import java.util.concurrent.atomic.*
 import java.util.concurrent.ConcurrentHashMap
 class MainController(private val apiKey: String?, initialSymbol: String = "AAPL", initialRange: String = "3M",
     initialDividerPosition: Double = 0.34, scannerColumns: String = "", shortMoveColumns: String = "",
-    initialTableDivider: Double = 0.68, private val openExternal: (String) -> Unit = {}) {
+                     initialTableDivider: Double = 0.68, initialSidebarVisible: Boolean = true,
+                     private val openExternal: (String) -> Unit = {}
+) {
     private val log = LoggerFactory.getLogger(MainController::class.java)
     private val repository = MarketRepository()
     private val analytics = AnalyticsRepository()
@@ -69,6 +71,7 @@ class MainController(private val apiKey: String?, initialSymbol: String = "AAPL"
         { symbol -> profileService.load(symbol) }
     )
     private val insightSidebar = InsightSidebar(moderateCandidatePanel)
+    private val insightSidebarHost = InsightSidebarHost(insightSidebar, initialSidebarVisible)
     private val scannerPanel = ScannerPanel(
         onOpen = ::openScannerResult,
         shortMovePanel = shortMovePanel,
@@ -176,7 +179,8 @@ class MainController(private val apiKey: String?, initialSymbol: String = "AAPL"
         euronextProvider.configure(scannerCriteria)
         researchReport.start()
         val appLayers = MainViewFactory.create(refreshButton, settingsButton, importTradesButton,
-            aboutButton, scannerPanel, trendChart, insightSidebar, contentSplitPane, requestStatus, initialDivider)
+            aboutButton, scannerPanel, trendChart, insightSidebarHost, contentSplitPane, requestStatus, initialDivider
+        )
         WorkspaceToolbar.configure(
             appLayers, refreshButton, settingsButton, importTradesButton, aboutButton,
             { loadLocalChart(currentSymbol) }, ::showScannerSettings,
@@ -236,6 +240,7 @@ class MainController(private val apiKey: String?, initialSymbol: String = "AAPL"
     fun scannerColumnLayout(): String = scannerPanel.savedColumnLayout()
     fun shortMoveColumnLayout(): String = shortMovePanel.savedColumnLayout()
     fun tableDividerPosition(): Double = scannerPanel.tableDividerPosition()
+    fun sidebarVisible(): Boolean = insightSidebarHost.isExpanded
     private fun startScanner() {
         log.debug(LogTag.API, "startScanner(symbols={})", scannerCriteria.symbols.size)
         priorityScanner.replaceCandidates(emptyList())

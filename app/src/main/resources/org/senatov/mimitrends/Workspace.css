@@ -164,6 +164,31 @@
 .trend-chart-card { -fx-padding: 6px; }
 .insight-sidebar { -fx-padding: 5px; }
 
+.insight-sidebar-host {
+    -fx-background-color: transparent;
+}
+
+.insight-sidebar-toggle {
+    -fx-min-width: 24px;
+    -fx-pref-width: 24px;
+    -fx-max-width: 24px;
+    -fx-min-height: 52px;
+    -fx-pref-height: 52px;
+    -fx-padding: 0;
+    -fx-font-size: 19px;
+    -fx-font-weight: 300;
+    -fx-text-fill: -mimi-text-secondary;
+    -fx-background-color: -mimi-surface;
+    -fx-background-radius: 6px;
+    -fx-border-color: -mimi-border;
+    -fx-border-radius: 6px;
+}
+
+.insight-sidebar-toggle:hover {
+    -fx-text-fill: -mimi-accent;
+    -fx-border-color: -mimi-accent;
+}
+
 .table-section-header { -fx-padding: 1px 3px 6px 3px; }
 .table-section-title, .positive-watch-title, .inspector-title {
     -fx-font-size: 13px;

@@ -22,7 +22,7 @@ internal object MainViewFactory {
         aboutButton: Button,
         scannerPanel: ScannerPanel,
         trendChart: TrendChartView,
-        insightSidebar: InsightSidebar,
+        insightSidebar: InsightSidebarHost,
         contentSplitPane: SplitPane,
         requestStatus: RequestStatusPane,
         initialDivider: Double
