@@ -86,8 +86,13 @@ internal class BrokerTransactionStore(private val connection: Connection) {
                 if (result.next()) result.getString(1)?.takeIf(::isValidIsin) else null
             }
         }
-        val providerIsin = metadataIsin ?: providerIsin(normalizedSymbol)
-        if (providerIsin != null && metadataIsin == null) persistMapping(normalizedSymbol, providerIsin)
+        // Provider mappings are instrument-specific and therefore take precedence over metadata
+        // previously inferred from a broker description. This also repairs old false mappings.
+        val authoritativeIsin = providerIsin(normalizedSymbol)
+        val resolvedInstrumentIsin = authoritativeIsin ?: metadataIsin
+        if (authoritativeIsin != null && authoritativeIsin != metadataIsin) {
+            persistMapping(normalizedSymbol, authoritativeIsin, repairExisting = true)
+        }
         val executions = connection.prepareStatement(LOAD_EXECUTIONS).use { statement ->
             statement.executeQuery().use { result -> buildList {
                 while (result.next()) {
@@ -96,19 +101,25 @@ internal class BrokerTransactionStore(private val connection: Connection) {
                         result.getDouble(8), result.getDouble(9), result.getDouble(10), result.getString(11),
                         result.getString(12))
                     val linkedElsewhere = execution.linkedSymbol != null && execution.linkedSymbol != normalizedSymbol
-                    if (!linkedElsewhere && ((providerIsin != null && execution.isin == providerIsin) ||
-                        BrokerTradeMatcher.matches(execution.description, companyName))) add(execution)
+                    val belongsToInstrument = if (resolvedInstrumentIsin != null) {
+                        execution.isin == resolvedInstrumentIsin
+                    } else {
+                        BrokerTradeMatcher.matches(execution.description, companyName)
+                    }
+                    if (!linkedElsewhere && belongsToInstrument) add(execution)
                 }
             } }
         }
-        val resolvedIsin = providerIsin ?: executions.mapNotNull(BrokerExecution::isin).distinct().singleOrNull()
-        if (resolvedIsin != null) persistMapping(normalizedSymbol, resolvedIsin)
+        val inferredIsin = executions.mapNotNull(BrokerExecution::isin).distinct().singleOrNull()
+        if (resolvedInstrumentIsin == null && inferredIsin != null) persistMapping(normalizedSymbol, inferredIsin)
         return BrokerTradeMatcher.pair(normalizedSymbol, executions)
     }
 
-    private fun persistMapping(symbol: String, isin: String) {
-        connection.prepareStatement("""UPDATE instrument_metadata SET isin=? WHERE symbol=?
-            AND (isin IS NULL OR length(isin) != 12)""").use {
+    private fun persistMapping(symbol: String, isin: String, repairExisting: Boolean = false) {
+        val condition = if (repairExisting) "AND (isin IS NULL OR isin != ?)"
+        else "AND (isin IS NULL OR length(isin) != 12)"
+        connection.prepareStatement("UPDATE instrument_metadata SET isin=? WHERE symbol=? $condition").use {
+            if (repairExisting) it.setString(3, isin)
             it.setString(1, isin); it.setString(2, symbol); it.executeUpdate()
         }
         connection.prepareStatement("""UPDATE broker_transactions SET linked_symbol=?
