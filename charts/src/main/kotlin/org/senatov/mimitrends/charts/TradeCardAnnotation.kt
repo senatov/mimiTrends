@@ -38,19 +38,22 @@ internal class TradeCardAnnotation(
             title.lines().maxOf(graphics.fontMetrics::stringWidth),
             graphics.getFontMetrics(DETAIL_FONT).stringWidth(detail)
         ).toDouble()
-        val maximumWidth = (dataArea.width * MAXIMUM_WIDTH_SHARE).coerceAtLeast(initialCard.width)
-        val cardWidth = maxOf(initialCard.width, desiredContentWidth + HORIZONTAL_PADDING * 2.0)
-            .coerceAtMost(maximumWidth)
+        val maximumWidth = minOf(dataArea.width * MAXIMUM_WIDTH_SHARE, MAXIMUM_WIDTH_PIXELS)
+            .coerceAtLeast(MINIMUM_WIDTH_PIXELS.coerceAtMost(dataArea.width))
+        val cardWidth = maxOf(
+            initialCard.width.coerceAtMost(maximumWidth),
+            desiredContentWidth + HORIZONTAL_PADDING * 2.0
+        ).coerceAtMost(maximumWidth)
         val contentWidth = (cardWidth - HORIZONTAL_PADDING * 2.0).coerceAtLeast(1.0)
         val titleLines = wrapWords(graphics, title, contentWidth, TITLE_FONT)
         val detailLines = wrapWords(graphics, detail, contentWidth, DETAIL_FONT)
         val titleLineHeight = graphics.getFontMetrics(TITLE_FONT).height.toDouble()
         val detailLineHeight = graphics.getFontMetrics(DETAIL_FONT).height.toDouble()
         val cardHeight = maxOf(
-            initialCard.height,
+            initialCard.height.coerceAtMost(MAXIMUM_HEIGHT_PIXELS),
             VERTICAL_PADDING * 2.0 + titleLines.size * titleLineHeight + ROW_GAP +
                 detailLines.size * detailLineHeight
-        )
+        ).coerceAtMost(MAXIMUM_HEIGHT_PIXELS.coerceAtMost(dataArea.height))
         val card = fitToDataArea(initialCard.centerX, initialCard.centerY, cardWidth, cardHeight, dataArea)
         val arc = minOf(card.width * 0.08, card.height * 0.72)
         val shape = RoundRectangle2D.Double(card.x, card.y, card.width, card.height, arc, arc)
@@ -157,12 +160,15 @@ internal class TradeCardAnnotation(
         val SHADOW_COLOR = Color(24, 28, 36, 55)
         val TITLE_COLOR = Color(48, 55, 63)
         val CARD_STROKE = BasicStroke(1.35f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND)
-        val TITLE_FONT = Font("SansSerif", Font.PLAIN, 12)
-        val DETAIL_FONT = Font("SansSerif", Font.BOLD, 12)
+        val TITLE_FONT = Font("SansSerif", Font.PLAIN, 11)
+        val DETAIL_FONT = Font("SansSerif", Font.BOLD, 11)
         const val SHADOW_OFFSET = 3.0
-        const val HORIZONTAL_PADDING = 10.0
-        const val VERTICAL_PADDING = 7.0
+        const val HORIZONTAL_PADDING = 9.0
+        const val VERTICAL_PADDING = 6.0
         const val ROW_GAP = 2.0
-        const val MAXIMUM_WIDTH_SHARE = 0.90
+        const val MINIMUM_WIDTH_PIXELS = 180.0
+        const val MAXIMUM_WIDTH_PIXELS = 360.0
+        const val MAXIMUM_HEIGHT_PIXELS = 92.0
+        const val MAXIMUM_WIDTH_SHARE = 0.36
     }
 }

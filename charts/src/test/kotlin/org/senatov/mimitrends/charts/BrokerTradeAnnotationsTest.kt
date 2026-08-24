@@ -92,6 +92,7 @@ class BrokerTradeAnnotationsTest {
         assertTrue(bounds.right <= 1_200_000.0)
         assertTrue(bounds.bottom >= 100.0)
         assertTrue(bounds.top <= 110.0)
+        assertTrue(bounds.height <= 1.2)
     }
 
     @Test fun `places card above candles and keeps dragged position across history render`() {
