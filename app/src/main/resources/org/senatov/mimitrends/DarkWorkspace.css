@@ -145,14 +145,16 @@
 }
 
 .theme-dark .scanner-table .column-header-background {
-    -fx-border-color: transparent transparent #3d4a57 transparent;
+    -fx-background-insets: 0;
 }
 
 .theme-dark .scanner-table .column-header {
-    -fx-border-color: transparent rgba(125, 145, 164, 0.25) transparent transparent;
+    -fx-background-color: #252f3a;
+    -fx-border-color: transparent #35424e #3d4a57 transparent;
 }
 
-.theme-dark .scanner-table .column-header:hover {
+.theme-dark .scanner-table .column-header:hover,
+.theme-dark .scanner-table .column-header:pressed {
     -fx-background-color: #303d49;
 }
 

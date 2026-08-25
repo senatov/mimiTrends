@@ -319,26 +319,32 @@
 }
 
 .scanner-table .column-header-background {
-    -fx-pref-height: 27px;
-    -fx-border-color: transparent transparent #c9cdd2 transparent;
-    -fx-border-width: 0 0 1px 0;
+    -fx-background-insets: 0;
+    -fx-padding: 0;
 }
 
 .scanner-table .column-header {
-    -fx-border-color: transparent rgba(137, 145, 154, 0.42) transparent transparent;
-    -fx-border-width: 0 1px 0 0;
-    -fx-padding: 3px 7px;
+    -fx-background-color: #fbfbfc;
+    -fx-background-insets: 0;
+    -fx-border-color: transparent #d9dde2 #c9cdd2 transparent;
+    -fx-border-width: 0 1px 1px 0;
+    -fx-min-height: 28px;
+    -fx-pref-height: 28px;
+    -fx-max-height: 28px;
+    -fx-padding: 3px 8px;
 }
 
-.scanner-table .column-header:hover {
+.scanner-table .column-header:hover,
+.scanner-table .column-header:pressed {
     -fx-background-color: #f2f6fb;
 }
 
 .scanner-table .column-header .label {
-    -fx-font-size: 10.75px;
-    -fx-font-weight: 600;
-    -fx-text-fill: #46515c;
-    -fx-padding: 0 2px 0 0;
+    -fx-font-family: "System";
+    -fx-font-size: 11px;
+    -fx-font-weight: normal;
+    -fx-text-fill: #17191c;
+    -fx-padding: 0 6px 0 0;
 }
 
 .scanner-table .column-header .arrow {
