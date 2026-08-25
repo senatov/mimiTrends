@@ -2,7 +2,12 @@ package org.senatov.mimitrends
 
 import javafx.geometry.Pos
 import javafx.scene.control.Label
+import javafx.scene.control.ContextMenu
+import javafx.scene.control.MenuItem
 import javafx.scene.control.Tooltip
+import javafx.scene.input.KeyCode
+import javafx.scene.input.KeyCodeCombination
+import javafx.scene.input.KeyCombination
 import javafx.scene.input.MouseButton
 import javafx.scene.layout.HBox
 import javafx.scene.layout.Priority
@@ -14,7 +19,9 @@ import java.util.concurrent.ConcurrentHashMap
 
 internal class ModerateCandidatePanel(
     private val onOpen: (String, Long) -> Unit,
-    private val loadProfile: ((String) -> CompletableFuture<CompanyProfile>)? = null
+    private val loadProfile: ((String) -> CompletableFuture<CompanyProfile>)? = null,
+    private val copyText: (String) -> Unit = {},
+    private val openExternalChart: (String) -> Unit = {}
 ) : VBox(7.0) {
     private val names = ConcurrentHashMap<String, String>()
     private val candidates = VBox(4.0)
@@ -106,11 +113,28 @@ internal class ModerateCandidatePanel(
         return HBox(7.0, identity, spacer, score).apply {
             alignment = Pos.CENTER_LEFT
             styleClass += "positive-watch-row"
+            val menu = candidateContextMenu(move)
+            setOnContextMenuRequested { event -> menu.show(this, event.screenX, event.screenY) }
             setOnMouseClicked { event ->
                 if (event.button == MouseButton.PRIMARY) onOpen(move.symbol, move.endedAtEpochSeconds)
             }
         }
     }
+
+    private fun candidateContextMenu(move: ShortMove) = ContextMenu(
+        MenuItem("Copy search keyword").apply {
+            accelerator = KeyCodeCombination(KeyCode.C, KeyCombination.SHORTCUT_DOWN)
+            setOnAction { copyText(searchKeyword(move)) }
+        },
+        MenuItem("Copy ticker").apply { setOnAction { copyText(move.symbol) } },
+        MenuItem("Open Stock").apply {
+            accelerator = KeyCodeCombination(KeyCode.O, KeyCombination.SHORTCUT_DOWN)
+            setOnAction { openExternalChart(move.symbol) }
+        }
+    )
+
+    private fun searchKeyword(move: ShortMove): String =
+        CompanySearchTerm.from(names[move.symbol] ?: move.symbol, move.symbol)
 
     private fun requestName(move: ShortMove) {
         if (names.putIfAbsent(move.symbol, move.symbol) != null) return

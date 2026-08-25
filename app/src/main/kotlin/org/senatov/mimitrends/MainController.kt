@@ -64,7 +64,7 @@ class MainController(private val apiKey: String?, initialSymbol: String = "AAPL"
             trendChart.showSignalFocus(moveEpochSeconds)
             shortMoveSelection.open(symbol)
         },
-        { symbol -> profileService.load(symbol) }
+        { symbol -> profileService.load(symbol) }, ClipboardText::copy, stockPageOpener::open
     )
     private val insightSidebar = InsightSidebar(moderateCandidatePanel)
     private val insightSidebarHost = InsightSidebarHost(insightSidebar, initialSidebarVisible)

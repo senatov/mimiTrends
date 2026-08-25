@@ -315,40 +315,40 @@
 .scanner-table .column-header-background,
 .scanner-table .column-header,
 .scanner-table .filler {
-    -fx-background-color: linear-gradient(to bottom, #fbfcfe 0%, #f3f6f9 58%, #edf1f5 100%);
+    -fx-background-color: #fbfbfc;
 }
 
 .scanner-table .column-header-background {
-    -fx-pref-height: 28px;
-    -fx-border-color: transparent transparent #cbd4de transparent;
+    -fx-pref-height: 27px;
+    -fx-border-color: transparent transparent #c9cdd2 transparent;
     -fx-border-width: 0 0 1px 0;
 }
 
 .scanner-table .column-header {
-    -fx-border-color: transparent rgba(153, 167, 181, 0.32) transparent transparent;
+    -fx-border-color: transparent rgba(137, 145, 154, 0.42) transparent transparent;
     -fx-border-width: 0 1px 0 0;
     -fx-padding: 3px 7px;
 }
 
 .scanner-table .column-header:hover {
-    -fx-background-color: linear-gradient(to bottom, #ffffff 0%, #edf3f8 100%);
+    -fx-background-color: #f2f6fb;
 }
 
 .scanner-table .column-header .label {
     -fx-font-size: 10.75px;
     -fx-font-weight: 600;
-    -fx-text-fill: #33485d;
+    -fx-text-fill: #46515c;
     -fx-padding: 0 2px 0 0;
 }
 
 .scanner-table .column-header .arrow {
-    -fx-background-color: #496b8c;
+    -fx-background-color: #147ce5;
     -fx-padding: 3px 3.5px;
     -fx-opacity: 0.9;
 }
 
 .scanner-table .column-header .sort-order-dot {
-    -fx-background-color: #496b8c;
+    -fx-background-color: #147ce5;
 }
 
 .scanner-table .table-cell {
