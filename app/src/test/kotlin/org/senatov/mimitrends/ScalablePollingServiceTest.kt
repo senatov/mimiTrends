@@ -63,7 +63,7 @@ class ScalablePollingServiceTest {
         override fun verifyAccess() = Unit
         override fun loadQuote(isin: String) = ScalableQuote(
             isin, "Siemens Energy", "EUR", 151.23, 151.20, 151.26,
-            148.90, 1_787_644_954_314L
+            148.90, System.currentTimeMillis()
         )
     }
 }

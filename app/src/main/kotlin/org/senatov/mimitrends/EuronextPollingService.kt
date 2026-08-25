@@ -5,12 +5,9 @@ import org.senatov.mimitrends.log.LogTag
 import org.senatov.mimitrends.marketdata.EuronextInstrument
 import org.senatov.mimitrends.marketdata.EuronextMarketDataClient
 import org.senatov.mimitrends.marketdata.ProviderDataUnavailableException
-import org.senatov.mimitrends.model.MinuteBar
 import org.senatov.mimitrends.model.ProviderInstrument
-import org.senatov.mimitrends.model.ProviderMinuteBar
 import org.senatov.mimitrends.model.ProviderQuoteSnapshot
 import org.senatov.mimitrends.model.ScannerCriteria
-import org.senatov.mimitrends.model.VolumeStatus
 import org.slf4j.LoggerFactory
 import java.util.concurrent.Executors
 import java.util.concurrent.ScheduledFuture
@@ -96,20 +93,21 @@ internal class EuronextPollingService(
         val instrument = resolve(symbol) ?: return
         val source = EuronextInstrument(instrument.identifier, instrument.mic, instrument.resolvedName)
         val quote = client.loadQuote(source)
-        repository.upsertProviderQuote(ProviderQuoteSnapshot(
+        val now = System.currentTimeMillis()
+        if (quote.observedAtMillis !in (now - MAX_QUOTE_AGE_MILLIS)..(now + FUTURE_TOLERANCE_MILLIS)) {
+            throw ProviderDataUnavailableException("Euronext quote is stale for $symbol")
+        }
+        val stored = repository.upsertProviderQuote(
+            ProviderQuoteSnapshot(
             PROVIDER, symbol, instrument.identifier, quote.currency, quote.last, quote.bid, quote.ask,
             null, null, null, null, null, null, null, null, null, quote.observedAtMillis
         ))
-        val minute = quote.observedAtMillis / 60_000L * 60L
-        val bar = MinuteBar(symbol, minute, quote.last, quote.last, quote.last, quote.last, 0.0, VolumeStatus.MISSING)
-        val observation = ProviderMinuteBar(
-            PROVIDER, symbol, instrument.identifier, instrument.mic, quote.currency, bar, quote.observedAtMillis
-        )
-        val stored = repository.upsertProviderMinuteBar(observation)
         if (stored) {
-            observationSink.publish(observation)
-            log.debug(LogTag.DB, "Euronext quote stored symbol={} isin={} mic={} minute={} price={}",
-                symbol, instrument.identifier, instrument.mic, minute, quote.last)
+            observationSink.publish(MarketPriceObservation(PROVIDER, symbol, quote.last, quote.observedAtMillis))
+            log.debug(
+                LogTag.DB, "Euronext quote stored symbol={} isin={} mic={} price={}",
+                symbol, instrument.identifier, instrument.mic, quote.last
+            )
         }
     }
 
@@ -146,6 +144,8 @@ internal class EuronextPollingService(
         const val PROVIDER = "EURONEXT"
         const val INDEX_ISIN_PREFIX = "FRIX"
         const val UNRESOLVED_RETRY_MILLIS = 24 * 60 * 60_000L
+        const val MAX_QUOTE_AGE_MILLIS = 10 * 60_000L
+        const val FUTURE_TOLERANCE_MILLIS = 60_000L
         val EURONEXT_ZONE: ZoneId = ZoneId.of("Europe/Paris")
         val OPEN: LocalTime = LocalTime.of(7, 0)
         val CLOSE: LocalTime = LocalTime.of(22, 0)

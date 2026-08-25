@@ -5,12 +5,9 @@ import org.senatov.mimitrends.log.LogTag
 import org.senatov.mimitrends.marketdata.TradegateMarketDataClient
 import org.senatov.mimitrends.marketdata.ProviderDataUnavailableException
 import org.senatov.mimitrends.marketdata.ProviderHttpException
-import org.senatov.mimitrends.model.MinuteBar
 import org.senatov.mimitrends.model.ProviderInstrument
-import org.senatov.mimitrends.model.ProviderMinuteBar
 import org.senatov.mimitrends.model.ProviderQuoteSnapshot
 import org.senatov.mimitrends.model.ScannerCriteria
-import org.senatov.mimitrends.model.VolumeStatus
 import org.slf4j.LoggerFactory
 import java.time.DayOfWeek
 import java.time.Instant
@@ -97,21 +94,21 @@ internal class TradegatePollingService(
     private fun poll(symbol: String) {
         val instrument = resolve(symbol) ?: return
         val quote = client.loadQuote(instrument.identifier)
-        repository.upsertProviderQuote(ProviderQuoteSnapshot(
-            PROVIDER, symbol, instrument.identifier, CURRENCY, quote.last, quote.bid, quote.ask,
+        val executableMidpoint = quote.bid?.takeIf { it > 0.0 }?.let { bid ->
+            quote.ask?.takeIf { it >= bid }?.let { ask -> (bid + ask) / 2.0 }
+        } ?: throw ProviderDataUnavailableException("Tradegate returned no executable bid/ask for $symbol")
+        val stored = repository.upsertProviderQuote(
+            ProviderQuoteSnapshot(
+                PROVIDER, symbol, instrument.identifier, CURRENCY, executableMidpoint, quote.bid, quote.ask,
             quote.bidSize, quote.askSize, quote.sessionVolume, quote.sessionTurnover, quote.averagePrice,
             quote.executions, quote.high, quote.low, quote.previousClose, quote.observedAtMillis
         ))
-        val minute = quote.observedAtMillis / 60_000L * 60L
-        val bar = MinuteBar(symbol, minute, quote.last, quote.last, quote.last, quote.last, 0.0, VolumeStatus.MISSING)
-        val observation = ProviderMinuteBar(
-            PROVIDER, symbol, instrument.identifier, MIC, CURRENCY, bar, quote.observedAtMillis
-        )
-        val stored = repository.upsertProviderMinuteBar(observation)
         if (stored) {
-            observationSink.publish(observation)
-            log.debug(LogTag.DB, "Tradegate quote stored symbol={} isin={} minute={} price={}",
-                symbol, instrument.identifier, minute, quote.last)
+            observationSink.publish(MarketPriceObservation(PROVIDER, symbol, executableMidpoint, quote.observedAtMillis))
+            log.debug(
+                LogTag.DB, "Tradegate quote stored symbol={} isin={} price={}",
+                symbol, instrument.identifier, quote.last
+            )
         }
     }
 

@@ -6,15 +6,17 @@ import java.time.Instant
 
 internal class SavedResultQuoteRefresher(private val repository: MarketRepository) {
     fun refresh(results: List<ScanResult>, nowEpochSeconds: Long = Instant.now().epochSecond): List<ScanResult> {
-        val notBefore = nowEpochSeconds - MAX_STORED_QUOTE_AGE_SECONDS
+        val notBeforeMillis = (nowEpochSeconds - MAX_STORED_QUOTE_AGE_SECONDS) * 1_000L
         return results.map { result ->
-            val observation = repository.loadLatestProviderMinuteBar(result.symbol, notBefore)
-                ?: return@map result
-            if (observation.observedAtMillis <= result.updatedAtMillis) return@map result
+            val quote = repository.loadLatestProviderQuote(result.symbol, notBeforeMillis) ?: return@map result
+            if (quote.observedAtMillis <= result.updatedAtMillis) return@map result
             result.copy(
-                price = observation.bar.close,
-                updatedAtMillis = observation.observedAtMillis,
-                dataStatus = observation.provider
+                price = quote.last,
+                bidPrice = quote.bid ?: result.bidPrice,
+                askPrice = quote.ask ?: result.askPrice,
+                executableQuoteAtMillis = quote.observedAtMillis,
+                updatedAtMillis = quote.observedAtMillis,
+                dataStatus = quote.provider
             )
         }
     }

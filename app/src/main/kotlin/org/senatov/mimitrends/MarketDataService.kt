@@ -167,11 +167,7 @@ internal class MarketDataService(
             primary, primary, primarySource, primarySource,
             org.senatov.mimitrends.model.MarketObservationQuality.FULL_OHLCV
         )
-        val from = nowEpochSeconds - 4 * 3_600L
-        val providerBars = PROVIDER_SOURCES.flatMap { provider ->
-            repository.loadProviderMinuteBars(provider.name, symbol, from)
-        }
-        return ProviderBarTailMerger.merge(primary, providerBars, primarySource, nowEpochSeconds)
+        return ProviderBarTailMerger.merge(primary, emptyList(), primarySource, nowEpochSeconds)
     }
 
     private fun currency(symbol: String) = if (symbol.contains('.')) "EUR" else "USD"
@@ -224,11 +220,6 @@ internal class MarketDataService(
     private companion object {
         val RELAXATION_LEVELS = listOf(0.85, 0.70, 0.55)
         const val EXECUTABLE_QUOTE_MAX_AGE_SECONDS = 2 * 60L
-        val PROVIDER_SOURCES = listOf(
-            MarketDataSource.SCALABLE, MarketDataSource.LANG_SCHWARZ,
-            MarketDataSource.TRADEGATE, MarketDataSource.EURONEXT,
-            MarketDataSource.WALLSTREET_ONLINE
-        )
     }
 }
 

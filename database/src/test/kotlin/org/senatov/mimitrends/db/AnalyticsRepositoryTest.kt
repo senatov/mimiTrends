@@ -14,6 +14,48 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class AnalyticsRepositoryTest {
+    @Test
+    fun `removes analytics derived from quote-only pseudo bars`() {
+        val path = Files.createTempDirectory("mimitrends-quote-only-migration").resolve("test.db")
+        AnalyticsRepository(path).close()
+        DriverManager.getConnection("jdbc:sqlite:$path").use { connection ->
+            connection.createStatement().use { statement ->
+                statement.executeUpdate(
+                    "INSERT INTO scan_runs(id,started_at,region,requested_symbols,evaluated_symbols," +
+                            "accepted_symbols,published_symbols,failures,interval_seconds,status) " +
+                            "VALUES(1,1,'EUROPE',1,1,1,1,0,180,'COMPLETED')"
+                )
+                statement.executeUpdate(
+                    "INSERT INTO scan_candidates(run_id,symbol,evaluated_at,accepted,published,source) " +
+                            "VALUES(1,'SAP.DE',1,1,1,'TRADEGATE')"
+                )
+                statement.executeUpdate(
+                    "INSERT INTO research_samples(run_id,symbol,observed_epoch,entry_price,family,direction," +
+                            "accepted,published,source) VALUES(1,'SAP.DE',1,100,'MOMENTUM',1,1,1,'TRADEGATE')"
+                )
+                statement.executeUpdate("DELETE FROM schema_migrations WHERE version=13")
+            }
+        }
+
+        AnalyticsRepository(path).close()
+
+        DriverManager.getConnection("jdbc:sqlite:$path").use { connection ->
+            connection.createStatement().use { statement ->
+                statement.executeQuery("SELECT COUNT(*) FROM scan_candidates").use {
+                    it.next(); assertEquals(0, it.getInt(1))
+                }
+                statement.executeQuery("SELECT COUNT(*) FROM research_samples").use {
+                    it.next(); assertEquals(0, it.getInt(1))
+                }
+                statement.executeQuery(
+                    "SELECT evaluated_symbols,accepted_symbols,published_symbols FROM scan_runs WHERE id=1"
+                ).use {
+                    it.next(); assertEquals(0, it.getInt(1)); assertEquals(0, it.getInt(2)); assertEquals(0, it.getInt(3))
+                }
+            }
+        }
+    }
+
     @Test fun `repairs the TXN identifier confused with TXNM Energy`() {
         val path = Files.createTempDirectory("mimitrends-txn-isin").resolve("test.db")
         MarketRepository(path).use { repository ->

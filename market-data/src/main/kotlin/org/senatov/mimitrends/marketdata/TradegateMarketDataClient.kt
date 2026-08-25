@@ -100,6 +100,8 @@ class TradegateMarketDataClient(
         val json = mapper.readTree(body)
         val last = json.decimal("last") ?: throw ProviderDataUnavailableException("Tradegate returned no last price for $isin")
         require(last.isFinite() && last > 0.0) { "Tradegate returned invalid last price for $isin" }
+        val observedAt = parseDate(dateHeader)
+            ?: throw ProviderDataUnavailableException("Tradegate returned no trustworthy quote timestamp for $isin")
         return TradegateQuote(
             isin = isin,
             last = last,
@@ -114,7 +116,7 @@ class TradegateMarketDataClient(
             averagePrice = json.decimal("avg"),
             executions = json.path("executions").takeIf(JsonNode::isNumber)?.asLong(),
             previousClose = json.decimal("close"),
-            observedAtMillis = parseDate(dateHeader) ?: System.currentTimeMillis()
+            observedAtMillis = observedAt
         )
     }
 

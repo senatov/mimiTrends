@@ -5,11 +5,8 @@ import org.senatov.mimitrends.db.MarketRepository
 import org.senatov.mimitrends.log.LogTag
 import org.senatov.mimitrends.marketdata.WallstreetOnlineMarketDataClient
 import org.senatov.mimitrends.marketdata.WallstreetOnlineMover
-import org.senatov.mimitrends.model.MinuteBar
 import org.senatov.mimitrends.model.ProviderInstrument
-import org.senatov.mimitrends.model.ProviderMinuteBar
 import org.senatov.mimitrends.model.ProviderQuoteSnapshot
-import org.senatov.mimitrends.model.VolumeStatus
 import org.slf4j.LoggerFactory
 import java.util.concurrent.Executors
 import java.util.concurrent.ScheduledFuture
@@ -89,16 +86,12 @@ internal class WallstreetOnlinePollingService(
         repository.upsertProviderInstrument(ProviderInstrument(
             PROVIDER, symbol, quote.isin, mic, quote.currency, quote.name, now
         ))
-        repository.upsertProviderQuote(ProviderQuoteSnapshot(
+        val stored = repository.upsertProviderQuote(
+            ProviderQuoteSnapshot(
             PROVIDER, symbol, quote.isin, quote.currency, quote.last, quote.bid, quote.ask,
             null, null, null, null, null, null, null, null, null, quote.observedAtMillis
         ))
-        val minute = quote.observedAtMillis / 60_000L * 60L
-        val bar = MinuteBar(symbol, minute, quote.last, quote.last, quote.last, quote.last, 0.0, VolumeStatus.MISSING)
-        val observation = ProviderMinuteBar(
-            PROVIDER, symbol, quote.isin, mic, quote.currency, bar, quote.observedAtMillis
-        )
-        if (repository.upsertProviderMinuteBar(observation)) observationSink.publish(observation)
+        if (stored) observationSink.publish(MarketPriceObservation(PROVIDER, symbol, quote.last, quote.observedAtMillis))
     }
 
     private fun schedule(delayMillis: Long, expectedGeneration: Long) {

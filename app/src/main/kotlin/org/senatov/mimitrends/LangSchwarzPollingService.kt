@@ -4,11 +4,8 @@ import org.senatov.mimitrends.db.MarketRepository
 import org.senatov.mimitrends.log.LogTag
 import org.senatov.mimitrends.marketdata.LangSchwarzListing
 import org.senatov.mimitrends.marketdata.LangSchwarzMarketDataClient
-import org.senatov.mimitrends.model.MinuteBar
 import org.senatov.mimitrends.model.ProviderInstrument
-import org.senatov.mimitrends.model.ProviderMinuteBar
 import org.senatov.mimitrends.model.ProviderQuoteSnapshot
-import org.senatov.mimitrends.model.VolumeStatus
 import org.slf4j.LoggerFactory
 import java.util.concurrent.Executors
 import java.util.concurrent.ScheduledFuture
@@ -84,13 +81,9 @@ internal class LangSchwarzPollingService(
             PROVIDER, symbol, listing.itemId, CURRENCY, listing.midpoint, listing.bid, listing.ask,
                 null, null, null, null, null, null, null, null, listing.previousClose, listing.observedAtMillis
         ))
-        val minute = listing.observedAtMillis / 60_000L * 60L
-        val bar = MinuteBar(symbol, minute, listing.midpoint, listing.midpoint, listing.midpoint,
-            listing.midpoint, 0.0, VolumeStatus.MISSING)
-        val observation = ProviderMinuteBar(
-            PROVIDER, symbol, listing.itemId, MIC, CURRENCY, bar, listing.observedAtMillis
-        )
-        if (stored) observationSink.publish(observation)
+        if (stored) {
+            observationSink.publish(MarketPriceObservation(PROVIDER, symbol, listing.midpoint, listing.observedAtMillis))
+        }
     }
 
     private fun schedule(delayMillis: Long, expectedGeneration: Long) {

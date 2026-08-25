@@ -168,8 +168,8 @@ The primary question is not “What did this stock do over the last year?” but
 - rechecks published `Strong` and `Extreme` signals every minute in a separate priority task, updating
   their rows immediately and stopping when they fall below `Strong`;
 - stores minute OHLCV history, company profiles, derived statistics, scan runs, and signal outcomes in SQLite;
-- corrects stale European snapshots with timestamped observations from Tradegate, Euronext,
-  Lang & Schwarz, and wallstreetONLINE where an instrument can be resolved safely;
+- refreshes visible European quotes and executable bid/ask with timestamped observations from Tradegate, Euronext, Lang & Schwarz, and
+  wallstreetONLINE where an instrument can be resolved safely;
 - never labels a crawled quote as fresh using its HTTP download time: the provider's own observation
   timestamp is required;
 - uses exchange-local time zones and market calendars for US, Xetra, Euronext, and Helsinki instruments;
@@ -300,11 +300,10 @@ quality gates. Separately, the low-priority quote crawler opens at most five mat
 pass and accepts a quote only when its ISIN matches the canonical instrument ISIN. The site's disallowed
 stock-search RPC is not used.
 
-Every provider observation is stored with provider, identifier, MIC, currency, and original observation time. A quote without an
-unambiguous provider timestamp is rejected. Newer bar-capable observations can extend
-the latest analytical tail and refresh a published row, while older responses cannot replace fresh GUI or
-database state. Snapshot-only sources have `MISSING` volume quality and therefore cannot manufacture volume
-confirmation.
+Every quote observation is stored in `provider_quotes` with provider, identifier, MIC, currency, bid/ask, and original observation
+time. A quote without an unambiguous provider timestamp is rejected. Quote-only sources can refresh a published row, but never create
+or extend analytical candles and therefore cannot manufacture price patterns or volume confirmation. Only genuine OHLCV history from
+Yahoo and minute bars aggregated from Finnhub trades may extend the series used by the detectors.
 
 These are public website integrations rather than contracted APIs and can change without notice. Users must enable and use Lang &
 Schwarz only when their use complies with that website's terms. Failures are isolated per provider, logged without cookies or
@@ -489,17 +488,16 @@ parallel requests or database sharding are introduced.
 
 Yahoo Finance is the default history and fallback provider and does not require an API key. The application bootstraps recent minute history, then requests and upserts the missing tail. Yahoo's public chart endpoint is not a contracted API and may change without notice.
 
-Corrective provider quotes may refresh the displayed current price, but an isolated quote is never treated as
-a minute-bar pattern. A provider tail needs at least five continuous recent minutes before it can extend the
-series used by the detectors. Freshness validation likewise follows the analytical series, so a current
-snapshot cannot disguise stale candle history.
+Corrective provider quotes may refresh the displayed current price and executable bid/ask, but are never treated as minute bars and
+never extend the series used by the detectors. Freshness validation follows the analytical series, so a current snapshot cannot
+disguise stale candle history.
 
 European quotes may be delayed. MiMiTrends labels data as live, delayed, Yahoo, or cached rather than assuming that every last bar is current. Open-market recommendations require the analytical candle history to be no more than three minutes old; an isolated newer quote can update the displayed price but cannot make stale analysis current.
 
 ### European quote correction
 
-Timestamped public observations from Tradegate, Euronext, and wallstreetONLINE can correct the visible tail of European instruments.
-Lang & Schwarz can update only the visible quote and executable bid/ask. The leading
+Timestamped public observations from Tradegate, Euronext, Lang & Schwarz, Scalable Capital, and wallstreetONLINE can update only the
+visible quote and executable bid/ask of European instruments. The leading
 `Delay` value is calculated from the timestamp of the latest candle
 used by the detectors, not from the moment MiMiTrends downloaded a page or from a newer isolated quote.
 `Updated` separately shows the timestamp of the latest displayed price. A provider that returns an old quote

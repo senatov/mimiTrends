@@ -88,7 +88,7 @@ class EuronextMarketDataClient(
         val timestamp = LAST_TRADE_TIME.find(html)?.groupValues?.get(1)?.replace("&nbsp;", " ")?.trim()
         val observedAt = timestamp?.let {
             runCatching { LocalDateTime.parse(it, QUOTE_TIME).atZone(EURONEXT_ZONE).toInstant().toEpochMilli() }.getOrNull()
-        } ?: System.currentTimeMillis()
+        } ?: throw ProviderDataUnavailableException("Euronext returned no trustworthy quote timestamp")
         return EuronextQuote(last, bid, ask, currency, observedAt)
     }
 

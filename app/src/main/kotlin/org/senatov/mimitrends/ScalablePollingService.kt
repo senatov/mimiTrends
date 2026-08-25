@@ -6,11 +6,8 @@ import org.senatov.mimitrends.marketdata.ScalableCliClient
 import org.senatov.mimitrends.marketdata.ScalableCliUnavailableException
 import org.senatov.mimitrends.marketdata.ScalableQuote
 import org.senatov.mimitrends.marketdata.ScalableQuoteClient
-import org.senatov.mimitrends.model.MinuteBar
 import org.senatov.mimitrends.model.ProviderInstrument
-import org.senatov.mimitrends.model.ProviderMinuteBar
 import org.senatov.mimitrends.model.ProviderQuoteSnapshot
-import org.senatov.mimitrends.model.VolumeStatus
 import org.slf4j.LoggerFactory
 import java.util.concurrent.Executors
 import java.util.concurrent.ScheduledFuture
@@ -78,27 +75,24 @@ internal class ScalablePollingService(
     }
 
     private fun store(symbol: String, quote: ScalableQuote) {
+        val now = System.currentTimeMillis()
+        if (quote.observedAtMillis !in (now - MAX_QUOTE_AGE_MILLIS)..(now + FUTURE_TOLERANCE_MILLIS)) {
+            throw ScalableCliUnavailableException("Scalable quote is stale")
+        }
         repository.upsertProviderInstrument(
             ProviderInstrument(
                 PROVIDER, symbol, quote.isin, MIC, quote.currency, quote.name, quote.observedAtMillis
             )
         )
-        repository.upsertProviderQuote(
+        val stored = repository.upsertProviderQuote(
             ProviderQuoteSnapshot(
                 PROVIDER, symbol, quote.isin, quote.currency, quote.midpoint, quote.bid, quote.ask,
                 null, null, null, null, null, null, null, null, quote.previousClose, quote.observedAtMillis
             )
         )
-        val minute = quote.observedAtMillis / 60_000L * 60L
-        val observation = ProviderMinuteBar(
-            PROVIDER, symbol, quote.isin, MIC, quote.currency,
-            MinuteBar(
-                symbol, minute, quote.midpoint, quote.midpoint, quote.midpoint, quote.midpoint,
-                0.0, VolumeStatus.MISSING
-            ),
-            quote.observedAtMillis
-        )
-        if (repository.upsertProviderMinuteBar(observation)) observationSink.publish(observation)
+        if (stored) {
+            observationSink.publish(MarketPriceObservation(PROVIDER, symbol, quote.midpoint, quote.observedAtMillis))
+        }
     }
 
     private fun schedule(delayMillis: Long, expectedGeneration: Long) {
@@ -117,5 +111,7 @@ internal class ScalablePollingService(
         const val MIC = "SCALABLE"
         const val MAX_SYMBOLS = 30
         const val POLL_INTERVAL_MILLIS = 30_000L
+        const val MAX_QUOTE_AGE_MILLIS = 2 * 60_000L
+        const val FUTURE_TOLERANCE_MILLIS = 60_000L
     }
 }

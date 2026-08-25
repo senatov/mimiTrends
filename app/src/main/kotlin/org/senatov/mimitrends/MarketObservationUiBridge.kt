@@ -7,14 +7,12 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.launch
-import org.senatov.mimitrends.model.ProviderMinuteBar
-
 internal class MarketObservationUiBridge(
-    observations: Flow<ProviderMinuteBar>,
-    private val applyObservation: (ProviderMinuteBar) -> Unit
+    observations: Flow<MarketPriceObservation>,
+    private val applyObservation: (MarketPriceObservation) -> Unit
 ) : AutoCloseable {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
-    private val uiUpdates = UiUpdateBatcher<String, ProviderMinuteBar>({ task -> Platform.runLater(task) }) { batch ->
+    private val uiUpdates = UiUpdateBatcher<String, MarketPriceObservation>({ task -> Platform.runLater(task) }) { batch ->
         batch.forEach(applyObservation)
     }
 

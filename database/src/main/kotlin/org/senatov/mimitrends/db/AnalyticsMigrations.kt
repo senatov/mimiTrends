@@ -119,6 +119,25 @@ internal object AnalyticsMigrations {
                 rank INTEGER NOT NULL, source TEXT NOT NULL,
                 PRIMARY KEY(selection_date, region, symbol))""",
             "CREATE INDEX idx_universe_symbol_date ON universe_membership(symbol, selection_date DESC)"
+        ),
+        13 to listOf(
+            """DELETE FROM research_samples WHERE source IN
+                ('SCALABLE','TRADEGATE','EURONEXT','LANG_SCHWARZ','WALLSTREET_ONLINE',
+                 'TRADERFOX','BNP_PARIBAS','BOERSE_DE')""",
+            """DELETE FROM scan_candidates WHERE source IN
+                ('SCALABLE','TRADEGATE','EURONEXT','LANG_SCHWARZ','WALLSTREET_ONLINE',
+                 'TRADERFOX','BNP_PARIBAS','BOERSE_DE')""",
+            """UPDATE scan_runs SET
+                evaluated_symbols=(SELECT COUNT(*) FROM scan_candidates WHERE run_id=scan_runs.id),
+                accepted_symbols=(SELECT COUNT(*) FROM scan_candidates WHERE run_id=scan_runs.id AND accepted=1),
+                published_symbols=(SELECT COUNT(*) FROM scan_candidates WHERE run_id=scan_runs.id AND published=1)""",
+            """DELETE FROM data_quality WHERE source IN
+                ('SCALABLE','TRADEGATE','EURONEXT','LANG_SCHWARZ','WALLSTREET_ONLINE',
+                 'TRADERFOX','BNP_PARIBAS','BOERSE_DE')""",
+            """DELETE FROM trading_sessions WHERE source IN
+                ('SCALABLE','TRADEGATE','EURONEXT','LANG_SCHWARZ','WALLSTREET_ONLINE',
+                 'TRADERFOX','BNP_PARIBAS','BOERSE_DE')""",
+            "DELETE FROM predictive_models"
         )
     )
 }

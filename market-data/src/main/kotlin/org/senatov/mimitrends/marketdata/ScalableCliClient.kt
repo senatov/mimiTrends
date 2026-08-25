@@ -39,7 +39,9 @@ class ScalableCliClient(
         val result = root.path("data").path("result")
         val midpoint = result.path("quote_mid_price").asDouble(Double.NaN)
         val timestamp = result.path("quote_timestamp_utc").asText("")
-        if (!midpoint.isFinite() || midpoint <= 0.0 || timestamp.isBlank()) {
+        if (!midpoint.isFinite() || midpoint <= 0.0 || timestamp.isBlank() ||
+            result.path("quote_is_outdated").asBoolean(false)
+        ) {
             throw ScalableCliUnavailableException("Scalable quote response is incomplete")
         }
         val intradayReturn = result.path("quote_performances")
