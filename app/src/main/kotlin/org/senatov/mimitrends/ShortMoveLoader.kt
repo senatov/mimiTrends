@@ -149,7 +149,7 @@ internal object ShortMoveBarComposer {
         .let { index -> if (index < 0) Int.MIN_VALUE else -index }
 
     private val PROVIDER_PRIORITY = listOf(
-        "LANG_SCHWARZ", "TRADEGATE", "EURONEXT", "WALLSTREET_ONLINE"
+        "SCALABLE", "LANG_SCHWARZ", "TRADEGATE", "EURONEXT", "WALLSTREET_ONLINE"
     )
     private const val MAX_LIVE_OVERLAY_SECONDS = 20 * 60L
 }

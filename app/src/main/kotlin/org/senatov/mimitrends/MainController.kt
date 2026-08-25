@@ -123,6 +123,9 @@ class MainController(private val apiKey: String?, initialSymbol: String = "AAPL"
     private val tradegateProvider = TradegatePollingService(repository, observationSink = observationBus)
     private val euronextProvider = EuronextPollingService(repository, observationSink = observationBus)
     private val langSchwarzProvider = LangSchwarzPollingService(repository, observationBus)
+    private val scalableProvider = ScalablePollingService(
+        repository, observationBus, langSchwarzProvider::replaceSymbols
+    )
     private val wallstreetOnlineProvider = WallstreetOnlinePollingService(repository, observationBus)
     private val arivaReferences = ArivaReferenceService(repository)
     private val recentEvents = RecentEventRetainer()
@@ -224,7 +227,7 @@ class MainController(private val apiKey: String?, initialSymbol: String = "AAPL"
         try {
             shortMoveRefresh.close()
             ApplicationResourceCloser.close(focusedSignals, priorityScanner, tradegateProvider, euronextProvider,
-                langSchwarzProvider, wallstreetOnlineProvider, arivaReferences,
+                scalableProvider, langSchwarzProvider, wallstreetOnlineProvider, arivaReferences,
                 { finnhubClient?.close() }, batchScheduler, repository, analytics, log)
         } finally {
             observationBus.close()
@@ -319,7 +322,7 @@ class MainController(private val apiKey: String?, initialSymbol: String = "AAPL"
             val shortMoves = shortMoveLoader.load(symbols)
             val retained = recentEvents.merge(active, System.currentTimeMillis(), criteria.resultLimit)
             val displayed = retained
-            langSchwarzProvider.replaceSymbols(displayed.map(ScanResult::symbol))
+            scalableProvider.replaceSymbols(displayed.map(ScanResult::symbol))
             wallstreetOnlineProvider.replaceSymbols(displayed.map(ScanResult::symbol))
             arivaReferences.replaceSymbols(displayed.map(ScanResult::symbol))
             priorityScanner.replaceCandidates(active)

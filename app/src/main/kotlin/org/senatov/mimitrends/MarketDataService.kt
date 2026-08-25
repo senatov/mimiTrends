@@ -225,7 +225,8 @@ internal class MarketDataService(
         val RELAXATION_LEVELS = listOf(0.85, 0.70, 0.55)
         const val EXECUTABLE_QUOTE_MAX_AGE_SECONDS = 2 * 60L
         val PROVIDER_SOURCES = listOf(
-            MarketDataSource.LANG_SCHWARZ, MarketDataSource.TRADEGATE, MarketDataSource.EURONEXT,
+            MarketDataSource.SCALABLE, MarketDataSource.LANG_SCHWARZ,
+            MarketDataSource.TRADEGATE, MarketDataSource.EURONEXT,
             MarketDataSource.WALLSTREET_ONLINE
         )
     }

@@ -13,6 +13,7 @@ internal object ApplicationResourceCloser {
         priorityScanner: AutoCloseable,
         tradegateProvider: AutoCloseable,
         euronextProvider: AutoCloseable,
+        scalableProvider: AutoCloseable,
         langSchwarzProvider: AutoCloseable,
         wallstreetOnlineProvider: AutoCloseable,
         arivaReferences: AutoCloseable,
@@ -26,6 +27,7 @@ internal object ApplicationResourceCloser {
         priorityScanner.close()
         tradegateProvider.close()
         euronextProvider.close()
+        scalableProvider.close()
         langSchwarzProvider.close()
         wallstreetOnlineProvider.close()
         arivaReferences.close()
