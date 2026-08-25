@@ -101,6 +101,7 @@ class MainController(private val apiKey: String?, initialSymbol: String = "AAPL"
     private var rotationTask: ScheduledFuture<*>? = null
     private val scanGeneration = AtomicLong()
     private val scanCyclePlanner = ScanCyclePlanner()
+    private var providerUniverse = emptyList<String>()
     private val closing = AtomicBoolean()
     private val chartDataLoader = ChartDataLoader(repository, analytics, exchangeRates)
     private val chartSelection: ChartSelectionController by lazy {
@@ -116,19 +117,20 @@ class MainController(private val apiKey: String?, initialSymbol: String = "AAPL"
     private val marketData = MarketDataService(repository, analytics, scannerEngine, yahooFinance, feedStatus::status)
     private val scannerBatch = ScannerBatchService(marketData::loadAndEvaluate, analytics, repository, feedStatus::status)
     private val observationBus = MarketObservationBus()
+    private val observationRecorder = ProviderObservationRecorder(repository, observationBus)
     private val observationPresenter = ProviderObservationPresenter(
         scannerPanel, { currentSignal }, { currentSignal = it }, shortMoveRefresh::request
     )
     private val observationUiBridge = MarketObservationUiBridge(observationBus.observations, observationPresenter::apply)
-    private val tradegateProvider = TradegatePollingService(repository, observationSink = observationBus)
-    private val euronextProvider = EuronextPollingService(repository, observationSink = observationBus)
-    private val langSchwarzProvider = LangSchwarzPollingService(repository, observationBus)
+    private val tradegateProvider = TradegatePollingService(repository, observationSink = observationRecorder)
+    private val euronextProvider = EuronextPollingService(repository, observationSink = observationRecorder)
+    private val langSchwarzProvider = LangSchwarzPollingService(repository, observationRecorder)
     private val scalableProvider = ScalablePollingService(
-        repository, observationBus, { symbols ->
+        repository, observationRecorder, { symbols ->
             langSchwarzProvider.replaceSymbols(if (scannerCriteria.langSchwarzEnabled) symbols else emptyList())
         }
     )
-    private val wallstreetOnlineProvider = WallstreetOnlinePollingService(repository, observationBus)
+    private val wallstreetOnlineProvider = WallstreetOnlinePollingService(repository, observationRecorder)
     private val arivaReferences = ArivaReferenceService(repository)
     private val recentEvents = RecentEventRetainer()
     private val priorityScanner = PriorityScanCoordinator(
@@ -257,12 +259,16 @@ class MainController(private val apiKey: String?, initialSymbol: String = "AAPL"
             val universe = dynamicUniverse.select(scannerCriteria)
             if (closing.get() || generation != scanGeneration.get()) return@scan
             val selectedSymbols = universe.symbols
+            configureProviderUniverse(selectedSymbols)
             analytics.recordUniverseSelection(universe.ranks, universe.discovered)
             Platform.runLater {
                 insightSidebar.showUniverse(universe)
                 moderateCandidatePanel.showBuildingContext(selectedSymbols.size)
             }
-            val symbols = scanCyclePlanner.order(selectedSymbols.filter { MarketCalendar.isOpen(it) })
+            val nowMillis = System.currentTimeMillis()
+            val symbols = scanCyclePlanner.order(selectedSymbols.filter { symbol ->
+                ScanMarketEligibility.isActive(symbol, liveTicks[symbol], nowMillis)
+            })
             shortMoveRefresh.replaceSymbols(symbols)
             log.info(LogTag.API, "scan started symbols={} discovered={} recentWindow={}m",
                 symbols.size, universe.discovered.size, criteria.maxSignalAgeMinutes)
@@ -359,6 +365,15 @@ class MainController(private val apiKey: String?, initialSymbol: String = "AAPL"
             )
         }
         batchScheduler.execute { runCatching(scan).onFailure { log.error(LogTag.API, "initial scanner cycle failed", it) } }
+    }
+
+    private fun configureProviderUniverse(symbols: List<String>) {
+        if (symbols == providerUniverse) return
+        providerUniverse = symbols
+        val providerCriteria = scannerCriteria.copy(symbols = symbols)
+        tradegateProvider.configure(providerCriteria)
+        euronextProvider.configure(providerCriteria)
+        log.info(LogTag.API, "provider polling universe updated symbols={}", symbols.size)
     }
     private fun openScannerResult(result: ScanResult) {
         log.debug(LogTag.UI, "openScannerResult(symbol={}, age={})", result.symbol, result.signalAgeMinutes)
