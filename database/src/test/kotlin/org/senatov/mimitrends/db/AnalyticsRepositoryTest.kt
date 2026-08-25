@@ -15,6 +15,39 @@ import kotlin.test.assertTrue
 
 class AnalyticsRepositoryTest {
     @Test
+    fun `repairs mismatched adr identifiers and removes their scalable quotes`() {
+        val path = Files.createTempDirectory("mimitrends-isin-repair").resolve("test.db")
+        AnalyticsRepository(path).close()
+        DriverManager.getConnection("jdbc:sqlite:$path").use { connection ->
+            connection.createStatement().use { statement ->
+                statement.executeUpdate(
+                    """INSERT OR REPLACE INTO instrument_metadata
+                    (symbol,name,exchange,currency,timezone,isin,tradable,updated_at)
+                    VALUES('NVO','Novo Nordisk A/S','NYSE','USD','America/New_York','US31810T1016',1,1)"""
+                )
+                statement.executeUpdate(
+                    """INSERT OR REPLACE INTO instrument_metadata
+                    (symbol,name,exchange,currency,timezone,isin,tradable,updated_at)
+                    VALUES('XOM','Exxon Mobil Corporation','NYSE','USD','America/New_York','US98423F1093',1,1)"""
+                )
+                statement.executeUpdate("DELETE FROM schema_migrations WHERE version=14")
+            }
+        }
+
+        AnalyticsRepository(path).close()
+        DriverManager.getConnection("jdbc:sqlite:$path").use { connection ->
+            connection.createStatement().use { statement ->
+                statement.executeQuery("SELECT isin FROM instrument_metadata WHERE symbol='NVO'").use { result ->
+                    assertTrue(result.next()); assertEquals("US6701002056", result.getString(1))
+                }
+                statement.executeQuery("SELECT isin FROM instrument_metadata WHERE symbol='XOM'").use { result ->
+                    assertTrue(result.next()); assertEquals("US30231G1022", result.getString(1))
+                }
+            }
+        }
+    }
+
+    @Test
     fun `removes analytics derived from quote-only pseudo bars`() {
         val path = Files.createTempDirectory("mimitrends-quote-only-migration").resolve("test.db")
         AnalyticsRepository(path).close()

@@ -10,6 +10,7 @@ import java.nio.file.Files
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import kotlin.test.assertEquals
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class ScalablePollingServiceTest {
@@ -52,6 +53,34 @@ class ScalablePollingServiceTest {
             service.use { it.replaceSymbols(listOf("ENR.DE")); assertTrue(fallback.await(2, TimeUnit.SECONDS)) }
 
             assertTrue(listOf("ENR.DE") in fallbackHistory)
+        }
+    }
+
+    @Test
+    fun `rejects quote when isin metadata points to another company`() {
+        repository().use { repository ->
+            repository.upsertProviderInstrument(
+                ProviderInstrument(
+                    "EURONEXT", "NVO", "US31810T1016", "XNYS", "USD", "Novo Nordisk A/S", 1_000
+                )
+            )
+            repository.upsertCompanyProfile(
+                org.senatov.mimitrends.model.CompanyProfile("NVO", "Novo Nordisk A/S", "NYSE", null)
+            )
+            val fallback = CountDownLatch(1)
+            val wrongCompany = object : ScalableQuoteClient {
+                override fun verifyAccess() = Unit
+                override fun loadQuote(isin: String) = ScalableQuote(
+                    isin, "FinVolution Group ADR", "EUR", 3.72, 3.68, 3.76,
+                    3.73, System.currentTimeMillis()
+                )
+            }
+            val service = ScalablePollingService(repository, {}, {
+                if ("NVO" in it) fallback.countDown()
+            }, wrongCompany)
+            service.use { it.replaceSymbols(listOf("NVO")); assertTrue(fallback.await(2, TimeUnit.SECONDS)) }
+
+            assertNull(repository.loadLatestProviderQuote("NVO", 0))
         }
     }
 

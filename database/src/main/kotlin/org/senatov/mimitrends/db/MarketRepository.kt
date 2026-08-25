@@ -349,6 +349,7 @@ class MarketRepository(
                     "CREATE INDEX IF NOT EXISTS idx_provider_bars_symbol_time ON provider_minute_bars(symbol, minute_epoch)"
                 )
                 RetiredProviderCleaner.clean(connection)
+                IncorrectProviderIdentityCleaner.clean(connection)
                 // Website and broker adapters expose quote snapshots, not exchange OHLC bars. Older builds
                 // converted their single prices into artificial candles, which must not reach analytics.
                 statement.executeUpdate(

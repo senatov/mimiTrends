@@ -138,6 +138,10 @@ internal object AnalyticsMigrations {
                 ('SCALABLE','TRADEGATE','EURONEXT','LANG_SCHWARZ','WALLSTREET_ONLINE',
                  'TRADERFOX','BNP_PARIBAS','BOERSE_DE')""",
             "DELETE FROM predictive_models"
+        ),
+        14 to listOf(
+            "UPDATE instrument_metadata SET isin='US6701002056' WHERE symbol='NVO' AND isin='US31810T1016'",
+            "UPDATE instrument_metadata SET isin='US30231G1022' WHERE symbol='XOM' AND isin='US98423F1093'"
         )
     )
 }

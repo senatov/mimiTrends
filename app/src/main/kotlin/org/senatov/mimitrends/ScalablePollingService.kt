@@ -79,6 +79,15 @@ internal class ScalablePollingService(
         if (quote.observedAtMillis !in (now - MAX_QUOTE_AGE_MILLIS)..(now + FUTURE_TOLERANCE_MILLIS)) {
             throw ScalableCliUnavailableException("Scalable quote is stale")
         }
+        val expectedName = repository.loadCompanyProfile(symbol)?.name
+        if (!ProviderInstrumentSelector.matchesCompany(symbol, expectedName, quote.name)) {
+            log.warn(
+                LogTag.API,
+                "Scalable instrument rejected symbol={} expectedName={} resolvedName={}",
+                symbol, expectedName, quote.name
+            )
+            throw ScalableCliUnavailableException("Scalable instrument identity does not match symbol")
+        }
         repository.upsertProviderInstrument(
             ProviderInstrument(
                 PROVIDER, symbol, quote.isin, MIC, quote.currency, quote.name, quote.observedAtMillis

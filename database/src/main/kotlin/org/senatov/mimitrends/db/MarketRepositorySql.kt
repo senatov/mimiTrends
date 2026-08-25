@@ -54,3 +54,13 @@ internal object RetiredProviderCleaner {
         statement.executeBatch()
     }
 }
+
+internal object IncorrectProviderIdentityCleaner {
+    fun clean(connection: Connection) {
+        listOf("provider_quotes", "provider_instruments").forEach { table ->
+            connection.prepareStatement(
+                "DELETE FROM $table WHERE provider='SCALABLE' AND symbol IN ('NVO','XOM')"
+            ).use { it.executeUpdate() }
+        }
+    }
+}
