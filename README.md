@@ -288,10 +288,11 @@ All user-facing thresholds can be adjusted in Settings.
 
 ### Additional public providers
 
-European coverage is corrected by independent provider adapters rather than by overwriting the Yahoo series.
-Tradegate and Euronext can be enabled and paced in Settings. The table-result refresher additionally uses
-Lang & Schwarz for resolvable ISINs or WKNs. Lang & Schwarz reads its Europe and Euro Stoxx tables in one
-bounded pass. Before every normal scan, wallstreetONLINE discovery reads only the first HTML page of the
+European coverage is corrected by independent provider adapters rather than by overwriting the Yahoo series. Tradegate and Euronext can
+be enabled and paced in Settings. Lang & Schwarz is a separate, disabled-by-default personal-use quote fallback for resolvable ISINs or
+unambiguous company names. When explicitly enabled, it reads the Germany, Europe, and Euro Stoxx tables in one bounded pass, accepts
+only recent timestamped bid/ask snapshots, and never converts their midpoint into an analytical candle. Before every normal scan,
+wallstreetONLINE discovery reads only the first HTML page of the
 public top-performance and most-traded tables. It merges duplicate paths, sorts the combined set by reported
 percentage performance, keeps the first 30 rows, resolves their equity tickers, and adds them to that scan's
 market universe. This is candidate discovery, not an endorsement and not a replacement for the normal signal
@@ -299,14 +300,15 @@ quality gates. Separately, the low-priority quote crawler opens at most five mat
 pass and accepts a quote only when its ISIN matches the canonical instrument ISIN. The site's disallowed
 stock-search RPC is not used.
 
-Every provider observation is stored in its own series with provider, identifier, MIC, currency, and original
-observation time. A quote without an unambiguous provider timestamp is rejected. Newer observations can extend
+Every provider observation is stored with provider, identifier, MIC, currency, and original observation time. A quote without an
+unambiguous provider timestamp is rejected. Newer bar-capable observations can extend
 the latest analytical tail and refresh a published row, while older responses cannot replace fresh GUI or
 database state. Snapshot-only sources have `MISSING` volume quality and therefore cannot manufacture volume
 confirmation.
 
-These are public website integrations rather than contracted APIs and can change without notice. Failures are
-isolated per provider, logged without cookies or credentials, and do not stop the rest of the scan.
+These are public website integrations rather than contracted APIs and can change without notice. Users must enable and use Lang &
+Schwarz only when their use complies with that website's terms. Failures are isolated per provider, logged without cookies or
+credentials, and do not stop the rest of the scan.
 
 ### Early three-minute momentum
 
@@ -496,8 +498,9 @@ European quotes may be delayed. MiMiTrends labels data as live, delayed, Yahoo, 
 
 ### European quote correction
 
-Timestamped public observations from Tradegate, Euronext, Lang & Schwarz, and wallstreetONLINE can correct the visible tail
-of European instruments. The leading `Delay` value is calculated from the timestamp of the latest candle
+Timestamped public observations from Tradegate, Euronext, and wallstreetONLINE can correct the visible tail of European instruments.
+Lang & Schwarz can update only the visible quote and executable bid/ask. The leading
+`Delay` value is calculated from the timestamp of the latest candle
 used by the detectors, not from the moment MiMiTrends downloaded a page or from a newer isolated quote.
 `Updated` separately shows the timestamp of the latest displayed price. A provider that returns an old quote
 therefore remains visibly stale and cannot displace a newer observation or make stale analysis appear current.

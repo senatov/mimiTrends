@@ -23,6 +23,7 @@ internal class LangSchwarzPollingService(
     private val scheduler = Executors.newSingleThreadScheduledExecutor { task ->
         Thread(task, "mimitrends-lang-schwarz-provider").apply { isDaemon = true }
     }
+    private val backoff = ProviderBackoff()
     private var symbols = emptyList<String>()
     private var generation = 0L
     private var task: ScheduledFuture<*>? = null
@@ -33,32 +34,43 @@ internal class LangSchwarzPollingService(
         generation++
         task?.cancel(false)
         task = null
+        backoff.success()
         if (symbols.isNotEmpty()) schedule(0L, generation)
         log.info(LogTag.API, "Lang & Schwarz provider configured symbols={}", symbols.size)
     }
 
     private fun poll(expectedGeneration: Long) {
+        var nextDelayMillis = POLL_INTERVAL_MILLIS
         try {
+            if (!backoff.canRequest()) return
             val targets = synchronized(this) {
                 if (generation != expectedGeneration || symbols.isEmpty()) return
                 symbols
             }
             val listings = client.loadEuropeanListings()
             targets.forEach { symbol -> match(symbol, listings)?.let { store(symbol, it) } }
+            backoff.success()
         } catch (error: Exception) {
             if (error !is InterruptedException) {
-                log.warn(LogTag.API, "Lang & Schwarz table crawl failed operation=poll", error)
+                nextDelayMillis = backoff.failure(error)
+                log.warn(
+                    LogTag.API, "Lang & Schwarz table crawl paused operation=poll delay={}ms cause={}",
+                    nextDelayMillis, error.toString()
+                )
             }
         } finally {
             synchronized(this) {
-                if (generation == expectedGeneration && symbols.isNotEmpty()) schedule(POLL_INTERVAL_MILLIS, generation)
+                if (generation == expectedGeneration && symbols.isNotEmpty()) {
+                    schedule(backoff.jitteredDelay(maxOf(POLL_INTERVAL_MILLIS, nextDelayMillis)), generation)
+                }
             }
         }
     }
 
     private fun match(symbol: String, listings: List<LangSchwarzListing>): LangSchwarzListing? {
         val profile = repository.loadCompanyProfile(symbol) ?: return null
-        val identifiers = MATCHING_PROVIDERS.mapNotNull { repository.loadProviderInstrument(it, symbol)?.identifier }
+        val identifiers = listOfNotNull(repository.loadInstrumentIsin(symbol)) +
+                MATCHING_PROVIDERS.mapNotNull { repository.loadProviderInstrument(it, symbol)?.identifier }
         return LangSchwarzListingMatcher.match(symbol, profile.name, identifiers, listings)
     }
 
@@ -67,9 +79,10 @@ internal class LangSchwarzPollingService(
         repository.upsertProviderInstrument(ProviderInstrument(
             PROVIDER, symbol, listing.itemId, MIC, CURRENCY, listing.name, now
         ))
-        repository.upsertProviderQuote(ProviderQuoteSnapshot(
+        val stored = repository.upsertProviderQuote(
+            ProviderQuoteSnapshot(
             PROVIDER, symbol, listing.itemId, CURRENCY, listing.midpoint, listing.bid, listing.ask,
-            null, null, null, null, null, null, null, null, null, listing.observedAtMillis
+                null, null, null, null, null, null, null, null, listing.previousClose, listing.observedAtMillis
         ))
         val minute = listing.observedAtMillis / 60_000L * 60L
         val bar = MinuteBar(symbol, minute, listing.midpoint, listing.midpoint, listing.midpoint,
@@ -77,7 +90,7 @@ internal class LangSchwarzPollingService(
         val observation = ProviderMinuteBar(
             PROVIDER, symbol, listing.itemId, MIC, CURRENCY, bar, listing.observedAtMillis
         )
-        if (repository.upsertProviderMinuteBar(observation)) observationSink.publish(observation)
+        if (stored) observationSink.publish(observation)
     }
 
     private fun schedule(delayMillis: Long, expectedGeneration: Long) {

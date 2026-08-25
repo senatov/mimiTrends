@@ -349,6 +349,9 @@ class MarketRepository(
                     "CREATE INDEX IF NOT EXISTS idx_provider_bars_symbol_time ON provider_minute_bars(symbol, minute_epoch)"
                 )
                 RetiredProviderCleaner.clean(connection)
+                // Older builds converted bid/ask midpoints into artificial OHLC bars. Lang & Schwarz
+                // remains a quote-only source, so those historical pseudo-bars must not reach analytics.
+                statement.executeUpdate("DELETE FROM provider_minute_bars WHERE provider='LANG_SCHWARZ'")
                 // Remove the temporary generated-monogram source used by an older build so genuine
                 // cached company favicons are fetched on the next visible table render.
                 statement.executeUpdate(

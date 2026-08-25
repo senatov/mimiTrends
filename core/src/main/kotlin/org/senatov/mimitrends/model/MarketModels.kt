@@ -160,6 +160,7 @@ data class ScannerCriteria(
     val minTrendReturnPercent: Double = 0.45,
     val minTrendEfficiency: Double = 0.08,
     val displayCurrency: DisplayCurrency = DisplayCurrency.EUR,
+    val langSchwarzEnabled: Boolean = false,
     val tradegateEnabled: Boolean = false,
     val tradegateRequestIntervalMillis: Long = 1_000,
     val euronextEnabled: Boolean = false,

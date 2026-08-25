@@ -124,7 +124,9 @@ class MainController(private val apiKey: String?, initialSymbol: String = "AAPL"
     private val euronextProvider = EuronextPollingService(repository, observationSink = observationBus)
     private val langSchwarzProvider = LangSchwarzPollingService(repository, observationBus)
     private val scalableProvider = ScalablePollingService(
-        repository, observationBus, langSchwarzProvider::replaceSymbols
+        repository, observationBus, { symbols ->
+            langSchwarzProvider.replaceSymbols(if (scannerCriteria.langSchwarzEnabled) symbols else emptyList())
+        }
     )
     private val wallstreetOnlineProvider = WallstreetOnlinePollingService(repository, observationBus)
     private val arivaReferences = ArivaReferenceService(repository)

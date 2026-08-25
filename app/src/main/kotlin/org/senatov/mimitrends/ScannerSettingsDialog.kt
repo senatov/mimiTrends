@@ -51,6 +51,7 @@ class ScannerSettingsDialog(
     private val trendReturn = Spinner<Double>(0.1, 20.0, current.minTrendReturnPercent, 0.1).apply { isEditable = true }
     private val trendEfficiency = Spinner<Double>(0.01, 1.0, current.minTrendEfficiency, 0.01).apply { isEditable = true }
     private val currency = ComboBox(FXCollections.observableArrayList(DisplayCurrency.entries)).apply { value = current.displayCurrency }
+    private val langSchwarzEnabled = CheckBox("Enabled").apply { isSelected = current.langSchwarzEnabled }
     private val tradegateEnabled = CheckBox("Enabled").apply { isSelected = current.tradegateEnabled }
     private val tradegateInterval = Spinner<Int>(500, 10_000, current.tradegateRequestIntervalMillis.toInt(), 250).apply {
         isEditable = true
@@ -133,6 +134,14 @@ class ScannerSettingsDialog(
             Label("Optional website collectors run independently from Yahoo and Finnhub. Each provider stores its observations in a separate database series.").apply {
                 isWrapText = true; styleClass += "settings-footnote"
             },
+            section(
+                "Lang & Schwarz",
+                settingRow(
+                    "Personal-use quote fallback",
+                    "Disabled by default. Reads public bid/ask snapshots only when Scalable is unavailable. Enable only when your use complies with the website terms.",
+                    langSchwarzEnabled
+                )
+            ),
             section("Tradegate",
                 settingRow("Public quote collector", "Resolve company names to Tradegate instruments and collect EUR quotes during its weekday trading session.", tradegateEnabled),
                 settingRow("Request interval", "Milliseconds between sequential instruments. A small timing jitter and automatic backoff are applied.", tradegateInterval)
@@ -265,6 +274,7 @@ class ScannerSettingsDialog(
         trendReturn.valueFactory.value = defaults.minTrendReturnPercent
         trendEfficiency.valueFactory.value = defaults.minTrendEfficiency
         currency.value = defaults.displayCurrency
+        langSchwarzEnabled.isSelected = defaults.langSchwarzEnabled
         tradegateEnabled.isSelected = defaults.tradegateEnabled
         tradegateInterval.valueFactory.value = defaults.tradegateRequestIntervalMillis.toInt()
         euronextEnabled.isSelected = defaults.euronextEnabled
@@ -302,6 +312,7 @@ class ScannerSettingsDialog(
             minTrendReturnPercent = trendReturn.value,
             minTrendEfficiency = trendEfficiency.value,
             displayCurrency = currency.value,
+            langSchwarzEnabled = langSchwarzEnabled.isSelected,
             tradegateEnabled = tradegateEnabled.isSelected,
             tradegateRequestIntervalMillis = tradegateInterval.value.toLong(),
             euronextEnabled = euronextEnabled.isSelected,

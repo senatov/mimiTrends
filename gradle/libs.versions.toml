@@ -12,6 +12,7 @@ duckdb = "1.5.5.1"
 slf4j = "2.0.18"
 jfreechartFx = "2.0.2"
 junit = "5.14.4"
+jsoup = "1.23.1"
 
 [libraries]
 atlantafx-base = { module = "io.github.mkpaz:atlantafx-base", version.ref = "atlantafx" }
@@ -25,6 +26,7 @@ jfreechart-fx = { module = "org.jfree:org.jfree.chart.fx", version.ref = "jfreec
 junit-bom = { module = "org.junit:junit-bom", version.ref = "junit" }
 junit-jupiter = { module = "org.junit.jupiter:junit-jupiter" }
 junit-platform-launcher = { module = "org.junit.platform:junit-platform-launcher" }
+jsoup = { module = "org.jsoup:jsoup", version.ref = "jsoup" }
 kotlin-test-junit5 = { module = "org.jetbrains.kotlin:kotlin-test-junit5" }
 log4j-bom = { module = "org.apache.logging.log4j:log4j-bom", version.ref = "log4j" }
 log4j-api = { module = "org.apache.logging.log4j:log4j-api" }

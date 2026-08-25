@@ -42,6 +42,8 @@ class ScannerSettingsService(private val path: Path = Path.of(System.getProperty
                 minTrendReturnPercent = p.getProperty("minTrendReturnPercent", "0.45").toDouble().coerceIn(0.1, 20.0),
                 minTrendEfficiency = p.getProperty("minTrendEfficiency", "0.08").toDouble().coerceIn(0.01, 1.0),
                 displayCurrency = runCatching { DisplayCurrency.valueOf(p.getProperty("displayCurrency", "EUR")) }.getOrDefault(DisplayCurrency.EUR),
+                langSchwarzEnabled = p.getProperty("provider.langSchwarz.enabled", "false")
+                    .toBooleanStrictOrNull() ?: false,
                 tradegateEnabled = p.getProperty("provider.tradegate.enabled", "false").toBooleanStrictOrNull() ?: false,
                 tradegateRequestIntervalMillis = p.getProperty("provider.tradegate.intervalMillis", "1000")
                     .toLong().coerceIn(500, 10_000),
@@ -97,6 +99,7 @@ class ScannerSettingsService(private val path: Path = Path.of(System.getProperty
             setProperty("minTrendReturnPercent", value.minTrendReturnPercent.toString())
             setProperty("minTrendEfficiency", value.minTrendEfficiency.toString())
             setProperty("displayCurrency", value.displayCurrency.name)
+            setProperty("provider.langSchwarz.enabled", value.langSchwarzEnabled.toString())
             setProperty("provider.tradegate.enabled", value.tradegateEnabled.toString())
             setProperty("provider.tradegate.intervalMillis", value.tradegateRequestIntervalMillis.toString())
             setProperty("provider.euronext.enabled", value.euronextEnabled.toString())

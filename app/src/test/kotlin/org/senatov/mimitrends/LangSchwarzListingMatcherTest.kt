@@ -3,6 +3,7 @@ package org.senatov.mimitrends
 import org.junit.jupiter.api.Test
 import org.senatov.mimitrends.marketdata.LangSchwarzListing
 import kotlin.test.assertEquals
+import kotlin.test.assertNull
 
 class LangSchwarzListingMatcherTest {
     @Test fun `matches a German instrument by WKN embedded in its ISIN`() {
@@ -25,7 +26,19 @@ class LangSchwarzListingMatcherTest {
         assertEquals(listing, matched)
     }
 
+    @Test
+    fun `rejects ambiguous company-name matches without an identifier`() {
+        val first = listing("111111", "ALPHA ENERGY HOLDING")
+        val second = listing("222222", "ALPHA ENERGY SYSTEMS")
+
+        assertNull(
+            LangSchwarzListingMatcher.match(
+                "ALPHA.DE", "Alpha Energy", emptyList(), listOf(first, second)
+            )
+        )
+    }
+
     private fun listing(wkn: String, name: String) = LangSchwarzListing(
-        "42", wkn, name, "/de/aktie/42", 100.0, 100.2, 1_000
+        "42", wkn, name, "/de/aktie/42", 100.0, 100.2, null, 1_000
     )
 }

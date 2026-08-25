@@ -17,6 +17,29 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class MarketRepositoryTest {
+    @Test
+    fun `removes legacy Lang Schwarz midpoint bars while retaining instrument identity`() {
+        val database = Files.createTempDirectory("mimitrends-lang-schwarz-bars").resolve("test.db")
+        MarketRepository(database).use { repository ->
+            repository.upsertProviderInstrument(
+                ProviderInstrument(
+                    "LANG_SCHWARZ", "ENR.DE", "1240969", "LSSI", "EUR", "Siemens Energy", 1_000
+                )
+            )
+            repository.upsertProviderMinuteBar(
+                ProviderMinuteBar(
+                    "LANG_SCHWARZ", "ENR.DE", "1240969", "LSSI", "EUR",
+                    MinuteBar("ENR.DE", 60, 151.0, 151.0, 151.0, 151.0, 0.0, VolumeStatus.MISSING), 60_000
+                )
+            )
+        }
+
+        MarketRepository(database).use { repository ->
+            assertTrue(repository.loadProviderMinuteBars("LANG_SCHWARZ", "ENR.DE", 0).isEmpty())
+            assertEquals("1240969", repository.loadProviderInstrument("LANG_SCHWARZ", "ENR.DE")?.identifier)
+        }
+    }
+
     @Test fun `uses unique provider isin when canonical metadata is absent`() {
         val database = Files.createTempDirectory("mimitrends-provider-isin").resolve("test.db")
         MarketRepository(database).use { repository ->

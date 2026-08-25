@@ -33,11 +33,13 @@ class ScannerSettingsServiceTest {
         val service = ScannerSettingsService(path)
 
         service.save(ScannerCriteria(
+            langSchwarzEnabled = true,
             tradegateEnabled = true, tradegateRequestIntervalMillis = 1_750,
             euronextEnabled = true, euronextRequestIntervalMillis = 2_250
         ))
         val restored = service.load()
 
+        assertTrue(restored.langSchwarzEnabled)
         assertTrue(restored.tradegateEnabled)
         assertEquals(1_750, restored.tradegateRequestIntervalMillis)
         assertTrue(restored.euronextEnabled)
