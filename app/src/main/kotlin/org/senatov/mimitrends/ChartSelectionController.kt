@@ -27,7 +27,9 @@ internal class ChartSelectionController(
         private set
 
     fun selectRange(range: String) {
-        if (range == selectedRange || range !in ChartRange.values) return
+        if (range !in ChartRange.values) return
+        chart.showFullHistory()
+        if (range == selectedRange) return
         selectedRange = range
         load(selectedSymbol())
     }

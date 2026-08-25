@@ -123,6 +123,10 @@ internal class TrendChartHeader(
         focus.isSelected = true
     }
 
+    fun selectHistory() {
+        history.isSelected = true
+    }
+
     fun showInstrument(name: String, symbol: String, currentPrice: String, details: String, summary: String?) {
         val instrumentText = "$symbol  ·  $name"
         instrument.text = instrumentText

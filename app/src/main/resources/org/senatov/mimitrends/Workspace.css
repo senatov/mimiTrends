@@ -56,7 +56,7 @@
 }
 
 .app-version {
-    -fx-font-size: 11px;
+    -fx-font-size: 12px;
     -fx-font-weight: 500;
     -fx-text-fill: -mimi-text-secondary;
     -fx-padding: 0 0 1px 2px;
@@ -328,9 +328,9 @@
     -fx-background-insets: 0;
     -fx-border-color: transparent #d9dde2 #c9cdd2 transparent;
     -fx-border-width: 0 1px 1px 0;
-    -fx-min-height: 28px;
-    -fx-pref-height: 28px;
-    -fx-max-height: 28px;
+    -fx-min-height: 30px;
+    -fx-pref-height: 30px;
+    -fx-max-height: 30px;
     -fx-padding: 3px 8px;
 }
 
@@ -341,7 +341,7 @@
 
 .scanner-table .column-header .label {
     -fx-font-family: "System";
-    -fx-font-size: 11px;
+    -fx-font-size: 12px;
     -fx-font-weight: normal;
     -fx-text-fill: #17191c;
     -fx-padding: 0 6px 0 0;

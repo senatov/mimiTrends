@@ -130,6 +130,11 @@ class TrendChartView(
         header.selectFocus()
     }
 
+    fun showFullHistory() {
+        header.selectHistory()
+        lastRequest?.let(::renderRequest)
+    }
+
     fun prepareForInstrument(symbol: String) {
         if (lastRequest?.symbol == symbol) return
         clear()
