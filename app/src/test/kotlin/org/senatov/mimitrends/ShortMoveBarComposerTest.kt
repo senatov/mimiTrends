@@ -48,6 +48,20 @@ class ShortMoveBarComposerTest {
         assertEquals(listOf(80.0, 99.0), result.map(MinuteBar::close))
     }
 
+    @Test
+    fun `rejects provider tail belonging to a different instrument`() {
+        val now = 30_000L
+        val primary = listOf(bar(now - 60, 41.31), bar(now, 41.35))
+        val providers = listOf(
+            observation("SCALABLE", now - 60, 3.73, 1_000L),
+            observation("SCALABLE", now, 3.74, 2_000L)
+        )
+
+        val result = ShortMoveBarComposer.compose(primary, providers, now)
+
+        assertEquals(listOf(41.31, 41.35), result.map(MinuteBar::close))
+    }
+
     private fun observation(provider: String, minute: Long, close: Double, observedAt: Long) =
         ProviderMinuteBar(provider, "SAP.DE", "id", "mic", "EUR", bar(minute, close), observedAt)
 

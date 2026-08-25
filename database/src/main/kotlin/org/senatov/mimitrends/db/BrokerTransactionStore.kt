@@ -88,7 +88,7 @@ internal class BrokerTransactionStore(private val connection: Connection) {
         }
         // Provider mappings are instrument-specific and therefore take precedence over metadata
         // previously inferred from a broker description. This also repairs old false mappings.
-        val authoritativeIsin = providerIsin(normalizedSymbol)
+        val authoritativeIsin = providerIsin(normalizedSymbol, companyName)
         val resolvedInstrumentIsin = authoritativeIsin ?: metadataIsin
         if (authoritativeIsin != null && authoritativeIsin != metadataIsin) {
             persistMapping(normalizedSymbol, authoritativeIsin, repairExisting = true)
@@ -130,18 +130,23 @@ internal class BrokerTransactionStore(private val connection: Connection) {
 
     private fun isValidIsin(value: String): Boolean = value.matches(Regex("[A-Z]{2}[A-Z0-9]{9}[0-9]"))
 
-    private fun providerIsin(symbol: String): String? {
+    private fun providerIsin(symbol: String, companyName: String): String? {
         val tableExists = connection.prepareStatement(
             "SELECT 1 FROM sqlite_master WHERE type='table' AND name='provider_instruments'"
         ).use { statement -> statement.executeQuery().use { it.next() } }
         if (!tableExists) return null
         return connection.prepareStatement(
-            "SELECT identifier FROM provider_instruments WHERE symbol=? ORDER BY updated_at DESC"
+            "SELECT identifier, resolved_name FROM provider_instruments WHERE symbol=? ORDER BY updated_at DESC"
         ).use { statement ->
             statement.setString(1, symbol)
             statement.executeQuery().use { rows ->
                 buildSet {
-                    while (rows.next()) rows.getString(1)?.takeIf(::isValidIsin)?.let(::add)
+                    while (rows.next()) {
+                        val resolvedName = rows.getString(2).orEmpty()
+                        if (BrokerTradeMatcher.matches(resolvedName, companyName)) {
+                            rows.getString(1)?.takeIf(::isValidIsin)?.let(::add)
+                        }
+                    }
                 }.singleOrNull()
             }
         }

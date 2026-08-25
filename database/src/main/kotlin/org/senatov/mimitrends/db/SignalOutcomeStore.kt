@@ -18,7 +18,7 @@ internal class SignalOutcomeStore(private val connection: Connection) {
                    (? / c.entry_price - 1.0) * 100.0, ?
             FROM scan_candidates c
             WHERE c.symbol=? AND c.published=1 AND c.entry_price>0
-              AND c.signal_epoch<=? AND c.signal_epoch>=?
+              AND c.signal_epoch<=? AND c.signal_epoch>=? AND ? <= c.entry_price * 2.0
             ON CONFLICT(run_id, symbol) DO UPDATE SET
               maximum_return_percent=MAX(signal_excursions.maximum_return_percent, excluded.maximum_return_percent),
               minimum_return_percent=MIN(signal_excursions.minimum_return_percent, excluded.minimum_return_percent),
@@ -29,6 +29,7 @@ internal class SignalOutcomeStore(private val connection: Connection) {
             statement.setString(4, symbol)
             statement.setLong(5, observedEpoch)
             statement.setLong(6, observedEpoch - MAX_TRACKING_MINUTES * 60L)
+            statement.setDouble(7, highPrice)
             statement.executeUpdate()
         }
     }
@@ -43,7 +44,8 @@ internal class SignalOutcomeStore(private val connection: Connection) {
             JOIN scan_runs r ON r.id=c.run_id
             LEFT JOIN signal_excursions x ON x.run_id=c.run_id AND x.symbol=c.symbol
             WHERE c.symbol=? AND c.published=1 AND c.entry_price>0 AND c.signal_epoch<=?
-              AND c.signal_epoch>=?""").use { statement ->
+              AND c.signal_epoch>=? AND ABS((? / c.entry_price - 1.0) * 100.0)<=?"""
+        ).use { statement ->
             for (horizon in HORIZONS_MINUTES) {
                 statement.setInt(1, horizon)
                 statement.setDouble(2, currentPrice)
@@ -53,6 +55,8 @@ internal class SignalOutcomeStore(private val connection: Connection) {
                 statement.setString(6, symbol)
                 statement.setLong(7, observedEpoch - horizon * 60L)
                 statement.setLong(8, observedEpoch - (horizon + OUTCOME_MAX_LAG_MINUTES) * 60L)
+                statement.setDouble(9, currentPrice)
+                statement.setDouble(10, MAX_PLAUSIBLE_RETURN_PERCENT)
                 statement.addBatch()
             }
             statement.executeBatch()
@@ -63,5 +67,6 @@ internal class SignalOutcomeStore(private val connection: Connection) {
         val HORIZONS_MINUTES = listOf(5, 10, 30, 60, 90)
         const val OUTCOME_MAX_LAG_MINUTES = 4
         const val MAX_TRACKING_MINUTES = 94
+        const val MAX_PLAUSIBLE_RETURN_PERCENT = 100.0
     }
 }

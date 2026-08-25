@@ -136,6 +136,7 @@ internal object ShortMoveBarComposer {
             .thenBy { it.value.size }
             .thenBy { providerRank(it.key) })?.value.orEmpty()
         selectedTail.asSequence()
+            .filter { observation -> consistentWithPrimary(observation.bar, byMinute) }
             .groupBy { it.bar.minuteEpochSeconds }
             .forEach { (minute, observations) ->
                 byMinute[minute] = observations.maxWith(
@@ -145,6 +146,16 @@ internal object ShortMoveBarComposer {
         return byMinute.values.toList()
     }
 
+    private fun consistentWithPrimary(bar: MinuteBar, primary: Map<Long, MinuteBar>): Boolean {
+        val reference = primary[bar.minuteEpochSeconds]
+            ?: primary.entries.lastOrNull { (minute, _) ->
+                minute <= bar.minuteEpochSeconds && bar.minuteEpochSeconds - minute <= MAX_REFERENCE_AGE_SECONDS
+            }?.value
+            ?: return true
+        if (reference.close <= 0.0 || bar.close <= 0.0) return false
+        return kotlin.math.abs(bar.close / reference.close - 1.0) <= MAX_PROVIDER_DEVIATION
+    }
+
     private fun providerRank(provider: String): Int = PROVIDER_PRIORITY.indexOf(provider.uppercase())
         .let { index -> if (index < 0) Int.MIN_VALUE else -index }
 
@@ -152,4 +163,6 @@ internal object ShortMoveBarComposer {
         "SCALABLE", "LANG_SCHWARZ", "TRADEGATE", "EURONEXT", "WALLSTREET_ONLINE"
     )
     private const val MAX_LIVE_OVERLAY_SECONDS = 20 * 60L
+    private const val MAX_REFERENCE_AGE_SECONDS = 30 * 60L
+    private const val MAX_PROVIDER_DEVIATION = 0.25
 }

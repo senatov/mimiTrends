@@ -57,10 +57,30 @@ internal object RetiredProviderCleaner {
 
 internal object IncorrectProviderIdentityCleaner {
     fun clean(connection: Connection) {
-        listOf("provider_quotes", "provider_instruments").forEach { table ->
-            connection.prepareStatement(
-                "DELETE FROM $table WHERE provider='SCALABLE' AND symbol IN ('NVO','XOM')"
-            ).use { it.executeUpdate() }
+        val hasMetadata = connection.prepareStatement(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='instrument_metadata'"
+        ).use { statement -> statement.executeQuery().use { it.next() } }
+        KNOWN_IDENTITIES.forEach { (symbol, correctIsin) ->
+            if (hasMetadata) {
+                connection.prepareStatement(
+                    "UPDATE instrument_metadata SET isin=? WHERE symbol=? AND (isin IS NULL OR isin!=?)"
+                ).use { statement ->
+                    statement.setString(1, correctIsin); statement.setString(2, symbol)
+                    statement.setString(3, correctIsin); statement.executeUpdate()
+                }
+            }
+            listOf("provider_minute_bars", "provider_quotes", "provider_instruments").forEach { table ->
+                connection.prepareStatement(
+                    "DELETE FROM $table WHERE symbol=? AND identifier!=?"
+                ).use { statement ->
+                    statement.setString(1, symbol); statement.setString(2, correctIsin); statement.executeUpdate()
+                }
+            }
         }
     }
+
+    private val KNOWN_IDENTITIES = mapOf(
+        "NVO" to "US6701002056",
+        "XOM" to "US30231G1022"
+    )
 }

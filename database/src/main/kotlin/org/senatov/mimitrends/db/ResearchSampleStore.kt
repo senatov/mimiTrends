@@ -20,6 +20,13 @@ internal class ResearchSampleStore(private val connection: Connection) {
 
     fun record(runId: Long, symbol: String, result: ScanResult?, features: ResearchFeatures, source: String) {
         if (!features.entryPrice.isFinite() || features.entryPrice <= 0.0) return
+        val priceMetrics = listOf(
+            features.return1mPercent, features.return3mPercent, features.return5mPercent,
+            features.return10mPercent, features.return30mPercent, features.return60mPercent,
+            features.range10mPercent, features.realizedVolatility30m, features.vwapDistancePercent,
+            features.sessionHighDistancePercent, features.sessionLowDistancePercent
+        )
+        if (priceMetrics.any { !it.isFinite() || kotlin.math.abs(it) > MAX_PLAUSIBLE_RETURN_PERCENT }) return
         val family = result?.let { family(it.signalSource) } ?: CONTROL_FAMILY
         val direction = result?.let { if (it.signalSource.contains('↓')) -1 else 1 } ?: 1
         if (hasRecentEpisode(symbol, family, direction, features.observedEpochSeconds)) return
@@ -68,7 +75,12 @@ internal class ResearchSampleStore(private val connection: Connection) {
         val direction = result?.let { if (it.signalSource.contains('↓')) -1 else 1 } ?: 1
         val sampleId = sampleId(symbol, features.observedEpochSeconds, family, direction) ?: return
         connection.prepareStatement(HISTORICAL_OUTCOME_SQL).use { statement ->
-            outcomes.forEach { outcome ->
+            outcomes.filter { outcome ->
+                outcome.observedPrice.isFinite() && outcome.observedPrice > 0.0 &&
+                        kotlin.math.abs(outcome.returnPercent) <= MAX_PLAUSIBLE_RETURN_PERCENT &&
+                        kotlin.math.abs(outcome.maximumReturnPercent) <= MAX_PLAUSIBLE_RETURN_PERCENT &&
+                        kotlin.math.abs(outcome.minimumReturnPercent) <= MAX_PLAUSIBLE_RETURN_PERCENT
+            }.forEach { outcome ->
                 statement.setLong(1, sampleId)
                 statement.setInt(2, outcome.horizonMinutes)
                 statement.setDouble(3, outcome.observedPrice)
@@ -127,6 +139,7 @@ internal class ResearchSampleStore(private val connection: Connection) {
             (sample_id, maximum_return_percent, minimum_return_percent, last_observed_at)
             SELECT id, (? / entry_price - 1.0) * 100.0, (? / entry_price - 1.0) * 100.0, ?
             FROM research_samples WHERE symbol=? AND observed_epoch<=? AND observed_epoch>=?
+              AND ? <= entry_price * 2.0
             ON CONFLICT(sample_id) DO UPDATE SET
             maximum_return_percent=MAX(research_excursions.maximum_return_percent, excluded.maximum_return_percent),
             minimum_return_percent=MIN(research_excursions.minimum_return_percent, excluded.minimum_return_percent),
@@ -137,6 +150,7 @@ internal class ResearchSampleStore(private val connection: Connection) {
             statement.setString(4, symbol)
             statement.setLong(5, epoch)
             statement.setLong(6, epoch - MAX_TRACKING_MINUTES * 60L)
+            statement.setDouble(7, high)
             statement.executeUpdate()
         }
     }
@@ -148,7 +162,9 @@ internal class ResearchSampleStore(private val connection: Connection) {
             SELECT s.id, ?, ?, (? / s.entry_price - 1.0) * 100.0, (? - s.observed_epoch) / 60.0,
                    x.maximum_return_percent, x.minimum_return_percent, ?
             FROM research_samples s LEFT JOIN research_excursions x ON x.sample_id=s.id
-            WHERE s.symbol=? AND s.observed_epoch<=? AND s.observed_epoch>=?""").use { statement ->
+            WHERE s.symbol=? AND s.observed_epoch<=? AND s.observed_epoch>=?
+              AND ABS((? / s.entry_price - 1.0) * 100.0)<=?"""
+        ).use { statement ->
             statement.setInt(1, horizon)
             statement.setDouble(2, close)
             statement.setDouble(3, close)
@@ -157,6 +173,8 @@ internal class ResearchSampleStore(private val connection: Connection) {
             statement.setString(6, symbol)
             statement.setLong(7, epoch - horizon * 60L)
             statement.setLong(8, epoch - (horizon + OUTCOME_LAG_MINUTES) * 60L)
+            statement.setDouble(9, close)
+            statement.setDouble(10, MAX_PLAUSIBLE_RETURN_PERCENT)
             statement.executeUpdate()
         }
     }
@@ -180,6 +198,7 @@ internal class ResearchSampleStore(private val connection: Connection) {
         const val EPISODE_SECONDS = 15 * 60L
         const val MAX_TRACKING_MINUTES = 94
         const val OUTCOME_LAG_MINUTES = 4
+        const val MAX_PLAUSIBLE_RETURN_PERCENT = 100.0
         val HORIZONS = listOf(5, 10, 30, 60, 90)
         const val INSERT_SQL = """INSERT OR IGNORE INTO research_samples(
             run_id, symbol, observed_epoch, entry_price, family, direction, accepted, source,

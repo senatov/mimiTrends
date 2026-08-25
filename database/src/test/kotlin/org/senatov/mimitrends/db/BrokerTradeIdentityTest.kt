@@ -9,6 +9,31 @@ import kotlin.test.assertTrue
 
 class BrokerTradeIdentityTest {
     @Test
+    fun `provider identity from another company cannot overwrite valid metadata`() {
+        val directory = Files.createTempDirectory("mimitrends-foreign-provider-identity")
+        val database = directory.resolve("test.db")
+        MarketRepository(database).use { market ->
+            market.upsertProviderInstrument(
+                ProviderInstrument("SCALABLE", "NVO", "US31810T1016", "SCALABLE", "EUR", "FinVolution Group ADR", 2L)
+            )
+        }
+        AnalyticsRepository(database).use { analytics ->
+            analytics.upsertInstrument(
+                InstrumentMetadata("NVO", "Novo Nordisk A/S", "NYSE", "USD", "America/New_York", isin = "US6701002056")
+            )
+            analytics.loadBrokerTrades("NVO", "Novo Nordisk A/S")
+        }
+        DriverManager.getConnection("jdbc:sqlite:$database").use { connection ->
+            connection.createStatement().executeQuery(
+                "SELECT isin FROM instrument_metadata WHERE symbol='NVO'"
+            ).use { result ->
+                assertTrue(result.next())
+                assertEquals("US6701002056", result.getString(1))
+            }
+        }
+    }
+
+    @Test
     fun `provider identity repairs stale metadata and prevents adjacent instrument trade leakage`() {
         val directory = Files.createTempDirectory("mimitrends-trade-identity")
         val database = directory.resolve("test.db")
