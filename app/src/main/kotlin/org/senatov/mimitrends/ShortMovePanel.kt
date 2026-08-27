@@ -39,7 +39,7 @@ class ShortMovePanel(
     private val sortedRows = SortedList(filteredRows)
     private val table = TableView(sortedRows)
     private val time = DateTimeFormatter.ofPattern("HH:mm").withZone(ZoneId.systemDefault())
-    private val updateCaption = Label("5-minute moves + recent post-drop · waiting").apply {
+    private val updateCaption = Label("Fresh bottom reversals + stable corridors · waiting").apply {
         styleClass += "short-move-caption"
         maxWidth = Double.MAX_VALUE
         tooltip = javafx.scene.control.Tooltip(text)
@@ -52,8 +52,8 @@ class ShortMovePanel(
         isManaged = false
     }
     private val empty = WorkspaceEmptyState.create(
-        "No recent price battles",
-        "This panel will populate when fresh minute bars form a directional move or recurring jump."
+        "No actionable opportunities now",
+        "Fresh confirmed bottom reversals and stable tradable corridors will appear here."
     )
     private val noMatches = WorkspaceEmptyState.create(
         "No matching movements",
@@ -80,7 +80,7 @@ class ShortMovePanel(
             2.0,
             HBox(
                 8.0,
-                Label("Recent price battles").apply { styleClass += "table-section-title" }, spacer, headerActions
+                Label("Trading opportunities").apply { styleClass += "table-section-title" }, spacer, headerActions
             ).apply { alignment = Pos.CENTER_LEFT },
             updateCaption
         ).apply {
@@ -106,7 +106,15 @@ class ShortMovePanel(
             }
             prefWidth = 210.0; minWidth = 90.0
         }
-        val priceRange = TableColumn<ShortMove, ShortMove>("From → To").apply {
+        val opportunity = TableColumn<ShortMove, Number>("Opportunity").apply {
+            id = "opportunity"
+            styleClass += "status-column"
+            setCellValueFactory { ReadOnlyDoubleWrapper(it.value.opportunityScore.toDouble()) }
+            comparator = Comparator.comparingDouble(Number::toDouble)
+            setCellFactory { OpportunityCell() }
+            prefWidth = 104.0; minWidth = 82.0
+        }
+        val priceRange = TableColumn<ShortMove, ShortMove>("Range").apply {
             id = "price_range"
             styleClass += "numeric-column"
             setCellValueFactory { ReadOnlyObjectWrapper(it.value) }
@@ -115,14 +123,14 @@ class ShortMovePanel(
             setCellFactory { PriceRangeCell() }
             prefWidth = 82.0; minWidth = 62.0
         }
-        val direction = TableColumn<ShortMove, ShortMove>("Direction").apply {
+        val direction = TableColumn<ShortMove, ShortMove>("Setup").apply {
             id = "direction"
             styleClass += "status-column"
             setCellValueFactory { ReadOnlyObjectWrapper(it.value) }
             comparator = ShortMoveSort.direction
             setCellFactory { DirectionCell() }; prefWidth = 105.0
         }
-        val move = TableColumn<ShortMove, Number>("Move").apply {
+        val move = TableColumn<ShortMove, Number>("Room").apply {
             id = "move"
             styleClass += "numeric-column"
             setCellValueFactory { ReadOnlyDoubleWrapper(it.value.changePercent) }
@@ -143,8 +151,9 @@ class ShortMovePanel(
             } }
             prefWidth = 135.0
         }
-        table.columns.setAll(company, priceRange, direction, move, period)
+        table.columns.setAll(company, opportunity, direction, move, priceRange, period)
         listOf(
+            opportunity to "Current timing relevance from 0 to 100%. This is not a probability of profit.",
             priceRange to "Price at the beginning and end of the detected movement.",
             direction to "Detected movement type and its observed direction.",
             move to "Percentage price change across the displayed period.",
@@ -153,6 +162,7 @@ class ShortMovePanel(
         columnLayout = TableColumnLayout(table, savedColumns).also(TableColumnLayout<ShortMove>::install)
         autoFitter = TableColumnAutoFitter(table, listOf(
             TableColumnAutoFitter.Spec(company, { companyNames[it.symbol] ?: it.symbol }, 80.0, 240.0),
+            TableColumnAutoFitter.Spec(opportunity, { "${it.opportunityScore}%" }, 82.0, 112.0),
             TableColumnAutoFitter.Spec(priceRange, ShortMovePricePresentation::text, 62.0, 88.0),
             TableColumnAutoFitter.Spec(direction, ::directionLabel, 68.0, 105.0),
             TableColumnAutoFitter.Spec(move, { "%+.2f%%".format(it.changePercent) }, 54.0, 76.0),
@@ -211,12 +221,14 @@ class ShortMovePanel(
 
     internal fun show(moves: Collection<ShortMove>, nowEpochSeconds: Long = Instant.now().epochSecond) {
         val selected = table.selectionModel.selectedItem?.identity()
-        val displayed = eventRetainer.merge(moves.take(MAX_VISIBLE_MOVES), nowEpochSeconds)
+        val current = moves.asSequence().filter(::isPrimaryOpportunity)
+            .sortedByDescending(ShortMove::opportunityScore).take(MAX_VISIBLE_MOVES).toList()
+        val displayed = eventRetainer.merge(current, nowEpochSeconds).filter(::isPrimaryOpportunity)
         rows.setAll(displayed)
         selected?.let { identity ->
             sortedRows.firstOrNull { it.identity() == identity }?.let(table.selectionModel::select)
         }
-        updateCaption.text = "5-minute moves + recurring jumps · updated ${time.format(Instant.ofEpochSecond(nowEpochSeconds))}"
+        updateCaption.text = "${displayed.size} actionable · updated ${time.format(Instant.ofEpochSecond(nowEpochSeconds))}"
         updateCaption.tooltip?.text = updateCaption.text
         displayed.forEach(::requestCompanyName)
         autoFitter.request()
@@ -230,6 +242,7 @@ class ShortMovePanel(
         ShortMovePattern.POST_DROP_STRUGGLE -> "◆ POST-DROP"
         ShortMovePattern.CONFIRMED_EXTENDED_DROP -> "◆ CONFIRMED DROP"
         ShortMovePattern.RECOVERY_AFTER_EXTENDED_DROP -> "◆ DROP RECOVERY"
+        ShortMovePattern.TRADABLE_CORRIDOR -> "▰ CORRIDOR"
         ShortMovePattern.DIRECTIONAL -> if (move.changePercent >= 0.0) "▲ UP" else "▼ DOWN"
     }
 
@@ -291,6 +304,7 @@ class ShortMovePanel(
                 ShortMovePattern.POST_DROP_STRUGGLE -> "◆ POST-DROP"
                 ShortMovePattern.CONFIRMED_EXTENDED_DROP -> "◆ CONFIRMED DROP"
                 ShortMovePattern.RECOVERY_AFTER_EXTENDED_DROP -> "◆ DROP RECOVERY"
+                ShortMovePattern.TRADABLE_CORRIDOR -> "▰ CORRIDOR"
                 ShortMovePattern.DIRECTIONAL -> if (move.changePercent >= 0.0) "▲ UP" else "▼ DOWN"
             }
         }
@@ -302,6 +316,27 @@ class ShortMovePanel(
             super.updateItem(item, empty); text = if (empty || item == null) null else "%+.2f%%".format(item.toDouble())
             styleClass.removeAll("short-move-up", "short-move-down")
             if (!empty && item != null) styleClass += if (item.toDouble() >= 0.0) "short-move-up" else "short-move-down"
+        }
+    }
+
+    private class OpportunityCell : TableCell<ShortMove, Number>() {
+        override fun updateItem(item: Number?, empty: Boolean) {
+            super.updateItem(item, empty)
+            styleClass.removeAll("opportunity-high", "opportunity-good", "opportunity-wait", "opportunity-late", "opportunity-avoid")
+            if (empty || item == null || item.toInt() < 0) {
+                text = null; tooltip = null
+                return
+            }
+            val value = item.toInt().coerceIn(0, 100)
+            text = "$value%"
+            styleClass += when {
+                value >= 80 -> "opportunity-high"
+                value >= 60 -> "opportunity-good"
+                value >= 40 -> "opportunity-wait"
+                value >= 20 -> "opportunity-late"
+                else -> "opportunity-avoid"
+            }
+            tooltip = tableRow?.item?.let { move -> javafx.scene.control.Tooltip(move.opportunityDetails) }
         }
     }
 
@@ -320,6 +355,10 @@ class ShortMovePanel(
         const val MAX_VISIBLE_MOVES = 10
     }
 }
+
+private fun isPrimaryOpportunity(move: ShortMove): Boolean =
+    move.opportunityScore >= 0 && (move.pattern == ShortMovePattern.TRADABLE_CORRIDOR ||
+            move.pattern == ShortMovePattern.RECOVERY_AFTER_EXTENDED_DROP)
 
 private fun ShortMove.identity() = symbol to endedAtEpochSeconds
 

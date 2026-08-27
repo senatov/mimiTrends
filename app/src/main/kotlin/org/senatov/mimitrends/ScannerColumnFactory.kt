@@ -106,7 +106,7 @@ internal class ScannerColumnFactory(
             configure(115.0, 55.0)
         }
 
-    fun pattern(): TableColumn<ScanResult, ScanResult> = TableColumn<ScanResult, ScanResult>("Watch").apply {
+    fun pattern(): TableColumn<ScanResult, ScanResult> = TableColumn<ScanResult, ScanResult>("Opportunity").apply {
         styleClass += "status-column"
         setCellValueFactory { ReadOnlyObjectWrapper(it.value) }
         comparator = Comparator { left, right ->
@@ -124,7 +124,9 @@ internal class ScannerColumnFactory(
                     val watchScore = WatchScorePresentation.calculate(item)
                     graphic = Label(watchScore.label).apply {
                         styleClass += "pattern-watch-score"
-                        style = "-fx-text-fill: ${watchScore.color};"
+                        style = "-fx-text-fill: ${watchScore.color}; " +
+                                "-fx-background-color: ${opportunityBackground(watchScore.value)}; " +
+                                "-fx-background-radius: 999px; -fx-padding: 3px 8px; -fx-font-weight: 700;"
                     }
                     text = null
                     tooltip = Tooltip("Detected: ${content.primary}\n${content.qualifiers.orEmpty()}\n${watchScore.details}").apply {
@@ -252,6 +254,14 @@ internal class ScannerColumnFactory(
         prefWidth = preferred
         minWidth = minimum
         table.columns += this
+    }
+
+    private fun opportunityBackground(value: Int): String = when {
+        value >= 80 -> "rgba(181,232,204,0.82)"
+        value >= 60 -> "rgba(210,239,221,0.82)"
+        value >= 40 -> "rgba(250,232,157,0.80)"
+        value >= 20 -> "rgba(249,213,174,0.82)"
+        else -> "rgba(244,199,204,0.82)"
     }
 
     private fun signalVisual(result: ScanResult): SignalVisual {

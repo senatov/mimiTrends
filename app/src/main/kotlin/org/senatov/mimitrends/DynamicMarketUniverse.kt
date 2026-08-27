@@ -14,13 +14,13 @@ internal class DynamicMarketUniverse(
 
     @Synchronized
     fun select(criteria: ScannerCriteria): DynamicUniverseSelection {
-        val configured = MarketUniverseSelector.select(criteria).filterNot(::isBlockedVenue)
+        val configured = MarketUniverseSelector.select(criteria)
         val signature = UniverseSignature(configured, criteria.marketRegion.name)
         val previous = snapshot?.takeIf { it.signature == signature }
         previous?.takeIf { nowMillis() - it.createdAt < REFRESH_INTERVAL_MILLIS }
             ?.let { return it.selection }
         val discovered = discover().map(String::uppercase)
-            .filterNot(::isBlockedVenue)
+            .filterNot(org.senatov.mimitrends.model.FinancialTransactionTaxExclusions::contains)
             .filter { MarketUniverseSelector.includes(it, criteria.marketRegion) }
             .distinct()
         val regionalSymbols = listOf(false, true).map { european ->
@@ -75,8 +75,6 @@ internal class DynamicMarketUniverse(
         return (desired.filter(retained::contains) + retained).distinct().take(MAX_SYMBOLS_PER_REGION)
     }
 
-    private fun isBlockedVenue(symbol: String): Boolean = symbol.endsWith(".MI", ignoreCase = true)
-
     private data class UniverseSignature(val configured: List<String>, val region: String)
     private data class UniverseSnapshot(
         val signature: UniverseSignature,
@@ -85,7 +83,7 @@ internal class DynamicMarketUniverse(
     )
 
     private companion object {
-        const val MAX_SYMBOLS_PER_REGION = 50
+        const val MAX_SYMBOLS_PER_REGION = 200
         const val STABLE_CORE_SIZE = 35
         const val MAX_REPLACEMENTS_PER_REFRESH = 5
         const val FRESHNESS_WINDOW_MINUTES = 30L

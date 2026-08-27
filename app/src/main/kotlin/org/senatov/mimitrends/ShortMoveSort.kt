@@ -24,6 +24,7 @@ internal object ShortMoveSort {
         ShortMovePattern.POST_DROP_STRUGGLE -> -2
         ShortMovePattern.DIRECTIONAL -> if (move.changePercent < 0.0) -1 else 1
         ShortMovePattern.RECOVERY_AFTER_EXTENDED_DROP -> 2
+        ShortMovePattern.TRADABLE_CORRIDOR -> 3
     }
 
     private fun periodMidpoint(move: ShortMove): Long = move.startedAtEpochSeconds +

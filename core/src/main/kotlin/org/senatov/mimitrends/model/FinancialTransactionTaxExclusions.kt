@@ -1,6 +1,6 @@
 package org.senatov.mimitrends.model
 
-/** Symbols excluded because purchases are subject to the French financial transaction tax. */
+/** Markets excluded from opportunity scanning because the broker may apply country-specific fees or taxes. */
 object FinancialTransactionTaxExclusions {
     private val symbols = setOf(
         "MC.PA", "OR.PA", "TTE.PA", "BNP.PA", "SAN.PA", "SU.PA", "RMS.PA", "DG.PA",
@@ -8,7 +8,12 @@ object FinancialTransactionTaxExclusions {
         "ENGI.PA", "DSY.PA", "HO.PA", "PUB.PA", "ML.PA", "CA.PA", "SGO.PA", "LR.PA"
     )
 
-    fun contains(symbol: String): Boolean = symbol.uppercase() in symbols
+    private val blockedMarketSuffixes = setOf(".PA", ".MI", ".HE", ".CO")
+
+    fun contains(symbol: String): Boolean {
+        val normalized = symbol.uppercase()
+        return normalized in symbols || blockedMarketSuffixes.any(normalized::endsWith)
+    }
 
     fun removeFrom(values: List<String>): List<String> = values.filterNot(::contains)
 }

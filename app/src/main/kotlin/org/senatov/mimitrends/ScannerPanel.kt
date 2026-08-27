@@ -39,8 +39,8 @@ class ScannerPanel(
     private var closing = false
     internal val marketClosedOverlay = MarketClosedOverlay(table::requestFocus)
     private val empty = WorkspaceEmptyState.create(
-        "No anomaly signals yet",
-        "The scanner is collecting market data. Qualifying instruments will appear here automatically."
+        "No additional signals yet",
+        "The scanner is collecting supporting market diagnostics."
     )
     private val noMatches by lazy {
         WorkspaceEmptyState.create(
@@ -77,7 +77,8 @@ class ScannerPanel(
 
     init {
         log.debug(LogTag.UI, "init()")
-        val header = javafx.scene.layout.HBox(8.0, Label("Anomaly signals").apply { styleClass += "table-section-title" },
+        val header = javafx.scene.layout.HBox(
+            8.0, Label("Additional market signals").apply { styleClass += "table-section-title" },
             scanIndicator, cycleStatus.apply { styleClass += "scanner-cycle" }, usMarketBadge, europeMarketBadge, dataPulseBadge,
             javafx.scene.layout.Region().also { javafx.scene.layout.HBox.setHgrow(it, Priority.ALWAYS) },
             detectedTodayButton).apply {
@@ -103,6 +104,7 @@ class ScannerPanel(
         }
         val turnover = columnFactory.number("Turnover", { convertPrice(it.symbol, it.sessionTurnover) }, ::compactMoney)
         val updated = columnFactory.updated { time.format(Instant.ofEpochMilli(it)) }
+        listOf(scoreColumn, outcome, priceAction, volume, age, turnover).forEach { it.isVisible = false }
         listOf(freshness, symbol, signal, entryQuality, move, price, scoreColumn, outcome, priceAction, volume, age, turnover, updated)
             .zip(listOf("delay", "company", "pattern", "entry_quality", "move", "price", "anomaly", "outcome", "price_action",
                 "volume", "age", "turnover", "updated"))

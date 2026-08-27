@@ -19,15 +19,16 @@ class WatchScorePresentationTest {
         )
 
         assertTrue(score.value <= 29)
-        assertTrue(score.label.endsWith("(avoid)"))
+        assertEquals("${score.value}%", score.label)
         assertTrue(score.details.contains("Entry quality: 28%"))
     }
 
-    @Test fun `formats a precise readiness percentage before the category`() {
+    @Test
+    fun `formats a precise opportunity percentage without an ambiguous action label`() {
         val score = WatchScorePresentation.calculate(TestScanResult.create())
 
         assertTrue(score.value in 0..100)
-        assertTrue(score.label.startsWith("${score.value}% ("))
+        assertEquals("${score.value}%", score.label)
     }
 
     @Test fun `unconfirmed bottom is never presented as a buy`() {
@@ -36,7 +37,7 @@ class WatchScorePresentationTest {
         )
 
         assertTrue(score.value <= 29)
-        assertTrue(score.label.endsWith("(avoid)"))
+        assertEquals("${score.value}%", score.label)
     }
 
     @Test fun `strong rise without volume or outcome confirmation remains wait`() {
@@ -51,7 +52,7 @@ class WatchScorePresentationTest {
         )
 
         assertTrue(score.value <= 66)
-        assertTrue(score.label.endsWith("(wait)"))
+        assertTrue(score.value < 67)
     }
 
     @Test fun `confirmed strong rise can reach buy category`() {
@@ -65,7 +66,7 @@ class WatchScorePresentationTest {
         )
 
         assertTrue(score.value >= 67)
-        assertTrue(score.label.endsWith("(buy)"))
+        assertEquals("${score.value}%", score.label)
         assertTrue(score.value % 10 != 0, "readiness must not be quantized to ten-point steps")
     }
 
@@ -82,7 +83,7 @@ class WatchScorePresentationTest {
         )
 
         assertTrue(score.value <= 49)
-        assertTrue(score.label.endsWith("(wait)"))
+        assertTrue(score.value < 67)
     }
 
     @Test fun `aging signal cannot remain buy`() {
@@ -94,7 +95,7 @@ class WatchScorePresentationTest {
         )
 
         assertTrue(score.value <= 59)
-        assertTrue(!score.label.endsWith("(buy)"))
+        assertTrue(score.value < 67)
     }
 
     @Test fun `stale signal is always avoid`() {
@@ -106,7 +107,7 @@ class WatchScorePresentationTest {
         )
 
         assertTrue(score.value <= 29)
-        assertTrue(score.label.endsWith("(avoid)"))
+        assertTrue(score.value < 35)
     }
 
     @Test fun `penalizes an extended entry without discarding a strong instrument`() {
@@ -130,7 +131,7 @@ class WatchScorePresentationTest {
         )
 
         assertTrue(score.value <= 59)
-        assertTrue(score.label.endsWith("(wait)"))
+        assertTrue(score.value < 67)
     }
 
     @Test fun `spread wider than plausible short move is avoid`() {
@@ -141,7 +142,7 @@ class WatchScorePresentationTest {
         )
 
         assertTrue(score.value <= 29)
-        assertTrue(score.label.endsWith("(avoid)"))
+        assertTrue(score.value < 35)
     }
 
     @Test fun `weak calibrated downside cannot be presented as buy`() {
@@ -155,7 +156,7 @@ class WatchScorePresentationTest {
         )
 
         assertTrue(score.value <= 59)
-        assertTrue(!score.label.endsWith("(buy)"))
+        assertTrue(score.value < 67)
     }
 
     @Test fun `negative latest three minutes override an earlier bullish jump`() {
@@ -167,7 +168,7 @@ class WatchScorePresentationTest {
         )
 
         assertTrue(score.value <= 29)
-        assertTrue(score.label.endsWith("(avoid)"))
+        assertTrue(score.value < 35)
     }
 
     @Test fun `cyclic latest tail cannot remain buy`() {
@@ -180,7 +181,7 @@ class WatchScorePresentationTest {
         )
 
         assertTrue(score.value <= 49)
-        assertTrue(!score.label.endsWith("(buy)"))
+        assertTrue(score.value < 67)
     }
 
     @Test fun `uses a separate traffic light color scale`() {

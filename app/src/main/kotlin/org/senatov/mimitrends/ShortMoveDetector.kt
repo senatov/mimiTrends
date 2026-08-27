@@ -24,7 +24,9 @@ internal data class ShortMove(
     val safetyScore: Int = -1,
     val safetyConfidence: Int = 0,
     val safetyLabel: String = "Unavailable",
-    val safetyDetails: String = ""
+    val safetyDetails: String = "",
+    val opportunityScore: Int = -1,
+    val opportunityDetails: String = ""
 )
 
 internal enum class ShortMovePattern {
@@ -32,7 +34,8 @@ internal enum class ShortMovePattern {
     DIRECTIONAL,
     POST_DROP_STRUGGLE,
     CONFIRMED_EXTENDED_DROP,
-    RECOVERY_AFTER_EXTENDED_DROP
+    RECOVERY_AFTER_EXTENDED_DROP,
+    TRADABLE_CORRIDOR
 }
 
 internal object ShortMoveDetector {
@@ -44,7 +47,8 @@ internal object ShortMoveDetector {
         nowEpochSeconds: Long,
         limit: Int = 10
     ): List<ShortMove> = barsBySymbol.mapNotNull { (symbol, bars) ->
-        detectRecurringSharpJump(symbol, bars, nowEpochSeconds)
+        TradableCorridorDetector.detect(symbol, bars, nowEpochSeconds)
+            ?: detectRecurringSharpJump(symbol, bars, nowEpochSeconds)
             ?: detectPostDropStruggle(symbol, bars, nowEpochSeconds)
             ?: detectConfirmedExtendedDrop(symbol, bars, nowEpochSeconds)
             ?: detectRecoveryAfterExtendedDrop(symbol, bars, nowEpochSeconds)
@@ -195,6 +199,7 @@ internal object ShortMoveDetector {
             ShortMovePattern.POST_DROP_STRUGGLE -> POST_DROP_WEIGHT
             ShortMovePattern.CONFIRMED_EXTENDED_DROP -> EXTENDED_DROP_WEIGHT
             ShortMovePattern.RECOVERY_AFTER_EXTENDED_DROP -> RECOVERY_DROP_WEIGHT
+            ShortMovePattern.TRADABLE_CORRIDOR -> 2.25
             ShortMovePattern.DIRECTIONAL -> 1.0
         }
         return kotlin.math.abs(move.changePercent) * freshness * patternWeight

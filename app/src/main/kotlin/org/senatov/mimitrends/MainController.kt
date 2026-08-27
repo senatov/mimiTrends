@@ -311,7 +311,7 @@ class MainController(private val apiKey: String?, initialSymbol: String = "AAPL"
             }
             Platform.runLater {
                 scannerPanel.beginScan(1, 1, symbols)
-                status.update("Finnhub live + Yahoo/SQLite: scanning ${symbols.size} symbols · fresh impulses only")
+                status.update("Scanning ${symbols.size}/${selectedSymbols.size} eligible symbols · reversals and corridors")
             }
             val batch = scannerBatch.execute(symbols, criteria,
                 { generation == scanGeneration.get() && !closing.get() },

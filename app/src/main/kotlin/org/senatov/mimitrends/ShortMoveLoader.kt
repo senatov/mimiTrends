@@ -55,6 +55,7 @@ internal class ShortMoveLoader(
                 move.symbol, bars[move.symbol].orEmpty(), features, entry, trend?.score, nowEpochSeconds,
                 safetyCalibration.getValue(move.symbol.contains('.'))
             ) else null
+            val opportunity = opportunity(move, entry?.score, entry?.cooldownMinutes, safety?.score)
             move.copy(
                 trendScore = trend?.score,
                 trendConfidence = trend?.confidence ?: 0,
@@ -68,19 +69,42 @@ internal class ShortMoveLoader(
                 safetyScore = safety?.score ?: -1,
                 safetyConfidence = safety?.confidence ?: 0,
                 safetyLabel = safety?.label ?: "Unavailable",
-                safetyDetails = safety?.details.orEmpty()
+                safetyDetails = safety?.details.orEmpty(),
+                opportunityScore = opportunity,
+                opportunityDetails = listOf(move.opportunityDetails, entry?.details, safety?.details)
+                    .filterNotNull().filter(String::isNotBlank).joinToString("\n")
             )
         }
         val companyName = { symbol: String -> repository.loadCompanyProfile(symbol)?.name }
+        val opportunities = ShortMoveCompanyRanking.distinct(
+            ranked.filter { it.opportunityScore >= 0 }.sortedByDescending(ShortMove::opportunityScore),
+            MAX_OPPORTUNITIES,
+            companyName
+        )
         val recent = ShortMoveCompanyRanking.distinct(ranked, MAX_MOVES, companyName)
         val moderate = ShortMoveCompanyRanking.distinct(
             ModeratePositiveCandidateSelector.select(ranked), MAX_MODERATE_CANDIDATES, companyName
         )
-        return (recent + moderate).distinctBy(ShortMove::symbol)
+        return (opportunities + recent + moderate).distinctBy(ShortMove::symbol)
     }
+
+    private fun opportunity(move: ShortMove, entry: Int?, cooldownMinutes: Int?, safety: Int?): Int {
+        val base = when (move.pattern) {
+            ShortMovePattern.TRADABLE_CORRIDOR -> move.opportunityScore
+            ShortMovePattern.RECOVERY_AFTER_EXTENDED_DROP ->
+                listOfNotNull(entry?.takeIf { it >= 0 }, safety?.takeIf { it >= 0 }).averageOrNull()?.toInt() ?: 45
+
+            else -> -1
+        }
+        if (base < 0) return -1
+        return if ((cooldownMinutes ?: 0) > 0) base.coerceAtMost(39) else base.coerceIn(0, 100)
+    }
+
+    private fun List<Int>.averageOrNull(): Double? = if (isEmpty()) null else average()
 
     private companion object {
         const val MAX_MOVES = 10
+        const val MAX_OPPORTUNITIES = 12
         const val MAX_MODERATE_CANDIDATES = 6
         const val PATTERN_LOOKBACK_DAYS = 30L
         const val TREND_LOOKBACK_DAYS = 370L

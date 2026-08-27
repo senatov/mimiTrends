@@ -9,33 +9,33 @@ class InstrumentResultDeduplicatorTest {
             loadIsin = { if (it.startsWith("STLA")) "NL00150001Q9" else null },
             loadCompanyName = { null }
         )
-        val milan = TestScanResult.create(symbol = "STLAM.MI").copy(anomalyScore = 3.0)
-        val paris = TestScanResult.create(symbol = "STLAP.PA").copy(anomalyScore = 4.0)
+        val primary = TestScanResult.create(symbol = "STLA").copy(anomalyScore = 3.0)
+        val german = TestScanResult.create(symbol = "STLA.DE").copy(anomalyScore = 4.0)
 
-        assertEquals(listOf("STLAP.PA"), deduplicator.deduplicate(listOf(milan, paris)).map { it.symbol })
+        assertEquals(listOf("STLA.DE"), deduplicator.deduplicate(listOf(primary, german)).map { it.symbol })
     }
 
     @Test fun `uses normalized company name when isin is unavailable`() {
-        val names = mapOf("STLAM.MI" to "STELLANTIS NV", "STLAP.PA" to "STELLANTIS")
+        val names = mapOf("STLA" to "STELLANTIS NV", "STLA.DE" to "STELLANTIS")
         val deduplicator = InstrumentResultDeduplicator({ null }, names::get)
-        val newer = TestScanResult.create(symbol = "STLAM.MI").copy(updatedAtMillis = 2_000)
-        val older = TestScanResult.create(symbol = "STLAP.PA").copy(updatedAtMillis = 1_000)
+        val newer = TestScanResult.create(symbol = "STLA").copy(updatedAtMillis = 2_000)
+        val older = TestScanResult.create(symbol = "STLA.DE").copy(updatedAtMillis = 1_000)
 
-        assertEquals(listOf("STLAM.MI"), deduplicator.deduplicate(listOf(older, newer)).map { it.symbol })
+        assertEquals(listOf("STLA"), deduplicator.deduplicate(listOf(older, newer)).map { it.symbol })
     }
 
     @Test fun `does not merge equal names when known isins conflict`() {
-        val isins = mapOf("AAA.DE" to "DE0000000001", "AAA.PA" to "FR0000000002")
+        val isins = mapOf("AAA.DE" to "DE0000000001", "AAA" to "US0000000002")
         val deduplicator = InstrumentResultDeduplicator(isins::get) { "Example SE" }
-        val results = listOf(TestScanResult.create(symbol = "AAA.DE"), TestScanResult.create(symbol = "AAA.PA"))
+        val results = listOf(TestScanResult.create(symbol = "AAA.DE"), TestScanResult.create(symbol = "AAA"))
 
         assertEquals(2, deduplicator.deduplicate(results).size)
     }
 
     @Test fun `removes transaction-taxed results loaded from history`() {
         val deduplicator = InstrumentResultDeduplicator({ null }, { null })
-        val results = listOf(TestScanResult.create(symbol = "TTE.PA"), TestScanResult.create(symbol = "AIR.PA"))
+        val results = listOf(TestScanResult.create(symbol = "TTE.PA"), TestScanResult.create(symbol = "AIR.DE"))
 
-        assertEquals(listOf("AIR.PA"), deduplicator.deduplicate(results).map { it.symbol })
+        assertEquals(listOf("AIR.DE"), deduplicator.deduplicate(results).map { it.symbol })
     }
 }

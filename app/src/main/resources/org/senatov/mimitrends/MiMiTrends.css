@@ -425,6 +425,72 @@
 }
 .insight-sidebar .tab-header-area { -fx-padding: 0 0 5px 0; }
 .insight-sidebar .tab { -fx-background-radius: 7px 7px 0 0; }
+
+.insight-sidebar .tab-header-background {
+    -fx-background-color: transparent;
+}
+
+.insight-sidebar .tab {
+    -fx-background-color: transparent;
+    -fx-border-color: transparent transparent rgba(118, 142, 166, 0.35) transparent;
+    -fx-border-width: 0 0 2px 0;
+}
+
+.insight-sidebar .tab .tab-label {
+    -fx-text-fill: #6a7d91;
+    -fx-font-weight: 500;
+}
+
+.insight-sidebar .tab:hover {
+    -fx-background-color: rgba(219, 230, 241, 0.55);
+}
+
+.insight-sidebar .tab:selected {
+    -fx-background-color: rgba(220, 235, 248, 0.96);
+    -fx-border-color: transparent transparent #1769aa transparent;
+    -fx-border-width: 0 0 3px 0;
+}
+
+.insight-sidebar .tab:selected .tab-label {
+    -fx-text-fill: #123f69;
+    -fx-font-weight: 700;
+}
+
+.short-move-table .table-cell.opportunity-high,
+.short-move-table .table-cell.opportunity-good,
+.short-move-table .table-cell.opportunity-wait,
+.short-move-table .table-cell.opportunity-late,
+.short-move-table .table-cell.opportunity-avoid {
+    -fx-font-weight: 700;
+    -fx-alignment: center;
+    -fx-background-insets: 5px 8px;
+    -fx-background-radius: 999px;
+}
+
+.short-move-table .table-cell.opportunity-high {
+    -fx-text-fill: #075f3b;
+    -fx-background-color: rgba(181, 232, 204, 0.82);
+}
+
+.short-move-table .table-cell.opportunity-good {
+    -fx-text-fill: #137347;
+    -fx-background-color: rgba(210, 239, 221, 0.82);
+}
+
+.short-move-table .table-cell.opportunity-wait {
+    -fx-text-fill: #806000;
+    -fx-background-color: rgba(250, 232, 157, 0.80);
+}
+
+.short-move-table .table-cell.opportunity-late {
+    -fx-text-fill: #98520d;
+    -fx-background-color: rgba(249, 213, 174, 0.82);
+}
+
+.short-move-table .table-cell.opportunity-avoid {
+    -fx-text-fill: #9b2835;
+    -fx-background-color: rgba(244, 199, 204, 0.82);
+}
 .signal-inspector, .universe-panel { -fx-padding: 8px; }
 .inspector-title { -fx-font-size: 14px; -fx-font-weight: 600; -fx-text-fill: #17365f; }
 .inspector-line { -fx-font-size: 11px; -fx-text-fill: #42576d; -fx-padding: 5px 0 5px 0; }

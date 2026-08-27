@@ -16,12 +16,12 @@ class DynamicMarketUniverseTest {
     }
 
     @Test
-    fun `excludes taxed French issuers but retains non-French Paris listings`() {
+    fun `excludes markets with unwanted country fees`() {
         val selection = DynamicMarketUniverse().select(
-            ScannerCriteria(symbols = listOf("TTE.PA", "MC.PA", "AIR.PA", "STMPA.PA", "STLAP.PA"))
+            ScannerCriteria(symbols = listOf("TTE.PA", "AIR.PA", "ENEL.MI", "NOKIA.HE", "NOVO-B.CO", "SAP.DE"))
         )
 
-        assertEquals(listOf("AIR.PA", "STMPA.PA", "STLAP.PA"), selection.symbols)
+        assertEquals(listOf("SAP.DE"), selection.symbols)
     }
 
     @Test
@@ -43,9 +43,9 @@ class DynamicMarketUniverseTest {
             ScannerCriteria(symbols = us.reversed() + europe.reversed())
         )
 
-        assertEquals(100, selection.symbols.size)
+        assertEquals(120, selection.symbols.size)
         assertEquals(us.reversed().take(35), selection.symbols.take(35))
-        assertEquals(europe.reversed().take(35), selection.symbols.drop(50).take(35))
+        assertEquals(europe.reversed().take(35), selection.symbols.drop(60).take(35))
         assertEquals(36, selection.ranks["U1"])
         assertEquals(36, selection.ranks["E1.DE"])
     }

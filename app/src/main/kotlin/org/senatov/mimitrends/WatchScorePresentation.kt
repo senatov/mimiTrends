@@ -14,7 +14,7 @@ internal data class WatchScore(val value: Int, val color: String, val details: S
         value >= WAIT_THRESHOLD -> "wait"
         else -> "avoid"
     }
-    val label: String get() = "$value% ($category)"
+    val label: String get() = "$value%"
 
     private companion object {
         const val BUY_THRESHOLD = 67

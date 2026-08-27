@@ -65,6 +65,6 @@ internal class ScanCyclePlanner(
 
     private companion object {
         const val PRIORITY_CYCLES = 3
-        const val DEFAULT_MAXIMUM_SYMBOLS_PER_CYCLE = 50
+        const val DEFAULT_MAXIMUM_SYMBOLS_PER_CYCLE = 75
     }
 }
