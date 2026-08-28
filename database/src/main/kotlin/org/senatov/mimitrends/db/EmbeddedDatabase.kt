@@ -82,6 +82,10 @@ class EmbeddedDatabase private constructor(private val state: State) : AutoClose
         target
     }
 
+    fun optimize() = locked { connection ->
+        connection.createStatement().use { it.execute("PRAGMA optimize") }
+    }
+
     fun compactIfWorthwhile(minimumFreeRatio: Double = 0.12, minimumBytes: Long = 128L * 1_048_576L): Boolean =
         locked { connection ->
             if (Files.size(state.path) < minimumBytes) return@locked false

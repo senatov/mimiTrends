@@ -22,4 +22,18 @@ class ResearchFeatureExtractorTest {
         assertTrue(features.trendEfficiency10m > 0.99)
         assertTrue(features.vwapDistancePercent > 0.0)
     }
+
+    @Test
+    fun `does not relabel sparse bars as minute horizons`() {
+        val start = 1_768_226_400L
+        val bars = (0..12).filter { it != 2 }.map { minute ->
+            val price = 100.0 + minute
+            MinuteBar("TEST", start + minute * 60L, price, price, price, price, 1_000.0)
+        }
+
+        val features = assertNotNull(ResearchFeatureExtractor.extract(bars))
+
+        assertTrue(features.return10mPercent.isNaN())
+        assertEquals((112.0 / 111.0 - 1.0) * 100.0, features.return1mPercent, 0.000_001)
+    }
 }

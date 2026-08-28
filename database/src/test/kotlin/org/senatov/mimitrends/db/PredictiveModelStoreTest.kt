@@ -59,8 +59,10 @@ class PredictiveModelStoreTest {
         DriverManager.getConnection("jdbc:sqlite:$path").use { connection ->
             connection.autoCommit = false
             connection.prepareStatement("""INSERT INTO research_samples(id, run_id, symbol, observed_epoch,
-                entry_price, family, direction, accepted, source, score, jump_z, range_z, volume_z, rvol, return_10m)
-                VALUES (?, 0, ?, ?, 100, 'Impulse', 1, 1, 'TEST', ?, 0, 0, 0, 1, 0)""").use { sample ->
+                entry_price, feature_version, family, direction, accepted, source, score, jump_z, range_z,
+                volume_z, rvol, return_10m)
+                VALUES (?, 0, ?, ?, 100, 4, 'Impulse', 1, 1, 'TEST', ?, 0, 0, 0, 1, 0)"""
+            ).use { sample ->
                 connection.prepareStatement("""INSERT INTO research_outcomes(sample_id, horizon_minutes,
                     observed_price, return_percent, elapsed_minutes, observed_at) VALUES (?, ?, ?, ?, ?, ?)""").use { outcome ->
                     var id = 1L

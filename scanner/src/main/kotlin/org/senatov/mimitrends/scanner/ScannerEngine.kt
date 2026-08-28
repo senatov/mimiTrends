@@ -2,6 +2,7 @@ package org.senatov.mimitrends.scanner
 
 import org.senatov.mimitrends.log.LogTag
 import org.senatov.mimitrends.model.MinuteBar
+import org.senatov.mimitrends.statistics.ValidatedStatistics
 import org.senatov.mimitrends.model.MarketTimeZone
 import org.senatov.mimitrends.model.isValidMinuteBar
 import org.senatov.mimitrends.model.ScanResult
@@ -292,17 +293,12 @@ class ScannerEngine(private val zoneOverride: ZoneId? = null) {
     // Scaled MAD (1 / Phi^-1(0.75) ~= 1.4826), a robust alternative to standard deviation.
     // NIST Engineering Statistics Handbook: https://itl.nist.gov/div898/software/dataplot/refman2/auxillar/mad.htm
     private fun robustScale(values: List<Double>, floor: Double): Double {
-        val center = median(values)
-        val mad = median(values.map { abs(it - center) })
+        val center = ValidatedStatistics.median(values)
+        val mad = ValidatedStatistics.median(values.map { abs(it - center) })
         return max(1.4826 * mad, max(abs(center) * 0.20, floor))
     }
 
-    private fun median(values: List<Double>): Double {
-        if (values.isEmpty()) return 0.0
-        val sorted = values.sorted()
-        val middle = sorted.size / 2
-        return if (sorted.size % 2 == 0) (sorted[middle - 1] + sorted[middle]) / 2.0 else sorted[middle]
-    }
+    private fun median(values: List<Double>) = ValidatedStatistics.median(values)
 
     private fun sameSession(bars: List<MinuteBar>, latest: MinuteBar): List<MinuteBar> {
         val date = local(latest).toLocalDate()

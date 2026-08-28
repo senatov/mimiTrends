@@ -122,9 +122,10 @@ internal class PredictiveModelStore(private val connection: Connection) {
     }
 
     private fun latestTrainingCutoff(horizon: Int): Long = connection.prepareStatement(
-        "SELECT COALESCE(MAX(training_cutoff), 0) FROM predictive_models WHERE horizon_minutes=?"
+        "SELECT COALESCE(MAX(training_cutoff), 0) FROM predictive_models WHERE horizon_minutes=? AND feature_version=?"
     ).use { statement ->
         statement.setInt(1, horizon)
+        statement.setInt(2, FEATURE_VERSION)
         statement.executeQuery().use { it.next(); it.getLong(1) }
     }
 
@@ -171,7 +172,7 @@ internal class PredictiveModelStore(private val connection: Connection) {
 
     private companion object {
         const val DEFAULT_HORIZON = 10
-        const val FEATURE_VERSION = 3
+        const val FEATURE_VERSION = 4
         const val FRICTION_PERCENT = 0.20
         const val MIN_TOTAL_SAMPLES = 300
         const val MIN_TRAINING_SAMPLES = 200
@@ -188,7 +189,7 @@ internal class PredictiveModelStore(private val connection: Connection) {
             FROM research_samples s JOIN research_outcomes o ON o.sample_id=s.id
             LEFT JOIN universe_membership u ON u.symbol=s.symbol
                 AND u.selection_date=date(s.observed_epoch, 'unixepoch')
-            WHERE o.horizon_minutes=? ORDER BY s.observed_epoch"""
+            WHERE o.horizon_minutes=? AND s.feature_version=$FEATURE_VERSION ORDER BY s.observed_epoch"""
         const val INSERT_MODEL_SQL = """INSERT INTO predictive_models(horizon_minutes, feature_version,
             trained_at, training_cutoff, training_samples, validation_samples, validation_days,
             model_brier, baseline_brier, average_net_return, top_quartile_net_return,

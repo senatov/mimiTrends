@@ -4,4 +4,5 @@ plugins {
 
 dependencies {
     api(libs.slf4j.api)
+    implementation(libs.commons.statistics.descriptive)
 }

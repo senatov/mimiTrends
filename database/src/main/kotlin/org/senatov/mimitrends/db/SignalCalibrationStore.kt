@@ -7,6 +7,7 @@ import java.sql.Connection
 import java.time.Instant
 import java.time.ZoneOffset
 import kotlin.math.sqrt
+import org.senatov.mimitrends.statistics.ValidatedStatistics
 
 internal class SignalCalibrationStore(private val connection: Connection) {
     fun enrich(result: ScanResult, horizonMinutes: Int = DEFAULT_HORIZON_MINUTES): ScanResult {
@@ -39,9 +40,9 @@ internal class SignalCalibrationStore(private val connection: Connection) {
             calibrationHorizonMinutes = horizonMinutes,
             continuationLowerBound = lowerBound,
             continuationUpperBound = upperBound,
-            medianNetReturnPercent = percentile(netReturns, 0.50),
-            lowerQuartileNetReturnPercent = percentile(netReturns, 0.25),
-            upperQuartileNetReturnPercent = percentile(netReturns, 0.75),
+            medianNetReturnPercent = ValidatedStatistics.quantile(netReturns, 0.50),
+            lowerQuartileNetReturnPercent = ValidatedStatistics.quantile(netReturns, 0.25),
+            upperQuartileNetReturnPercent = ValidatedStatistics.quantile(netReturns, 0.75),
             medianFavorableExcursionPercent = medianOrNaN(favorable),
             medianAdverseExcursionPercent = medianOrNaN(adverse)
         )
@@ -109,15 +110,7 @@ internal class SignalCalibrationStore(private val connection: Connection) {
         source.contains("LIVE", ignoreCase = true) || source.contains("RT", ignoreCase = true)
 
     private fun medianOrNaN(values: List<Double>): Double =
-        if (values.isEmpty()) Double.NaN else percentile(values, 0.50)
-
-    private fun percentile(values: List<Double>, fraction: Double): Double {
-        val sorted = values.sorted()
-        val position = (sorted.lastIndex * fraction).coerceIn(0.0, sorted.lastIndex.toDouble())
-        val lower = position.toInt()
-        val upper = (lower + 1).coerceAtMost(sorted.lastIndex)
-        return sorted[lower] + (sorted[upper] - sorted[lower]) * (position - lower)
-    }
+        ValidatedStatistics.median(values)
 
     // Edwin B. Wilson, "Probable Inference, the Law of Succession, and Statistical Inference" (1927).
     // https://doi.org/10.1080/01621459.1927.10502953

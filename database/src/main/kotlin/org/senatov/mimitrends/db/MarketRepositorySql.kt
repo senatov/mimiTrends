@@ -4,6 +4,7 @@ package org.senatov.mimitrends.db
 
 import java.sql.Connection
 import java.sql.PreparedStatement
+import org.senatov.mimitrends.model.InstrumentCurrency
 
 internal const val UPSERT_SQL = """INSERT INTO minute_bars(symbol, minute_epoch, open, high, low, close, volume, volume_status,
     source_currency, currency_status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -36,9 +37,7 @@ internal const val UPSERT_PROVIDER_QUOTE_SQL = """INSERT INTO provider_quotes(pr
     WHERE excluded.observed_at > provider_quotes.observed_at"""
 
 internal val ISIN = Regex("[A-Z]{2}[A-Z0-9]{9}[0-9]")
-private val EURO_SUFFIXES = listOf(".DE", ".F", ".PA", ".AS", ".MI", ".HE")
-internal fun sourceCurrency(symbol: String): String =
-    if (EURO_SUFFIXES.any(symbol.uppercase()::endsWith)) "EUR" else "USD"
+internal fun sourceCurrency(symbol: String): String = InstrumentCurrency.infer(symbol)
 
 internal object RetiredProviderCleaner {
     private val providers = listOf("BOERSE_DE", "BNP_PARIBAS", "TRADERFOX")
@@ -60,22 +59,27 @@ internal object IncorrectProviderIdentityCleaner {
         val hasMetadata = connection.prepareStatement(
             "SELECT 1 FROM sqlite_master WHERE type='table' AND name='instrument_metadata'"
         ).use { statement -> statement.executeQuery().use { it.next() } }
-        KNOWN_IDENTITIES.forEach { (symbol, correctIsin) ->
-            if (hasMetadata) {
-                connection.prepareStatement(
-                    "UPDATE instrument_metadata SET isin=? WHERE symbol=? AND (isin IS NULL OR isin!=?)"
-                ).use { statement ->
-                    statement.setString(1, correctIsin); statement.setString(2, symbol)
-                    statement.setString(3, correctIsin); statement.executeUpdate()
+        val cleanupStatements = listOf(
+            connection.prepareStatement("DELETE FROM provider_minute_bars WHERE symbol=? AND identifier!=?"),
+            connection.prepareStatement("DELETE FROM provider_quotes WHERE symbol=? AND identifier!=?"),
+            connection.prepareStatement("DELETE FROM provider_instruments WHERE symbol=? AND identifier!=?")
+        )
+        try {
+            KNOWN_IDENTITIES.forEach { (symbol, correctIsin) ->
+                if (hasMetadata) {
+                    connection.prepareStatement(
+                        "UPDATE instrument_metadata SET isin=? WHERE symbol=? AND (isin IS NULL OR isin!=?)"
+                    ).use { statement ->
+                        statement.setString(1, correctIsin); statement.setString(2, symbol)
+                        statement.setString(3, correctIsin); statement.executeUpdate()
+                    }
                 }
-            }
-            listOf("provider_minute_bars", "provider_quotes", "provider_instruments").forEach { table ->
-                connection.prepareStatement(
-                    "DELETE FROM $table WHERE symbol=? AND identifier!=?"
-                ).use { statement ->
+                cleanupStatements.forEach { statement ->
                     statement.setString(1, symbol); statement.setString(2, correctIsin); statement.executeUpdate()
                 }
             }
+        } finally {
+            cleanupStatements.forEach(PreparedStatement::close)
         }
     }
 
@@ -83,4 +87,45 @@ internal object IncorrectProviderIdentityCleaner {
         "NVO" to "US6701002056",
         "XOM" to "US30231G1022"
     )
+}
+
+internal object MarketStorageMaintenance {
+    fun migrateLegacyData(connection: Connection): Int {
+        connection.createStatement().use {
+            it.executeUpdate("CREATE TABLE IF NOT EXISTS market_storage_migrations(version INTEGER PRIMARY KEY)")
+        }
+        val applied = connection.prepareStatement(
+            "SELECT 1 FROM market_storage_migrations WHERE version=?"
+        ).use { statement ->
+            statement.setInt(1, LEGACY_CLEANUP_VERSION)
+            statement.executeQuery().use { it.next() }
+        }
+        if (applied) return 0
+        RetiredProviderCleaner.clean(connection)
+        IncorrectProviderIdentityCleaner.clean(connection)
+        val removed = connection.createStatement().use { statement ->
+            statement.executeUpdate("DROP INDEX IF EXISTS idx_minute_symbol_time")
+            val malformedSnapshots = statement.executeUpdate(
+                "DELETE FROM minute_bars WHERE minute_epoch % 60 != 0 AND volume <= 0"
+            )
+            val providerBars = statement.executeUpdate(
+                """DELETE FROM provider_minute_bars WHERE provider IN
+                    ('SCALABLE','TRADEGATE','EURONEXT','LANG_SCHWARZ','WALLSTREET_ONLINE',
+                     'TRADERFOX','BNP_PARIBAS','BOERSE_DE')"""
+            )
+            malformedSnapshots + providerBars
+        }
+        connection.createStatement().use { statement ->
+            statement.executeUpdate(
+                "UPDATE company_profiles SET logo_url=NULL, logo=NULL WHERE logo_url LIKE 'https://img.loadlogo.com/%'"
+            )
+        }
+        connection.prepareStatement("INSERT INTO market_storage_migrations(version) VALUES (?)").use { statement ->
+            statement.setInt(1, LEGACY_CLEANUP_VERSION)
+            statement.executeUpdate()
+        }
+        return removed
+    }
+
+    private const val LEGACY_CLEANUP_VERSION = 1
 }

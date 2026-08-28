@@ -2,6 +2,7 @@ package org.senatov.mimitrends.scanner
 
 import org.senatov.mimitrends.model.MarketTimeZone
 import org.senatov.mimitrends.model.MinuteBar
+import org.senatov.mimitrends.statistics.ValidatedStatistics
 import org.senatov.mimitrends.model.ScannerCriteria
 import java.time.Instant
 import java.time.ZoneId
@@ -188,16 +189,12 @@ internal class VReversalDetector(private val zoneOverride: ZoneId? = null) {
     }
 
     private fun robustScale(values: List<Double>): Double {
-        val center = median(values)
-        val mad = median(values.map { abs(it - center) })
+        val center = ValidatedStatistics.median(values)
+        val mad = ValidatedStatistics.median(values.map { abs(it - center) })
         return max(1.4826 * mad, max(center * 0.20, RETURN_FLOOR))
     }
 
-    private fun median(values: List<Double>): Double {
-        val sorted = values.sorted()
-        val middle = sorted.size / 2
-        return if (sorted.size % 2 == 0) (sorted[middle - 1] + sorted[middle]) / 2.0 else sorted[middle]
-    }
+    private fun median(values: List<Double>) = ValidatedStatistics.median(values)
 
     private fun local(bar: MinuteBar) = Instant.ofEpochSecond(bar.minuteEpochSeconds)
         .atZone(zoneOverride ?: MarketTimeZone.forSymbol(bar.symbol))

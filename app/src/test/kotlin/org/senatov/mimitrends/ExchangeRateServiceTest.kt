@@ -5,6 +5,7 @@ import org.senatov.mimitrends.model.MinuteBar
 import org.senatov.mimitrends.model.DisplayCurrency
 import java.nio.file.Files
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 
 class ExchangeRateServiceTest {
     @Test
@@ -21,6 +22,27 @@ class ExchangeRateServiceTest {
         assertEquals(98.0, converted.low, 1e-9)
         assertEquals(101.0, converted.close, 1e-9)
         assertEquals(source.volume, converted.volume)
+    }
+
+    @Test
+    fun `does not invent parity when the cache is missing`() {
+        val directory = Files.createTempDirectory("mimitrends-rate-missing")
+        val service = ExchangeRateService(directory.resolve("missing.properties"))
+
+        assertFailsWith<IllegalStateException> {
+            service.convert("PEP", 100.0, DisplayCurrency.EUR)
+        }
+    }
+
+    @Test
+    fun `rejects unsupported currency pairs`() {
+        val cache = Files.createTempFile("mimitrends-rate", ".properties")
+        Files.writeString(cache, "usdPerEur=1.25\n")
+        val service = ExchangeRateService(cache)
+
+        assertFailsWith<IllegalArgumentException> {
+            service.convertCurrency(100.0, "GBP", DisplayCurrency.EUR)
+        }
     }
 
     @Test

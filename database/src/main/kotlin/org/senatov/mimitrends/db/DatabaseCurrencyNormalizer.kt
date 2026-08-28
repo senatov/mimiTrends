@@ -3,6 +3,7 @@
 package org.senatov.mimitrends.db
 
 import java.sql.Connection
+import org.senatov.mimitrends.model.InstrumentCurrency
 
 internal data class EurPriceSnapshot(
     val sourceCurrency: String,
@@ -27,9 +28,7 @@ internal class DatabaseCurrencyNormalizer(private val connection: Connection) {
     }
 
     companion object {
-        private val EURO_SUFFIXES = listOf(".DE", ".F", ".PA", ".AS", ".MI", ".HE")
-        fun sourceCurrency(symbol: String): String =
-            if (EURO_SUFFIXES.any(symbol.uppercase()::endsWith)) "EUR" else "USD"
+        fun sourceCurrency(symbol: String): String = InstrumentCurrency.infer(symbol)
     }
 }
 

@@ -13,6 +13,7 @@ slf4j = "2.0.18"
 jfreechartFx = "2.0.2"
 junit = "5.14.4"
 jsoup = "1.23.1"
+commonsStatistics = "1.3"
 
 [libraries]
 atlantafx-base = { module = "io.github.mkpaz:atlantafx-base", version.ref = "atlantafx" }
@@ -36,6 +37,7 @@ slf4j-api = { module = "org.slf4j:slf4j-api", version.ref = "slf4j" }
 smile-core = { module = "com.github.haifengl:smile-core", version.ref = "smile" }
 sqlite-jdbc = { module = "org.xerial:sqlite-jdbc", version.ref = "sqlite" }
 duckdb-jdbc = { module = "org.duckdb:duckdb_jdbc", version.ref = "duckdb" }
+commons-statistics-descriptive = { module = "org.apache.commons:commons-statistics-descriptive", version.ref = "commonsStatistics" }
 
 [plugins]
 kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }

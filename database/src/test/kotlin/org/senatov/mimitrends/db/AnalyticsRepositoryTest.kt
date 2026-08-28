@@ -166,6 +166,48 @@ class AnalyticsRepositoryTest {
         }
     }
 
+    @Test
+    fun `stores actual counters when a partially evaluated scan is aborted`() {
+        val path = Files.createTempDirectory("mimitrends-aborted-counters").resolve("test.db")
+        MarketRepository(path).close()
+        AnalyticsRepository(path).use { analytics ->
+            val run = analytics.beginScan("US", 2, 180)
+            analytics.recordScanCandidate(run, "TEST", result(1_800_000_000L), null, "LIVE")
+            analytics.recordScanCandidate(run, "OTHER", null, "NO_DATA", "LIVE")
+
+            analytics.abortScan(run)
+        }
+
+        DriverManager.getConnection("jdbc:sqlite:$path").use { connection ->
+            connection.createStatement().executeQuery(
+                "SELECT status,evaluated_symbols,accepted_symbols,published_symbols FROM scan_runs"
+            ).use { result ->
+                assertTrue(result.next())
+                assertEquals("ABORTED", result.getString(1))
+                assertEquals(2, result.getInt(2))
+                assertEquals(1, result.getInt(3))
+                assertEquals(0, result.getInt(4))
+            }
+        }
+    }
+
+    @Test
+    fun `creates indexes for retention and latest published lookup`() {
+        val path = Files.createTempDirectory("mimitrends-query-indexes").resolve("test.db")
+        MarketRepository(path).close()
+        AnalyticsRepository(path).close()
+
+        DriverManager.getConnection("jdbc:sqlite:$path").use { connection ->
+            val indexes = connection.createStatement().executeQuery(
+                "SELECT name FROM sqlite_schema WHERE type='index'"
+            ).use { result -> buildSet { while (result.next()) add(result.getString(1)) } }
+            assertTrue("idx_provider_bars_epoch" in indexes)
+            assertTrue("idx_scan_runs_started" in indexes)
+            assertTrue("idx_quality_observed" in indexes)
+            assertTrue("idx_candidates_published_latest" in indexes)
+        }
+    }
+
     @Test fun `recovers interrupted scans and expires old provider observations`() {
         val path = Files.createTempDirectory("mimitrends-recovery").resolve("test.db")
         MarketRepository(path).close()

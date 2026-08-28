@@ -3,6 +3,7 @@ package org.senatov.mimitrends
 import org.senatov.mimitrends.log.LogTag
 import org.senatov.mimitrends.model.DisplayCurrency
 import org.senatov.mimitrends.model.MinuteBar
+import org.senatov.mimitrends.model.InstrumentCurrency
 import org.slf4j.LoggerFactory
 import java.net.URI
 import java.net.http.HttpClient
@@ -16,20 +17,22 @@ import java.util.concurrent.CompletableFuture
 
 class ExchangeRateService(private val cachePath: Path = Path.of(System.getProperty("user.home"), ".mimi", "trends", "exchange-rate.properties")) {
     private val log = LoggerFactory.getLogger(javaClass)
-    @Volatile private var usdPerEur = loadCached() ?: 1.0
+
+    @Volatile
+    private var usdPerEur: Double? = loadCached()
 
     fun usdToEur(value: Double): Double {
         log.trace(LogTag.STATE, "usdToEur(value={})", value)
-        return value / usdPerEur
+        return value / requireRate()
     }
 
     fun eurToUsd(value: Double): Double {
         log.trace(LogTag.STATE, "eurToUsd(value={})", value)
-        return value * usdPerEur
+        return value * requireRate()
     }
 
     fun convert(symbol: String, value: Double, target: DisplayCurrency): Double {
-        val sourceIsEuro = EURO_SUFFIXES.any(symbol.uppercase()::endsWith)
+        val sourceIsEuro = InstrumentCurrency.infer(symbol) == "EUR"
         return when (target) {
             DisplayCurrency.EUR -> if (sourceIsEuro) value else usdToEur(value)
             DisplayCurrency.USD -> if (sourceIsEuro) eurToUsd(value) else value
@@ -40,7 +43,7 @@ class ExchangeRateService(private val cachePath: Path = Path.of(System.getProper
         source.equals(target.name, ignoreCase = true) -> value
         source.equals("USD", ignoreCase = true) && target == DisplayCurrency.EUR -> usdToEur(value)
         source.equals("EUR", ignoreCase = true) && target == DisplayCurrency.USD -> eurToUsd(value)
-        else -> value
+        else -> throw IllegalArgumentException("Unsupported currency conversion $source/${target.name}")
     }
 
     fun convertBar(symbol: String, bar: MinuteBar, target: DisplayCurrency = DisplayCurrency.EUR): MinuteBar {
@@ -70,6 +73,7 @@ class ExchangeRateService(private val cachePath: Path = Path.of(System.getProper
             require(response.statusCode() == 200) { "ECB exchange-rate HTTP ${response.statusCode()}" }
             val rate = Regex("currency=['\"]USD['\"]\\s+rate=['\"]([0-9.]+)").find(response.body())?.groupValues?.get(1)?.toDouble()
                 ?: error("USD rate is missing in ECB response")
+            require(rate.isFinite() && rate > 0.0) { "Invalid EUR/USD rate $rate" }
             usdPerEur = rate; save(rate); log.info(LogTag.API, "ECB exchange rate loaded EUR/USD={}", rate); rate
         }
     }
@@ -77,7 +81,10 @@ class ExchangeRateService(private val cachePath: Path = Path.of(System.getProper
     private fun loadCached(): Double? {
         log.debug(LogTag.IO, "loadCached(path={})", cachePath)
         if (!Files.exists(cachePath)) return null
-        return runCatching { Properties().also { Files.newInputStream(cachePath).use(it::load) }.getProperty("usdPerEur")?.toDouble() }.getOrNull()
+        return runCatching {
+            Properties().also { Files.newInputStream(cachePath).use(it::load) }
+                .getProperty("usdPerEur")?.toDouble()?.takeIf { it.isFinite() && it > 0.0 }
+        }.getOrNull()
     }
 
     private fun save(rate: Double) {
@@ -86,7 +93,7 @@ class ExchangeRateService(private val cachePath: Path = Path.of(System.getProper
         Files.newOutputStream(cachePath).use { Properties().apply { setProperty("usdPerEur", rate.toString()) }.store(it, "ECB reference rate") }
     }
 
-    private companion object {
-        val EURO_SUFFIXES = listOf(".DE", ".F", ".PA", ".AS", ".MI", ".HE")
-    }
+    private fun requireRate(): Double = usdPerEur
+        ?: error("EUR/USD exchange rate is unavailable; refresh must succeed before conversion")
+
 }

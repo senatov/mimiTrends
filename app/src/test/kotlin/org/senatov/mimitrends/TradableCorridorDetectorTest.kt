@@ -30,6 +30,17 @@ class TradableCorridorDetectorTest {
         assertNull(TradableCorridorDetector.detect("TREND", bars, now))
     }
 
+    @Test
+    fun `does not count stale sparse bars as a two hour corridor`() {
+        val now = 2_000_000L
+        val pattern = listOf(99.0, 100.0, 101.0, 100.0)
+        val bars = (0 until 72).map { index ->
+            bar(now - (71 - index) * 10L * 60L, pattern[index % pattern.size])
+        }
+
+        assertNull(TradableCorridorDetector.detect("NVDA", bars, now))
+    }
+
     private fun bar(epoch: Long, close: Double) = MinuteBar(
         "TEST", epoch, close, close + 0.05, close - 0.05, close, 10_000.0
     )

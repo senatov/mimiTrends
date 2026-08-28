@@ -11,7 +11,8 @@ internal class ResearchSampleStore(private val connection: Connection) {
     fun needsHistoricalBackfill(): Boolean = connection.createStatement().use { statement ->
         statement.executeQuery("""SELECT
             (SELECT COUNT(DISTINCT date(minute_epoch, 'unixepoch')) FROM minute_bars),
-            (SELECT COUNT(DISTINCT date(observed_epoch, 'unixepoch')) FROM research_samples WHERE source='HISTORICAL'),
+            (SELECT COUNT(DISTINCT date(observed_epoch, 'unixepoch')) FROM research_samples
+                WHERE source='HISTORICAL' AND feature_version=$FEATURE_VERSION),
             (SELECT COUNT(*) FROM research_outcomes WHERE horizon_minutes=90)""").use {
             it.next()
             it.getInt(2) < (it.getInt(1) - REQUIRED_BASELINE_DAYS).coerceAtLeast(0) || it.getInt(3) == 0
@@ -43,6 +44,7 @@ internal class ResearchSampleStore(private val connection: Connection) {
             statement.setInt(index++, direction)
             statement.setInt(index++, if (result == null) 0 else 1)
             statement.setString(index++, source)
+            statement.setInt(index++, FEATURE_VERSION)
             metric(statement, index++, result?.anomalyScore)
             metric(statement, index++, result?.priceAnomaly)
             metric(statement, index++, result?.rangeAnomaly)
@@ -115,12 +117,14 @@ internal class ResearchSampleStore(private val connection: Connection) {
 
     private fun hasRecentEpisode(symbol: String, family: String, direction: Int, epoch: Long): Boolean =
         connection.prepareStatement("""SELECT 1 FROM research_samples WHERE symbol=? AND family=? AND direction=?
+            AND feature_version=?
             AND observed_epoch>? AND observed_epoch<=? ORDER BY observed_epoch DESC LIMIT 1""").use { statement ->
             statement.setString(1, symbol.uppercase())
             statement.setString(2, family)
             statement.setInt(3, direction)
-            statement.setLong(4, epoch - EPISODE_SECONDS)
-            statement.setLong(5, epoch)
+            statement.setInt(4, FEATURE_VERSION)
+            statement.setLong(5, epoch - EPISODE_SECONDS)
+            statement.setLong(6, epoch)
             statement.executeQuery().use { it.next() }
         }
 
@@ -199,14 +203,27 @@ internal class ResearchSampleStore(private val connection: Connection) {
         const val MAX_TRACKING_MINUTES = 94
         const val OUTCOME_LAG_MINUTES = 4
         const val MAX_PLAUSIBLE_RETURN_PERCENT = 100.0
+        const val FEATURE_VERSION = 4
         val HORIZONS = listOf(5, 10, 30, 60, 90)
         const val INSERT_SQL = """INSERT OR IGNORE INTO research_samples(
-            run_id, symbol, observed_epoch, entry_price, family, direction, accepted, source,
+            run_id, symbol, observed_epoch, entry_price, family, direction, accepted, source, feature_version,
             score, jump_z, range_z, volume_z, rvol, return_1m, return_3m, return_5m, return_10m,
             return_30m, return_60m, range_10m, volatility_30m, vwap_distance, session_high_distance,
             session_low_distance, volume_ratio_10m, trend_efficiency_10m, entry_currency, currency_status,
             entry_price_eur, fx_rate, fx_rate_epoch)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"""
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(symbol, observed_epoch, family, direction) DO UPDATE SET
+                run_id=excluded.run_id, entry_price=excluded.entry_price, accepted=excluded.accepted,
+                source=excluded.source, feature_version=excluded.feature_version, score=excluded.score,
+                jump_z=excluded.jump_z, range_z=excluded.range_z, volume_z=excluded.volume_z, rvol=excluded.rvol,
+                return_1m=excluded.return_1m, return_3m=excluded.return_3m, return_5m=excluded.return_5m,
+                return_10m=excluded.return_10m, return_30m=excluded.return_30m, return_60m=excluded.return_60m,
+                range_10m=excluded.range_10m, volatility_30m=excluded.volatility_30m,
+                vwap_distance=excluded.vwap_distance, session_high_distance=excluded.session_high_distance,
+                session_low_distance=excluded.session_low_distance, volume_ratio_10m=excluded.volume_ratio_10m,
+                trend_efficiency_10m=excluded.trend_efficiency_10m, entry_currency=excluded.entry_currency,
+                currency_status=excluded.currency_status, entry_price_eur=excluded.entry_price_eur,
+                fx_rate=excluded.fx_rate, fx_rate_epoch=excluded.fx_rate_epoch"""
         const val HISTORICAL_OUTCOME_SQL = """INSERT OR IGNORE INTO research_outcomes(
             sample_id, horizon_minutes, observed_price, return_percent, elapsed_minutes,
             maximum_return_percent, minimum_return_percent, observed_at)

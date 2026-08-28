@@ -18,14 +18,24 @@ object ResearchFeatureExtractor {
             java.time.Instant.ofEpochSecond(it.minuteEpochSeconds).atZone(zone).toLocalDate() == latestDate
         }
         if (session.size < 2 || latest.close <= 0.0) return null
-        val returns30 = session.takeLast(31).zipWithNext().map { (a, b) -> percent(b.close, a.close) }
-        val mean = returns30.average().takeIf(Double::isFinite) ?: 0.0
-        val volatility = sqrt(returns30.sumOf { (it - mean) * (it - mean) } /
-            returns30.size.coerceAtLeast(1))
-        val recent10 = session.takeLast(11)
-        val recentVolumes = session.dropLast(10).takeLast(30).map { it.volume }.filter { it > 0.0 }
-        val currentVolume = session.takeLast(10).sumOf(MinuteBar::volume)
-        val referenceVolume = recentVolumes.average().takeIf { it.isFinite() && it > 0.0 }?.times(10.0)
+        val recent30 = trailingWindow(session, 30)
+        val returns30 = recent30.zipWithNext().mapNotNull { (a, b) ->
+            if (b.minuteEpochSeconds - a.minuteEpochSeconds == 60L) percent(b.close, a.close) else null
+        }
+        val mean = returns30.average()
+        val volatility = if (mean.isFinite()) {
+            sqrt(returns30.sumOf { (it - mean) * (it - mean) } / returns30.size)
+        } else Double.NaN
+        val recent10 = trailingWindow(session, 10)
+        val prior30 = session.filter {
+            val age = latest.minuteEpochSeconds - it.minuteEpochSeconds
+            age in 11L * 60L..40L * 60L
+        }
+        val currentVolumes = recent10.filter { it.minuteEpochSeconds > latest.minuteEpochSeconds - 10L * 60L }
+        val recentVolumes = prior30.map { it.volume }.filter { it > 0.0 }
+        val currentVolume = currentVolumes.sumOf(MinuteBar::volume)
+        val referenceVolume = recentVolumes.average().takeIf { it.isFinite() && it > 0.0 }
+            ?.times(currentVolumes.size)
         // Ananth Madhavan, "VWAP Strategies" (2002), volume-weighted execution benchmark.
         // https://www.pm-research.com/content/iijtrade/2002/1/32
         val vwapDenominator = session.sumOf(MinuteBar::volume)
@@ -50,8 +60,17 @@ object ResearchFeatureExtractor {
         )
     }
 
-    private fun trailingReturn(bars: List<MinuteBar>, minutes: Int): Double =
-        bars.getOrNull(bars.lastIndex - minutes)?.close?.let { percent(bars.last().close, it) } ?: Double.NaN
+    private fun trailingReturn(bars: List<MinuteBar>, minutes: Int): Double {
+        val latest = bars.last()
+        val target = latest.minuteEpochSeconds - minutes * 60L
+        val reference = bars.lastOrNull { it.minuteEpochSeconds == target } ?: return Double.NaN
+        return percent(latest.close, reference.close)
+    }
+
+    private fun trailingWindow(bars: List<MinuteBar>, minutes: Int): List<MinuteBar> {
+        val cutoff = bars.last().minuteEpochSeconds - minutes * 60L
+        return bars.filter { it.minuteEpochSeconds >= cutoff }
+    }
 
     private fun efficiency(bars: List<MinuteBar>): Double {
         if (bars.size < 2) return Double.NaN

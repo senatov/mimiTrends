@@ -33,6 +33,7 @@ class MarketRepositoryTest {
                 )
             )
         }
+        resetLegacyCleanup(database.toString())
 
         MarketRepository(database).use { repository ->
             assertTrue(repository.loadProviderMinuteBars("LANG_SCHWARZ", "ENR.DE", 0).isEmpty())
@@ -69,6 +70,7 @@ class MarketRepositoryTest {
                 null, null, null, null, null, null, null, null, null, null, null, 60_000
             ))
         }
+        resetLegacyCleanup(database.toString())
 
         MarketRepository(database).use { repository ->
             assertEquals(null, repository.loadProviderInstrument("TRADERFOX", "EOAN.DE"))
@@ -229,4 +231,12 @@ class MarketRepositoryTest {
                 statement.executeQuery().use { it.next() }
             }
         }
+
+    private fun resetLegacyCleanup(database: String) {
+        DriverManager.getConnection("jdbc:sqlite:$database").use { connection ->
+            connection.createStatement().use {
+                it.executeUpdate("DELETE FROM market_storage_migrations WHERE version=1")
+            }
+        }
+    }
 }

@@ -142,6 +142,24 @@ internal object AnalyticsMigrations {
         14 to listOf(
             "UPDATE instrument_metadata SET isin='US6701002056' WHERE symbol='NVO' AND isin='US31810T1016'",
             "UPDATE instrument_metadata SET isin='US30231G1022' WHERE symbol='XOM' AND isin='US98423F1093'"
+        ),
+        15 to listOf(
+            "CREATE INDEX IF NOT EXISTS idx_scan_runs_started ON scan_runs(started_at)",
+            "CREATE INDEX IF NOT EXISTS idx_quality_observed ON data_quality(observed_at)",
+            "CREATE INDEX IF NOT EXISTS idx_candidates_published_latest ON scan_candidates(symbol, run_id DESC) WHERE published=1"
+        ),
+        16 to listOf(
+            "CREATE TABLE IF NOT EXISTS schema_migrations(version INTEGER PRIMARY KEY, applied_at INTEGER NOT NULL)"
+        ),
+        17 to listOf(
+            "ALTER TABLE research_samples ADD COLUMN feature_version INTEGER NOT NULL DEFAULT 3"
+        ),
+        18 to listOf(
+            """UPDATE scan_runs SET
+                evaluated_symbols=(SELECT COUNT(*) FROM scan_candidates WHERE run_id=scan_runs.id),
+                accepted_symbols=(SELECT COUNT(*) FROM scan_candidates WHERE run_id=scan_runs.id AND accepted=1),
+                published_symbols=(SELECT COUNT(*) FROM scan_candidates WHERE run_id=scan_runs.id AND published=1)
+                WHERE status='ABORTED'"""
         )
     )
 }

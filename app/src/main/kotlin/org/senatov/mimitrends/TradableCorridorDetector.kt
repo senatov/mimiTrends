@@ -3,6 +3,9 @@ package org.senatov.mimitrends
 import kotlin.math.abs
 import kotlin.math.roundToInt
 import org.senatov.mimitrends.model.MinuteBar
+import org.senatov.mimitrends.model.MarketTimeZone
+import java.time.Instant
+import org.senatov.mimitrends.statistics.ValidatedStatistics
 
 /** Finds a stable intraday range whose remaining move is still usable after estimated friction. */
 internal object TradableCorridorDetector {
@@ -10,13 +13,18 @@ internal object TradableCorridorDetector {
         val sorted = bars.filter { it.close > 0.0 }.sortedBy(MinuteBar::minuteEpochSeconds)
         val latest = sorted.lastOrNull() ?: return null
         if (nowEpochSeconds - latest.minuteEpochSeconds > MAX_DATA_AGE_MINUTES * 60) return null
-        val session = sorted.filter { it.minuteEpochSeconds / 86_400L == latest.minuteEpochSeconds / 86_400L }
-            .takeLast(LOOKBACK_MINUTES)
+        val zone = MarketTimeZone.forSymbol(symbol)
+        val latestDate = Instant.ofEpochSecond(latest.minuteEpochSeconds).atZone(zone).toLocalDate()
+        val cutoff = latest.minuteEpochSeconds - LOOKBACK_MINUTES * 60L
+        val session = sorted.filter {
+            it.minuteEpochSeconds >= cutoff &&
+                    Instant.ofEpochSecond(it.minuteEpochSeconds).atZone(zone).toLocalDate() == latestDate
+        }
         if (session.size < MIN_BARS) return null
 
-        val closes = session.map(MinuteBar::close).sorted()
-        val lower = percentile(closes, LOWER_QUANTILE)
-        val upper = percentile(closes, UPPER_QUANTILE)
+        val closes = session.map(MinuteBar::close)
+        val lower = ValidatedStatistics.quantile(closes, LOWER_QUANTILE)
+        val upper = ValidatedStatistics.quantile(closes, UPPER_QUANTILE)
         if (lower <= 0.0 || upper <= lower) return null
         val widthPercent = (upper / lower - 1.0) * 100.0
         if (widthPercent !in MIN_WIDTH_PERCENT..MAX_WIDTH_PERCENT) return null
@@ -78,9 +86,6 @@ internal object TradableCorridorDetector {
         }
         return groups
     }
-
-    private fun percentile(sorted: List<Double>, quantile: Double): Double =
-        sorted[((sorted.lastIndex * quantile).roundToInt()).coerceIn(sorted.indices)]
 
     private const val LOOKBACK_MINUTES = 120
     private const val MIN_BARS = 45

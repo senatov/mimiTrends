@@ -307,13 +307,6 @@ class MarketRepository(
                           OR symbol LIKE '%.AS' OR symbol LIKE '%.MI' OR symbol LIKE '%.HE' THEN 'EUR'
                         ELSE 'USD' END, currency_status='INFERRED'""")
                 }
-                statement.executeUpdate("DROP INDEX IF EXISTS idx_minute_symbol_time")
-                val removedSnapshots = statement.executeUpdate(
-                    "DELETE FROM minute_bars WHERE minute_epoch % 60 != 0 AND volume <= 0"
-                )
-                if (removedSnapshots > 0) {
-                    log.info(LogTag.DB, "removed malformed zero-volume quote snapshots count={}", removedSnapshots)
-                }
                 statement.executeUpdate(
                     """CREATE TABLE IF NOT EXISTS company_profiles (
                         symbol TEXT PRIMARY KEY, name TEXT NOT NULL, exchange TEXT NOT NULL,
@@ -348,21 +341,15 @@ class MarketRepository(
                 statement.executeUpdate(
                     "CREATE INDEX IF NOT EXISTS idx_provider_bars_symbol_time ON provider_minute_bars(symbol, minute_epoch)"
                 )
-                RetiredProviderCleaner.clean(connection)
-                IncorrectProviderIdentityCleaner.clean(connection)
-                // Website and broker adapters expose quote snapshots, not exchange OHLC bars. Older builds
-                // converted their single prices into artificial candles, which must not reach analytics.
                 statement.executeUpdate(
-                    """DELETE FROM provider_minute_bars WHERE provider IN
-                        ('SCALABLE','TRADEGATE','EURONEXT','LANG_SCHWARZ','WALLSTREET_ONLINE',
-                         'TRADERFOX','BNP_PARIBAS','BOERSE_DE')"""
-                )
-                // Remove the temporary generated-monogram source used by an older build so genuine
-                // cached company favicons are fetched on the next visible table render.
-                statement.executeUpdate(
-                    "UPDATE company_profiles SET logo_url = NULL, logo = NULL WHERE logo_url LIKE 'https://img.loadlogo.com/%'"
+                    "CREATE INDEX IF NOT EXISTS idx_provider_bars_epoch ON provider_minute_bars(minute_epoch)"
                 )
             }
+            val removedLegacyRows = MarketStorageMaintenance.migrateLegacyData(connection)
+            if (removedLegacyRows > 0) log.info(
+                LogTag.DB,
+                "removed legacy quote-derived provider bars count={}", removedLegacyRows
+            )
             connection.commit()
         } catch (error: Exception) {
             connection.rollback()

@@ -214,10 +214,15 @@ class AnalyticsRepository(
     }
 
     fun abortScan(runId: Long) = locked {
-        connection.prepareStatement("""UPDATE scan_runs SET completed_at=?, status='ABORTED'
+        connection.prepareStatement(
+            """UPDATE scan_runs SET completed_at=?, status='ABORTED',
+            evaluated_symbols=(SELECT COUNT(*) FROM scan_candidates WHERE run_id=?),
+            accepted_symbols=(SELECT COUNT(*) FROM scan_candidates WHERE run_id=? AND accepted=1),
+            published_symbols=(SELECT COUNT(*) FROM scan_candidates WHERE run_id=? AND published=1)
             WHERE id=? AND status='RUNNING'""").use { statement ->
             statement.setLong(1, Instant.now().epochSecond)
-            statement.setLong(2, runId)
+            statement.setLong(2, runId); statement.setLong(3, runId); statement.setLong(4, runId)
+            statement.setLong(5, runId)
             statement.executeUpdate()
         }
     }
@@ -229,18 +234,17 @@ class AnalyticsRepository(
     }
 
     fun loadLatestPublishedResults(limit: Int): List<ScanResult> = locked {
-        connection.prepareStatement("""WITH latest_by_symbol AS (
-                SELECT run_id, symbol, price, entry_price, score, jump_z, range_z, volume_z, rvol,
-                    change_10m, turnover, signal, data_epoch, signal_epoch, source,
-                    ROW_NUMBER() OVER (PARTITION BY symbol ORDER BY run_id DESC) AS recency_rank
-                FROM scan_candidates
-                WHERE published=1
+        connection.prepareStatement(
+            """SELECT c.symbol, c.price, c.entry_price, c.score, c.jump_z,
+                c.range_z, c.volume_z, c.rvol, c.change_10m, c.turnover, c.signal, c.data_epoch,
+                c.signal_epoch, c.source
+            FROM scan_candidates c
+            WHERE c.published=1 AND NOT EXISTS (
+                SELECT 1 FROM scan_candidates newer
+                WHERE newer.symbol=c.symbol AND newer.published=1 AND newer.run_id>c.run_id
             )
-            SELECT symbol, price, entry_price, score, jump_z, range_z, volume_z, rvol,
-                change_10m, turnover, signal, data_epoch, signal_epoch, source
-            FROM latest_by_symbol
-            WHERE recency_rank=1
-            ORDER BY run_id DESC, data_epoch DESC, score DESC LIMIT ?""").use { s ->
+            ORDER BY c.run_id DESC, c.data_epoch DESC, c.score DESC LIMIT ?"""
+        ).use { s ->
             s.setInt(1, limit.coerceAtLeast(1))
             s.executeQuery().use { result -> buildList {
                 fun nullableMetric(index: Int): Double = result.getDouble(index).let { if (result.wasNull()) Double.NaN else it }
@@ -280,6 +284,7 @@ class AnalyticsRepository(
         duckAnalytics.applyRetention(nowEpoch)
         connection.prepareStatement("DELETE FROM scan_runs WHERE started_at < ?").use { it.setLong(1, nowEpoch - SCAN_RETENTION_DAYS * 86_400L); it.executeUpdate() }
         connection.prepareStatement("DELETE FROM data_quality WHERE observed_at < ?").use { it.setLong(1, nowEpoch - DATA_QUALITY_RETENTION_DAYS * 86_400L); it.executeUpdate() }
+        database.optimize()
         if (database.compactIfWorthwhile()) log.info(LogTag.DB, "SQLite storage compacted after DuckDB archival")
     }
 
@@ -330,6 +335,7 @@ class AnalyticsRepository(
                 connection.autoCommit = false
                 try {
                     connection.createStatement().use { s -> statements.forEach(s::executeUpdate) }
+                    if (version == CURRENCY_BACKFILL_MIGRATION) DatabaseCurrencyBackfill.run(connection)
                     connection.prepareStatement("INSERT INTO schema_migrations(version, applied_at) VALUES (?, ?)").use { s ->
                         s.setInt(1, version); s.setLong(2, Instant.now().epochSecond); s.executeUpdate()
                     }
@@ -341,12 +347,15 @@ class AnalyticsRepository(
                 }
             }
         }
-        transaction { DatabaseCurrencyBackfill.run(connection) }
         log.info(LogTag.DB, "analytics schema ready version={}", AnalyticsMigrations.values.maxOf { it.first })
     }
 
     private fun recoverInterruptedScans(nowEpoch: Long = Instant.now().epochSecond) = locked {
-        connection.prepareStatement("""UPDATE scan_runs SET completed_at=?, status='ABORTED'
+        connection.prepareStatement(
+            """UPDATE scan_runs SET completed_at=?, status='ABORTED',
+            evaluated_symbols=(SELECT COUNT(*) FROM scan_candidates WHERE run_id=scan_runs.id),
+            accepted_symbols=(SELECT COUNT(*) FROM scan_candidates WHERE run_id=scan_runs.id AND accepted=1),
+            published_symbols=(SELECT COUNT(*) FROM scan_candidates WHERE run_id=scan_runs.id AND published=1)
             WHERE status='RUNNING' AND completed_at IS NULL""").use { statement ->
             statement.setLong(1, nowEpoch)
             val recovered = statement.executeUpdate()
@@ -370,6 +379,7 @@ class AnalyticsRepository(
     private inline fun <T> locked(crossinline block: () -> T): T = database.locked { block() }
 
     private companion object {
+        const val CURRENCY_BACKFILL_MIGRATION = 16
         const val RAW_RETENTION_DAYS = 90
         const val PROVIDER_RETENTION_DAYS = 90
         const val SQLITE_AGGREGATE_TAIL_DAYS = 45L
