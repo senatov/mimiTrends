@@ -82,27 +82,31 @@ internal class ShortMoveRefreshCoordinator(
 }
 
 internal class ShortMoveEventRetainer {
-    private val retainedBySymbol: MutableMap<String, ShortMove> = LinkedHashMap()
+    private val retainedBySymbol: MutableMap<String, RetainedMove> = LinkedHashMap()
 
     fun merge(current: Collection<ShortMove>, nowEpochSeconds: Long): List<ShortMove> {
-        val expiredSymbols = retainedBySymbol.values
-            .filter { move -> nowEpochSeconds - move.eventEpochSeconds > RETENTION_SECONDS }
-            .map(ShortMove::symbol)
+        val expiredSymbols = retainedBySymbol
+            .filterValues { retained -> nowEpochSeconds - retained.lastSeenEpochSeconds > RETENTION_SECONDS }
+            .keys
         expiredSymbols.forEach(retainedBySymbol::remove)
-        current.asSequence().filter { it.pattern == ShortMovePattern.RECURRING_SHARP_JUMP }.forEach { candidate ->
-            val retained = retainedBySymbol[candidate.symbol]
-            if (retained == null || candidate.eventEpochSeconds > retained.eventEpochSeconds) {
-                retainedBySymbol[candidate.symbol] = candidate
-            }
+        current.asSequence().filter(ShortMove::isActionableOpportunity).forEach { candidate ->
+            retainedBySymbol[candidate.symbol] = RetainedMove(candidate, nowEpochSeconds)
         }
         val frozenSymbols = retainedBySymbol.keys
-        return (retainedBySymbol.values + current.filter { it.symbol !in frozenSymbols })
+        return (retainedBySymbol.values.map(RetainedMove::move) + current.filter { it.symbol !in frozenSymbols })
             .distinctBy(ShortMove::symbol)
+            .sortedByDescending(ShortMove::opportunityScore)
             .take(MAX_RETAINED_ROWS)
     }
+
+    private data class RetainedMove(val move: ShortMove, val lastSeenEpochSeconds: Long)
 
     private companion object {
         const val RETENTION_SECONDS = 20 * 60L
         const val MAX_RETAINED_ROWS = 10
     }
 }
+
+private fun ShortMove.isActionableOpportunity(): Boolean =
+    opportunityScore >= 0 && (pattern == ShortMovePattern.TRADABLE_CORRIDOR ||
+            pattern == ShortMovePattern.RECOVERY_AFTER_EXTENDED_DROP)

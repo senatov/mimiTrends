@@ -24,25 +24,64 @@ class ShortMoveDetectorTest {
         assertEquals(listOf(76, 62), selected.map(ModeratePositiveCandidateSelector::positivityPercent))
     }
 
-    @Test fun `freezes a recurring jump for twenty minutes despite refreshed rows`() {
+    @Test
+    fun `retains an actionable opportunity for twenty minutes after it disappears`() {
         val retainer = ShortMoveEventRetainer()
-        val initial = recurringMove(event = 1_000L, close = 104.0)
+        val initial = opportunityMove("NDA.DE", event = 1_000L, close = 104.0, score = 72)
 
         retainer.merge(listOf(initial), 1_000L)
-        val refreshed = retainer.merge(listOf(recurringMove(event = 1_000L, close = 106.0)), 1_900L)
+        val retained = retainer.merge(emptyList(), 1_900L)
 
-        assertEquals(104.0, refreshed.single().close)
+        assertEquals(104.0, retained.single().close)
         kotlin.test.assertFalse(retainer.merge(emptyList(), 2_201L).any { it.symbol == "NDA.DE" })
     }
 
-    @Test fun `replaces a frozen recurring row when a new jump occurs`() {
+    @Test
+    fun `replaces a retained opportunity when a newer one occurs`() {
         val retainer = ShortMoveEventRetainer()
-        retainer.merge(listOf(recurringMove(event = 1_000L, close = 104.0)), 1_000L)
+        retainer.merge(listOf(opportunityMove("NDA.DE", event = 1_000L, close = 104.0, score = 72)), 1_000L)
 
-        val result = retainer.merge(listOf(recurringMove(event = 1_600L, close = 109.0)), 1_600L)
+        val result = retainer.merge(
+            listOf(opportunityMove("NDA.DE", event = 1_600L, close = 109.0, score = 81)), 1_600L
+        )
 
         assertEquals(1_600L, result.single().eventEpochSeconds)
         assertEquals(109.0, result.single().close)
+    }
+
+    @Test
+    fun `refreshes an active opportunity and restarts its retention window`() {
+        val retainer = ShortMoveEventRetainer()
+        retainer.merge(listOf(opportunityMove("NDA.DE", event = 1_000L, close = 104.0, score = 72)), 1_000L)
+
+        val refreshed = retainer.merge(
+            listOf(opportunityMove("NDA.DE", event = 1_000L, close = 106.0, score = 80)), 1_900L
+        )
+
+        assertEquals(106.0, refreshed.single().close)
+        assertEquals(80, refreshed.single().opportunityScore)
+        assertTrue(retainer.merge(emptyList(), 3_100L).any { it.symbol == "NDA.DE" })
+        kotlin.test.assertFalse(retainer.merge(emptyList(), 3_101L).any { it.symbol == "NDA.DE" })
+    }
+
+    @Test
+    fun `orders retained and current opportunities by opportunity score`() {
+        val retainer = ShortMoveEventRetainer()
+        retainer.merge(listOf(opportunityMove("LOW", event = 1_000L, close = 104.0, score = 42)), 1_000L)
+
+        val result = retainer.merge(
+            listOf(opportunityMove("HIGH", event = 1_100L, close = 105.0, score = 88)), 1_100L
+        )
+
+        assertEquals(listOf("HIGH", "LOW"), result.map(ShortMove::symbol))
+    }
+
+    @Test
+    fun `does not retain non-actionable diagnostics`() {
+        val retainer = ShortMoveEventRetainer()
+        retainer.merge(listOf(recurringMove(event = 1_000L, close = 104.0)), 1_000L)
+
+        assertTrue(retainer.merge(emptyList(), 1_001L).isEmpty())
     }
 
     @Test fun `detects a new sharp rise when similar rises recur across days`() {
@@ -303,5 +342,10 @@ class ShortMoveDetectorTest {
     private fun recurringMove(event: Long, close: Double) = ShortMove(
         "NDA.DE", 4.0, 100.0, close, event - 60L, event, 2,
         ShortMovePattern.RECURRING_SHARP_JUMP, event
+    )
+
+    private fun opportunityMove(symbol: String, event: Long, close: Double, score: Int) = ShortMove(
+        symbol, 4.0, 100.0, close, event - 60L, event, 45,
+        ShortMovePattern.TRADABLE_CORRIDOR, event, opportunityScore = score
     )
 }
