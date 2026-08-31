@@ -89,11 +89,16 @@ internal class ShortMoveEventRetainer {
             .filterValues { retained -> nowEpochSeconds - retained.lastSeenEpochSeconds > RETENTION_SECONDS }
             .keys
         expiredSymbols.forEach(retainedBySymbol::remove)
-        current.asSequence().filter(ShortMove::isActionableOpportunity).forEach { candidate ->
-            retainedBySymbol[candidate.symbol] = RetainedMove(candidate, nowEpochSeconds)
+        val active = current.asSequence().filter(ShortMove::isActionableOpportunity).toList()
+        active.forEach { candidate ->
+            retainedBySymbol[candidate.symbol] = RetainedMove(candidate.copy(isRetained = false), nowEpochSeconds)
         }
+        val activeSymbols = active.mapTo(HashSet(), ShortMove::symbol)
         val frozenSymbols = retainedBySymbol.keys
-        return (retainedBySymbol.values.map(RetainedMove::move) + current.filter { it.symbol !in frozenSymbols })
+        val retained = retainedBySymbol.values.map { item ->
+            item.move.copy(isRetained = item.move.symbol !in activeSymbols)
+        }
+        return (retained + current.filter { it.symbol !in frozenSymbols })
             .distinctBy(ShortMove::symbol)
             .sortedByDescending(ShortMove::opportunityScore)
             .take(MAX_RETAINED_ROWS)
@@ -106,7 +111,3 @@ internal class ShortMoveEventRetainer {
         const val MAX_RETAINED_ROWS = 10
     }
 }
-
-private fun ShortMove.isActionableOpportunity(): Boolean =
-    opportunityScore >= 0 && (pattern == ShortMovePattern.TRADABLE_CORRIDOR ||
-            pattern == ShortMovePattern.RECOVERY_AFTER_EXTENDED_DROP)

@@ -128,7 +128,7 @@ class ShortMovePanel(
             styleClass += "status-column"
             setCellValueFactory { ReadOnlyObjectWrapper(it.value) }
             comparator = ShortMoveSort.direction
-            setCellFactory { DirectionCell() }; prefWidth = 105.0
+            setCellFactory { DirectionCell() }; prefWidth = 135.0
         }
         val move = TableColumn<ShortMove, Number>("Room").apply {
             id = "move"
@@ -164,7 +164,7 @@ class ShortMovePanel(
             TableColumnAutoFitter.Spec(company, { companyNames[it.symbol] ?: it.symbol }, 80.0, 240.0),
             TableColumnAutoFitter.Spec(opportunity, { "${it.opportunityScore}%" }, 82.0, 112.0),
             TableColumnAutoFitter.Spec(priceRange, ShortMovePricePresentation::text, 62.0, 88.0),
-            TableColumnAutoFitter.Spec(direction, ::directionLabel, 68.0, 105.0),
+            TableColumnAutoFitter.Spec(direction, ::directionLabel, 82.0, 155.0),
             TableColumnAutoFitter.Spec(move, { "%+.2f%%".format(it.changePercent) }, 54.0, 76.0),
             TableColumnAutoFitter.Spec(period, {
                 "${time.format(Instant.ofEpochSecond(it.startedAtEpochSeconds))}–${time.format(Instant.ofEpochSecond(it.endedAtEpochSeconds))}"
@@ -178,29 +178,39 @@ class ShortMovePanel(
         VBox.setVgrow(table, Priority.ALWAYS)
         table.styleClass += listOf("scanner-table", "short-move-table")
         table.setRowFactory {
-            TableRow<ShortMove>().apply {
+            object : TableRow<ShortMove>() {
                 var contextItem: ShortMove? = null
-                setOnMouseClicked { event ->
-                    if (!isEmpty && event.button == MouseButton.PRIMARY && event.clickCount == 1) {
-                        onOpen(item.symbol, item.endedAtEpochSeconds)
+
+                init {
+                    setOnMouseClicked { event ->
+                        if (!isEmpty && event.button == MouseButton.PRIMARY && event.clickCount == 1) {
+                            onOpen(item.symbol, item.endedAtEpochSeconds)
+                        }
+                    }
+                    contextMenu = ContextMenu(
+                        MenuItem("Copy search keyword").apply {
+                            accelerator = KeyCodeCombination(KeyCode.C, KeyCombination.SHORTCUT_DOWN)
+                            setOnAction { contextItem?.let { move -> copyText(searchKeyword(move)) } }
+                        },
+                        MenuItem("Copy ticker").apply { setOnAction { contextItem?.symbol?.let(copyText) } },
+                        MenuItem("Open Stock").apply {
+                            accelerator = KeyCodeCombination(KeyCode.O, KeyCombination.SHORTCUT_DOWN)
+                            setOnAction { contextItem?.symbol?.let(openExternalChart) }
+                        }
+                    ).apply {
+                        setOnShowing {
+                            contextItem = item.takeUnless { isEmpty }
+                            contextItem?.let { table.selectionModel.select(it) }
+                        }
+                        setOnHidden { contextItem = null }
                     }
                 }
-                contextMenu = ContextMenu(
-                    MenuItem("Copy search keyword").apply {
-                        accelerator = KeyCodeCombination(KeyCode.C, KeyCombination.SHORTCUT_DOWN)
-                        setOnAction { contextItem?.let { move -> copyText(searchKeyword(move)) } }
-                    },
-                    MenuItem("Copy ticker").apply { setOnAction { contextItem?.symbol?.let(copyText) } },
-                    MenuItem("Open Stock").apply {
-                        accelerator = KeyCodeCombination(KeyCode.O, KeyCombination.SHORTCUT_DOWN)
-                        setOnAction { contextItem?.symbol?.let(openExternalChart) }
-                    }
-                ).apply {
-                    setOnShowing {
-                        contextItem = item.takeUnless { isEmpty }
-                        contextItem?.let { table.selectionModel.select(it) }
-                    }
-                    setOnHidden { contextItem = null }
+
+                override fun updateItem(item: ShortMove?, empty: Boolean) {
+                    super.updateItem(item, empty)
+                    tooltip = if (!empty && item?.isRetained == true) javafx.scene.control.Tooltip(
+                        "Recently detected · no longer confirmed by the latest scan"
+                    ) else null
                 }
             }
         }
@@ -221,14 +231,17 @@ class ShortMovePanel(
 
     internal fun show(moves: Collection<ShortMove>, nowEpochSeconds: Long = Instant.now().epochSecond) {
         val selected = table.selectionModel.selectedItem?.identity()
-        val current = moves.asSequence().filter(::isPrimaryOpportunity)
+        val current = moves.asSequence().filter(ShortMove::isActionableOpportunity)
             .sortedByDescending(ShortMove::opportunityScore).take(MAX_VISIBLE_MOVES).toList()
-        val displayed = eventRetainer.merge(current, nowEpochSeconds).filter(::isPrimaryOpportunity)
+        val displayed = eventRetainer.merge(current, nowEpochSeconds).filter(ShortMove::isActionableOpportunity)
         rows.setAll(displayed)
         selected?.let { identity ->
             sortedRows.firstOrNull { it.identity() == identity }?.let(table.selectionModel::select)
         }
-        updateCaption.text = "${displayed.size} actionable · updated ${time.format(Instant.ofEpochSecond(nowEpochSeconds))}"
+        val recentCount = displayed.count(ShortMove::isRetained)
+        val activeCount = displayed.size - recentCount
+        updateCaption.text =
+            "$activeCount active · $recentCount recent · updated ${time.format(Instant.ofEpochSecond(nowEpochSeconds))}"
         updateCaption.tooltip?.text = updateCaption.text
         displayed.forEach(::requestCompanyName)
         autoFitter.request()
@@ -241,8 +254,8 @@ class ShortMovePanel(
         ShortMovePattern.RECURRING_SHARP_JUMP -> recurringDirection(move)
         ShortMovePattern.POST_DROP_STRUGGLE -> "◆ POST-DROP"
         ShortMovePattern.CONFIRMED_EXTENDED_DROP -> "◆ CONFIRMED DROP"
-        ShortMovePattern.RECOVERY_AFTER_EXTENDED_DROP -> "◆ DROP RECOVERY"
-        ShortMovePattern.TRADABLE_CORRIDOR -> "▰ CORRIDOR"
+        ShortMovePattern.RECOVERY_AFTER_EXTENDED_DROP -> setupLabel(move, "◆ DROP RECOVERY")
+        ShortMovePattern.TRADABLE_CORRIDOR -> setupLabel(move, "▰ CORRIDOR")
         ShortMovePattern.DIRECTIONAL -> if (move.changePercent >= 0.0) "▲ UP" else "▼ DOWN"
     }
 
@@ -303,8 +316,8 @@ class ShortMovePanel(
                 ShortMovePattern.RECURRING_SHARP_JUMP -> recurringDirection(move)
                 ShortMovePattern.POST_DROP_STRUGGLE -> "◆ POST-DROP"
                 ShortMovePattern.CONFIRMED_EXTENDED_DROP -> "◆ CONFIRMED DROP"
-                ShortMovePattern.RECOVERY_AFTER_EXTENDED_DROP -> "◆ DROP RECOVERY"
-                ShortMovePattern.TRADABLE_CORRIDOR -> "▰ CORRIDOR"
+                ShortMovePattern.RECOVERY_AFTER_EXTENDED_DROP -> setupLabel(move, "◆ DROP RECOVERY")
+                ShortMovePattern.TRADABLE_CORRIDOR -> setupLabel(move, "▰ CORRIDOR")
                 ShortMovePattern.DIRECTIONAL -> if (move.changePercent >= 0.0) "▲ UP" else "▼ DOWN"
             }
         }
@@ -336,7 +349,14 @@ class ShortMovePanel(
                 value >= 20 -> "opportunity-late"
                 else -> "opportunity-avoid"
             }
-            tooltip = tableRow?.item?.let { move -> javafx.scene.control.Tooltip(move.opportunityDetails) }
+            tooltip = tableRow?.item?.let { move ->
+                val retentionNote = if (move.isRetained) {
+                    "Recently detected; no longer confirmed by the latest scan."
+                } else null
+                javafx.scene.control.Tooltip(
+                    listOfNotNull(retentionNote, move.opportunityDetails.takeIf(String::isNotBlank)).joinToString("\n")
+                )
+            }
         }
     }
 
@@ -356,11 +376,10 @@ class ShortMovePanel(
     }
 }
 
-private fun isPrimaryOpportunity(move: ShortMove): Boolean =
-    move.opportunityScore >= 0 && (move.pattern == ShortMovePattern.TRADABLE_CORRIDOR ||
-            move.pattern == ShortMovePattern.RECOVERY_AFTER_EXTENDED_DROP)
-
 private fun ShortMove.identity() = symbol to endedAtEpochSeconds
+
+private fun setupLabel(move: ShortMove, activeLabel: String): String =
+    if (move.isRetained) "$activeLabel · RECENT" else activeLabel
 
 private fun recurringDirection(move: ShortMove): String =
     if (move.changePercent >= 0.0) "⚠ RECURRING UP" else "⚠ RECURRING DOWN"

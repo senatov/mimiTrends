@@ -33,6 +33,7 @@ class ShortMoveDetectorTest {
         val retained = retainer.merge(emptyList(), 1_900L)
 
         assertEquals(104.0, retained.single().close)
+        assertTrue(retained.single().isRetained)
         kotlin.test.assertFalse(retainer.merge(emptyList(), 2_201L).any { it.symbol == "NDA.DE" })
     }
 
@@ -60,6 +61,7 @@ class ShortMoveDetectorTest {
 
         assertEquals(106.0, refreshed.single().close)
         assertEquals(80, refreshed.single().opportunityScore)
+        kotlin.test.assertFalse(refreshed.single().isRetained)
         assertTrue(retainer.merge(emptyList(), 3_100L).any { it.symbol == "NDA.DE" })
         kotlin.test.assertFalse(retainer.merge(emptyList(), 3_101L).any { it.symbol == "NDA.DE" })
     }
@@ -79,7 +81,11 @@ class ShortMoveDetectorTest {
     @Test
     fun `does not retain non-actionable diagnostics`() {
         val retainer = ShortMoveEventRetainer()
-        retainer.merge(listOf(recurringMove(event = 1_000L, close = 104.0)), 1_000L)
+        val diagnostic = ShortMove(
+            "NDA.DE", 4.0, 100.0, 104.0, 940L, 1_000L, 2,
+            ShortMovePattern.RECURRING_SHARP_JUMP, 1_000L
+        )
+        retainer.merge(listOf(diagnostic), 1_000L)
 
         assertTrue(retainer.merge(emptyList(), 1_001L).isEmpty())
     }
@@ -338,11 +344,6 @@ class ShortMoveDetectorTest {
 
     private fun move(symbol: String, change: Double) =
         ShortMove(symbol, change, 100.0, 100.0 + change, 0L, 60L, 2)
-
-    private fun recurringMove(event: Long, close: Double) = ShortMove(
-        "NDA.DE", 4.0, 100.0, close, event - 60L, event, 2,
-        ShortMovePattern.RECURRING_SHARP_JUMP, event
-    )
 
     private fun opportunityMove(symbol: String, event: Long, close: Double, score: Int) = ShortMove(
         symbol, 4.0, 100.0, close, event - 60L, event, 45,

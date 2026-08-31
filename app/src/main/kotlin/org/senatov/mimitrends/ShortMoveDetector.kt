@@ -26,8 +26,13 @@ internal data class ShortMove(
     val safetyLabel: String = "Unavailable",
     val safetyDetails: String = "",
     val opportunityScore: Int = -1,
-    val opportunityDetails: String = ""
+    val opportunityDetails: String = "",
+    val isRetained: Boolean = false
 )
+
+internal fun ShortMove.isActionableOpportunity(): Boolean =
+    opportunityScore >= 0 && (pattern == ShortMovePattern.TRADABLE_CORRIDOR ||
+            pattern == ShortMovePattern.RECOVERY_AFTER_EXTENDED_DROP)
 
 internal enum class ShortMovePattern {
     RECURRING_SHARP_JUMP,
