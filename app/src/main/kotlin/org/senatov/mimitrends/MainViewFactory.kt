@@ -34,7 +34,7 @@ internal object MainViewFactory {
         }
         contentSplitPane.apply {
             orientation = javafx.geometry.Orientation.VERTICAL
-            val chartArea = HBox(8.0, trendChart, insightSidebar).apply {
+            val chartArea = HBox(5.0, trendChart, insightSidebar).apply {
                 HBox.setHgrow(trendChart, Priority.ALWAYS)
                 minHeight = 0.0
             }
@@ -46,7 +46,7 @@ internal object MainViewFactory {
         Platform.runLater { contentSplitPane.setDividerPosition(0, initialDivider) }
         SplitPaneReset.install(contentSplitPane, initialDivider)
         val content = VBox(contentSplitPane).apply {
-            padding = Insets(12.0, 14.0, 12.0, 14.0)
+            padding = Insets(7.0, 8.0, 8.0, 8.0)
             VBox.setVgrow(contentSplitPane, Priority.ALWAYS)
         }
         val root = BorderPane(content, VBox(titleBar, requestStatus), null, null, null).apply {

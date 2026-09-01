@@ -82,18 +82,19 @@
 }
 
 .chart-mode-switch {
-    -fx-background-color: #e9edf2;
-    -fx-background-radius: 6px;
-    -fx-border-color: #c8d0d9;
-    -fx-border-radius: 6px;
+    -fx-background-color: linear-gradient(to bottom, #dce4ec, #eef3f7);
+    -fx-background-radius: 8px;
+    -fx-border-color: #9eabb9;
+    -fx-border-radius: 8px;
+    -fx-effect: innershadow(gaussian, rgba(38,58,78,0.16), 3, 0.08, 0, 1);
 }
 
 .chart-mode-button {
     -fx-font-family: "System";
     -fx-font-size: 12px;
     -fx-font-weight: 400;
-    -fx-background-radius: 4px;
-    -fx-border-radius: 4px;
+    -fx-background-radius: 7px;
+    -fx-border-radius: 7px;
 }
 
 .chart-range-button { -fx-min-width: 32px; -fx-padding: 4px 7px; }
@@ -102,7 +103,7 @@
     -fx-font-weight: 500;
     -fx-background-color: -mimi-accent;
     -fx-border-color: -mimi-accent-hover;
-    -fx-effect: null;
+    -fx-effect: dropshadow(gaussian, rgba(23,63,115,0.34), 5, 0.12, 0, 2);
 }
 .chart-range-button:selected:hover, .chart-range-button:selected:focused {
     -fx-text-fill: white;
@@ -113,23 +114,33 @@
 .chart-view-button:selected {
     -fx-background-color: -mimi-accent;
     -fx-border-color: -mimi-accent;
-    -fx-effect: null;
+    -fx-effect: dropshadow(gaussian, rgba(23,63,115,0.34), 5, 0.12, 0, 2);
 }
 .chart-overlay-switch { -fx-background-color: #f1ece5; -fx-border-color: #d7c4aa; }
 .chart-overlay-button:selected {
     -fx-background-color: #a65d18;
     -fx-border-color: #a65d18;
-    -fx-effect: null;
+    -fx-effect: dropshadow(gaussian, rgba(112,65,22,0.30), 5, 0.12, 0, 2);
 }
 
 .insight-sidebar .tab-header-area { -fx-padding: 0 0 7px 0; }
 .insight-sidebar .tab-header-background { -fx-background-color: transparent; }
 .insight-sidebar .tab {
-    -fx-background-color: transparent;
-    -fx-background-radius: 4px;
-    -fx-padding: 6px 9px;
+    -fx-background-color: linear-gradient(to bottom, rgba(255,255,255,0.82), rgba(229,235,242,0.76));
+    -fx-background-radius: 8px 8px 6px 6px;
+    -fx-border-color: rgba(143,159,177,0.66);
+    -fx-border-radius: 8px 8px 6px 6px;
+    -fx-border-width: 1px;
+    -fx-padding: 5px 9px;
+    -fx-effect: dropshadow(gaussian, rgba(31,54,79,0.14), 4, 0.08, 0, 1);
 }
-.insight-sidebar .tab:selected { -fx-background-color: -mimi-accent-soft; }
+.insight-sidebar .tab:hover { -fx-border-color: -mimi-accent; }
+.insight-sidebar .tab:selected {
+    -fx-background-color: linear-gradient(to bottom, #f9fcff, #d8eafb);
+    -fx-border-color: #6f9bc9 #6f9bc9 -mimi-accent #6f9bc9;
+    -fx-border-width: 1px 1px 2px 1px;
+    -fx-effect: dropshadow(gaussian, rgba(36,94,168,0.25), 6, 0.10, 0, 2);
+}
 .insight-sidebar .tab .tab-label {
     -fx-font-family: "System";
     -fx-font-size: 12px;

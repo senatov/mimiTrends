@@ -65,6 +65,20 @@
     -fx-background-color: #263240;
 }
 
+.theme-dark .button,
+.theme-dark .table-columns-button,
+.theme-dark .table-search-clear,
+.theme-dark .insight-sidebar-toggle,
+.theme-dark .insight-sidebar .tab {
+    -fx-background-color: linear-gradient(to bottom, #2a3541, #202934);
+    -fx-border-color: #526273;
+}
+
+.theme-dark .insight-sidebar .tab:selected {
+    -fx-background-color: linear-gradient(to bottom, #294c70, #203b59);
+    -fx-border-color: #5796df;
+}
+
 .theme-dark .table-search-field {
     -fx-background-color: #202934;
     -fx-text-fill: -mimi-text;

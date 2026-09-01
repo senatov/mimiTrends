@@ -99,14 +99,14 @@ internal class MarketDataService(
             ) }
             repository.loadMinuteBars(symbol, now - 30 * 86_400)
         }
-        val completedYahoo = bars.filter { it.minuteEpochSeconds <= now / 60L * 60L - 60L }
+        val analysisInput = currentAnalysisBars(bars, source, now)
         if (source == MarketDataSource.SQLITE) repository.loadCompanyProfile(symbol)?.let { profile ->
             metadata = InstrumentMetadata(symbol, profile.name, profile.exchange,
                 currency(symbol), MarketTimeZone.forSymbol(symbol).id)
         }
         val declaredStatus = dataStatus(symbol)
         if (declaredStatus == "LIVE") source = MarketDataSource.FINNHUB
-        val merged = mergeProviderTail(symbol, completedYahoo, source, now)
+        val merged = mergeProviderTail(symbol, analysisInput, source, now)
         val effectiveStatus = if (merged.latestQuality == org.senatov.mimitrends.model.MarketObservationQuality.QUOTE_SNAPSHOT)
             merged.latestSource.name else declaredStatus
         analytics.recordMarketEvaluation(metadata, corporateActions, symbol, merged.historySource.name,
@@ -223,6 +223,16 @@ internal class MarketDataService(
         const val EXECUTABLE_QUOTE_MAX_AGE_SECONDS = 2 * 60L
         const val PROVIDER_LOOKBACK_SECONDS = 4 * 3_600L
     }
+}
+
+internal fun currentAnalysisBars(
+    bars: List<MinuteBar>,
+    source: MarketDataSource,
+    nowEpochSeconds: Long
+): List<MinuteBar> {
+    if (source == MarketDataSource.FINNHUB) return bars
+    val lastCompletedMinute = nowEpochSeconds / 60L * 60L - 60L
+    return bars.filter { it.minuteEpochSeconds <= lastCompletedMinute }
 }
 
 internal data class ScanEvaluation(
