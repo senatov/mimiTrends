@@ -56,6 +56,7 @@ class CompanyLogoClient(
         .header("User-Agent", "MiMiTrends/1.0")
         .GET().build()
 
+
     private companion object {
         val KNOWN_DOMAINS = mapOf(
             "AAPL" to "apple.com", "MSFT" to "microsoft.com", "NVDA" to "nvidia.com",
