@@ -96,8 +96,11 @@ internal object TradableCorridorDetector {
     private const val LOOKBACK_MINUTES = 120
     private const val MIN_BARS = 45
     private const val MAX_DATA_AGE_MINUTES = 3L
-    private const val LOWER_QUANTILE = 0.12
-    private const val UPPER_QUANTILE = 0.88
+
+    // Keep 76% central coverage, biased toward support so brief upside spikes do not lift
+    // a long-entry corridor as strongly as downside observations affect its safety boundary.
+    private const val LOWER_QUANTILE = 0.08
+    private const val UPPER_QUANTILE = 0.84
     private const val MIN_WIDTH_PERCENT = 0.65
     private const val MAX_WIDTH_PERCENT = 6.0
     private const val WIDTH_FULL_SCORE_PERCENT = 1.50

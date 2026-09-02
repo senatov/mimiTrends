@@ -68,6 +68,35 @@ class TradableCorridorDetectorTest {
         assertNull(TradableCorridorDetector.detect("NVDA", bars, now))
     }
 
+    @Test
+    fun `keeps a long entry corridor below repeated upside spikes`() {
+        val now = 500_000L
+        val pattern = listOf(99.0, 99.3, 99.8, 100.4, 100.9, 101.0, 100.7, 100.2, 99.7, 99.2, 99.0, 102.0)
+        val bars = (0 until 73).map { index ->
+            bar(now - (72 - index) * 60L, pattern[index % pattern.size])
+        }
+
+        val result = TradableCorridorDetector.detect("NVDA", bars, now)
+
+        requireNotNull(result)
+        assertTrue(requireNotNull(result.corridorLower) <= 99.0)
+        assertTrue(requireNotNull(result.corridorUpper) < 101.0)
+    }
+
+    @Test
+    fun `does not move the corridor for a single recent outlier`() {
+        val now = 600_000L
+        val pattern = listOf(99.0, 99.3, 99.8, 100.4, 100.9, 101.0, 100.7, 100.2, 99.7, 99.2, 99.0, 99.1)
+        val bars = (0 until 71).map { index ->
+            bar(now - (71 - index) * 60L, pattern[index % pattern.size])
+        } + bar(now, 99.0)
+
+        val result = TradableCorridorDetector.detect("NVDA", bars, now)
+
+        requireNotNull(result)
+        assertTrue(requireNotNull(result.corridorUpper) > 100.8)
+    }
+
     private fun bar(epoch: Long, close: Double) = MinuteBar(
         "TEST", epoch, close, close + 0.05, close - 0.05, close, 10_000.0
     )
