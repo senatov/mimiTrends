@@ -20,6 +20,7 @@ internal class TrendChartHeader(
 ) : VBox(6.0) {
     private val instrument = Label("Select a scanner result")
     private val price = Label()
+    private val performance = Label()
     private val context = Label("Price and volume history")
     private val signal = Label()
     private val cursor = Label(CURSOR_PROMPT)
@@ -80,11 +81,13 @@ internal class TrendChartHeader(
         cursor.minWidth = 0.0
         cursor.maxWidth = Double.MAX_VALUE
         price.styleClass += "chart-current-price"
+        performance.styleClass += "chart-performance-summary"
+        configureFlexibleText(performance)
         instrument.styleClass += "chart-instrument-title"
 
-        val titleRow = HBox(10.0, instrument, price).apply {
+        val titleRow = HBox(7.0, price, instrument, performance).apply {
             alignment = Pos.BASELINE_LEFT
-            HBox.setHgrow(instrument, Priority.ALWAYS)
+            HBox.setHgrow(performance, Priority.ALWAYS)
         }
         val metaRow = HBox(8.0, signal, context, this@TrendChartHeader.cursor).apply {
             alignment = Pos.CENTER_LEFT
@@ -120,15 +123,22 @@ internal class TrendChartHeader(
         history.isSelected = true
     }
 
-    fun showInstrument(name: String, symbol: String, currentPrice: String, details: String, summary: String?) {
+    fun showInstrument(
+        name: String, symbol: String, currentPrice: String, details: String,
+        summary: SignalChartPresentation.Summary?
+    ) {
         val instrumentText = "$symbol  ·  $name"
         instrument.text = instrumentText
         instrument.tooltip = Tooltip(instrumentText)
         price.text = currentPrice
+        performance.text = summary?.performance.orEmpty()
+        performance.tooltip = summary?.performance?.let(::Tooltip)
+        performance.isVisible = summary?.performance != null
+        performance.isManaged = summary?.performance != null
         context.text = details
         context.tooltip = Tooltip(details)
-        signal.text = summary.orEmpty()
-        signal.tooltip = summary?.let { Tooltip(it) }
+        signal.text = summary?.details.orEmpty()
+        signal.tooltip = summary?.details?.let(::Tooltip)
         signal.isVisible = summary != null
         signal.isManaged = summary != null
     }
@@ -141,6 +151,7 @@ internal class TrendChartHeader(
         instrument.text = "$symbol  ·  Loading market data"
         instrument.tooltip = null
         price.text = ""
+        clearPerformance()
         context.text = "Reading collected bars and broker activity…"
         context.tooltip = null
         signal.text = ""
@@ -154,6 +165,7 @@ internal class TrendChartHeader(
         instrument.text = symbol
         instrument.tooltip = null
         price.text = ""
+        clearPerformance()
         context.text = detail
         context.tooltip = null
         signal.text = ""
@@ -166,6 +178,7 @@ internal class TrendChartHeader(
     fun clear() {
         instrument.text = "No collected market data"
         price.text = ""
+        clearPerformance()
         context.text = ""
         signal.text = ""
         signal.isVisible = false
@@ -174,6 +187,13 @@ internal class TrendChartHeader(
         context.tooltip = null
         signal.tooltip = null
         cursor.text = CURSOR_PROMPT
+    }
+
+    private fun clearPerformance() {
+        performance.text = ""
+        performance.tooltip = null
+        performance.isVisible = false
+        performance.isManaged = false
     }
 
     private fun configureFlexibleText(label: Label) {

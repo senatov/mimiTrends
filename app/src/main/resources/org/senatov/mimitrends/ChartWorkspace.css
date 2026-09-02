@@ -21,6 +21,13 @@
     -fx-text-fill: -mimi-positive;
 }
 
+.chart-performance-summary {
+    -fx-font-family: "System";
+    -fx-font-size: 12px;
+    -fx-font-weight: 400;
+    -fx-text-fill: -mimi-text-secondary;
+}
+
 .chart-context-details, .chart-signal-summary, .chart-cursor-details {
     -fx-font-family: "System";
     -fx-font-size: 12px;
