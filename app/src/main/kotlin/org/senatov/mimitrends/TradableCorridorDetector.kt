@@ -30,8 +30,12 @@ internal object TradableCorridorDetector {
         if (widthPercent !in MIN_WIDTH_PERCENT..MAX_WIDTH_PERCENT) return null
 
         val tolerance = (upper - lower) * EDGE_TOLERANCE_SHARE
-        val lowerTouches = touchGroups(session) { it.low <= lower + tolerance }
-        val upperTouches = touchGroups(session) { it.high >= upper - tolerance }
+        if (latest.close !in (lower - tolerance)..(upper + tolerance)) return null
+        val recentBreaks = session.takeLast(RECENT_STABILITY_BARS)
+            .count { it.close !in (lower - tolerance)..(upper + tolerance) }
+        if (recentBreaks > MAX_RECENT_BREAKS) return null
+        val lowerTouches = touchGroups(session) { it.low in (lower - tolerance)..(lower + tolerance) }
+        val upperTouches = touchGroups(session) { it.high in (upper - tolerance)..(upper + tolerance) }
         if (lowerTouches < MIN_TOUCHES_PER_EDGE || upperTouches < MIN_TOUCHES_PER_EDGE) return null
         val contained = session.count { it.close in (lower - tolerance)..(upper + tolerance) }.toDouble() / session.size
         if (contained < MIN_CONTAINMENT) return null
@@ -56,15 +60,15 @@ internal object TradableCorridorDetector {
                 0.10 * contained) * 100.0).roundToInt().coerceIn(0, 100)
         if (score < MIN_OPPORTUNITY_SCORE || remaining < MIN_REMAINING_PERCENT) return null
 
-        val details = "Stable %.2f%% corridor · %d lower + %d upper touches · %.0f%% contained\n".format(
-            widthPercent, lowerTouches, upperTouches, contained * 100.0
+        val details = "Stable %.2f%% corridor (%.2f–%.2f) · %d lower + %d upper touches · %.0f%% contained\n".format(
+            widthPercent, lower, upper, lowerTouches, upperTouches, contained * 100.0
         ) + "Price is %.0f%% through the corridor · %.2f%% remains to the upper edge\n".format(
             position * 100.0, remaining
         ) + "Opportunity is timing relevance, not profit probability."
         return ShortMove(
             symbol = symbol,
             changePercent = remaining,
-            open = lower,
+            open = latest.close,
             close = upper,
             startedAtEpochSeconds = session.first().minuteEpochSeconds,
             endedAtEpochSeconds = latest.minuteEpochSeconds,
@@ -72,7 +76,9 @@ internal object TradableCorridorDetector {
             pattern = ShortMovePattern.TRADABLE_CORRIDOR,
             eventEpochSeconds = latest.minuteEpochSeconds,
             opportunityScore = score,
-            opportunityDetails = details
+            opportunityDetails = details,
+            corridorLower = lower,
+            corridorUpper = upper
         )
     }
 
@@ -99,6 +105,8 @@ internal object TradableCorridorDetector {
     private const val MIN_TOUCHES_PER_EDGE = 2
     private const val MIN_CONTAINMENT = 0.82
     private const val MAX_NORMALIZED_DRIFT = 0.90
+    private const val RECENT_STABILITY_BARS = 12
+    private const val MAX_RECENT_BREAKS = 1
     private const val MIN_REMAINING_PERCENT = 0.25
     private const val MIN_OPPORTUNITY_SCORE = 35
 }

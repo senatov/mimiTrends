@@ -38,6 +38,21 @@ class ShortMoveDetectorTest {
     }
 
     @Test
+    fun `drops a retained corridor immediately after a lower edge break`() {
+        val retainer = ShortMoveEventRetainer()
+        val corridor = opportunityMove("IFX.DE", event = 1_000L, close = 55.93, score = 72).copy(
+            open = 55.50, corridorLower = 55.50, corridorUpper = 55.93
+        )
+        retainer.merge(listOf(corridor), 1_000L)
+        val broken = move("IFX.DE", -0.4).copy(close = 55.30, endedAtEpochSeconds = 1_060L)
+
+        val result = retainer.merge(listOf(broken), 1_060L)
+
+        assertTrue(result.none { it.pattern == ShortMovePattern.TRADABLE_CORRIDOR })
+        assertEquals(listOf(ShortMovePattern.DIRECTIONAL), result.map(ShortMove::pattern))
+    }
+
+    @Test
     fun `replaces a retained opportunity when a newer one occurs`() {
         val retainer = ShortMoveEventRetainer()
         retainer.merge(listOf(opportunityMove("NDA.DE", event = 1_000L, close = 104.0, score = 72)), 1_000L)

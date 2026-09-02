@@ -27,7 +27,9 @@ internal data class ShortMove(
     val safetyDetails: String = "",
     val opportunityScore: Int = -1,
     val opportunityDetails: String = "",
-    val isRetained: Boolean = false
+    val isRetained: Boolean = false,
+    val corridorLower: Double? = null,
+    val corridorUpper: Double? = null
 )
 
 internal fun ShortMove.isActionableOpportunity(): Boolean =

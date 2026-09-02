@@ -154,9 +154,9 @@ class ShortMovePanel(
         table.columns.setAll(company, opportunity, direction, move, priceRange, period)
         listOf(
             opportunity to "Current timing relevance from 0 to 100%. This is not a probability of profit.",
-            priceRange to "Price at the beginning and end of the detected movement.",
+            priceRange to "Current price and upper corridor target, or movement start and end prices.",
             direction to "Detected movement type and its observed direction.",
-            move to "Percentage price change across the displayed period.",
+            move to "Remaining upside to the corridor target, or price change across the displayed period.",
             period to "Local start and end time of the detected movement."
         ).forEach { (column, description) -> TableColumnHelp.install(column, description) }
         columnLayout = TableColumnLayout(table, savedColumns).also(TableColumnLayout<ShortMove>::install)

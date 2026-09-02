@@ -85,6 +85,11 @@ internal class ShortMoveEventRetainer {
     private val retainedBySymbol: MutableMap<String, RetainedMove> = LinkedHashMap()
 
     fun merge(current: Collection<ShortMove>, nowEpochSeconds: Long): List<ShortMove> {
+        val currentBySymbol = current.associateBy(ShortMove::symbol)
+        retainedBySymbol.entries.removeIf { (_, retained) ->
+            val latest = currentBySymbol[retained.move.symbol] ?: return@removeIf false
+            retained.move.pattern == ShortMovePattern.TRADABLE_CORRIDOR && retained.move.corridorBrokenBy(latest.close)
+        }
         val expiredSymbols = retainedBySymbol
             .filterValues { retained -> nowEpochSeconds - retained.lastSeenEpochSeconds > RETENTION_SECONDS }
             .keys
@@ -106,8 +111,16 @@ internal class ShortMoveEventRetainer {
 
     private data class RetainedMove(val move: ShortMove, val lastSeenEpochSeconds: Long)
 
+    private fun ShortMove.corridorBrokenBy(price: Double): Boolean {
+        val lower = corridorLower ?: return false
+        val upper = corridorUpper ?: return false
+        val tolerance = (upper - lower) * CORRIDOR_BREAK_TOLERANCE_SHARE
+        return price !in (lower - tolerance)..(upper + tolerance)
+    }
+
     private companion object {
         const val RETENTION_SECONDS = 20 * 60L
         const val MAX_RETAINED_ROWS = 10
+        const val CORRIDOR_BREAK_TOLERANCE_SHARE = 0.12
     }
 }
