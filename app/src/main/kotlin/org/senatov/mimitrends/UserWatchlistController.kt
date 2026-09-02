@@ -1,7 +1,6 @@
 package org.senatov.mimitrends
 
 import org.senatov.mimitrends.db.MarketRepository
-import java.util.concurrent.CompletableFuture
 import java.util.concurrent.ConcurrentHashMap
 
 internal class UserWatchlistController(
@@ -13,13 +12,10 @@ internal class UserWatchlistController(
         addAll(repository.loadUserWatchlist())
     }
     private val liveSources = ConcurrentHashMap<String, String>()
+    private val searchIndex = InstrumentSearchIndex(repository.loadInstrumentCatalog())
 
     val actions = InstrumentWatchlistActions(
-        search = { query ->
-            CompletableFuture.supplyAsync {
-                repository.searchInstruments(query).map { TableSearchSuggestion(it.symbol, it.name, it.exchange) }
-            }
-        },
+        search = { query -> java.util.concurrent.CompletableFuture.completedFuture(searchIndex.search(query)) },
         add = ::add,
         remove = ::remove,
         contains = symbols::contains,

@@ -6,6 +6,25 @@ data class InstrumentCatalogEntry(val symbol: String, val name: String, val exch
 
 @Suppress("SqlNoDataSourceInspection")
 internal object InstrumentCatalogStore {
+    fun loadAll(connection: Connection): List<InstrumentCatalogEntry> = connection.createStatement().use { statement ->
+        statement.executeQuery(
+            """WITH catalog(symbol, name, exchange) AS (
+                SELECT symbol, name, exchange FROM company_profiles
+                UNION SELECT symbol, resolved_name, mic FROM provider_instruments
+                UNION SELECT symbol, symbol, '' FROM minute_bars
+            )
+            SELECT symbol, MAX(name), MAX(exchange) FROM catalog GROUP BY symbol ORDER BY symbol"""
+        ).use { result ->
+            buildList {
+                while (result.next()) add(
+                    InstrumentCatalogEntry(
+                        result.getString(1).trim().uppercase(), result.getString(2), result.getString(3)
+                    )
+                )
+            }
+        }
+    }
+
     fun search(connection: Connection, query: String, limit: Int): List<InstrumentCatalogEntry> {
         val term = "%${query.trim().lowercase()}%"
         return connection.prepareStatement(

@@ -94,6 +94,9 @@ class MarketRepository(
     fun searchInstruments(query: String, limit: Int = 12): List<InstrumentCatalogEntry> =
         database.locked { InstrumentCatalogStore.search(it, query, limit) }
 
+    fun loadInstrumentCatalog(): List<InstrumentCatalogEntry> =
+        database.locked(InstrumentCatalogStore::loadAll)
+
     fun loadUserWatchlist(): Set<String> = database.locked(UserWatchlistStore::load)
 
     fun addToUserWatchlist(symbol: String) = database.locked { UserWatchlistStore.add(it, symbol) }
