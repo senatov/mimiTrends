@@ -2,6 +2,7 @@ package org.senatov.mimitrends
 
 import org.junit.jupiter.api.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNull
 
 class CompanySearchTermTest {
     @Test fun `normalizes and shortens the displayed company name`() {
@@ -34,6 +35,14 @@ class CompanySearchTermTest {
 
     @Test fun `falls back to ticker when company name is empty`() {
         assertEquals("BMW", CompanySearchTerm.from(" ", "BMW.DE"))
+    }
+
+    @Test fun `preserves a brand name that matches its ticker after suffix removal`() {
+        assertEquals("Snap", CompanySearchTerm.displayNameOrNull("Snap Inc.", "SNAP"))
+    }
+
+    @Test fun `rejects a provider fallback that is only the ticker`() {
+        assertNull(CompanySearchTerm.displayNameOrNull("snap", "SNAP"))
     }
 
     @Test fun `removes legal suffixes punctuation and parenthesized article`() {

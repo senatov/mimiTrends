@@ -4,8 +4,14 @@ internal object CompanySearchTerm {
     fun normalizeDisplay(companyName: String): String = cleanedWords(companyName)
         .joinToString(" ").let(::readableCase)
 
+    fun displayNameOrNull(companyName: String, symbol: String): String? {
+        val sourceName = companyName.trim()
+        if (sourceName.isBlank() || sourceName.equals(symbol.trim(), ignoreCase = true)) return null
+        return normalizeDisplay(sourceName).takeIf(String::isNotBlank)
+    }
+
     fun from(companyName: String, symbol: String): String {
-        return normalizeDisplay(companyName).takeIf(String::isNotBlank)
+        return displayNameOrNull(companyName, symbol)
             ?: symbol.substringBefore('.').trim()
     }
 

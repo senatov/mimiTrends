@@ -236,8 +236,7 @@ internal class ScannerColumnFactory(
                     loadProfile?.invoke(symbol)?.whenComplete(
                         BiConsumer<CompanyProfile?, Throwable?> { profile, error ->
                             if (error == null && profile != null) {
-                                val normalized = CompanySearchTerm.normalizeDisplay(profile.name)
-                                val displayName = normalized.takeUnless { it.isBlank() || it.equals(symbol, true) }
+                                val displayName = CompanySearchTerm.displayNameOrNull(profile.name, symbol)
                                     ?: "Company unavailable"
                                 profileUpdates.offer(symbol, profile.copy(name = displayName))
                             }
