@@ -4,6 +4,8 @@ package org.senatov.mimitrends.db
 
 import org.senatov.mimitrends.model.MinuteBar
 import org.senatov.mimitrends.model.CompanyProfile
+import org.senatov.mimitrends.model.CompanyDomain
+import org.senatov.mimitrends.model.CompanyDomainSource
 import org.senatov.mimitrends.model.VolumeStatus
 import org.senatov.mimitrends.model.ProviderInstrument
 import org.senatov.mimitrends.model.ProviderMinuteBar
@@ -222,6 +224,37 @@ class MarketRepositoryTest {
         assertEquals(setOf("AAPL", "SAP.DE"), catalog.keys)
         assertEquals("SAP SE", catalog.getValue("SAP.DE").name)
         repository.close()
+    }
+
+    @Test
+    fun `seeds and updates persistent company domains`() {
+        val database = Files.createTempDirectory("mimitrends-domains").resolve("test.db")
+        val repository = MarketRepository(database)
+
+        val seeded = requireNotNull(repository.loadCompanyDomain("aapl"))
+        assertEquals("apple.com", seeded.domain)
+        assertEquals(CompanyDomainSource.SEED, seeded.source)
+
+        repository.upsertCompanyDomain(
+            CompanyDomain("snap", "https://www.snap.com/about", CompanyDomainSource.MANUAL, 1.2, updatedAtMillis = 42)
+        )
+        val stored = requireNotNull(repository.loadCompanyDomain("SNAP"))
+        assertEquals("SNAP", stored.symbol)
+        assertEquals("snap.com", stored.domain)
+        assertEquals(CompanyDomainSource.MANUAL, stored.source)
+        assertEquals(1.0, stored.confidence)
+        assertEquals(42, stored.updatedAtMillis)
+        repository.upsertCompanyDomain(
+            CompanyDomain("AAPL", "investor.apple.com", CompanyDomainSource.MANUAL, 1.0, updatedAtMillis = 43)
+        )
+        repository.close()
+
+        MarketRepository(database).use { reopened ->
+            val retained = requireNotNull(reopened.loadCompanyDomain("SNAP"))
+            assertEquals("snap.com", retained.domain)
+            assertEquals(CompanyDomainSource.MANUAL, retained.source)
+            assertEquals("investor.apple.com", reopened.loadCompanyDomain("AAPL")?.domain)
+        }
     }
 
     private fun legacyMinuteIndexExists(database: String): Boolean =

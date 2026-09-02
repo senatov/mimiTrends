@@ -44,7 +44,7 @@ class MainController(private val apiKey: String?, initialSymbol: String = "AAPL"
     private val wallstreetOnlineDiscovery = WallstreetOnlineDiscoveryService(wallstreetOnlineClient, yahooFinance)
     private val dynamicUniverse = DynamicMarketUniverse(wallstreetOnlineDiscovery::discover)
     private var profileService = CompanyProfileService(
-        repository, apiKey?.let(::FinnhubProfileClient), CompanyLogoClient()
+        repository, apiKey?.let(::FinnhubProfileClient), persistentCompanyLogoClient(repository)
     )
     private val stockPageOpener = StockPageOpener(
         repository, wallstreetOnlineClient, { scannerCriteria.stockSearchUrl }, openExternal,
@@ -412,7 +412,8 @@ class MainController(private val apiKey: String?, initialSymbol: String = "AAPL"
     private fun restartFinnhubLive(key: String) {
         log.debug(LogTag.API, "restartFinnhubLive(keyPresent={})", key.isNotBlank())
         profileService = CompanyProfileService(repository, key.takeIf(String::isNotBlank)?.let(::FinnhubProfileClient),
-            CompanyLogoClient())
+            persistentCompanyLogoClient(repository)
+        )
         finnhubClient = FinnhubLiveStarter.restart(key, finnhubClient, scannerCriteria, liveTicks,
             liveAggregator, log, status::update)
     }

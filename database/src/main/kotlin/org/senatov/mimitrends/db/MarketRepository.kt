@@ -5,6 +5,7 @@ package org.senatov.mimitrends.db
 import org.senatov.mimitrends.log.LogTag
 import org.senatov.mimitrends.model.MinuteBar
 import org.senatov.mimitrends.model.CompanyProfile
+import org.senatov.mimitrends.model.CompanyDomain
 import org.senatov.mimitrends.model.VolumeStatus
 import org.senatov.mimitrends.model.ProviderInstrument
 import org.senatov.mimitrends.model.ProviderMinuteBar
@@ -30,6 +31,7 @@ class MarketRepository(
     }
     private val connection: Connection = database.connection
     private val companyProfiles = CompanyProfileStore(database)
+    private val companyDomains = CompanyDomainStore(database)
 
     init {
         log.debug(LogTag.DB, "init()")
@@ -226,6 +228,13 @@ class MarketRepository(
         companyProfiles.upsert(profile)
     }
 
+    fun loadCompanyDomain(symbol: String): CompanyDomain? = companyDomains.load(symbol)
+
+    fun upsertCompanyDomain(domain: CompanyDomain) {
+        check(!closed.get()) { "MarketRepository is closed" }
+        companyDomains.upsert(domain)
+    }
+
     fun flushPending(): Int {
         log.trace(LogTag.DB, "flushPending()")
         val batch = synchronized(pendingLock) {
@@ -313,6 +322,7 @@ class MarketRepository(
                         logo_url TEXT, logo BLOB, updated_at INTEGER NOT NULL
                     )"""
                 )
+                CompanyDomainStore.migrate(connection)
                 statement.executeUpdate(
                     """CREATE TABLE IF NOT EXISTS provider_instruments (
                         provider TEXT NOT NULL, symbol TEXT NOT NULL, identifier TEXT NOT NULL,
