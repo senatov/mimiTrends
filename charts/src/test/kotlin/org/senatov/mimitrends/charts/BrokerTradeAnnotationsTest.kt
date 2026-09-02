@@ -151,7 +151,8 @@ class BrokerTradeAnnotationsTest {
         assertTrue(anchor.y > 99.0, "connector must terminate on the candle, not the chart floor")
     }
 
-    @Test fun `does not invent an entry candle for a trade opened before the visible range`() {
+    @Test
+    fun `shows a visible exit when the entry precedes the visible range`() {
         val renderer = BrokerTradeAnnotations(XYPlot())
         val bars = (10L..20L).map { minute ->
             MinuteBar("TEST", minute * 60L, 32.0, 32.5, 31.5, 32.2, 1_000.0)
@@ -163,8 +164,11 @@ class BrokerTradeAnnotationsTest {
 
         renderer.render(listOf(trade), bars, bars, 1.0)
 
-        assertEquals(emptyList(), renderer.renderedTradePoints())
-        assertEquals(emptyList(), renderer.renderedCardBounds())
+        assertEquals(
+            listOf(BrokerTradeAnnotations.TradePoint(1_200_000.0, 32.4)),
+            renderer.renderedTradePoints()
+        )
+        assertEquals(1, renderer.renderedCardBounds().size)
     }
 
     @Test fun `keeps actual execution price when it is outside candle OHLC`() {

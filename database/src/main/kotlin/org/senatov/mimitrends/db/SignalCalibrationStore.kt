@@ -31,7 +31,7 @@ internal class SignalCalibrationStore(private val connection: Connection) {
             calibrationSamples = samples.size,
             calibrationHorizonMinutes = horizonMinutes
         )
-        val (lowerBound, upperBound) = wilsonInterval(wins + PRIOR_WINS, samples.size + PRIOR_SAMPLES)
+        val (lowerBound, upperBound) = wilsonInterval(wins.toDouble(), samples.size.toDouble())
         val favorable = samples.mapNotNull { it.favorableExcursion(direction) }
         val adverse = samples.mapNotNull { it.adverseExcursion(direction) }
         return normalized.copy(

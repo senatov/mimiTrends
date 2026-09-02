@@ -40,6 +40,8 @@ class SignalCalibrationStoreTest {
             assertEquals(-0.3, calibrated.medianAdverseExcursionPercent, 1e-12)
             assertTrue(calibrated.continuationLowerBound < calibrated.continuationProbability)
             assertTrue(calibrated.continuationUpperBound > calibrated.continuationProbability)
+            assertEquals(0.39062208887279953, calibrated.continuationLowerBound, 1e-12)
+            assertEquals(0.8618799089087867, calibrated.continuationUpperBound, 1e-12)
             assertEquals(4.0, calibrated.anomalyScore, 1e-12)
         }
     }

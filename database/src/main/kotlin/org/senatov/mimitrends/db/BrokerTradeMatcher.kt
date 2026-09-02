@@ -1,6 +1,7 @@
 package org.senatov.mimitrends.db
 
 import org.senatov.mimitrends.model.BrokerTrade
+import kotlin.math.abs
 
 internal object BrokerTradeMatcher {
     fun matches(description: String, companyName: String): Boolean {
@@ -11,114 +12,152 @@ internal object BrokerTradeMatcher {
             instrumentName.startsWith(transactionName)
     }
 
-    fun pair(symbol: String, executions: List<BrokerExecution>): List<BrokerTrade> {
-        return reconcile(symbol, executions).trades
-    }
+    fun pair(symbol: String, executions: List<BrokerExecution>): List<BrokerTrade> =
+        reconcile(symbol, executions).trades
 
     fun reconcile(symbol: String, executions: List<BrokerExecution>): BrokerTradeReconciliation {
-        val result = mutableListOf<BrokerTrade>()
-        var position = Position()
-        val deferredSells = mutableListOf<BrokerExecution>()
-        var correctedOrder = 0
-        var unmatchedSells = 0
+        val reconciliations = executions.groupBy { it.currency.uppercase() }.values.map { values ->
+            reconcileSingleCurrency(symbol, values)
+        }
+        return BrokerTradeReconciliation(
+            reconciliations.flatMap(BrokerTradeReconciliation::trades)
+                .sortedWith(compareBy(BrokerTrade::entryEpochSeconds, { it.exitEpochSeconds ?: Long.MAX_VALUE })),
+            reconciliations.sumOf(BrokerTradeReconciliation::correctedOrder),
+            reconciliations.sumOf(BrokerTradeReconciliation::unmatchedSells)
+        )
+    }
+
+    private fun reconcileSingleCurrency(
+        symbol: String,
+        executions: List<BrokerExecution>
+    ): BrokerTradeReconciliation {
+        val matcher = FifoMatcher(symbol)
         executions.groupBy(BrokerExecution::epochSeconds).toSortedMap().forEach { (_, sameSecond) ->
             val pending = sameSecond.sortedBy(BrokerExecution::id).toMutableList()
-            while (pending.isNotEmpty()) {
-                val closingSell = pending.firstOrNull { it.isSell() && sameQuantity(it.shares, position.quantity) }
-                if (!position.isEmpty && closingSell != null) {
-                    pending.remove(closingSell)
-                    position.add(closingSell)
-                    result += position.completed(symbol)
-                    position = Position()
-                    continue
-                }
-                val sell = pending.firstOrNull { it.isSell() }
-                // Broker exports do not preserve execution order inside the same second. Apply buys
-                // before non-closing sells so a flat batch cannot manufacture a short and an open long.
-                val buy = pending.firstOrNull { it.isBuy() }
-                if (buy != null) {
-                    pending.remove(buy)
-                    val invertedSell = deferredSells.firstOrNull {
-                        sameQuantity(it.shares, buy.shares) &&
-                            buy.epochSeconds - it.epochSeconds in 0..CORRECTION_WINDOW_SECONDS
-                    }
-                    if (position.isEmpty && invertedSell != null) {
-                        deferredSells.remove(invertedSell)
-                        val correctedBuy = buy.copy(epochSeconds = invertedSell.epochSeconds)
-                        position.add(correctedBuy)
-                        position.add(invertedSell)
-                        result += position.completed(symbol)
-                        position = Position()
-                        correctedOrder++
-                        continue
-                    }
-                    position.add(buy)
-                    continue
-                }
-                if (sell != null && sell.shares <= position.quantity + EPSILON) {
-                    pending.remove(sell)
-                    position.add(sell)
-                    if (position.isEmpty) {
-                        result += position.completed(symbol)
-                        position = Position()
-                    }
-                    continue
-                }
-                pending.remove(requireNotNull(sell))
-                deferredSells += sell
+            pending.firstOrNull { it.isSell() && matcher.closesExactly(it.shares) }?.let {
+                pending.remove(it)
+                matcher.sell(it)
             }
+            pending.filter { it.isBuy() }.forEach(matcher::buy)
+            pending.filter { it.isSell() }.forEach(matcher::sell)
         }
-        unmatchedSells += deferredSells.size
-        if (!position.isEmpty) result += position.open(symbol)
-        return BrokerTradeReconciliation(result, correctedOrder, unmatchedSells)
+        return matcher.result()
     }
 
-    private fun sameQuantity(first: Double, second: Double): Boolean = kotlin.math.abs(first - second) <= EPSILON
+    private class FifoMatcher(private val symbol: String) {
+        private val lots = ArrayDeque<ExecutionRemainder>()
+        private val deferredSells = mutableListOf<ExecutionRemainder>()
+        private val trades = mutableListOf<BrokerTrade>()
+        private val correctedSellIds = mutableSetOf<Long>()
 
+        fun closesExactly(quantity: Double): Boolean = sameQuantity(lots.sumOf { it.remaining }, quantity)
+
+        fun buy(execution: BrokerExecution) {
+            val buy = ExecutionRemainder(execution)
+            while (buy.hasRemaining()) {
+                val sellIndex = deferredSells.indexOfFirst {
+                    buy.execution.epochSeconds - it.execution.epochSeconds in 0..CORRECTION_WINDOW_SECONDS
+                }
+                if (sellIndex < 0) break
+                val sell = deferredSells[sellIndex]
+                val quantity = minOf(buy.remaining, sell.remaining)
+                trades += completedTrade(listOf(buy.slice(quantity)), sell.slice(quantity), sell.execution.epochSeconds)
+                correctedSellIds += sell.execution.id
+                if (!sell.hasRemaining()) deferredSells.removeAt(sellIndex)
+            }
+            if (buy.hasRemaining()) lots.addLast(buy)
+        }
+
+        fun sell(execution: BrokerExecution) {
+            val sell = ExecutionRemainder(execution)
+            val consumed = mutableListOf<ExecutionSlice>()
+            while (sell.hasRemaining() && lots.isNotEmpty()) {
+                val lot = lots.first()
+                val quantity = minOf(lot.remaining, sell.remaining)
+                consumed += lot.slice(quantity)
+                sell.consume(quantity)
+                if (!lot.hasRemaining()) lots.removeFirst()
+            }
+            val closedQuantity = consumed.sumOf(ExecutionSlice::quantity)
+            if (closedQuantity > EPSILON) {
+                trades += completedTrade(consumed, ExecutionSlice(execution, closedQuantity), null)
+            }
+            if (sell.hasRemaining()) deferredSells.addLast(sell)
+        }
+
+        fun result(): BrokerTradeReconciliation {
+            if (lots.isNotEmpty()) trades += openTrade(lots.toList())
+            return BrokerTradeReconciliation(
+                trades.sortedWith(compareBy(BrokerTrade::entryEpochSeconds, { it.exitEpochSeconds ?: Long.MAX_VALUE })),
+                correctedSellIds.size,
+                deferredSells.count(ExecutionRemainder::hasRemaining)
+            )
+        }
+
+        private fun completedTrade(
+            buys: List<ExecutionSlice>,
+            sell: ExecutionSlice,
+            entryEpochOverride: Long?
+        ): BrokerTrade {
+            val quantity = buys.sumOf(ExecutionSlice::quantity)
+            val purchaseAmount = buys.sumOf(ExecutionSlice::grossAmount)
+            val buyCharges = buys.sumOf(ExecutionSlice::charges)
+            val proceeds = sell.grossAmount
+            val sellCharges = sell.charges
+            val profit = proceeds - sellCharges - purchaseAmount - buyCharges
+            val costs = purchaseAmount + buyCharges
+            val firstBuy = buys.minBy(ExecutionSlice::epochSeconds)
+            return BrokerTrade(
+                symbol, firstBuy.execution.isin ?: sell.execution.isin, quantity,
+                entryEpochOverride ?: firstBuy.epochSeconds, purchaseAmount / quantity,
+                sell.epochSeconds, proceeds / quantity, profit,
+                if (costs == 0.0) null else profit / costs * 100.0,
+                buyCharges + sellCharges, firstBuy.execution.currency
+            )
+        }
+
+        private fun openTrade(openLots: List<ExecutionRemainder>): BrokerTrade {
+            val slices = openLots.map { it.peek() }
+            val quantity = slices.sumOf(ExecutionSlice::quantity)
+            val purchaseAmount = slices.sumOf(ExecutionSlice::grossAmount)
+            val charges = slices.sumOf(ExecutionSlice::charges)
+            val first = slices.minBy(ExecutionSlice::epochSeconds)
+            return BrokerTrade(
+                symbol, first.execution.isin, quantity, first.epochSeconds,
+                purchaseAmount / quantity, null, null, null, null, charges, first.execution.currency
+            )
+        }
+    }
+
+    private class ExecutionRemainder(val execution: BrokerExecution) {
+        var remaining = execution.shares
+            private set
+
+        fun hasRemaining(): Boolean = remaining > EPSILON
+
+        fun slice(quantity: Double): ExecutionSlice {
+            consume(quantity)
+            return ExecutionSlice(execution, quantity)
+        }
+
+        fun consume(quantity: Double) {
+            require(quantity >= 0.0 && quantity <= remaining + EPSILON)
+            remaining = (remaining - quantity).coerceAtLeast(0.0)
+        }
+
+        fun peek() = ExecutionSlice(execution, remaining)
+    }
+
+    private data class ExecutionSlice(val execution: BrokerExecution, val quantity: Double) {
+        val epochSeconds: Long get() = execution.epochSeconds
+        private val share: Double get() = quantity / execution.shares
+        val grossAmount: Double get() = abs(execution.amount) * share
+        val charges: Double get() = (execution.fee + execution.tax) * share
+    }
+
+    private fun sameQuantity(first: Double, second: Double): Boolean = abs(first - second) <= EPSILON
     private fun BrokerExecution.isBuy(): Boolean = type.equals("Buy", ignoreCase = true)
     private fun BrokerExecution.isSell(): Boolean = type.equals("Sell", ignoreCase = true)
-
-    private class Position {
-        private val buys = mutableListOf<BrokerExecution>()
-        private val sells = mutableListOf<BrokerExecution>()
-        var quantity = 0.0
-            private set
-        val isEmpty: Boolean get() = sameQuantity(quantity, 0.0)
-
-        fun add(execution: BrokerExecution) {
-            if (execution.isBuy()) {
-                buys += execution
-                quantity += execution.shares
-            } else {
-                sells += execution
-                quantity -= execution.shares
-            }
-            if (sameQuantity(quantity, 0.0)) quantity = 0.0
-        }
-
-        fun completed(symbol: String): BrokerTrade {
-            val firstBuy = buys.first()
-            val lastSell = sells.last()
-            val boughtQuantity = buys.sumOf(BrokerExecution::shares)
-            val soldQuantity = sells.sumOf(BrokerExecution::shares)
-            val purchaseAmount = -buys.sumOf(BrokerExecution::amount)
-            val costs = purchaseAmount + buys.sumOf { it.fee + it.tax }
-            val proceeds = sells.sumOf(BrokerExecution::amount) - sells.sumOf { it.fee + it.tax }
-            val profit = proceeds - costs
-            return BrokerTrade(symbol, firstBuy.isin ?: lastSell.isin, boughtQuantity,
-                firstBuy.epochSeconds, purchaseAmount / boughtQuantity, lastSell.epochSeconds,
-                proceeds / soldQuantity, profit, if (costs == 0.0) null else profit / costs * 100.0,
-                buys.sumOf { it.fee + it.tax } + sells.sumOf { it.fee + it.tax }, firstBuy.currency)
-        }
-
-        fun open(symbol: String): BrokerTrade {
-            val firstBuy = buys.first()
-            val purchaseAmount = -buys.sumOf(BrokerExecution::amount)
-            return BrokerTrade(symbol, firstBuy.isin, quantity, firstBuy.epochSeconds,
-                purchaseAmount / buys.sumOf(BrokerExecution::shares), null, null, null, null,
-                buys.sumOf { it.fee + it.tax } + sells.sumOf { it.fee + it.tax }, firstBuy.currency)
-        }
-    }
 
     private fun normalize(value: String): String = value.lowercase()
         .replace(Regex("[^a-z0-9]+"), " ")

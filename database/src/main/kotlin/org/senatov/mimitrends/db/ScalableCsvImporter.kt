@@ -14,7 +14,7 @@ object ScalableCsvImporter {
         "shares", "price", "amount", "fee", "tax", "currency"
     )
 
-    fun parse(path: Path, zoneId: ZoneId = ZoneId.systemDefault()): List<BrokerTransaction> {
+    fun parse(path: Path, zoneId: ZoneId = ZoneId.of("Europe/Berlin")): List<BrokerTransaction> {
         Files.newBufferedReader(path, StandardCharsets.UTF_8).use { reader ->
             val headerLine = reader.readLine() ?: error("The selected CSV file is empty")
             val headers = parseLine(headerLine).map { it.removePrefix("\uFEFF").trim() }
@@ -75,8 +75,7 @@ object ScalableCsvImporter {
         var quoted = false
         var index = 0
         while (index < line.length) {
-            val char = line[index]
-            when (char) {
+            when (val char = line[index]) {
                 '"' -> if (quoted && index + 1 < line.length && line[index + 1] == '"') {
                     field.append('"'); index++
                 } else quoted = !quoted

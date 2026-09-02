@@ -96,7 +96,60 @@ class BrokerTradeMatcherTest {
 
         assertEquals(0, reconciliation.unmatchedSells)
         assertTrue(reconciliation.trades.none { it.isOpen })
+        assertEquals(3, reconciliation.trades.size)
+    }
+
+    @Test
+    fun `closes partial sales as separate fifo trades`() {
+        val trades = BrokerTradeMatcher.pair(
+            "TEST", listOf(
+                execution(1, 100, "Buy", 10.0, 10.0, -100.0, 1.0),
+                execution(2, 200, "Buy", 10.0, 20.0, -200.0, 2.0),
+                execution(3, 300, "Sell", 12.0, 30.0, 360.0, 1.2),
+                execution(4, 400, "Sell", 8.0, 40.0, 320.0, 0.8)
+            )
+        )
+
+        assertEquals(2, trades.size)
+        assertEquals(12.0, trades[0].quantity)
+        assertEquals((100.0 + 40.0) / 12.0, trades[0].entryPrice, 0.000_001)
+        assertEquals(217.4, trades[0].profitAmount!!, 0.000_001)
+        assertEquals(8.0, trades[1].quantity)
+        assertEquals(20.0, trades[1].entryPrice, 0.000_001)
+        assertEquals(157.6, trades[1].profitAmount!!, 0.000_001)
+    }
+
+    @Test
+    fun `reconciles one deferred sale from multiple later buys`() {
+        val reconciliation = BrokerTradeMatcher.reconcile(
+            "TEST", listOf(
+                execution(1, 100, "Sell", 10.0, 22.0, 220.0),
+                execution(2, 120, "Buy", 4.0, 20.0, -80.0),
+                execution(3, 140, "Buy", 6.0, 21.0, -126.0)
+            )
+        )
+
         assertEquals(2, reconciliation.trades.size)
+        assertTrue(reconciliation.trades.none { it.isOpen })
+        assertEquals(1, reconciliation.correctedOrder)
+        assertEquals(0, reconciliation.unmatchedSells)
+        assertEquals(14.0, reconciliation.trades.sumOf { it.profitAmount!! }, 0.000_001)
+    }
+
+    @Test
+    fun `does not combine positions denominated in different currencies`() {
+        val executions = listOf(
+            execution(1, 100, "Buy", 2.0, 100.0, -200.0),
+            execution(2, 200, "Sell", 2.0, 110.0, 220.0),
+            execution(3, 300, "Buy", 3.0, 90.0, -270.0).copy(currency = "USD")
+        )
+
+        val trades = BrokerTradeMatcher.pair("TEST", executions)
+
+        assertEquals(2, trades.size)
+        assertEquals(listOf("EUR", "USD"), trades.map { it.currency })
+        assertTrue(trades.first().profitAmount != null)
+        assertTrue(trades.last().isOpen)
     }
 
     private fun execution(

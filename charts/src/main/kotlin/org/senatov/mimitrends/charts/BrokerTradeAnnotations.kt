@@ -42,7 +42,8 @@ internal class BrokerTradeAnnotations(private val plot: XYPlot) {
         val firstEpoch = bars.first().minuteEpochSeconds
         val lastEpoch = bars.last().minuteEpochSeconds
         val visible = trades.filter { trade ->
-            trade.entryEpochSeconds in firstEpoch..lastEpoch && hasNearbyBar(trade.entryEpochSeconds, bars)
+            endpointVisible(trade.entryEpochSeconds, firstEpoch, lastEpoch, bars) ||
+                    trade.exitEpochSeconds?.let { endpointVisible(it, firstEpoch, lastEpoch, bars) } == true
         }
         val priceSpan = (bars.maxOf { it.high } - bars.minOf { it.low })
             .coerceAtLeast(bars.last().close * 0.02) * barPriceMultiplier
@@ -53,36 +54,47 @@ internal class BrokerTradeAnnotations(private val plot: XYPlot) {
         val candleRangeMax = bars.maxOf { it.high } * barPriceMultiplier
         val rangeMax = candleRangeMax + priceSpan * CARD_LANE_SHARE
         visible.forEach { trade ->
-            val entryX = displayMillis(trade.entryEpochSeconds)
-            val entryY = trade.entryPrice
+            val entryVisible = endpointVisible(trade.entryEpochSeconds, firstEpoch, lastEpoch, bars)
             val exit = trade.exitEpochSeconds?.let { epoch ->
                 trade.exitPrice?.let { price -> epoch to price }
             }
+            val exitVisible = exit?.first?.let { endpointVisible(it, firstEpoch, lastEpoch, bars) } == true
+            val entryX = displayMillis(trade.entryEpochSeconds)
             val exitX = exit?.first?.let(displayMillis)
-            val controlX = exitX?.let { (entryX + it) / 2.0 } ?: entryX
-            val entryAlignment = alignToCandle(trade.entryEpochSeconds, trade.entryPrice,
-                bars, timeStep, barPriceMultiplier, displayMillis)
-            val exitAlignment = exit?.let { (epoch, price) ->
+            val controlX = when {
+                entryVisible && exitVisible -> (entryX + requireNotNull(exitX)) / 2.0
+                entryVisible -> entryX
+                else -> requireNotNull(exitX)
+            }
+            val entryAlignment = if (entryVisible) alignToCandle(
+                trade.entryEpochSeconds, trade.entryPrice,
+                bars, timeStep, barPriceMultiplier, displayMillis
+            ) else null
+            val exitAlignment = if (exitVisible) requireNotNull(exit).let { (epoch, price) ->
                 alignToCandle(epoch, price, bars,
                     timeStep, barPriceMultiplier, displayMillis)
-            }
-            val entryPoint = entryAlignment?.candlePoint ?: TradePoint(entryX, entryY)
-            val exitPoint = exit?.let { (epoch, price) ->
+            } else null
+            val entryPoint = if (entryVisible) entryAlignment?.candlePoint ?: TradePoint(entryX, trade.entryPrice) else null
+            val exitPoint = if (exitVisible) requireNotNull(exit).let { (epoch, price) ->
                 exitAlignment?.candlePoint ?: TradePoint(displayMillis(epoch), price)
-            }
-            addPoint(entryPoint.x, entryPoint.y, timeStep, priceSpan, ORANGE)
+            } else null
+            entryPoint?.let { addPoint(it.x, it.y, timeStep, priceSpan, ORANGE) }
             exitPoint?.let { addPoint(it.x, it.y, timeStep, priceSpan, pnlColor(trade)) }
-            val key = TradeKey(trade.symbol, trade.entryEpochSeconds, trade.exitEpochSeconds)
+            val key = TradeKey(
+                trade.symbol, trade.entryEpochSeconds, trade.exitEpochSeconds,
+                trade.quantity, trade.entryPrice, trade.exitPrice
+            )
             val stored = cardPositions[key]
             val preferredX = stored?.let { domainMin + (it.x * (domainMax - domainMin)) } ?: controlX
             val preferredBottom = stored?.let { rangeMin + (it.y * (rangeMax - rangeMin)) }
                 ?: (candleRangeMax + priceSpan * CARD_GAP)
             val connectorPoints = listOfNotNull(
-                entryAlignment?.candlePoint,
-                exitAlignment?.candlePoint
+                entryAlignment?.candlePoint, exitAlignment?.candlePoint
             ).ifEmpty { listOfNotNull(entryPoint, exitPoint) }
             addCard(key, trade, connectorPoints, preferredX, preferredBottom, timeStep, priceSpan,
-                domainMin, domainMax, rangeMin, rangeMax, entryAlignment, exitAlignment)
+                domainMin, domainMax, rangeMin, rangeMax, entryAlignment, exitAlignment,
+                entryBeforeRange = trade.entryEpochSeconds < firstEpoch
+            )
         }
     }
 
@@ -147,7 +159,8 @@ internal class BrokerTradeAnnotations(private val plot: XYPlot) {
         rangeMin: Double,
         rangeMax: Double,
         entryAlignment: CandleAlignment?,
-        exitAlignment: CandleAlignment?
+        exitAlignment: CandleAlignment?,
+        entryBeforeRange: Boolean
     ) {
         val formatter = DecimalFormat("#,##0.00")
         val symbol = currencySymbol(trade.currency)
@@ -156,9 +169,10 @@ internal class BrokerTradeAnnotations(private val plot: XYPlot) {
         val title = if (exit == null) "${trade.symbol} · BUY $symbol$entry · OPEN"
         else "${trade.symbol} · BUY $symbol$entry → SELL $symbol$exit"
         val aligned = listOfNotNull(entryAlignment, exitAlignment).firstOrNull()
-        val sessionNote = aligned?.let {
+        val alignmentNote = aligned?.let {
             "market mismatch at ${SimpleDateFormat("HH:mm").format(Date(it.actualEpochSeconds * 1_000L))}"
         }.orEmpty()
+        val rangeNote = if (entryBeforeRange) "entry before visible range" else ""
         val pnl = trade.profitAmount?.let { amount ->
             val sign = if (amount >= 0.0) "+" else "−"
             val absolute = formatter.format(kotlin.math.abs(amount))
@@ -171,7 +185,7 @@ internal class BrokerTradeAnnotations(private val plot: XYPlot) {
         )
         renderedCards += RenderedCard(key, bounds, domainMin, domainMax, rangeMin, rangeMax)
         addCardConnector(connectorPoints, bounds, timeStep, priceSpan)
-        val titleLines = listOf(title, sessionNote).filter(String::isNotEmpty).joinToString("\n")
+        val titleLines = listOf(title, rangeNote, alignmentNote).filter(String::isNotEmpty).joinToString("\n")
         add(TradeCardAnnotation(bounds, titleLines, pnl, pnlColor(trade)))
     }
 
@@ -239,6 +253,9 @@ internal class BrokerTradeAnnotations(private val plot: XYPlot) {
         bars.minOfOrNull { kotlin.math.abs(it.minuteEpochSeconds - epochSeconds) }
             ?.let { it <= MAX_ALIGNMENT_SECONDS } == true
 
+    private fun endpointVisible(epochSeconds: Long, firstEpoch: Long, lastEpoch: Long, bars: List<MinuteBar>): Boolean =
+        epochSeconds in firstEpoch..lastEpoch && hasNearbyBar(epochSeconds, bars)
+
     private fun add(annotation: XYAnnotation) {
         annotations += annotation
         plot.addAnnotation(annotation)
@@ -291,7 +308,14 @@ internal class BrokerTradeAnnotations(private val plot: XYPlot) {
 
     internal data class TradePoint(val x: Double, val y: Double)
 
-    private data class TradeKey(val symbol: String, val entryEpoch: Long, val exitEpoch: Long?)
+    private data class TradeKey(
+        val symbol: String,
+        val entryEpoch: Long,
+        val exitEpoch: Long?,
+        val quantity: Double,
+        val entryPrice: Double,
+        val exitPrice: Double?
+    )
     private data class ActiveDrag(val key: TradeKey, val domainOffset: Double, val rangeOffset: Double)
     private data class NormalizedPoint(val x: Double, val y: Double)
     private data class RenderedCard(
