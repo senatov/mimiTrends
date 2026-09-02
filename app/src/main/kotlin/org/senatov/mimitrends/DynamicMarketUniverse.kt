@@ -11,6 +11,13 @@ internal class DynamicMarketUniverse(
 ) {
     private val activity = mutableMapOf<String, Double>()
     private var snapshot: UniverseSnapshot? = null
+    private var pinned = emptySet<String>()
+
+    @Synchronized
+    fun replacePinned(symbols: Collection<String>) {
+        pinned = symbols.mapTo(linkedSetOf()) { it.trim().uppercase() }
+        snapshot = null
+    }
 
     @Synchronized
     fun select(criteria: ScannerCriteria): DynamicUniverseSelection {
@@ -34,7 +41,7 @@ internal class DynamicMarketUniverse(
                 .distinct().take(MAX_SYMBOLS_PER_REGION)
             stabilize(previous?.selection?.symbols.orEmpty().filter { it.contains('.') == european }, desired, core)
         }
-        val symbols = regionalSymbols.flatten()
+        val symbols = (regionalSymbols.flatten() + pinned).distinct()
         val ranks = regionalSymbols.flatMap { region ->
             region.mapIndexed { index, symbol -> symbol to index + 1 }
         }.toMap()

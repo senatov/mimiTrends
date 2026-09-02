@@ -6,9 +6,11 @@ internal class ProviderObservationPresenter(
     private val panel: ScannerPanel,
     private val selectedSignal: () -> ScanResult?,
     private val updateSelectedSignal: (ScanResult) -> Unit,
-    private val requestShortMoveRefresh: () -> Unit
+    private val requestShortMoveRefresh: () -> Unit,
+    private val onObservation: (MarketPriceObservation) -> Unit = {}
 ) {
     fun apply(observation: MarketPriceObservation) {
+        onObservation(observation)
         panel.applyMarketObservation(
             observation.symbol, observation.price, observation.observedAtMillis, observation.provider
         )

@@ -13,7 +13,6 @@ import org.senatov.mimitrends.model.CompanyProfile
 import org.senatov.mimitrends.model.ScanResult
 import org.senatov.mimitrends.model.DisplayCurrency
 import org.senatov.mimitrends.model.TableAppearance
-import org.senatov.mimitrends.model.UiTheme
 import org.slf4j.LoggerFactory
 import java.time.Instant
 import java.time.ZoneId
@@ -27,7 +26,8 @@ class ScannerPanel(
     initialTableDivider: Double = 0.68,
     private val loadProfile: ((String) -> CompletableFuture<CompanyProfile>)? = null,
     private val openStock: (String) -> Unit = {},
-    private val onShowDetectedToday: () -> Unit = {}
+    private val onShowDetectedToday: () -> Unit = {},
+    private val watchlist: InstrumentWatchlistActions = InstrumentWatchlistActions()
 ) : VBox(7.0) {
     internal var onInspect: (ScanResult) -> Unit = {}
     private val log = LoggerFactory.getLogger(javaClass)
@@ -60,8 +60,11 @@ class ScannerPanel(
     private val time = DateTimeFormatter.ofPattern("HH:mm:ss").withZone(ZoneId.systemDefault())
     private var currency = DisplayCurrency.EUR
     private var convertPrice: (String, Double) -> Double = { _, value -> value }
-    private val columnFactory = ScannerColumnFactory(table, loadProfile)
-    private val search = TableSearchField.create("Find signal…", ::applyFilter, ::openFirstMatch, table::requestFocus)
+    private val columnFactory = ScannerColumnFactory(table, loadProfile) { watchlist.contains(it) }
+    private val search = TableSearchField.create(
+        "Find signal…", ::applyFilter, ::openFirstMatch, table::requestFocus,
+        watchlist.search, ::pinSuggestion
+    )
     private val filterCount = Label().apply {
         styleClass += "table-filter-count"
         isVisible = false
@@ -155,7 +158,8 @@ class ScannerPanel(
         table.columnResizePolicy = TableView.UNCONSTRAINED_RESIZE_POLICY
         table.fixedCellSize = -1.0
         ScannerTableInteraction.install(
-            table, onOpen, { onInspect(it) }, ::copySearchKeyword, ::copyText, openStock, search::clear
+            table, onOpen, { onInspect(it) }, ::copySearchKeyword, ::copyText, openStock, search::clear,
+            { watchlist.contains(it) }, ::removePinned
         )
         table.minHeight = 0.0
         table.maxHeight = Double.MAX_VALUE
@@ -178,6 +182,16 @@ class ScannerPanel(
         VBox.setVgrow(tableSplit, Priority.ALWAYS)
         minHeight = 0.0
         maxHeight = Double.MAX_VALUE
+    }
+
+    private fun pinSuggestion(suggestion: TableSearchSuggestion) {
+        watchlist.add(suggestion.symbol)
+        search.clear()
+    }
+
+    private fun removePinned(symbol: String) {
+        watchlist.remove(symbol)
+        table.refresh()
     }
     fun savedColumnLayout(): String = columnLayout.capture(autoFitter.manuallySizedColumnIds())
     fun tableDividerPosition(): Double = tableSplit.dividers.firstOrNull()?.position ?: 0.68
@@ -296,7 +310,10 @@ class ScannerPanel(
 
     fun completeScan(resultLimit: Int = 50) {
         log.debug(LogTag.UI, "completeScan(results={})", stagedRows.size)
-        replaceRows(stagedRows.values.sortedByDescending(ScanResult::anomalyScore).take(resultLimit))
+        val ordered = stagedRows.values.sortedByDescending(ScanResult::anomalyScore)
+        val visible = (ordered.take(resultLimit) + ordered.filter { watchlist.contains(it.symbol) })
+            .distinctBy(ScanResult::symbol)
+        replaceRows(visible)
         stagedRows.clear(); scanning = false
         val freshest = rows.minOfOrNull { FeedFreshness.ageMinutes(it.analysisUpdatedAtMillis) }
         dataPulseBadge.text = freshest?.let { "DATA ${it}m" } ?: "DATA no signals"
@@ -370,22 +387,8 @@ class ScannerPanel(
 
     fun setAppearance(value: TableAppearance) {
         log.debug(LogTag.UI, "setAppearance(font={}, size={})", value.fontFamily, value.fontSize)
-        val safeFont = value.fontFamily.replace("\"", "")
-        val colors = if (value.theme == UiTheme.DARK) {
-            listOf("#D7DEE7", "#19212B", "#202A35", "#254A70", "#354250")
-        } else {
-            listOf(value.textColor, value.evenRowColor, value.oddRowColor, value.selectionColor, value.gridColor)
-        }
-        table.style = """
-            -fx-font-family: "$safeFont";
-            -fx-font-size: ${value.fontSize}px;
-            -mimi-table-text: ${colors[0]};
-            -mimi-row-even: ${colors[1]};
-            -mimi-row-odd: ${colors[2]};
-            -mimi-selection: ${colors[3]};
-            -mimi-table-grid: ${colors[4]};
-        """.trimIndent()
-        table.refresh(); autoFitter.request()
+        ScannerTableAppearance.apply(table, value)
+        autoFitter.request()
     }
     private fun percent(value: Double?) = value?.let { "%+.2f%%".format(it) } ?: "N/A"
     private fun copyText(value: String) {

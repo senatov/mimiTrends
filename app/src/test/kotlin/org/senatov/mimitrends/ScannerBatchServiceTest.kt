@@ -87,4 +87,24 @@ class ScannerBatchServiceTest {
             }
         }
     }
+
+    @Test
+    fun `keeps a pinned instrument visible when it has no current signal`() {
+        val path = Files.createTempDirectory("mimitrends-pinned-batch").resolve("test.db")
+        val repository = MarketRepository(path)
+        val analytics = AnalyticsRepository(path)
+        val monitored = TestScanResult.create(symbol = "IFX.DE").copy(signalSource = "Pinned · monitoring")
+        val service = ScannerBatchService(
+            { _, _ -> ScanEvaluation(null, emptyList(), "NO_CURRENT_SIGNAL", monitored = monitored) },
+            analytics, repository, { "TEST" }
+        )
+
+        val result = service.execute(
+            listOf("IFX.DE"), ScannerCriteria(), { true }, { _, _ -> }, setOf("IFX.DE")
+        )
+
+        assertEquals(listOf("IFX.DE"), requireNotNull(result).active.map { it.symbol })
+        analytics.close()
+        repository.close()
+    }
 }

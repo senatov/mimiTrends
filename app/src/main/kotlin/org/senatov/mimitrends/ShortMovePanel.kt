@@ -32,7 +32,8 @@ class ShortMovePanel(
     savedColumns: String = "",
     private val loadProfile: ((String) -> java.util.concurrent.CompletableFuture<CompanyProfile>)? = null,
     private val copyText: (String) -> Unit = {},
-    private val openExternalChart: (String) -> Unit = {}
+    private val openExternalChart: (String) -> Unit = {},
+    private val watchlist: InstrumentWatchlistActions = InstrumentWatchlistActions()
 ) : VBox(5.0) {
     private val rows = FXCollections.observableArrayList<ShortMove>()
     private val filteredRows = FilteredList(rows)
@@ -45,7 +46,10 @@ class ShortMovePanel(
         tooltip = javafx.scene.control.Tooltip(text)
     }
     private val companyNames = java.util.concurrent.ConcurrentHashMap<String, String>()
-    private val search = TableSearchField.create("Find move…", ::applyFilter, ::openFirstMatch, table::requestFocus)
+    private val search = TableSearchField.create(
+        "Find move…", ::applyFilter, ::openFirstMatch, table::requestFocus,
+        watchlist.search, ::pinSuggestion
+    )
     private val filterCount = Label().apply {
         styleClass += "table-filter-count"
         isVisible = false
@@ -95,8 +99,9 @@ class ShortMovePanel(
                 object : TableCell<ShortMove, String>() {
                     override fun updateItem(item: String?, empty: Boolean) {
                         super.updateItem(item, empty)
-                        text = if (empty || item == null) null else
-                            if (tableRow?.item?.pattern == ShortMovePattern.RECURRING_SHARP_JUMP) "⚠ $item" else item
+                        text = null
+                        graphic = if (empty || item == null || tableRow?.item == null) null else
+                            ShortMoveCompanyGraphic.create(tableRow.item, item, watchlist)
                         styleClass.remove("short-move-recurring-jump")
                         if (!empty && tableRow?.item?.pattern == ShortMovePattern.RECURRING_SHARP_JUMP) {
                             styleClass += "short-move-recurring-jump"
@@ -180,6 +185,9 @@ class ShortMovePanel(
         table.setRowFactory {
             object : TableRow<ShortMove>() {
                 var contextItem: ShortMove? = null
+                val removeItem = MenuItem("Remove from watchlist").apply {
+                    setOnAction { contextItem?.symbol?.let(watchlist.remove) }
+                }
 
                 init {
                     setOnMouseClicked { event ->
@@ -196,10 +204,12 @@ class ShortMovePanel(
                         MenuItem("Open Stock").apply {
                             accelerator = KeyCodeCombination(KeyCode.O, KeyCombination.SHORTCUT_DOWN)
                             setOnAction { contextItem?.symbol?.let(openExternalChart) }
-                        }
+                        },
+                        removeItem
                     ).apply {
                         setOnShowing {
                             contextItem = item.takeUnless { isEmpty }
+                            removeItem.isVisible = contextItem?.symbol?.let(watchlist.contains) == true
                             contextItem?.let { table.selectionModel.select(it) }
                         }
                         setOnHidden { contextItem = null }
@@ -208,6 +218,8 @@ class ShortMovePanel(
 
                 override fun updateItem(item: ShortMove?, empty: Boolean) {
                     super.updateItem(item, empty)
+                    styleClass.remove("user-watchlist-row")
+                    if (!empty && item != null && watchlist.contains(item.symbol)) styleClass += "user-watchlist-row"
                     tooltip = if (!empty && item?.isRetained == true) javafx.scene.control.Tooltip(
                         "Recently detected · no longer confirmed by the latest scan"
                     ) else null
@@ -249,6 +261,11 @@ class ShortMovePanel(
 
     internal fun savedColumnLayout(): String = columnLayout.capture(autoFitter.manuallySizedColumnIds())
     internal fun focusSearch() = search.focusField()
+
+    private fun pinSuggestion(suggestion: TableSearchSuggestion) {
+        watchlist.add(suggestion.symbol)
+        search.clear()
+    }
 
     private fun directionLabel(move: ShortMove): String = when (move.pattern) {
         ShortMovePattern.RECURRING_SHARP_JUMP -> recurringDirection(move)

@@ -25,7 +25,8 @@ internal class ScannerBatchService(
         symbols: List<String>,
         criteria: ScannerCriteria,
         isCurrent: () -> Boolean,
-        onProgress: (completed: Int, symbol: String) -> Unit
+        onProgress: (completed: Int, symbol: String) -> Unit,
+        alwaysInclude: Set<String> = emptySet()
     ): ScannerBatchResult? {
         val runId = analytics.beginScan(criteria.marketRegion.name, symbols.size, criteria.scanIntervalSeconds)
         val strict = mutableListOf<ScanResult>()
@@ -36,6 +37,7 @@ internal class ScannerBatchService(
         val sourceCoverage = linkedMapOf<String, Int>()
         var oldestDataAgeSeconds: Long? = null
         var reusedAnalyses = 0
+        val monitored = linkedMapOf<String, ScanResult>()
         val nowEpochSeconds = java.time.Instant.now().epochSecond
         symbols.forEachIndexed { index, symbol ->
             if (!isCurrent()) {
@@ -58,6 +60,7 @@ internal class ScannerBatchService(
                     evaluation.context?.let(contexts::add)
                     val accepted = evaluation.primary ?: evaluation.fallback.firstNotNullOfOrNull { it }
                         ?: evaluation.longTerm ?: evaluation.context
+                    if (symbol in alwaysInclude) (accepted ?: evaluation.monitored)?.let { monitored[symbol] = it }
                     analytics.recordScanCandidate(runId, symbol, accepted,
                         if (accepted == null) evaluation.rejectionReason ?: "NO_CURRENT_SIGNAL" else null,
                         accepted?.dataStatus ?: fallbackStatus(symbol), evaluation.researchFeatures)
@@ -85,7 +88,11 @@ internal class ScannerBatchService(
         analytics.completeScan(runId, selection.results.map(ScanResult::symbol), errors.size)
         val strictSymbols = calibratedStrict.mapTo(hashSetOf(), ScanResult::symbol)
         val qualifiedStrictCount = selection.results.count { it.symbol in strictSymbols }
-        return ScannerBatchResult(selection.results, qualifiedStrictCount, selection.adaptiveCount, errors,
+        val results = (selection.results + monitored.values.filterNot { monitoredResult ->
+            selection.results.any { it.symbol == monitoredResult.symbol }
+        }).distinctBy(ScanResult::symbol)
+        return ScannerBatchResult(
+            results, qualifiedStrictCount, selection.adaptiveCount, errors,
             sourceCoverage.toMap(), oldestDataAgeSeconds, reusedAnalyses)
     }
 }

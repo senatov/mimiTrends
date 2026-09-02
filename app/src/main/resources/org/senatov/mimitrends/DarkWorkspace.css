@@ -91,6 +91,10 @@
     -fx-text-fill: #aeb9c5;
 }
 
+.theme-dark .scanner-table .table-row-cell.user-watchlist-row {
+    -fx-background-color: rgba(100, 73, 126, 0.42);
+}
+
 .theme-dark .chart-card-header,
 .theme-dark .inspector-section {
     -fx-background-color: -mimi-surface-muted;

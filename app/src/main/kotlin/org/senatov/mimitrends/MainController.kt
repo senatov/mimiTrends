@@ -43,6 +43,7 @@ class MainController(private val apiKey: String?, initialSymbol: String = "AAPL"
     private val wallstreetOnlineClient = WallstreetOnlineMarketDataClient()
     private val wallstreetOnlineDiscovery = WallstreetOnlineDiscoveryService(wallstreetOnlineClient, yahooFinance)
     private val dynamicUniverse = DynamicMarketUniverse(wallstreetOnlineDiscovery::discover)
+    private val userWatchlist = UserWatchlistController(repository, dynamicUniverse, ::startScanner)
     private var profileService = CompanyProfileService(
         repository, apiKey?.let(::FinnhubProfileClient), persistentCompanyLogoClient(repository)
     )
@@ -57,7 +58,7 @@ class MainController(private val apiKey: String?, initialSymbol: String = "AAPL"
             shortMoveSelection.open(symbol)
         },
         shortMoveColumns, { symbol -> profileService.load(symbol) }, ClipboardText::copy,
-        stockPageOpener::open
+        stockPageOpener::open, userWatchlist.actions
     )
     private val moderateCandidatePanel = ModerateCandidatePanel(
         { symbol, moveEpochSeconds ->
@@ -75,7 +76,8 @@ class MainController(private val apiKey: String?, initialSymbol: String = "AAPL"
         initialTableDivider = initialTableDivider,
         loadProfile = { symbol -> profileService.load(symbol) },
         openStock = stockPageOpener::open,
-        onShowDetectedToday = { detectedToday.show() }
+        onShowDetectedToday = { detectedToday.show() },
+        watchlist = userWatchlist.actions
     )
     private val detectedToday: DetectedTodayController by lazy { DetectedTodayController(analytics, batchScheduler, scannerPanel) }
     private val exchangeRateStartup by lazy {
@@ -119,7 +121,8 @@ class MainController(private val apiKey: String?, initialSymbol: String = "AAPL"
     private val observationBus = MarketObservationBus()
     private val observationRecorder = ProviderObservationRecorder(repository, observationBus)
     private val observationPresenter = ProviderObservationPresenter(
-        scannerPanel, { currentSignal }, { currentSignal = it }, shortMoveRefresh::request
+        scannerPanel, { currentSignal }, { currentSignal = it }, shortMoveRefresh::request,
+        userWatchlist::observe
     )
     private val observationUiBridge = MarketObservationUiBridge(observationBus.observations, observationPresenter::apply)
     private val tradegateProvider = TradegatePollingService(repository, observationSink = observationRecorder)
@@ -317,7 +320,9 @@ class MainController(private val apiKey: String?, initialSymbol: String = "AAPL"
                 { generation == scanGeneration.get() && !closing.get() },
                 { completed, symbol -> Platform.runLater {
                     status.update("Market data: analyzed $completed/${symbols.size} · $symbol")
-                } }
+                }
+                },
+                userWatchlist.symbols
             ) ?: return@scan
             val detectedTodayCount = analytics.loadTodayDetections().size
             val errors = batch.errors

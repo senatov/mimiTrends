@@ -26,7 +26,8 @@ import java.util.function.BiConsumer
 
 internal class ScannerColumnFactory(
     private val table: TableView<ScanResult>,
-    private val loadProfile: ((String) -> CompletableFuture<CompanyProfile>)?
+    private val loadProfile: ((String) -> CompletableFuture<CompanyProfile>)?,
+    private val isPinned: (String) -> Boolean = { false }
 ) {
     private val logoImages = ConcurrentHashMap<String, Image>()
     private val companyNames = ConcurrentHashMap<String, String>()
@@ -348,6 +349,15 @@ internal class ScannerColumnFactory(
             }
         }
         content.children += Label(name)
+        val venue = result?.let { MarketVenuePresentation.forInstrument(symbol, it.dataStatus) }
+        if (venue != null) content.children += Label(venue.flag).apply {
+            styleClass += "market-venue-flag"
+            tooltip = Tooltip("Current quote: ${venue.venue}")
+        }
+        if (isPinned(symbol)) content.children += Label("◆").apply {
+            styleClass += "watchlist-marker"
+            tooltip = Tooltip("Pinned to your persistent watchlist")
+        }
         return content
     }
 

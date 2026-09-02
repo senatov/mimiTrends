@@ -91,6 +91,15 @@ class MarketRepository(
         }
     }
 
+    fun searchInstruments(query: String, limit: Int = 12): List<InstrumentCatalogEntry> =
+        database.locked { InstrumentCatalogStore.search(it, query, limit) }
+
+    fun loadUserWatchlist(): Set<String> = database.locked(UserWatchlistStore::load)
+
+    fun addToUserWatchlist(symbol: String) = database.locked { UserWatchlistStore.add(it, symbol) }
+
+    fun removeFromUserWatchlist(symbol: String) = database.locked { UserWatchlistStore.remove(it, symbol) }
+
     fun loadProviderInstrument(provider: String, symbol: String): ProviderInstrument? = database.locked {
         connection.prepareStatement(
             """SELECT identifier, mic, currency, resolved_name, updated_at FROM provider_instruments
@@ -217,6 +226,9 @@ class MarketRepository(
 
     fun loadLatestProviderQuote(symbol: String, notBeforeMillis: Long): ProviderQuoteSnapshot? =
         database.locked { LatestProviderQuoteReader.load(connection, symbol, notBeforeMillis) }
+
+    fun loadLatestProviderQuote(provider: String, symbol: String, notBeforeMillis: Long): ProviderQuoteSnapshot? =
+        database.locked { LatestProviderQuoteReader.load(connection, provider, symbol, notBeforeMillis) }
 
     fun loadCompanyProfile(symbol: String): CompanyProfile? = companyProfiles.load(symbol)
 
@@ -354,6 +366,7 @@ class MarketRepository(
                 statement.executeUpdate(
                     "CREATE INDEX IF NOT EXISTS idx_provider_bars_epoch ON provider_minute_bars(minute_epoch)"
                 )
+                UserWatchlistStore.migrate(connection)
             }
             val removedLegacyRows = MarketStorageMaintenance.migrateLegacyData(connection)
             if (removedLegacyRows > 0) log.info(

@@ -267,6 +267,24 @@
     -fx-background-radius: 8px;
     -fx-padding: 3px 6px;
 }
+
+.scanner-table .table-row-cell.user-watchlist-row {
+    -fx-background-color: rgba(202, 184, 225, 0.32);
+}
+
+.scanner-table .table-row-cell.user-watchlist-row:selected {
+    -fx-background-color: derive(-mimi-selection, -3%);
+}
+
+.market-venue-flag {
+    -fx-font-size: 10px;
+    -fx-opacity: 0.82;
+}
+
+.watchlist-marker {
+    -fx-font-size: 8px;
+    -fx-text-fill: #8b67a8;
+}
 .table-section-title, .positive-watch-title, .inspector-title {
     -fx-font-size: 13px;
     -fx-font-weight: 600;

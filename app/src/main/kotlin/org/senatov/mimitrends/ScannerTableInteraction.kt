@@ -20,38 +20,54 @@ internal object ScannerTableInteraction {
         copySearch: (ScanResult) -> Unit,
         copyTicker: (String) -> Unit,
         openStock: (String) -> Unit,
-        clearSearch: () -> Boolean
+        clearSearch: () -> Boolean,
+        isPinned: (String) -> Boolean,
+        removePinned: (String) -> Unit
     ) {
         table.setRowFactory {
-            TableRow<ScanResult>().apply {
+            object : TableRow<ScanResult>() {
                 var contextItem: ScanResult? = null
                 val hoverDelay = PauseTransition(Duration.seconds(5.0)).apply {
                     setOnFinished { item?.takeIf { isHover && !isEmpty }?.let(inspect) }
                 }
-                setOnMouseEntered { if (!isEmpty) hoverDelay.playFromStart() }
-                setOnMouseExited { hoverDelay.stop() }
-                setOnMouseClicked { event ->
-                    if (!isEmpty && event.button == MouseButton.PRIMARY && event.clickCount == 1) {
-                        hoverDelay.stop()
-                        open(item)
+                val removeItem = MenuItem("Remove from watchlist").apply {
+                    setOnAction { contextItem?.symbol?.let(removePinned) }
+                }
+
+                init {
+                    setOnMouseEntered { if (!isEmpty) hoverDelay.playFromStart() }
+                    setOnMouseExited { hoverDelay.stop() }
+                    setOnMouseClicked { event ->
+                        if (!isEmpty && event.button == MouseButton.PRIMARY && event.clickCount == 1) {
+                            hoverDelay.stop()
+                            open(item)
+                        }
+                    }
+                    contextMenu = ContextMenu(
+                        MenuItem("Copy search keyword").apply {
+                            accelerator = KeyCodeCombination(KeyCode.C, KeyCombination.SHORTCUT_DOWN)
+                            setOnAction { contextItem?.let(copySearch) }
+                        },
+                        MenuItem("Copy ticker").apply { setOnAction { contextItem?.symbol?.let(copyTicker) } },
+                        MenuItem("Open Stock").apply {
+                            accelerator = KeyCodeCombination(KeyCode.O, KeyCombination.SHORTCUT_DOWN)
+                            setOnAction { contextItem?.symbol?.let(openStock) }
+                        },
+                        removeItem
+                    ).apply {
+                        setOnShowing {
+                            contextItem = item.takeUnless { isEmpty }
+                            removeItem.isVisible = contextItem?.symbol?.let(isPinned) == true
+                            contextItem?.let { table.selectionModel.select(it) }
+                        }
+                        setOnHidden { contextItem = null }
                     }
                 }
-                contextMenu = ContextMenu(
-                    MenuItem("Copy search keyword").apply {
-                        accelerator = KeyCodeCombination(KeyCode.C, KeyCombination.SHORTCUT_DOWN)
-                        setOnAction { contextItem?.let(copySearch) }
-                    },
-                    MenuItem("Copy ticker").apply { setOnAction { contextItem?.symbol?.let(copyTicker) } },
-                    MenuItem("Open Stock").apply {
-                        accelerator = KeyCodeCombination(KeyCode.O, KeyCombination.SHORTCUT_DOWN)
-                        setOnAction { contextItem?.symbol?.let(openStock) }
-                    }
-                ).apply {
-                    setOnShowing {
-                        contextItem = item.takeUnless { isEmpty }
-                        contextItem?.let { table.selectionModel.select(it) }
-                    }
-                    setOnHidden { contextItem = null }
+
+                override fun updateItem(item: ScanResult?, empty: Boolean) {
+                    super.updateItem(item, empty)
+                    styleClass.remove("user-watchlist-row")
+                    if (!empty && item != null && isPinned(item.symbol)) styleClass += "user-watchlist-row"
                 }
             }
         }

@@ -109,6 +109,7 @@ internal class MarketDataService(
         val merged = mergeProviderTail(symbol, analysisInput, source, now)
         val effectiveStatus = if (merged.latestQuality == org.senatov.mimitrends.model.MarketObservationQuality.QUOTE_SNAPSHOT)
             merged.latestSource.name else declaredStatus
+        val monitored = monitoredResult(symbol, merged, effectiveStatus, now)
         analytics.recordMarketEvaluation(metadata, corporateActions, symbol, merged.historySource.name,
             effectiveStatus, merged.historyBars, merged.latestEpochSeconds, merged.latestSource.name,
             merged.latestQuality)
@@ -116,13 +117,15 @@ internal class MarketDataService(
             log.debug(LogTag.API, "open-market data rejected as stale symbol={} latest={} now={}",
                 symbol, merged.latestAnalysisEpochSeconds, now)
             return ScanEvaluation(null, emptyList(), "STALE_DATA", sourceStatus = merged.latestSource.name,
-                latestDataEpochSeconds = merged.latestAnalysisEpochSeconds)
+                latestDataEpochSeconds = merged.latestAnalysisEpochSeconds, monitored = monitored
+            )
         }
         if (!merged.analysisTracksLatestQuote()) {
             log.debug(LogTag.API, "open-market analysis rejected behind quote symbol={} analysis={} quote={}",
                 symbol, merged.latestAnalysisEpochSeconds, merged.latestEpochSeconds)
             return ScanEvaluation(null, emptyList(), "ANALYSIS_BEHIND_QUOTE", sourceStatus = merged.latestSource.name,
-                latestDataEpochSeconds = merged.latestAnalysisEpochSeconds)
+                latestDataEpochSeconds = merged.latestAnalysisEpochSeconds, monitored = monitored
+            )
         }
         analysisCache.reuse(symbol, merged.analysisBars, criteria, now * 1_000L)?.let { return it }
         val researchFeatures = ResearchFeatureExtractor.extract(merged.analysisBars)
@@ -143,9 +146,46 @@ internal class MarketDataService(
         } else null
         return ScanEvaluation(primary, fallback, rejectionReason, longTerm,
             researchFeatures, merged.latestSource.name,
-            merged.latestAnalysisEpochSeconds, context).also {
+            merged.latestAnalysisEpochSeconds, context, monitored = monitored
+        ).also {
             analysisCache.record(symbol, merged.analysisBars, criteria, it)
         }
+    }
+
+    private fun monitoredResult(
+        symbol: String,
+        snapshot: MarketDataSnapshot,
+        status: String,
+        nowEpochSeconds: Long
+    ): ScanResult? {
+        val bars = snapshot.analysisBars.sortedBy(MinuteBar::minuteEpochSeconds)
+        val latest = bars.lastOrNull() ?: return null
+        val anchor = bars.lastOrNull { it.minuteEpochSeconds <= latest.minuteEpochSeconds - 10 * 60L } ?: bars.first()
+        val recent = bars.filter { it.minuteEpochSeconds >= latest.minuteEpochSeconds - 24 * 3_600L }
+        val result = ScanResult(
+            symbol = symbol,
+            price = snapshot.latestObservation?.bar?.close ?: latest.close,
+            anomalyScore = 0.0,
+            priceAnomaly = Double.NaN,
+            volumeAnomaly = Double.NaN,
+            rangeAnomaly = Double.NaN,
+            relativeVolume = Double.NaN,
+            candleBodyRatio = 0.0,
+            windowChangePercent = if (anchor.close > 0.0) (latest.close / anchor.close - 1.0) * 100.0 else 0.0,
+            windowVolume = latest.volume,
+            sessionVolume = recent.sumOf(MinuteBar::volume),
+            sessionTurnover = recent.sumOf { it.close * it.volume },
+            signalAgeMinutes = 0,
+            signalSource = "Pinned · monitoring",
+            updatedAtMillis = snapshot.latestObservation?.observedAtMillis ?: latest.minuteEpochSeconds * 1_000L,
+            dataStatus = status,
+            signalWindowLabel = "watchlist",
+            signalPrice = latest.close,
+            signalEpochMillis = latest.minuteEpochSeconds * 1_000L,
+            analysisUpdatedAtMillis = (snapshot.latestAnalysisEpochSeconds ?: latest.minuteEpochSeconds) * 1_000L,
+            scanEvaluatedAtMillis = nowEpochSeconds * 1_000L
+        )
+        return result.withRecentDynamics(bars).withExecutableQuote(nowEpochSeconds)
     }
 
     fun loadPriorityResult(symbol: String, criteria: ScannerCriteria): ScanResult? {
@@ -197,7 +237,10 @@ internal class MarketDataService(
     }
 
     private fun ScanResult.withExecutableQuote(nowEpochSeconds: Long): ScanResult {
-        val quote = repository.loadLatestProviderQuote(symbol, (nowEpochSeconds - EXECUTABLE_QUOTE_MAX_AGE_SECONDS) * 1_000L)
+        val notBefore = (nowEpochSeconds - EXECUTABLE_QUOTE_MAX_AGE_SECONDS) * 1_000L
+        val provider = dataStatus.uppercase().takeIf { it in EXECUTABLE_PROVIDERS }
+        val quote = provider?.let { repository.loadLatestProviderQuote(it, symbol, notBefore) }
+            ?: repository.loadLatestProviderQuote(symbol, notBefore)
             ?: return this
         val bid = quote.bid?.takeIf { it > 0.0 } ?: return this
         val ask = quote.ask?.takeIf { it >= bid } ?: return this
@@ -222,6 +265,9 @@ internal class MarketDataService(
         val RELAXATION_LEVELS = listOf(0.85, 0.70, 0.55)
         const val EXECUTABLE_QUOTE_MAX_AGE_SECONDS = 2 * 60L
         const val PROVIDER_LOOKBACK_SECONDS = 4 * 3_600L
+        val EXECUTABLE_PROVIDERS = MarketDataSource.entries
+            .filterNot { it == MarketDataSource.SQLITE || it == MarketDataSource.YAHOO || it == MarketDataSource.FINNHUB }
+            .mapTo(hashSetOf()) { it.name }
     }
 }
 
@@ -244,5 +290,6 @@ internal data class ScanEvaluation(
     val sourceStatus: String = "UNKNOWN",
     val latestDataEpochSeconds: Long? = null,
     val context: ScanResult? = null,
-    val reusedAnalysis: Boolean = false
+    val reusedAnalysis: Boolean = false,
+    val monitored: ScanResult? = null
 )

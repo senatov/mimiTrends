@@ -20,6 +20,27 @@ import kotlin.test.assertTrue
 
 class MarketRepositoryTest {
     @Test
+    fun `searches the stored instrument catalog and persists the user watchlist`() {
+        val database = Files.createTempDirectory("mimitrends-instrument-search").resolve("test.db")
+        MarketRepository(database).use { repository ->
+            repository.upsertCompanyProfile(CompanyProfile("IFX.DE", "Infineon Technologies", "XETRA", null))
+            repository.upsertMinuteBar(MinuteBar("AAPL", 60L, 100.0, 100.0, 100.0, 100.0, 1.0))
+            repository.flushPending()
+
+            assertEquals("IFX.DE", repository.searchInstruments("infineon").single().symbol)
+            assertEquals("AAPL", repository.searchInstruments("aap").single().symbol)
+            repository.addToUserWatchlist("ifx.de")
+            assertEquals(setOf("IFX.DE"), repository.loadUserWatchlist())
+        }
+
+        MarketRepository(database).use { repository ->
+            assertEquals(setOf("IFX.DE"), repository.loadUserWatchlist())
+            repository.removeFromUserWatchlist("IFX.DE")
+            assertTrue(repository.loadUserWatchlist().isEmpty())
+        }
+    }
+
+    @Test
     fun `removes legacy Lang Schwarz midpoint bars while retaining instrument identity`() {
         val database = Files.createTempDirectory("mimitrends-lang-schwarz-bars").resolve("test.db")
         MarketRepository(database).use { repository ->
