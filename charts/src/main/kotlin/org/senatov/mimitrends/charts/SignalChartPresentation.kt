@@ -19,7 +19,7 @@ internal object SignalChartPresentation {
         currencySymbol: String
     ): String {
         val age = if (signal.signalAgeMinutes == 0) "now" else "${signal.signalAgeMinutes}m ago"
-        val date = signalBar?.let { SimpleDateFormat("dd MMM HH:mm").format(Date(it.minuteEpochSeconds * 1_000)) } ?: "—"
+        val date = signalBar?.let { SimpleDateFormat("dd.MM.yyyy HH:mm").format(Date(it.minuteEpochSeconds * 1_000)) } ?: "—"
         val entry = signal.signalPrice.takeIf { it.isFinite() && it > 0.0 }?.times(priceMultiplier)
         val move = entry?.takeIf { it != 0.0 }?.let { (currentPrice - it) / it * 100.0 }
         val prices = entry?.let {

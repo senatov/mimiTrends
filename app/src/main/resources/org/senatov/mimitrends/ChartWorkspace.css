@@ -4,7 +4,7 @@
     -fx-background-radius: 5px;
     -fx-border-color: -mimi-border;
     -fx-border-radius: 5px;
-    -fx-padding: 9px 11px;
+    -fx-padding: 7px 10px;
 }
 
 .chart-instrument-title {
@@ -33,15 +33,14 @@
     -fx-text-fill: #405164;
     -fx-background-color: transparent;
     -fx-border-color: transparent;
-    -fx-padding: 3px 0 0 0;
+    -fx-padding: 0;
 }
 
 .chart-primary-controls {
     -fx-alignment: bottom-right;
 }
 
-.chart-primary-controls .chart-mode-caption,
-.chart-range-row .chart-mode-caption {
+.chart-primary-controls .chart-mode-caption {
     -fx-padding: 0 2px 1px 2px;
 }
 
@@ -110,7 +109,6 @@
     -fx-background-color: -mimi-accent-hover;
     -fx-border-color: #173f73;
 }
-.chart-range-row { -fx-padding: 1px 0 0 0; }
 .chart-view-button:selected {
     -fx-background-color: -mimi-accent;
     -fx-border-color: -mimi-accent;

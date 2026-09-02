@@ -101,7 +101,7 @@ internal object TrendChartSupport {
         candleRenderer.defaultOutlinePaint = Color(70, 75, 81)
         candleRenderer.defaultStroke = BasicStroke(1.0f)
         candleRenderer.defaultToolTipGenerator = HighLowItemLabelGenerator(
-            SimpleDateFormat("dd MMM yyyy HH:mm"), DecimalFormat("#,##0.00")
+            SimpleDateFormat("dd.MM.yyyy HH:mm"), DecimalFormat("#,##0.00")
         )
         candleRenderer.autoWidthMethod = CandlestickRenderer.WIDTHMETHOD_SMALLEST
         candleRenderer.autoWidthFactor = 0.72
@@ -109,7 +109,7 @@ internal object TrendChartSupport {
         volumeRenderer.setShadowVisible(false)
         volumeRenderer.margin = 0.12
         volumeRenderer.defaultToolTipGenerator = StandardXYToolTipGenerator(
-            "{0}: {1}  {2}", SimpleDateFormat("dd MMM HH:mm"), DecimalFormat("#,##0")
+            "{0}: {1}  {2}", SimpleDateFormat("dd.MM.yyyy HH:mm"), DecimalFormat("#,##0")
         )
         listOf(pricePlot, volumePlot).forEach { plot ->
             plot.backgroundPaint = Color.WHITE
@@ -161,9 +161,9 @@ internal object TrendChartSupport {
         val span = bars.last().minuteEpochSeconds - bars.first().minuteEpochSeconds
         return when {
             span <= 86_400 -> "HH:mm"
-            span <= 7 * 86_400 -> "dd MMM  HH:mm"
-            span <= 180 * 86_400 -> "dd MMM"
-            else -> "MMM yy"
+            span <= 7 * 86_400 -> "dd.MM HH:mm"
+            span <= 180 * 86_400 -> "dd.MM"
+            else -> "MM.yy"
         }
     }
 

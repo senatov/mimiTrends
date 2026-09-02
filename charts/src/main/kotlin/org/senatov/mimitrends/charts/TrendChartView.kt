@@ -68,7 +68,7 @@ class TrendChartView(
         ChartCursorLabelAnnotation.Placement.RANGE_RIGHT
     )
     private var cursorMarkersInstalled = false
-    private var cursorDateFormat = SimpleDateFormat("dd MMM HH:mm")
+    private var cursorDateFormat = SimpleDateFormat("dd.MM.yyyy HH:mm")
     private var cursorPriceFormat = DecimalFormat("$#,##0.00")
     private var priceSignalMarker: IntervalMarker? = null
     private var volumeSignalMarker: IntervalMarker? = null
@@ -185,10 +185,10 @@ class TrendChartView(
 
         dateAxis.dateFormatOverride = timeline.dateFormat(TrendChartSupport.datePattern(visible))
         priceAxis.numberFormatOverride = DecimalFormat("${request.currencySymbol}#,##0.00")
-        cursorDateFormat = SimpleDateFormat("dd MMM yyyy  HH:mm")
+        cursorDateFormat = SimpleDateFormat("dd.MM.yyyy HH:mm")
         cursorPriceFormat = DecimalFormat("${request.currencySymbol}#,##0.00")
-        val details = if (focused) "Signal focus · expanded recent impulse · ${visible.size} candles"
-            else "${request.rangeLabel} · ${request.bars.size} minute bars"
+        val details = if (focused) "Focus · ${visible.size} candles"
+        else "${request.rangeLabel} · ${request.bars.size} minute candles"
         val signalBar = request.signal?.let { SignalChartPresentation.nearestBar(request.bars, it) }
         val signalSummary = request.signal?.let {
             SignalChartPresentation.summary(it, signalBar, closes.last(), request.priceMultiplier, request.currencySymbol)
@@ -297,7 +297,7 @@ class TrendChartView(
             labelTextAnchor = if (ageMinutes == 0) TextAnchor.TOP_RIGHT else TextAnchor.TOP_LEFT
         }
         val signalBar = lastRequest?.let { SignalChartPresentation.nearestBar(it.bars, signal) }
-        val signalDate = signalBar?.let { SimpleDateFormat("dd MMM HH:mm").format(Date(it.minuteEpochSeconds * 1_000)) }
+        val signalDate = signalBar?.let { SimpleDateFormat("dd.MM.yyyy HH:mm").format(Date(it.minuteEpochSeconds * 1_000)) }
         val entry = lastRequest?.let { signal.signalPrice * it.priceMultiplier }
         val label = when {
             isTrend -> "Trend ${signal.signalWindowLabel}"

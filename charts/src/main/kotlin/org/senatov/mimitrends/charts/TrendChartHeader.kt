@@ -76,7 +76,7 @@ internal class TrendChartHeader(
         configureFlexibleText(signal)
         configureFlexibleText(context)
         cursor.styleClass += "chart-cursor-details"
-        cursor.isWrapText = true
+        cursor.isWrapText = false
         cursor.minWidth = 0.0
         cursor.maxWidth = Double.MAX_VALUE
         price.styleClass += "chart-current-price"
@@ -86,9 +86,9 @@ internal class TrendChartHeader(
             alignment = Pos.BASELINE_LEFT
             HBox.setHgrow(instrument, Priority.ALWAYS)
         }
-        val metaRow = HBox(8.0, signal, context).apply {
+        val metaRow = HBox(8.0, signal, context, this@TrendChartHeader.cursor).apply {
             alignment = Pos.CENTER_LEFT
-            HBox.setHgrow(context, Priority.ALWAYS)
+            HBox.setHgrow(this@TrendChartHeader.cursor, Priority.ALWAYS)
         }
         val identity = VBox(2.0, titleRow, metaRow).apply {
             minWidth = 0.0
@@ -101,21 +101,14 @@ internal class TrendChartHeader(
             styleClass += "chart-mode-switch"
         }
         val controls = HBox(8.0,
-            controlGroup("VIEW", viewSwitch), controlGroup("OVERLAY", overlaySwitch)
+            controlGroup("VIEW", viewSwitch), controlGroup("OVERLAY", overlaySwitch),
+            controlGroup("RANGE", rangeSwitch)
         ).apply {
             alignment = Pos.BOTTOM_LEFT
             minWidth = Region.USE_PREF_SIZE
             styleClass += "chart-primary-controls"
         }
-        val rangeRow = HBox(12.0, cursor, controlGroup("RANGE", rangeSwitch)).apply {
-            alignment = Pos.BOTTOM_LEFT
-            HBox.setHgrow(this@TrendChartHeader.cursor, Priority.ALWAYS)
-            styleClass += "chart-range-row"
-        }
-        children += listOf(
-            HBox(12.0, identity, controls).apply { alignment = Pos.CENTER_LEFT },
-            rangeRow
-        )
+        children += HBox(12.0, identity, controls).apply { alignment = Pos.CENTER_LEFT }
         styleClass += "chart-card-header"
     }
 
