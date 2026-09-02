@@ -85,11 +85,11 @@ internal class TrendChartHeader(
         configureFlexibleText(performance)
         instrument.styleClass += "chart-instrument-title"
 
-        val titleRow = HBox(7.0, price, instrument, performance).apply {
+        val titleRow = HBox(7.0, price, instrument, performance, context).apply {
             alignment = Pos.BASELINE_LEFT
-            HBox.setHgrow(performance, Priority.ALWAYS)
+            HBox.setHgrow(context, Priority.ALWAYS)
         }
-        val metaRow = HBox(8.0, signal, context, this@TrendChartHeader.cursor).apply {
+        val metaRow = HBox(8.0, signal, this@TrendChartHeader.cursor).apply {
             alignment = Pos.CENTER_LEFT
             HBox.setHgrow(this@TrendChartHeader.cursor, Priority.ALWAYS)
         }
