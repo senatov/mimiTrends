@@ -350,10 +350,7 @@ internal class ScannerColumnFactory(
         }
         content.children += Label(name)
         val venue = result?.let { MarketVenuePresentation.forInstrument(symbol, it.dataStatus) }
-        if (venue != null) content.children += Label(venue.flag).apply {
-            styleClass += "market-venue-flag"
-            tooltip = Tooltip("Current quote: ${venue.venue}")
-        }
+        if (venue != null) content.children += MarketVenueFlag.create(venue)
         if (isPinned(symbol)) content.children += Label("◆").apply {
             styleClass += "watchlist-marker"
             tooltip = Tooltip("Pinned to your persistent watchlist")

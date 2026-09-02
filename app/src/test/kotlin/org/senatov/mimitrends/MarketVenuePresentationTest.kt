@@ -6,8 +6,8 @@ import kotlin.test.assertEquals
 class MarketVenuePresentationTest {
     @Test
     fun `uses the live provider venue before the ticker home market`() {
-        assertEquals("🇩🇪", MarketVenuePresentation.forInstrument("IFX.DE", "TRADEGATE").flag)
-        assertEquals("🇺🇸", MarketVenuePresentation.forInstrument("NVDA", "FINNHUB").flag)
-        assertEquals("🇫🇷", MarketVenuePresentation.forInstrument("AIR.PA", "YAHOO").flag)
+        assertEquals(MarketCountry.DE, MarketVenuePresentation.forInstrument("IFX.DE", "TRADEGATE").country)
+        assertEquals(MarketCountry.US, MarketVenuePresentation.forInstrument("NVDA", "FINNHUB").country)
+        assertEquals(MarketCountry.FR, MarketVenuePresentation.forInstrument("AIR.PA", "YAHOO").country)
     }
 }
