@@ -53,18 +53,12 @@ class MainController(private val apiKey: String?, initialSymbol: String = "AAPL"
         { symbol, error -> requestStatus.formatError(symbol, error) }, log
     )
     private val shortMovePanel = ShortMovePanel(
-        { symbol, moveEpochSeconds ->
-            trendChart.showSignalFocus(moveEpochSeconds)
-            shortMoveSelection.open(symbol)
-        },
+        ::openShortMoveChart,
         shortMoveColumns, { symbol -> profileService.load(symbol) }, ClipboardText::copy,
         stockPageOpener::open, userWatchlist.actions
     )
     private val moderateCandidatePanel = ModerateCandidatePanel(
-        { symbol, moveEpochSeconds ->
-            trendChart.showSignalFocus(moveEpochSeconds)
-            shortMoveSelection.open(symbol)
-        },
+        ::openShortMoveChart,
         { symbol -> profileService.load(symbol) }, ClipboardText::copy, stockPageOpener::open
     )
     private val insightSidebar = InsightSidebar(moderateCandidatePanel)
@@ -379,6 +373,11 @@ class MainController(private val apiKey: String?, initialSymbol: String = "AAPL"
         tradegateProvider.configure(providerCriteria)
         euronextProvider.configure(providerCriteria)
         log.info(LogTag.API, "provider polling universe updated symbols={}", symbols.size)
+    }
+    private fun openShortMoveChart(symbol: String, moveEpochSeconds: Long) {
+        // Starting the load clears the previous instrument, so install its focus request afterwards.
+        shortMoveSelection.open(symbol)
+        trendChart.showSignalFocus(moveEpochSeconds)
     }
     private fun openScannerResult(result: ScanResult) {
         log.debug(LogTag.UI, "openScannerResult(symbol={}, age={})", result.symbol, result.signalAgeMinutes)

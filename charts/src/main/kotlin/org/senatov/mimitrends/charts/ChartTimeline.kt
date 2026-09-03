@@ -31,7 +31,11 @@ internal class ChartTimeline private constructor(
         return actualBars[index]
     }
 
-    fun dateFormat(pattern: String): DateFormat = TimelineDateFormat(this, pattern)
+    fun dateFormat(pattern: String): DateFormat = if (isNonLinear) {
+        TimelineDateFormat(this, pattern)
+    } else {
+        SimpleDateFormat(pattern)
+    }
 
     private class TimelineDateFormat(
         @Transient private val timeline: ChartTimeline,

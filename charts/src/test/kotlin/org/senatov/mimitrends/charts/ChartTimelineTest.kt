@@ -17,6 +17,19 @@ class ChartTimelineTest {
         assertEquals(180_000.0, ChartTimeline.linear(bars).displayMillis(180L))
     }
 
+    @Test
+    fun `linear axis formats its actual tick time inside a market closure`() {
+        val bars = listOf(
+            MinuteBar("TEST", 0L, 100.0, 101.0, 99.0, 100.0, 1_000.0),
+            MinuteBar("TEST", 86_400L, 100.0, 101.0, 99.0, 100.0, 1_000.0)
+        )
+        val tickTime = 43_200_000L
+
+        val formatted = ChartTimeline.linear(bars).dateFormat("dd HH:mm").format(Date(tickTime))
+
+        assertEquals(SimpleDateFormat("dd HH:mm").format(Date(tickTime)), formatted)
+    }
+
     @Test fun `focus timeline gives the recent signal area at least one third of the chart`() {
         val bars = (0 until 300).map { index ->
             val epoch = if (index < 250) index * 60L else 86_400L + index * 60L
