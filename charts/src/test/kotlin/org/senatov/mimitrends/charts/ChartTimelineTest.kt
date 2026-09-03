@@ -97,4 +97,33 @@ class ChartTimelineTest {
         val detailCount = timeline.actualBars.count { it.minuteEpochSeconds >= bars[938].minuteEpochSeconds }
         assertTrue(detailCount * 3 >= timeline.actualBars.size)
     }
+
+    @Test
+    fun `focus timeline remains bounded when the signal is far in the past`() {
+        val bars = (0 until 10_000).map { index ->
+            MinuteBar("TEST", index * 60L, 100.0, 101.0, 99.0, 100.0, 1_000.0)
+        }
+
+        val timeline = ChartTimeline.focused(bars, bars[100].minuteEpochSeconds)
+
+        assertTrue(timeline.actualBars.size <= 320)
+        assertTrue(bars[100] in timeline.actualBars)
+        assertTrue(bars.last() in timeline.actualBars)
+    }
+
+    @Test
+    fun `focus timeline ignores requested events far outside loaded data`() {
+        val bars = (0 until 300).map { index ->
+            MinuteBar("TEST", index * 60L, 100.0, 101.0, 99.0, 100.0, 1_000.0)
+        }
+
+        val timeline = ChartTimeline.focused(
+            bars,
+            bars[200].minuteEpochSeconds,
+            listOf(-86_400L, bars.last().minuteEpochSeconds + 86_400L)
+        )
+
+        assertTrue(timeline.actualBars.size <= 320)
+        assertTrue(bars.first() !in timeline.actualBars)
+    }
 }

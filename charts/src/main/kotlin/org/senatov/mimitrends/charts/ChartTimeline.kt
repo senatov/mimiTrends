@@ -56,7 +56,12 @@ internal class ChartTimeline private constructor(
     companion object {
         private const val CONTEXT_BARS = 180
         private const val DETAIL_BEFORE_SIGNAL = 12
+        private const val DETAIL_AFTER_SIGNAL = 60
         private const val MIN_CONTEXT_SLOTS = 12
+        private const val MAX_CONTEXT_SLOTS = 146
+        private const val FUTURE_SLOTS = 60
+        private const val MAX_REQUESTED_BARS = 24
+        private const val MAX_EVENT_DISTANCE_SECONDS = 90L
         private const val DISPLAY_STEP_SECONDS = 60L
         private const val SESSION_GAP_SECONDS = 2 * 60 * 60L
 
@@ -72,22 +77,36 @@ internal class ChartTimeline private constructor(
                 kotlin.math.abs(bars[it].minuteEpochSeconds - signalEpochSeconds)
             } ?: bars.lastIndex
             val detailStart = (signalIndex - DETAIL_BEFORE_SIGNAL).coerceAtLeast(0)
-            val requestedIndices = includedEpochSeconds.mapNotNull { epoch ->
-                bars.indices.minByOrNull { kotlin.math.abs(bars[it].minuteEpochSeconds - epoch) }
-            }.filter { it < detailStart }.distinct()
+            val detailEnd = (signalIndex + DETAIL_AFTER_SIGNAL + 1).coerceAtMost(bars.size)
+            val requestedIndices = includedEpochSeconds.asSequence()
+                .filter {
+                    it in (bars.first().minuteEpochSeconds - MAX_EVENT_DISTANCE_SECONDS)..
+                            (bars.last().minuteEpochSeconds + MAX_EVENT_DISTANCE_SECONDS)
+                }
+                .distinct()
+                .sortedBy { kotlin.math.abs(it - signalEpochSeconds) }
+                .take(MAX_REQUESTED_BARS)
+                .mapNotNull { epoch ->
+                    bars.indices.minByOrNull { kotlin.math.abs(bars[it].minuteEpochSeconds - epoch) }
+                        ?.takeIf { kotlin.math.abs(bars[it].minuteEpochSeconds - epoch) <= MAX_EVENT_DISTANCE_SECONDS }
+                }
+                .filter { it !in detailStart until detailEnd }
+                .toList()
             val contextStart = minOf(
                 (detailStart - CONTEXT_BARS).coerceAtLeast(0),
-                requestedIndices.minOrNull() ?: detailStart
+                requestedIndices.filter { it < detailStart }.minOrNull() ?: detailStart
             )
-            val detail = bars.subList(detailStart, bars.size)
+            val detail = bars.subList(detailStart, detailEnd)
             val context = bars.subList(contextStart, detailStart)
-            val contextSlots = (detail.size * 2).coerceAtLeast(MIN_CONTEXT_SLOTS)
+            val future = bars.subList(detailEnd, bars.size)
+            val contextSlots = (detail.size * 2).coerceIn(MIN_CONTEXT_SLOTS, MAX_CONTEXT_SLOTS)
             val previousSessionClose = previousSessionClose(bars, signalIndex, contextStart)
             val requestedBars = requestedIndices.map(bars::get)
             val reservedBars = (listOfNotNull(previousSessionClose) + requestedBars).distinct()
-            val reservedSlots = reservedBars.size
+            val reservedSlots = reservedBars.count { it.minuteEpochSeconds < bars[detailStart].minuteEpochSeconds }
             val aggregateSlots = (contextSlots - reservedSlots).coerceAtLeast(1)
-            val selected = (reservedBars + TrendChartSupport.aggregate(context, aggregateSlots) + detail)
+            val futureBars = if (future.isEmpty()) emptyList() else TrendChartSupport.aggregate(future, FUTURE_SLOTS)
+            val selected = (reservedBars + TrendChartSupport.aggregate(context, aggregateSlots) + detail + futureBars)
                 .distinctBy(MinuteBar::minuteEpochSeconds)
                 .sortedBy(MinuteBar::minuteEpochSeconds)
             val displayStart = selected.first().minuteEpochSeconds

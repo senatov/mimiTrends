@@ -14,6 +14,7 @@ import java.time.Duration
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.CompletionStage
 import java.util.concurrent.CopyOnWriteArraySet
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.function.Consumer
 
 class FinnhubWebSocketClient(
@@ -28,15 +29,21 @@ class FinnhubWebSocketClient(
     private val mapper = ObjectMapper()
     private val subscriptions = CopyOnWriteArraySet<String>()
     private val messageBuffer = StringBuilder()
+    private val closed = AtomicBoolean()
     @Volatile private var webSocket: WebSocket? = null
 
     fun connect(): CompletableFuture<WebSocket> {
         log.debug(LogTag.API, "connect()")
+        if (closed.get()) return CompletableFuture.failedFuture(IllegalStateException("WebSocket client is closed"))
         val encodedToken = URLEncoder.encode(apiKey, StandardCharsets.UTF_8)
         return httpClient.newWebSocketBuilder()
             .connectTimeout(Duration.ofSeconds(10))
             .buildAsync(URI.create("wss://ws.finnhub.io?token=$encodedToken"), this)
             .thenApply { socket ->
+                if (closed.get()) {
+                    socket.sendClose(WebSocket.NORMAL_CLOSURE, "MiMiTrends closed")
+                    return@thenApply socket
+                }
                 webSocket = socket
                 log.info(LogTag.API, "websocket connected")
                 subscriptions.forEach(::sendSubscribe)
@@ -47,7 +54,7 @@ class FinnhubWebSocketClient(
     fun subscribe(symbol: String) {
         val normalized = symbol.trim().uppercase()
         log.debug(LogTag.API, "subscribe(symbol={})", normalized)
-        if (normalized.isEmpty()) return
+        if (normalized.isEmpty() || closed.get()) return
         subscriptions += normalized
         if (webSocket != null) sendSubscribe(normalized)
     }
@@ -61,12 +68,17 @@ class FinnhubWebSocketClient(
 
     override fun onOpen(webSocket: WebSocket) {
         log.debug(LogTag.API, "onOpen()")
+        if (closed.get()) {
+            webSocket.sendClose(WebSocket.NORMAL_CLOSURE, "MiMiTrends closed")
+            return
+        }
         this.webSocket = webSocket
         webSocket.request(1)
     }
 
     override fun onText(webSocket: WebSocket, data: CharSequence, last: Boolean): CompletionStage<*>? {
         log.debug(LogTag.API, "onText(chars={}, last={})", data.length, last)
+        if (closed.get()) return null
         messageBuffer.append(data)
         if (last) {
             val message = messageBuffer.toString()
@@ -79,11 +91,13 @@ class FinnhubWebSocketClient(
 
     override fun onBinary(webSocket: WebSocket, data: ByteBuffer, last: Boolean): CompletionStage<*>? {
         log.debug(LogTag.API, "onBinary(bytes={}, last={})", data.remaining(), last)
+        if (closed.get()) return null
         webSocket.request(1)
         return null
     }
 
     override fun onError(webSocket: WebSocket, error: Throwable) {
+        if (closed.get()) return
         log.error(LogTag.API, "websocket failed", error)
         onError.accept(error)
     }
@@ -108,6 +122,7 @@ class FinnhubWebSocketClient(
 
     override fun close() {
         log.debug(LogTag.API, "close()")
+        if (!closed.compareAndSet(false, true)) return
         webSocket?.sendClose(WebSocket.NORMAL_CLOSURE, "MiMiTrends closed")
         webSocket = null
     }

@@ -7,6 +7,8 @@ import org.senatov.mimitrends.model.DisplayCurrency
 import org.senatov.mimitrends.model.ScanResult
 import org.slf4j.Logger
 import java.util.concurrent.CompletableFuture
+import java.util.concurrent.Executors
+import java.util.concurrent.Future
 import java.util.function.BiConsumer
 
 internal class ChartSelectionController(
@@ -21,8 +23,12 @@ internal class ChartSelectionController(
     private val status: MainStatusController,
     private val formatError: (String, Throwable?) -> String,
     private val log: Logger
-) {
+) : AutoCloseable {
     private val requests = LatestRequestGate<String>()
+    private val loaderExecutor = Executors.newSingleThreadExecutor { task ->
+        Thread(task, "mimitrends-chart-loader").apply { isDaemon = true }
+    }
+    private var pendingLoad: Future<*>? = null
     var selectedRange: String = ChartRange.normalize(initialRange)
         private set
 
@@ -43,9 +49,10 @@ internal class ChartSelectionController(
         val requestedRange = selectedRange
         val currency = displayCurrency()
         status.update("Requesting SQLite: $symbol · $requestedRange")
-        CompletableFuture.supplyAsync {
+        pendingLoad?.cancel(true)
+        pendingLoad = CompletableFuture.supplyAsync({
             loader.load(symbol, ChartRange.days(requestedRange), currency)
-        }.whenComplete(BiConsumer<ChartData?, Throwable?> { chartData, error ->
+        }, loaderExecutor).whenComplete(BiConsumer<ChartData?, Throwable?> { chartData, error ->
             Platform.runLater {
                 if (isStale(request)) return@runLater
                 status.setLoading(false)
@@ -60,6 +67,12 @@ internal class ChartSelectionController(
 
     fun invalidate() {
         requests.invalidate()
+    }
+
+    override fun close() {
+        invalidate()
+        pendingLoad?.cancel(true)
+        loaderExecutor.shutdownNow()
     }
 
     private fun isStale(request: LatestRequestGate.Request<String>): Boolean {

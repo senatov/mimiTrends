@@ -27,6 +27,8 @@ import java.text.SimpleDateFormat
 import kotlin.math.ceil
 
 internal object TrendChartSupport {
+    private const val SESSION_GAP_SECONDS = 2 * 60 * 60L
+
     fun applyTheme(
         dark: Boolean,
         chart: JFreeChart,
@@ -139,14 +141,54 @@ internal object TrendChartSupport {
     }
 
     fun aggregate(bars: List<MinuteBar>, maxCandles: Int): List<MinuteBar> {
-        val chunkSize = ceil(bars.size / maxCandles.toDouble()).toInt().coerceAtLeast(1)
-        return bars.chunked(chunkSize).map { chunk ->
-            val first = chunk.first()
-            val last = chunk.last()
-            MinuteBar(first.symbol, last.minuteEpochSeconds, first.open, chunk.maxOf { it.high },
-                chunk.minOf { it.low }, last.close, chunk.sumOf { it.volume },
-                VolumeStatus.aggregate(chunk.map(MinuteBar::volumeStatus)))
+        require(maxCandles > 0) { "maxCandles must be positive" }
+        if (bars.size <= maxCandles) return bars
+        val sessions = splitSessions(bars)
+        if (sessions.size >= maxCandles) {
+            return evenlySample(sessions, maxCandles).map(::aggregateChunk)
         }
+        val allocations = IntArray(sessions.size) { 1 }
+        repeat(maxCandles - sessions.size) {
+            val index = sessions.indices
+                .filter { allocations[it] < sessions[it].size }
+                .maxByOrNull { sessions[it].size.toDouble() / allocations[it] }
+                ?: return@repeat
+            allocations[index]++
+        }
+        return sessions.flatMapIndexed { index, session ->
+            val chunkSize = ceil(session.size / allocations[index].toDouble()).toInt().coerceAtLeast(1)
+            session.chunked(chunkSize).map(::aggregateChunk)
+        }
+    }
+
+    private fun splitSessions(bars: List<MinuteBar>): List<List<MinuteBar>> {
+        val sessions = mutableListOf<MutableList<MinuteBar>>()
+        bars.forEach { bar ->
+            val current = sessions.lastOrNull()
+            if (current == null || bar.minuteEpochSeconds - current.last().minuteEpochSeconds >= SESSION_GAP_SECONDS) {
+                sessions += mutableListOf(bar)
+            } else {
+                current += bar
+            }
+        }
+        return sessions
+    }
+
+    private fun evenlySample(sessions: List<List<MinuteBar>>, limit: Int): List<List<MinuteBar>> {
+        if (limit == 1) return listOf(sessions.last())
+        return (0 until limit).map { index ->
+            sessions[index * (sessions.lastIndex) / (limit - 1)]
+        }
+    }
+
+    private fun aggregateChunk(chunk: List<MinuteBar>): MinuteBar {
+        val first = chunk.first()
+        val last = chunk.last()
+        return MinuteBar(
+            first.symbol, last.minuteEpochSeconds, first.open, chunk.maxOf { it.high },
+            chunk.minOf { it.low }, last.close, chunk.sumOf { it.volume },
+            VolumeStatus.aggregate(chunk.map(MinuteBar::volumeStatus))
+        )
     }
 
     fun inferBarWidth(bars: List<MinuteBar>): Double {

@@ -221,7 +221,7 @@ class MainController(private val apiKey: String?, initialSymbol: String = "AAPL"
         log.debug(LogTag.UI, "close()")
         if (!closing.compareAndSet(false, true)) return
         scanGeneration.incrementAndGet()
-        chartSelection.invalidate()
+        chartSelection.close()
         rotationTask?.cancel(false)
         researchReport.close()
         observationUiBridge.close()

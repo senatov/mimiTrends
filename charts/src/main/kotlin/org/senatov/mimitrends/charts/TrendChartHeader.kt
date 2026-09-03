@@ -147,6 +147,10 @@ internal class TrendChartHeader(
         rangeButtons[range]?.let { button -> button.toggleGroup.selectToggle(button) }
     }
 
+    fun resetCursor() {
+        cursor.text = CURSOR_PROMPT
+    }
+
     fun showLoading(symbol: String) {
         instrument.text = "$symbol  ·  Loading market data"
         instrument.tooltip = null

@@ -8,9 +8,17 @@ import java.util.Date
 internal object SignalChartPresentation {
     data class Summary(val performance: String?, val details: String)
 
-    fun nearestBar(bars: List<MinuteBar>, signal: ScanResult): MinuteBar? {
-        val epoch = signal.signalEpochMillis / 1_000L
-        return bars.minByOrNull { kotlin.math.abs(it.minuteEpochSeconds - epoch) }
+    fun nearestBar(bars: List<MinuteBar>, signal: ScanResult): MinuteBar? =
+        nearestBar(bars, signal.signalEpochMillis / 1_000L)
+
+    fun nearestBar(
+        bars: List<MinuteBar>,
+        epochSeconds: Long,
+        maxDistanceSeconds: Long = MAX_SIGNAL_DISTANCE_SECONDS
+    ): MinuteBar? = bars.minByOrNull {
+        kotlin.math.abs(it.minuteEpochSeconds - epochSeconds)
+    }?.takeIf {
+        kotlin.math.abs(it.minuteEpochSeconds - epochSeconds) <= maxDistanceSeconds
     }
 
     fun summary(
@@ -47,4 +55,6 @@ internal object SignalChartPresentation {
 
     private fun Double.finiteMetric(label: String, suffix: String): String? =
         takeIf(Double::isFinite)?.let { "$label ${"%.2f".format(it)}$suffix" }
+
+    private const val MAX_SIGNAL_DISTANCE_SECONDS = 90L
 }
