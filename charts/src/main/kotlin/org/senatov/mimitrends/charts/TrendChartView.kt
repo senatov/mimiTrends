@@ -74,6 +74,7 @@ class TrendChartView(
     private var volumeSignalMarker: IntervalMarker? = null
     private val priceSessionMarkers = mutableListOf<ValueMarker>()
     private val volumeSessionMarkers = mutableListOf<ValueMarker>()
+    private val sessionDateLabels = mutableListOf<SessionBoundaryDateAnnotation>()
     private val latestPriceMarker = LatestPriceMarkerController(pricePlot)
     private var lastRequest: TrendChartRenderRequest? = null
     private var renderedBars: List<MinuteBar> = emptyList()
@@ -330,17 +331,22 @@ class TrendChartView(
 
     private fun showSessionBoundaries(timeline: ChartTimeline) {
         clearSessionBoundaries()
-        timeline.sessionBoundaryDisplayMillis().forEach { boundary ->
-            priceSessionMarkers += sessionMarker(boundary).also(pricePlot::addDomainMarker)
-            volumeSessionMarkers += sessionMarker(boundary).also(volumePlot::addDomainMarker)
+        timeline.sessionBoundaries().forEach { boundary ->
+            priceSessionMarkers += sessionMarker(boundary.displayMillis).also(pricePlot::addDomainMarker)
+            volumeSessionMarkers += sessionMarker(boundary.displayMillis).also(volumePlot::addDomainMarker)
+            sessionDateLabels += SessionBoundaryDateAnnotation(
+                boundary.displayMillis, boundary.previousDate, boundary.nextDate
+            ).also(pricePlot::addAnnotation)
         }
     }
 
     private fun clearSessionBoundaries() {
         priceSessionMarkers.forEach(pricePlot::removeDomainMarker)
         volumeSessionMarkers.forEach(volumePlot::removeDomainMarker)
+        sessionDateLabels.forEach(pricePlot::removeAnnotation)
         priceSessionMarkers.clear()
         volumeSessionMarkers.clear()
+        sessionDateLabels.clear()
     }
 
     private fun sessionMarker(value: Double) = ValueMarker(value).apply {

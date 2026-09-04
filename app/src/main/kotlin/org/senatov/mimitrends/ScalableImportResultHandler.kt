@@ -8,7 +8,8 @@ internal class ScalableImportResultHandler(
     private val button: Button,
     private val setStatus: (String, Boolean, String?) -> Unit,
     private val formatError: (String, Throwable) -> String,
-    private val log: Logger
+    private val log: Logger,
+    private val onCompleted: () -> Unit = {}
 ) {
     fun handle(event: ScalableImportEvent) {
         when (event) {
@@ -25,6 +26,7 @@ internal class ScalableImportResultHandler(
                 setStatus("Scalable import: ${result.imported} new · ${result.duplicates} duplicates skipped · " +
                     "${result.linkedToSignals} linked to saved signals · $reconciliation",
                     result.unmatchedSells > 0, null)
+                onCompleted()
             }
             is ScalableImportEvent.Failed -> {
                 button.isDisable = false

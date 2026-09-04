@@ -31,7 +31,10 @@ class ChartTimelineTest {
 
         assertEquals(60_000L, nextSessionDisplayTime)
         assertEquals(SimpleDateFormat("dd HH:mm").format(Date(86_400_000L)), formatted)
-        assertEquals(listOf(60_000.0), timeline.sessionBoundaryDisplayMillis())
+        val boundary = timeline.sessionBoundaries().single()
+        assertEquals(60_000.0, boundary.displayMillis)
+        assertEquals(SimpleDateFormat("dd.MM").format(Date(0L)), boundary.previousDate)
+        assertEquals(SimpleDateFormat("dd.MM").format(Date(86_400_000L)), boundary.nextDate)
     }
 
     @Test fun `focus timeline gives the recent signal area at least one third of the chart`() {

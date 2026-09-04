@@ -6,6 +6,9 @@ import java.text.FieldPosition
 import java.text.ParsePosition
 import java.text.SimpleDateFormat
 import java.util.Date
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 
 internal class ChartTimeline private constructor(
     val actualBars: List<MinuteBar>,
@@ -37,15 +40,21 @@ internal class ChartTimeline private constructor(
         SimpleDateFormat(pattern)
     }
 
-    fun sessionBoundaryDisplayMillis(): List<Double> = actualBars.indices.drop(1).mapNotNull { index ->
+    fun sessionBoundaries(): List<SessionBoundary> = actualBars.indices.drop(1).mapNotNull { index ->
         val previous = actualBars[index - 1]
         val current = actualBars[index]
         if (current.minuteEpochSeconds - previous.minuteEpochSeconds >= SESSION_GAP_SECONDS) {
-            plottedBars[index].minuteEpochSeconds * 1_000.0
+            SessionBoundary(
+                plottedBars[index].minuteEpochSeconds * 1_000.0,
+                SHORT_DATE.format(Instant.ofEpochSecond(previous.minuteEpochSeconds)),
+                SHORT_DATE.format(Instant.ofEpochSecond(current.minuteEpochSeconds))
+            )
         } else {
             null
         }
     }
+
+    data class SessionBoundary(val displayMillis: Double, val previousDate: String, val nextDate: String)
 
     private class TimelineDateFormat(
         @Transient private val timeline: ChartTimeline,
@@ -74,6 +83,7 @@ internal class ChartTimeline private constructor(
         private const val MAX_EVENT_DISTANCE_SECONDS = 90L
         private const val DISPLAY_STEP_SECONDS = 60L
         private const val SESSION_GAP_SECONDS = 2 * 60 * 60L
+        private val SHORT_DATE = DateTimeFormatter.ofPattern("dd.MM").withZone(ZoneId.systemDefault())
 
         fun linear(bars: List<MinuteBar>): ChartTimeline {
             if (bars.size < 2) return ChartTimeline(bars, bars, false)

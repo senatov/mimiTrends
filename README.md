@@ -122,8 +122,11 @@ date;time;status;reference;description;assetType;type;isin;shares;price;amount;f
 ```
 
 Save the file with a `.csv` extension, click the import button in the MiMiTrends toolbar, and select
-the file. Matching transactions are stored locally and appear on the instrument's chart. Importing
-the same file again does not create another copy of an already stored transaction.
+the file. CSV imports run immediately on a dedicated high-priority worker instead of waiting behind
+scheduled scans or database maintenance. Matching transactions are stored locally, and the currently
+displayed chart is refreshed as soon as the import commits so new or changed trade overlays appear
+without a manual refresh. Importing the same file again does not create another copy of an already
+stored transaction.
 
 ## Quick start
 

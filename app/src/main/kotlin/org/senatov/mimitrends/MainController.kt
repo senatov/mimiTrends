@@ -87,12 +87,16 @@ class MainController(private val apiKey: String?, initialSymbol: String = "AAPL"
     private val batchScheduler = Executors.newSingleThreadScheduledExecutor { task ->
         Thread(task, "mimitrends-scanner-rotation").apply { isDaemon = true }
     }
-    private val scalableImport = ScalableImportAction(analytics, batchScheduler)
+    private val importExecutor = Executors.newSingleThreadExecutor { task ->
+        Thread(task, "mimitrends-priority-csv-import").apply { isDaemon = true; priority = Thread.MAX_PRIORITY }
+    }
+    private val scalableImport = ScalableImportAction(analytics, importExecutor)
     private val researchReport = ResearchReportAction(
         analytics, repository, scannerEngine, { scannerCriteria }, status::update
     )
     private val scalableImportResults = ScalableImportResultHandler(
-        actions.importTrades, status::update, requestStatus::formatError, log
+        actions.importTrades, status::update, requestStatus::formatError, log,
+        { loadLocalChart(currentSymbol) }
     )
     private var rotationTask: ScheduledFuture<*>? = null
     private val scanGeneration = AtomicLong()
@@ -227,6 +231,7 @@ class MainController(private val apiKey: String?, initialSymbol: String = "AAPL"
         observationUiBridge.close()
         try {
             shortMoveRefresh.close()
+            importExecutor.shutdownNow()
             ApplicationResourceCloser.close(focusedSignals, priorityScanner, tradegateProvider, euronextProvider,
                 scalableProvider, langSchwarzProvider, wallstreetOnlineProvider, arivaReferences,
                 { finnhubClient?.close() }, batchScheduler, repository, analytics, log)

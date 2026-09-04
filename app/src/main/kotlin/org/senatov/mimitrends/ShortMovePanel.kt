@@ -80,14 +80,12 @@ class ShortMovePanel(
         sortedRows.comparatorProperty().bind(table.comparatorProperty())
         val spacer = javafx.scene.layout.Region().also { HBox.setHgrow(it, Priority.ALWAYS) }
         val headerActions = HBox(7.0)
-        val header = VBox(
-            2.0,
-            HBox(
-                8.0,
-                Label("Trading opportunities").apply { styleClass += "table-section-title" }, spacer, headerActions
-            ).apply { alignment = Pos.CENTER_LEFT },
-            updateCaption
+        val header = HBox(
+            8.0,
+            Label("Trading opportunities").apply { styleClass += "table-section-title" },
+            updateCaption, spacer, headerActions
         ).apply {
+            alignment = Pos.CENTER_LEFT
             styleClass += listOf("table-section-header", "short-move-header")
         }
         val company = TableColumn<ShortMove, String>("Company").apply {
