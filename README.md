@@ -49,9 +49,17 @@ MiMiTrends is informational software. It does not place orders, provide investme
 
 *Freshness is the first sortable column. Pattern rows show their watch priority as a percentage, while
 Outcome progresses from `Collecting` to a preliminary `Beta` probability and finally a validated `Model`
-probability. The lower pane shows the selected event, minute candles, volume, entry, current price, and
-executed trades. Rounded trade cards can be dragged away from the candles; curved purple leaders keep
-every explanation associated with its orange trade interval.*
+probability. The workspace keeps fresh signals, actionable corridors and recoveries, the explanation
+panel, minute candles, volume, entry, current price, and EMA 9/21 plus the retrospective Trend 30 overlay
+visible together. Executed trades can be overlaid without leaving the chart.*
+
+### Positive watch
+
+<img src="./Doc/PositiveWatch.png" alt="MiMiTrends positive watch list and intraday trend chart" width="900">
+
+*Positive watch ranks downside-safety candidates separately from anomaly signals. Confirmation counts,
+entry quality, estimated safety, current-session candles, EMA 9/21, and the latest 30-candle direction
+remain visible without presenting the result as investment advice.*
 
 ### Scanner settings
 
@@ -544,11 +552,14 @@ Selecting a scanner row opens its locally stored candles and volume.
 - signal type, time, entry price, current/exit reference, score, and RVOL;
 - a non-linear trading-time axis that removes closed-market gaps and reserves at least one third of the width for fresh signal candles;
 - aggregated distant context with unaggregated minute candles around the signal;
-- fast 5-minute and local 15-minute direction overlays;
+- EMA 9 and EMA 21 overlays for short- and medium-speed price direction;
+- a dashed, retrospective linear-regression trend across the latest 30 visible candles;
 - a highlighted signal interval and signal-volume bar;
 - real OHLC, candle return, and volume for the candle nearest the cursor;
 - stronger background grid lines for accurate visual comparison;
 - a `Full history` switch for broader context;
+- a `1D` range that starts at midnight in the instrument's exchange-local time and therefore shows the
+  current trading day rather than a rolling 24-hour mixture of two sessions;
 - a `Trades` overlay with translucent rounded cards, clear borders, curved purple leaders, and
   preserved drag positions in both chart modes;
 - pan, zoom, synchronized time/price cursors, and tooltips.
