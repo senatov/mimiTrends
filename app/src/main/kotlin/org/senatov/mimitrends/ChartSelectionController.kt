@@ -51,7 +51,7 @@ internal class ChartSelectionController(
         status.update("Requesting SQLite: $symbol · $requestedRange")
         pendingLoad?.cancel(true)
         pendingLoad = CompletableFuture.supplyAsync({
-            loader.load(symbol, ChartRange.days(requestedRange), currency)
+            loader.load(symbol, requestedRange, currency)
         }, loaderExecutor).whenComplete(BiConsumer<ChartData?, Throwable?> { chartData, error ->
             Platform.runLater {
                 if (isStale(request)) return@runLater

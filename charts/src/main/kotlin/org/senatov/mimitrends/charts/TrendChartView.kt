@@ -88,7 +88,7 @@ class TrendChartView(
     private val tradeAnnotationDragController = TradeAnnotationDragController(
         viewer, dateAxis, priceAxis, pricePlot, tradeAnnotations
     )
-    private val signalTrendOverlay = SignalTrendOverlay(pricePlot)
+    private val marketTrendOverlay = MarketTrendOverlay(pricePlot)
     init {
         log.debug(LogTag.UI, "init()")
         styleClass += "trend-chart-card"
@@ -199,8 +199,8 @@ class TrendChartView(
         priceAxis.numberFormatOverride = DecimalFormat("${request.currencySymbol}#,##0.00")
         cursorDateFormat = SimpleDateFormat("dd.MM.yyyy HH:mm")
         cursorPriceFormat = DecimalFormat("${request.currencySymbol}#,##0.00")
-        val details = if (focused) "Focus · ${visible.size} candles"
-        else "${request.rangeLabel} · ${request.bars.size} minute candles"
+        val details = (if (focused) "Focus · ${visible.size} candles"
+        else "${request.rangeLabel} · ${request.bars.size} minute candles") + " · EMA 9/21 · Trend 30"
         val signalSummary = request.signal?.let {
             SignalChartPresentation.summary(it, signalBar, closes.last(), request.priceMultiplier, request.currencySymbol)
         }
@@ -211,7 +211,7 @@ class TrendChartView(
         latestPriceMarker.show(closes.last(), request.currencySymbol)
         showSignalWindow(request.bars.last().minuteEpochSeconds, request.signal, signalBar, timeline)
         showSessionBoundaries(timeline)
-        if (focused) signalTrendOverlay.render(timeline, request.priceMultiplier) else signalTrendOverlay.clear()
+        marketTrendOverlay.render(timeline, request.priceMultiplier)
         if (header.tradesVisible) tradeAnnotations.render(request.matchingTrades, visible, plotted,
             request.priceMultiplier, timeline::displayMillis)
         else tradeAnnotations.clear()
@@ -274,7 +274,7 @@ class TrendChartView(
         renderedBars = emptyList()
         renderedTimeline = ChartTimeline.linear(emptyList())
         tradeAnnotations.clear()
-        signalTrendOverlay.clear()
+        marketTrendOverlay.clear()
         chart.fireChartChanged()
     }
 

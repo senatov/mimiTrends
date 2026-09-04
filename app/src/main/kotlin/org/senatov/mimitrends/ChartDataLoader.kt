@@ -5,15 +5,14 @@ import org.senatov.mimitrends.db.MarketRepository
 import org.senatov.mimitrends.model.BrokerTrade
 import org.senatov.mimitrends.model.DisplayCurrency
 import org.senatov.mimitrends.model.MinuteBar
-import java.time.Instant
 
 internal class ChartDataLoader(
     private val repository: MarketRepository,
     private val analytics: AnalyticsRepository,
     private val exchangeRates: ExchangeRateService
 ) {
-    fun load(symbol: String, days: Long, targetCurrency: DisplayCurrency): ChartData {
-        val bars = repository.loadMinuteBars(symbol, Instant.now().minusSeconds(days * 86_400).epochSecond)
+    fun load(symbol: String, range: String, targetCurrency: DisplayCurrency): ChartData {
+        val bars = repository.loadMinuteBars(symbol, ChartRange.fromEpochSeconds(range, symbol))
             .map { exchangeRates.convertBar(symbol, it, targetCurrency) }
         val companyName = CompanySearchTerm.from(repository.loadCompanyProfile(symbol)?.name.orEmpty(), symbol)
         val trades = analytics.loadBrokerTrades(symbol, companyName).map { it.convertTo(targetCurrency) }

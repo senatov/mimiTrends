@@ -237,7 +237,7 @@ internal class TrendChartHeader(
         const val CURSOR_PROMPT = "Move above a candle to inspect it · click to pin"
         val RANGE_LABELS = listOf("1D", "5D", "1M", "3M", "6M", "1Y")
         val RANGE_DESCRIPTIONS = mapOf(
-            "1D" to "1 day", "5D" to "5 days", "1M" to "1 month",
+            "1D" to "today's trading session", "5D" to "5 days", "1M" to "1 month",
             "3M" to "3 months", "6M" to "6 months", "1Y" to "1 year"
         )
     }

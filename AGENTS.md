@@ -4,7 +4,8 @@
 
 1. Never commit, push, create a branch, or open a pull request without an explicit user request.
 2. Never add AI attribution, signatures, or generated-by comments to source files.
-3. Always include a short English proposed commit message after completed code changes.
+3. Always include a detailed English proposed commit message after completed code changes. Use a concise subject followed by an
+   informative body that explains both what changed and why.
 4. Preserve user changes and unrelated dirty-worktree edits.
 5. Use English for code, comments, logs, UI identifiers, and documentation added to the repository.
 
@@ -55,5 +56,6 @@
 ## Git workflow
 
 - Do not stage or commit unless explicitly requested.
-- Proposed commit messages must be short, lowercase English and describe the completed change.
+- Proposed commit messages must use a concise English subject, a blank line, and a detailed body describing the completed behavior,
+  motivation, and important implementation decisions.
 - Do not mix unrelated cleanup into a feature commit.
