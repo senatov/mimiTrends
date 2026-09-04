@@ -37,6 +37,16 @@ internal class ChartTimeline private constructor(
         SimpleDateFormat(pattern)
     }
 
+    fun sessionBoundaryDisplayMillis(): List<Double> = actualBars.indices.drop(1).mapNotNull { index ->
+        val previous = actualBars[index - 1]
+        val current = actualBars[index]
+        if (current.minuteEpochSeconds - previous.minuteEpochSeconds >= SESSION_GAP_SECONDS) {
+            plottedBars[index].minuteEpochSeconds * 1_000.0
+        } else {
+            null
+        }
+    }
+
     private class TimelineDateFormat(
         @Transient private val timeline: ChartTimeline,
         pattern: String
@@ -65,7 +75,25 @@ internal class ChartTimeline private constructor(
         private const val DISPLAY_STEP_SECONDS = 60L
         private const val SESSION_GAP_SECONDS = 2 * 60 * 60L
 
-        fun linear(bars: List<MinuteBar>): ChartTimeline = ChartTimeline(bars, bars, false)
+        fun linear(bars: List<MinuteBar>): ChartTimeline {
+            if (bars.size < 2) return ChartTimeline(bars, bars, false)
+            val ordinarySteps = bars.zipWithNext { first, second ->
+                second.minuteEpochSeconds - first.minuteEpochSeconds
+            }.filter { it in 1 until SESSION_GAP_SECONDS }.sorted()
+            val sessionStep = ordinarySteps.getOrNull(ordinarySteps.size / 2) ?: DISPLAY_STEP_SECONDS
+            var displayEpoch = bars.first().minuteEpochSeconds
+            var compressed = false
+            val plotted = bars.mapIndexed { index, bar ->
+                if (index > 0) {
+                    val actualStep = bar.minuteEpochSeconds - bars[index - 1].minuteEpochSeconds
+                    val displayStep = if (actualStep >= SESSION_GAP_SECONDS) sessionStep else actualStep
+                    compressed = compressed || displayStep != actualStep
+                    displayEpoch += displayStep
+                }
+                bar.copy(minuteEpochSeconds = displayEpoch)
+            }
+            return ChartTimeline(bars, plotted, compressed)
+        }
 
         fun focused(
             bars: List<MinuteBar>,
@@ -102,7 +130,7 @@ internal class ChartTimeline private constructor(
             val contextSlots = (detail.size * 2).coerceIn(MIN_CONTEXT_SLOTS, MAX_CONTEXT_SLOTS)
             val previousSessionClose = previousSessionClose(bars, signalIndex, contextStart)
             val requestedBars = requestedIndices.map(bars::get)
-            val reservedBars = (listOfNotNull(previousSessionClose) + requestedBars).distinct()
+            val reservedBars = (listOfNotNull(previousSessionClose, bars.last()) + requestedBars).distinct()
             val reservedSlots = reservedBars.count { it.minuteEpochSeconds < bars[detailStart].minuteEpochSeconds }
             val aggregateSlots = (contextSlots - reservedSlots).coerceAtLeast(1)
             val futureBars = if (future.isEmpty()) emptyList() else TrendChartSupport.aggregate(future, FUTURE_SLOTS)

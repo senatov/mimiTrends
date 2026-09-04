@@ -8,7 +8,8 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 class ChartTimelineTest {
-    @Test fun `linear timeline preserves exact event time between aggregated candles`() {
+    @Test
+    fun `linear timeline preserves exact event time inside one session`() {
         val bars = listOf(
             MinuteBar("TEST", 60L, 100.0, 101.0, 99.0, 100.0, 1_000.0),
             MinuteBar("TEST", 300L, 100.0, 101.0, 99.0, 100.0, 1_000.0)
@@ -18,16 +19,19 @@ class ChartTimelineTest {
     }
 
     @Test
-    fun `linear axis formats its actual tick time inside a market closure`() {
+    fun `linear timeline removes market closure and formats the next real session`() {
         val bars = listOf(
             MinuteBar("TEST", 0L, 100.0, 101.0, 99.0, 100.0, 1_000.0),
             MinuteBar("TEST", 86_400L, 100.0, 101.0, 99.0, 100.0, 1_000.0)
         )
-        val tickTime = 43_200_000L
+        val timeline = ChartTimeline.linear(bars)
+        val nextSessionDisplayTime = timeline.displayMillis(86_400L).toLong()
 
-        val formatted = ChartTimeline.linear(bars).dateFormat("dd HH:mm").format(Date(tickTime))
+        val formatted = timeline.dateFormat("dd HH:mm").format(Date(nextSessionDisplayTime))
 
-        assertEquals(SimpleDateFormat("dd HH:mm").format(Date(tickTime)), formatted)
+        assertEquals(60_000L, nextSessionDisplayTime)
+        assertEquals(SimpleDateFormat("dd HH:mm").format(Date(86_400_000L)), formatted)
+        assertEquals(listOf(60_000.0), timeline.sessionBoundaryDisplayMillis())
     }
 
     @Test fun `focus timeline gives the recent signal area at least one third of the chart`() {

@@ -72,6 +72,8 @@ class TrendChartView(
     private var cursorPriceFormat = DecimalFormat("$#,##0.00")
     private var priceSignalMarker: IntervalMarker? = null
     private var volumeSignalMarker: IntervalMarker? = null
+    private val priceSessionMarkers = mutableListOf<ValueMarker>()
+    private val volumeSessionMarkers = mutableListOf<ValueMarker>()
     private val latestPriceMarker = LatestPriceMarkerController(pricePlot)
     private var lastRequest: TrendChartRenderRequest? = null
     private var renderedBars: List<MinuteBar> = emptyList()
@@ -207,6 +209,7 @@ class TrendChartView(
         log.debug(LogTag.UI, "showLatestPrice(value={})", closes.last())
         latestPriceMarker.show(closes.last(), request.currencySymbol)
         showSignalWindow(request.bars.last().minuteEpochSeconds, request.signal, signalBar, timeline)
+        showSessionBoundaries(timeline)
         if (focused) signalTrendOverlay.render(timeline, request.priceMultiplier) else signalTrendOverlay.clear()
         if (header.tradesVisible) tradeAnnotations.render(request.matchingTrades, visible, plotted,
             request.priceMultiplier, timeline::displayMillis)
@@ -263,6 +266,7 @@ class TrendChartView(
         pricePlot.dataset = null
         volumePlot.dataset = null
         latestPriceMarker.clear()
+        clearSessionBoundaries()
         showSignalWindow(0, null, null, renderedTimeline)
         header.clear()
         clearCursor()
@@ -322,6 +326,26 @@ class TrendChartView(
         volumeSignalMarker = marker(null)
         pricePlot.addDomainMarker(priceSignalMarker, Layer.BACKGROUND)
         volumePlot.addDomainMarker(volumeSignalMarker, Layer.BACKGROUND)
+    }
+
+    private fun showSessionBoundaries(timeline: ChartTimeline) {
+        clearSessionBoundaries()
+        timeline.sessionBoundaryDisplayMillis().forEach { boundary ->
+            priceSessionMarkers += sessionMarker(boundary).also(pricePlot::addDomainMarker)
+            volumeSessionMarkers += sessionMarker(boundary).also(volumePlot::addDomainMarker)
+        }
+    }
+
+    private fun clearSessionBoundaries() {
+        priceSessionMarkers.forEach(pricePlot::removeDomainMarker)
+        volumeSessionMarkers.forEach(volumePlot::removeDomainMarker)
+        priceSessionMarkers.clear()
+        volumeSessionMarkers.clear()
+    }
+
+    private fun sessionMarker(value: Double) = ValueMarker(value).apply {
+        paint = Color(42, 111, 178, 190)
+        stroke = BasicStroke(1.2f)
     }
 
     private fun configureChart() {
