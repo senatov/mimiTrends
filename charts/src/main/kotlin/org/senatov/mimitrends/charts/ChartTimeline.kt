@@ -21,10 +21,17 @@ internal class ChartTimeline private constructor(
 
     fun displayMillis(actualEpochSeconds: Long): Double {
         if (!isNonLinear || actualBars.isEmpty()) return actualEpochSeconds * 1_000.0
-        val index = actualBars.indices.minByOrNull {
-            kotlin.math.abs(actualBars[it].minuteEpochSeconds - actualEpochSeconds)
-        } ?: 0
-        return plottedBars[index].minuteEpochSeconds * 1_000.0
+        val exact = actualBars.binarySearchBy(actualEpochSeconds) { it.minuteEpochSeconds }
+        if (exact >= 0) return plottedBars[exact].minuteEpochSeconds * 1_000.0
+        val right = -exact - 1
+        if (right == 0) return plottedBars.first().minuteEpochSeconds * 1_000.0
+        if (right == actualBars.size) return (plottedBars.last().minuteEpochSeconds +
+                actualEpochSeconds - actualBars.last().minuteEpochSeconds) * 1_000.0
+        val left = right - 1
+        val fraction = (actualEpochSeconds - actualBars[left].minuteEpochSeconds).toDouble() /
+                (actualBars[right].minuteEpochSeconds - actualBars[left].minuteEpochSeconds)
+        return (plottedBars[left].minuteEpochSeconds + fraction *
+                (plottedBars[right].minuteEpochSeconds - plottedBars[left].minuteEpochSeconds)) * 1_000.0
     }
 
     fun actualBarAt(displayMillis: Double): MinuteBar? {

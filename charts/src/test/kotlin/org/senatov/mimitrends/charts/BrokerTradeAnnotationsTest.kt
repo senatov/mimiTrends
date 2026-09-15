@@ -186,7 +186,8 @@ class BrokerTradeAnnotationsTest {
         assertEquals(27.15, renderer.renderedTradePoints().first().y, 0.000_001)
     }
 
-    @Test fun `does not relocate a trade to a distant retained candle`() {
+    @Test
+    fun `shows execution at its actual time even when candle history has a gap`() {
         val renderer = BrokerTradeAnnotations(XYPlot())
         val bars = listOf(
             MinuteBar("TEST", 0L, 31.0, 31.4, 30.8, 31.1, 1_000.0),
@@ -199,8 +200,8 @@ class BrokerTradeAnnotationsTest {
 
         renderer.render(listOf(trade), bars, bars, 1.0)
 
-        assertEquals(emptyList(), renderer.renderedTradePoints())
-        assertEquals(emptyList(), renderer.renderedCardBounds())
+        assertEquals(listOf(BrokerTradeAnnotations.TradePoint(300_000.0, 31.1)), renderer.renderedTradePoints())
+        assertEquals(1, renderer.renderedCardBounds().size)
     }
 
     @Test fun `keeps nearby trade cards readable and separated on a long range`() {
@@ -239,4 +240,23 @@ class BrokerTradeAnnotationsTest {
         assertTrue(second.bottom >= 100.0)
         assertTrue(first.top <= 112.0)
     }
+    @Test
+    fun `Intesa sparse history retains both execution times and prices`() {
+        val renderer = BrokerTradeAnnotations(XYPlot())
+        val bars = listOf(16L to 6.629, 24L to 6.640, 33L to 6.648, 38L to 6.643).map { (minute, price) ->
+            MinuteBar("IES.DE", minute * 60, price, price, price, price, 0.0)
+        }
+        val trade = BrokerTrade(
+            "IES.DE", null, 526.0, 19 * 60 + 21L, 6.644,
+            33 * 60 + 54L, 6.649, 2.63, 0.08, 0.0, "EUR"
+        )
+        renderer.render(listOf(trade), bars, bars, 1.0)
+        assertEquals(
+            listOf(
+                BrokerTradeAnnotations.TradePoint(1_161_000.0, 6.644),
+                BrokerTradeAnnotations.TradePoint(2_034_000.0, 6.649)
+            ), renderer.renderedTradePoints()
+        )
+    }
+
 }

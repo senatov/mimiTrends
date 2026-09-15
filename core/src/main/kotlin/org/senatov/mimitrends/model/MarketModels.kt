@@ -132,7 +132,7 @@ data class TableAppearance(
     val theme: UiTheme = UiTheme.LIGHT,
     val density: UiDensity = UiDensity.COMPACT,
     val fontFamily: String = "SF Pro Display",
-    val fontSize: Double = 12.0,
+    val fontSize: Double = 14.0,
     val textColor: String = "#263238",
     val evenRowColor: String = "#FAFAFA",
     val oddRowColor: String = "#F0F0F0",

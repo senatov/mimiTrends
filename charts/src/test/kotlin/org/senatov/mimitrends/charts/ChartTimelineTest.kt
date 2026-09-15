@@ -9,6 +9,16 @@ import kotlin.test.assertTrue
 
 class ChartTimelineTest {
     @Test
+    fun `compressed timeline interpolates executions instead of snapping to candles`() {
+        val bars = listOf(0L, 86_400L, 86_460L).map { epoch ->
+            MinuteBar("TEST", epoch, 100.0, 101.0, 99.0, 100.0, 1_000.0)
+        }
+        val timeline = ChartTimeline.linear(bars)
+        assertEquals(81_000.0, timeline.displayMillis(86_421L))
+        assertEquals(174_000.0, timeline.displayMillis(86_514L))
+    }
+
+    @Test
     fun `linear timeline preserves exact event time inside one session`() {
         val bars = listOf(
             MinuteBar("TEST", 60L, 100.0, 101.0, 99.0, 100.0, 1_000.0),

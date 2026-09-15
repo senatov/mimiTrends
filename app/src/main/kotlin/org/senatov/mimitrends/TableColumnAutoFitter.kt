@@ -75,7 +75,7 @@ class TableColumnAutoFitter<T>(
     }
 
     private fun fitNow() {
-        if (table.width <= 0.0 || table.items.isEmpty()) return
+        if (table.width <= 0.0) return
         table.applyCss()
         val cellFont = table.lookupAll(".table-cell").firstNotNullOfOrNull { (it as? TableCell<*, *>)?.font }
             ?: Font.getDefault()
@@ -98,7 +98,7 @@ class TableColumnAutoFitter<T>(
             .maxOfOrNull { textWidth(it, cellFont) } ?: 0.0
         val headerWidth = textWidth(TableColumnHelp.title(spec.column), headerFont) + HEADER_RESERVE
         return ceil(maxOf(contentWidth + CONTENT_INSETS + spec.reserveWidth, headerWidth))
-            .coerceIn(spec.minWidth, spec.maxWidth)
+            .coerceIn(spec.minWidth, maxOf(spec.maxWidth, ceil(headerWidth)))
     }
 
     private fun textWidth(value: String, font: Font): Double = Text(value).apply { this.font = font }.layoutBounds.width

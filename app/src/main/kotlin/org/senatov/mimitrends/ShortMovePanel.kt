@@ -173,7 +173,8 @@ class ShortMovePanel(
                 "${time.format(Instant.ofEpochSecond(it.startedAtEpochSeconds))}–${time.format(Instant.ofEpochSecond(it.endedAtEpochSeconds))}"
             }, 82.0, 105.0)
         ), columnLayout.savedWidths(), columnLayout.manuallySizedColumnIds())
-        headerActions.children += listOf(search, filterCount, columnLayout.menuButton(autoFitter::resetManualSizing))
+        headerActions.children += listOf(search, filterCount)
+        columnLayout.onReset = autoFitter::resetManualSizing
         rows.addListener(ListChangeListener<ShortMove> { updateFilterPresentation() })
         table.placeholder = empty
         table.columnResizePolicy = TableView.UNCONSTRAINED_RESIZE_POLICY

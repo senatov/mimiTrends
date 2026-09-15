@@ -145,7 +145,7 @@ class ScannerPanel(
         val headerActionIndex = header.children.lastIndex
         header.children.add(headerActionIndex, search)
         header.children.add(headerActionIndex + 1, filterCount)
-        header.children.add(headerActionIndex + 2, columnLayout.menuButton(autoFitter::resetManualSizing))
+        columnLayout.onReset = autoFitter::resetManualSizing
         rows.addListener(ListChangeListener<ScanResult> { updateFilterPresentation() })
         columnFactory.onContentChanged = { applyFilter(); autoFitter.request() }
         signal.sortType = TableColumn.SortType.DESCENDING

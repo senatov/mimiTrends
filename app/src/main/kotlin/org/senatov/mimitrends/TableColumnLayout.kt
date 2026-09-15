@@ -2,7 +2,6 @@ package org.senatov.mimitrends
 
 import javafx.scene.control.CheckMenuItem
 import javafx.scene.control.ContextMenu
-import javafx.scene.control.MenuButton
 import javafx.scene.control.MenuItem
 import javafx.scene.control.SeparatorMenuItem
 import javafx.scene.control.TableColumn
@@ -16,6 +15,8 @@ internal class TableColumnLayout<T>(
     private val defaultColumns = table.columns.toList()
     private val defaultWidths = defaultColumns.associateWith { it.prefWidth }
 
+    var onReset: () -> Unit = {}
+
     fun install() {
         val known = table.columns.associateBy { it.id }
         val ordered = savedEntries.mapNotNull { known[it.id] } + table.columns.filter { it.id !in savedEntries.map(Entry::id) }
@@ -26,23 +27,22 @@ internal class TableColumnLayout<T>(
                 if (entry.width.isFinite() && entry.width >= minWidth) prefWidth = entry.width
             }
         }
-        val menu = ContextMenu().apply { items += visibilityItems(known.values) }
+        val menu = ContextMenu().apply {
+            items += visibilityItems(known.values)
+            items += SeparatorMenuItem()
+            items += restoreItem()
+        }
         known.values.forEach { it.contextMenu = menu }
     }
 
-    fun menuButton(onReset: () -> Unit = {}): MenuButton = MenuButton("Columns").apply {
-        styleClass += "table-columns-button"
-        items += visibilityItems(table.columns)
-        items += SeparatorMenuItem()
-        items += MenuItem("Restore default columns").apply {
-            setOnAction {
-                table.columns.setAll(defaultColumns)
-                defaultColumns.forEach { column ->
-                    column.isVisible = true
-                    column.prefWidth = defaultWidths.getValue(column)
-                }
-                onReset()
+    private fun restoreItem(): MenuItem = MenuItem("Restore default columns").apply {
+        setOnAction {
+            table.columns.setAll(defaultColumns)
+            defaultColumns.forEach { column ->
+                column.isVisible = true
+                column.prefWidth = defaultWidths.getValue(column)
             }
+            onReset()
         }
     }
 

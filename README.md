@@ -196,7 +196,11 @@ The primary question is not “What did this stock do over the last year?” but
 - provides a signal-focused chart with a consistently styled full-history fallback;
 - imports completed transactions from compatible broker CSV files and outlines each matching trade interval on the
   chart with a translucent orange highlighter-style frame, a draggable rounded explanation card,
-  and a curved purple leader that keeps multiple trades identifiable;
+  and a nearby card with separate leaders to the visible buy and sell executions. Cards show execution times and precise
+  prices; missing candles are disclosed without hiding or moving executions to neighboring candles. Sparse
+  flat-price history shows visible quote points and a dotted guide between observations, distinct from EMA curves;
+- manages column visibility and restores default columns through the table-header context menu;
+- uses larger table headings and readable table values; scanner text size remains configurable in Appearance;
 - remembers window geometry, divider position, table appearance, columns, and the selected instrument.
 
 ## Reading the scanner table

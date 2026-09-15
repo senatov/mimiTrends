@@ -204,22 +204,6 @@
     -fx-padding: 0 2px;
 }
 
-.table-columns-button {
-    -fx-font-size: 11px;
-    -fx-font-weight: 400;
-    -fx-text-fill: -mimi-text-secondary;
-    -fx-background-color: -mimi-surface-muted;
-    -fx-background-radius: 5px;
-    -fx-border-color: -mimi-border;
-    -fx-border-radius: 5px;
-    -fx-padding: 4px 7px;
-}
-
-.table-columns-button:hover {
-    -fx-text-fill: -mimi-accent;
-    -fx-border-color: -mimi-accent;
-}
-
 .table-search-control {
     -fx-alignment: center-left;
 }
@@ -286,7 +270,7 @@
     -fx-text-fill: #8b67a8;
 }
 .table-section-title, .positive-watch-title, .inspector-title {
-    -fx-font-size: 13px;
+    -fx-font-size: 16px;
     -fx-font-weight: 600;
     -fx-text-fill: -mimi-text;
 }
@@ -327,7 +311,7 @@
     -fx-background-radius: 5px;
     -fx-border-color: -mimi-border-strong;
     -fx-border-radius: 5px;
-    -fx-font-size: 11px;
+    -fx-font-size: 14px;
 }
 
 .scanner-table .column-header-background,
@@ -346,9 +330,9 @@
     -fx-background-insets: 0;
     -fx-border-color: transparent #d9dde2 #c9cdd2 transparent;
     -fx-border-width: 0 1px 1px 0;
-    -fx-min-height: 30px;
-    -fx-pref-height: 30px;
-    -fx-max-height: 30px;
+    -fx-min-height: 34px;
+    -fx-pref-height: 34px;
+    -fx-max-height: 34px;
     -fx-padding: 3px 8px;
 }
 
@@ -359,8 +343,8 @@
 
 .scanner-table .column-header .label {
     -fx-font-family: "System";
-    -fx-font-size: 12px;
-    -fx-font-weight: normal;
+    -fx-font-size: 13px;
+    -fx-font-weight: 600;
     -fx-text-fill: #17191c;
     -fx-padding: 0 6px 0 0;
 }
@@ -376,7 +360,7 @@
 }
 
 .scanner-table .table-cell {
-    -fx-border-color: transparent #e2e6eb #e8ebef transparent;
+    -fx-border-color: transparent rgba(156, 169, 181, 0.18) rgba(156, 169, 181, 0.25) transparent;
     -fx-padding: 5px 6px;
 }
 
@@ -492,25 +476,28 @@
 .table-section { -fx-padding: 5px; }
 .trend-chart-card { -fx-padding: 5px; }
 .insight-sidebar { -fx-padding: 4px; }
-.table-section-header { -fx-padding: 0 2px 3px 2px; }
 
-.button, .table-columns-button, .table-search-clear, .insight-sidebar-toggle {
+.table-section-header {
+    -fx-padding: 3px 4px 7px 4px;
+}
+
+.button, .table-search-clear, .insight-sidebar-toggle {
     -fx-background-color:
         linear-gradient(to bottom, rgba(255,255,255,0.98), rgba(226,233,241,0.94));
     -fx-background-radius: 8px;
     -fx-border-color: rgba(128,146,166,0.78);
     -fx-border-radius: 8px;
     -fx-border-width: 1px;
-    -fx-effect: dropshadow(gaussian, rgba(31,54,79,0.22), 5, 0.10, 0, 2);
+    -fx-effect: dropshadow(gaussian, rgba(31, 54, 79, 0.12), 4, 0.10, 0, 1);
 }
 
-.button:hover, .table-columns-button:hover, .table-search-clear:hover, .insight-sidebar-toggle:hover {
+.button:hover, .table-search-clear:hover, .insight-sidebar-toggle:hover {
     -fx-background-color:
         linear-gradient(to bottom, #ffffff, #dce8f4);
     -fx-border-color: -mimi-accent;
 }
 
-.button:pressed, .table-columns-button:pressed, .table-search-clear:pressed,
+.button:pressed, .table-search-clear:pressed,
 .insight-sidebar-toggle:pressed {
     -fx-translate-y: 1px;
     -fx-background-color: linear-gradient(to bottom, #d6e0ea, #edf3f8);

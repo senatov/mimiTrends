@@ -200,7 +200,8 @@ class TrendChartView(
         cursorDateFormat = SimpleDateFormat("dd.MM.yyyy HH:mm")
         cursorPriceFormat = DecimalFormat("${request.currencySymbol}#,##0.00")
         val details = (if (focused) "Focus · ${visible.size} candles"
-        else "${request.rangeLabel} · ${request.bars.size} minute candles") + " · EMA 9/21 · Trend 30"
+        else "${request.rangeLabel} · ${request.bars.size} price bars") +
+                (if (marketTrendOverlay.hasSparseQuotes(timeline)) " · Sparse quotes (dotted)" else "") + " · EMA 9/21 · Trend 30"
         val signalSummary = request.signal?.let {
             SignalChartPresentation.summary(it, signalBar, closes.last(), request.priceMultiplier, request.currencySymbol)
         }

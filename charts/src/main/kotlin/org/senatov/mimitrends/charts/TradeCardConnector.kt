@@ -30,7 +30,6 @@ internal object TradeCardConnector {
         }
         return buildList {
             add(BrokerTradeShapeAnnotation(path, CONNECTOR_STROKE, CONNECTOR_COLOR))
-            addAll(fastener(geometry.start, geometry.domainUnit, geometry.rangeUnit))
             addAll(fastener(geometry.end, geometry.domainUnit, geometry.rangeUnit))
         }
     }

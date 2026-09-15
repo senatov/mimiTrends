@@ -669,8 +669,7 @@
 .scanner-table .table-row-cell:hover { -fx-background-color: derive(-mimi-selection, 22%); }
 .scanner-table .table-cell {
     -fx-text-fill: -mimi-table-text;
-    -fx-font-family: "System";
-    -fx-font-size: 11px;
+    -fx-font-size: 1em;
     -fx-font-weight: 400;
     -fx-border-color: transparent -mimi-table-grid rgba(156,169,181,0.28) transparent;
     -fx-border-width: 0 1px 1px 0;
@@ -680,20 +679,17 @@
 .scanner-table .table-row-cell:selected .table-cell { -fx-text-fill: -mimi-table-text; }
 .scanner-table .pattern-content { -fx-padding: 0; }
 .scanner-table .pattern-primary {
-    -fx-font-family: "System";
     -fx-font-size: 10.5px;
     -fx-font-weight: 400;
 }
 .scanner-table .pattern-qualifiers {
-    -fx-font-family: "System";
     -fx-font-size: 9px;
     -fx-font-weight: 400;
     -fx-text-fill: #273746;
 }
 .scanner-table .pattern-watch-badge,
 .scanner-table .table-row-cell:selected .pattern-watch-badge {
-    -fx-font-family: "System";
-    -fx-font-size: 11px;
+    -fx-font-size: 1em;
     -fx-font-weight: 700;
     -fx-text-fill: #7f1734;
 }
@@ -709,8 +705,7 @@
     -fx-border-insets: 0;
     -fx-border-radius: 1px;
     -fx-text-fill: #123a63;
-    -fx-font-family: "System";
-    -fx-font-size: 11px;
+    -fx-font-size: 1em;
     -fx-font-weight: 400;
 }
 .company-logo { -fx-background-radius: 4px; }
