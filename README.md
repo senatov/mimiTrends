@@ -173,6 +173,8 @@ The primary question is not “What did this stock do over the last year?” but
 - supplements a sparse strict result set with relaxed impulses and persistent rising trends;
 - adapts thresholds to retain the strongest defensible candidates instead of treating the configured
   target as a mandatory quota;
+- displays an animated message over the toolbar during startup until the first analytical pass completes; cached snapshots do not dismiss it;
+- labels analytical data age explicitly in minutes (for example, `801 min.`);
 - ranks completed results atomically instead of changing the visible table while a scan is running;
 - retains recently published events for up to twenty minutes after they stop qualifying, labels them as
   `Cooling`, and decays their ranking score while always giving active signals priority;

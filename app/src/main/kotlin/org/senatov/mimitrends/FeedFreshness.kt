@@ -6,7 +6,7 @@ internal object FeedFreshness {
 
     fun ageLabel(updatedAtMillis: Long, nowMillis: Long = System.currentTimeMillis()): String {
         val elapsed = (nowMillis - updatedAtMillis).coerceAtLeast(0L)
-        return if (elapsed < 60_000L) "<1m" else "${elapsed / 60_000L}m"
+        return if (elapsed < 60_000L) "<1 min." else "${elapsed / 60_000L} min."
     }
 
     fun isStale(updatedAtMillis: Long, status: String, nowMillis: Long = System.currentTimeMillis()): Boolean =

@@ -6,8 +6,10 @@ import org.junit.jupiter.api.Test
 class FeedAgeTest {
     @Test fun `reports completed minutes without overstating feed delay`() {
         assertEquals(15, FeedFreshness.ageMinutes(1_000_000L, 1_900_001L))
-        assertEquals("<1m", FeedFreshness.ageLabel(1_000_000L, 1_059_999L))
-        assertEquals("1m", FeedFreshness.ageLabel(1_000_000L, 1_060_000L))
+        assertEquals("<1 min.", FeedFreshness.ageLabel(1_000_000L, 1_059_999L))
+        assertEquals("801 min.", FeedFreshness.ageLabel(0L, 48_060_000L))
+        assertEquals("<1 min.", FeedFreshness.ageLabel(60_000L, 0L))
+        assertEquals("1 min.", FeedFreshness.ageLabel(1_000_000L, 1_060_000L))
     }
 
     @Test fun `accepts a feed within its declared delay and grace period`() {

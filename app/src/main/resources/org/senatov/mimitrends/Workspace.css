@@ -521,3 +521,22 @@
     -fx-background-radius: 16px;
     -fx-border-radius: 16px;
 }
+.startup-analysis-overlay {
+    -fx-padding: 8px 16px;
+    -fx-background-color: rgba(235, 246, 255, 0.98);
+    -fx-border-color: rgba(255, 255, 255, 0.95);
+    -fx-border-width: 1px;
+    -fx-effect: dropshadow(gaussian, rgba(24, 62, 100, 0.18), 8, 0, 0, 2);
+}
+.startup-analysis-message {
+    -fx-font-size: 24px;
+    -fx-font-weight: bold;
+    -fx-text-fill: #174a76;
+}
+.theme-dark .startup-analysis-overlay {
+    -fx-background-color: rgba(28, 46, 65, 0.98);
+    -fx-border-color: rgba(162, 203, 239, 0.35);
+}
+.theme-dark .startup-analysis-message {
+    -fx-text-fill: #d8edff;
+}

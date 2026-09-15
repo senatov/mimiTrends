@@ -37,6 +37,7 @@ class ScannerPanel(
     private val table = TableView(sortedRows)
     private val tableContainer = StackPane()
     private var closing = false
+    internal val startupOverlay = MarketAnalysisStartupOverlay()
     internal val marketClosedOverlay = MarketClosedOverlay(table::requestFocus)
     private val empty = WorkspaceEmptyState.create(
         "No additional signals yet",
@@ -95,7 +96,7 @@ class ScannerPanel(
         val entryQuality = columnFactory.metric(
             "Entry", SignalMetricPresentation::entryQualitySeverity, SignalMetricPresentation::entryQuality
         )
-        val move = columnFactory.number("10m move", ScanResult::windowChangePercent, ::percent)
+        val move = columnFactory.number("10m move", ScanResult::windowChangePercent, ScannerValueFormat::percent)
         val price = columnFactory.number("Price", { convertPrice(it.symbol, it.price) }) { "${currency.symbol}%,.2f".format(it) }
         val scoreColumn = columnFactory.metric("Anomaly", ScanResult::anomalyScore, SignalMetricPresentation::strength)
         val outcome = columnFactory.metric("Outcome", SignalMetricPresentation::outcomeSeverity, SignalMetricPresentation::outcome)
@@ -105,7 +106,7 @@ class ScannerPanel(
         val age = columnFactory.signal("Age", { SignalAgePresentation.label(it.signalAgeMinutes) }) {
             it.signalAgeMinutes.toDouble()
         }
-        val turnover = columnFactory.number("Turnover", { convertPrice(it.symbol, it.sessionTurnover) }, ::compactMoney)
+        val turnover = columnFactory.number("Turnover", { convertPrice(it.symbol, it.sessionTurnover) }, { ScannerValueFormat.money(it, currency) })
         val updated = columnFactory.updated { time.format(Instant.ofEpochMilli(it)) }
         listOf(scoreColumn, outcome, priceAction, volume, age, turnover).forEach { it.isVisible = false }
         listOf(freshness, symbol, signal, entryQuality, move, price, scoreColumn, outcome, priceAction, volume, age, turnover, updated)
@@ -127,18 +128,18 @@ class ScannerPanel(
         ).forEach { (column, description) -> TableColumnHelp.install(column, description) }
         columnLayout = TableColumnLayout(table, savedColumns).also(TableColumnLayout<ScanResult>::install)
         autoFitter = TableColumnAutoFitter(table, listOf(
-            TableColumnAutoFitter.Spec(freshness, { FeedFreshness.ageLabel(it.analysisUpdatedAtMillis) }, 68.0, 96.0),
+            TableColumnAutoFitter.Spec(freshness, { FeedFreshness.ageLabel(it.analysisUpdatedAtMillis) }, 100.0, 140.0),
             TableColumnAutoFitter.Spec(symbol, columnFactory::companyName, 145.0, 360.0, flexible = true, reserveWidth = 32.0),
             TableColumnAutoFitter.Spec(signal, { WatchScorePresentation.calculate(it).label }, 76.0, 110.0),
             TableColumnAutoFitter.Spec(entryQuality, { SignalMetricPresentation.entryQuality(it).label }, 82.0, 118.0),
-            TableColumnAutoFitter.Spec(move, { percent(it.windowChangePercent) }, 62.0, 105.0, reserveWidth = 4.0),
+            TableColumnAutoFitter.Spec(move, { ScannerValueFormat.percent(it.windowChangePercent) }, 62.0, 105.0, reserveWidth = 4.0),
             TableColumnAutoFitter.Spec(price, { "${currency.symbol}%,.2f".format(convertPrice(it.symbol, it.price)) }, 62.0, 110.0, reserveWidth = 4.0),
             TableColumnAutoFitter.Spec(scoreColumn, { SignalMetricPresentation.strength(it).label }, 68.0, 115.0),
             TableColumnAutoFitter.Spec(outcome, { SignalMetricPresentation.outcome(it).label }, 78.0, 135.0),
             TableColumnAutoFitter.Spec(priceAction, { SignalMetricPresentation.priceAction(it).label }, 72.0, 100.0),
             TableColumnAutoFitter.Spec(volume, { SignalMetricPresentation.volume(it).label }, 64.0, 125.0),
             TableColumnAutoFitter.Spec(age, { SignalAgePresentation.label(it.signalAgeMinutes) }, 64.0, 90.0),
-            TableColumnAutoFitter.Spec(turnover, { compactMoney(convertPrice(it.symbol, it.sessionTurnover)) }, 88.0, 145.0, reserveWidth = 8.0),
+            TableColumnAutoFitter.Spec(turnover, { ScannerValueFormat.money(convertPrice(it.symbol, it.sessionTurnover), currency) }, 88.0, 145.0, reserveWidth = 8.0),
             TableColumnAutoFitter.Spec(updated, { time.format(Instant.ofEpochMilli(it.updatedAtMillis)) }, 88.0, 125.0, reserveWidth = 8.0)
         ), columnLayout.savedWidths(), columnLayout.manuallySizedColumnIds())
         val headerActionIndex = header.children.lastIndex
@@ -158,7 +159,7 @@ class ScannerPanel(
         table.columnResizePolicy = TableView.UNCONSTRAINED_RESIZE_POLICY
         table.fixedCellSize = -1.0
         ScannerTableInteraction.install(
-            table, onOpen, { onInspect(it) }, ::copySearchKeyword, ::copyText, openStock, search::clear,
+            table, onOpen, { onInspect(it) }, ::copySearchKeyword, ClipboardText::copy, openStock, search::clear,
             { watchlist.contains(it) }, ::removePinned
         )
         table.minHeight = 0.0
@@ -201,7 +202,7 @@ class ScannerPanel(
         detectedTodayButton.text = "Detected today · $count"
     }
     private fun copySearchKeyword(result: ScanResult) {
-        copyText(CompanySearchTerm.from(columnFactory.companyName(result), result.symbol))
+        ClipboardText.copy(CompanySearchTerm.from(columnFactory.companyName(result), result.symbol))
     }
 
     private fun applyFilter() {
@@ -292,6 +293,7 @@ class ScannerPanel(
 
     fun beginScan(number: Int, total: Int, symbols: List<String>) {
         if (closing) return
+        startupOverlay.resume()
         log.debug(LogTag.UI, "beginScan(number={}, total={}, symbols={})", number, total, symbols.size)
         stagedRows.clear(); scanning = true
         marketClosedOverlay.hide()
@@ -309,6 +311,7 @@ class ScannerPanel(
     }
 
     fun completeScan(resultLimit: Int = 50) {
+        startupOverlay.finish()
         log.debug(LogTag.UI, "completeScan(results={})", stagedRows.size)
         val ordered = stagedRows.values.sortedByDescending(ScanResult::anomalyScore)
         val visible = (ordered.take(resultLimit) + ordered.filter { watchlist.contains(it.symbol) })
@@ -344,6 +347,7 @@ class ScannerPanel(
     }
 
     fun abortScan() {
+        startupOverlay.showFailure()
         log.debug(LogTag.UI, "abortScan()")
         stagedRows.clear(); scanning = false
     }
@@ -374,6 +378,7 @@ class ScannerPanel(
     }
 
     fun showClosing() {
+        startupOverlay.finish()
         closing = true
         scanIndicator.clearIndicator()
         cycleStatus.text = "Closing · waiting for current operations"
@@ -389,17 +394,5 @@ class ScannerPanel(
         log.debug(LogTag.UI, "setAppearance(font={}, size={})", value.fontFamily, value.fontSize)
         ScannerTableAppearance.apply(table, value)
         autoFitter.request()
-    }
-    private fun percent(value: Double?) = value?.let { "%+.2f%%".format(it) } ?: "N/A"
-    private fun copyText(value: String) {
-        log.debug(LogTag.UI, "copyText(chars={})", value.length)
-        ClipboardText.copy(value)
-    }
-
-    private fun compactMoney(value: Double): String = when {
-        value >= 1_000_000_000 -> "${currency.symbol}%.1fB".format(value / 1_000_000_000)
-        value >= 1_000_000 -> "${currency.symbol}%.1fM".format(value / 1_000_000)
-        value >= 1_000 -> "${currency.symbol}%.1fK".format(value / 1_000)
-        else -> "${currency.symbol}%,.0f".format(value)
     }
 }

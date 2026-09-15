@@ -77,7 +77,7 @@ internal class ScannerColumnFactory(
                 }
             }
         }
-        configure(78.0, 68.0)
+        configure(110.0, 100.0)
     }
 
     fun signal(

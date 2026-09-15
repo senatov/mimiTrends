@@ -49,7 +49,7 @@ internal object MainViewFactory {
             padding = Insets(7.0, 8.0, 8.0, 8.0)
             VBox.setVgrow(contentSplitPane, Priority.ALWAYS)
         }
-        val root = BorderPane(content, VBox(titleBar, requestStatus), null, null, null).apply {
+        val root = BorderPane(content, VBox(StackPane(titleBar, scannerPanel.startupOverlay), requestStatus), null, null, null).apply {
             styleClass += "app-root"
         }
         return StackPane(root, scannerPanel.marketClosedOverlay).apply {
