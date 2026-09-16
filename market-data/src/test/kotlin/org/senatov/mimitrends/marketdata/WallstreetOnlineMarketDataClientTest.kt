@@ -6,6 +6,13 @@ import java.time.LocalDate
 import java.time.ZoneId
 
 class WallstreetOnlineMarketDataClientTest {
+    @Test
+    fun `discovery covers broad US and German liquidity rankings`() {
+        assertEquals(true, WallstreetOnlineMarketDataClient.MOVER_PATHS.contains("/statistik/top-50-deutsche-aktien"))
+        assertEquals(true, WallstreetOnlineMarketDataClient.MOVER_PATHS.contains("/statistik/top-50-us-aktien"))
+        assertEquals(true, WallstreetOnlineMarketDataClient.MOVER_PATHS.contains("/statistik/top-aktien-meistgehandelt"))
+        assertEquals(true, WallstreetOnlineMarketDataClient.MOVER_PATHS.contains("/statistik/top-cdax-aktien-meistgehandelt"))
+    }
     @Test fun `parses movers in document order before discovery ranks by performance`() {
         val html = """
             <table>

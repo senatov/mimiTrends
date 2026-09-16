@@ -146,14 +146,24 @@ class WallstreetOnlineMarketDataClient(
 
     private fun decode(value: String): String = value.replace("&amp;", "&").replace("&quot;", "\"")
 
-    private companion object {
+    internal companion object {
         const val BASE_URL = "https://www.wallstreet-online.de"
         const val USER_AGENT = "MiMiTrends/1.0 (personal desktop market viewer)"
         const val MAX_MOVERS_PER_PAGE = 50
         const val FUTURE_TOLERANCE_MILLIS = 5 * 60_000L
         val QUOTE_ZONE: ZoneId = ZoneId.of("Europe/Berlin")
         const val DISCOVERY_RESULT_LIMIT = 100
-        val MOVER_PATHS = listOf(
+        internal val MOVER_PATHS = listOf(
+            // Broad market rankings are intentionally included before index-only
+            // lists so that liquid mid-caps (for example ELMOS) can enter discovery.
+            "/statistik/top-aktien-performance",
+            "/statistik/top-aktien-meistgehandelt",
+            "/statistik/top-50-deutsche-aktien",
+            "/statistik/top-50-us-aktien",
+            "/statistik/top-cdax-aktien-performance",
+            "/statistik/top-cdax-aktien-meistgehandelt",
+            "/statistik/top-nasdaq100-aktien-performance",
+            "/statistik/top-nasdaq100-aktien-meistgehandelt",
             "/statistik/top-sp500-aktien-performance",
             "/statistik/top-sp500-aktien-meistgehandelt",
             "/statistik/top-eurostoxx-aktien-performance",
