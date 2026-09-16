@@ -5,6 +5,7 @@ set -euo pipefail
 readonly PROJECT_DIR="${1:?usage: generate-release-notes.zsh PROJECT_DIR REPOSITORY OUTPUT_FILE}"
 readonly REPOSITORY="${2:?usage: generate-release-notes.zsh PROJECT_DIR REPOSITORY OUTPUT_FILE}"
 readonly OUTPUT_FILE="${3:?usage: generate-release-notes.zsh PROJECT_DIR REPOSITORY OUTPUT_FILE}"
+readonly app_version="$(sed -n 's/^appVersion=//p' "$PROJECT_DIR/gradle.properties")"
 
 previous_tag="${PREVIOUS_RELEASE_TAG:-$(
   gh release list --repo "$REPOSITORY" --limit 1 --json tagName --jq '.[0].tagName // empty'
@@ -36,10 +37,12 @@ while IFS=$'\t' read -r hash subject; do
   esac
 done < <(git -C "$PROJECT_DIR" log "$range" --no-merges --format=$'%h\t%s')
 
-(( ${#new_items} + ${#fix_items} + ${#change_items} + ${#documentation_items} + ${#other_items} > 0 )) || {
-  print -u2 "No commits found for release notes range: $range"
-  exit 1
-}
+if (( ${#new_items} + ${#fix_items} + ${#change_items} + ${#documentation_items} + ${#other_items} == 0 )); then
+  # A release build bumps appVersion before the source tree is committed. In
+  # that valid case the previous release tag can equal HEAD, so there are no
+  # commits to enumerate even though the DMG contains a new application version.
+  other_items+=("- Version bump to ${app_version}")
+fi
 
 {
   print "## What's changed"
