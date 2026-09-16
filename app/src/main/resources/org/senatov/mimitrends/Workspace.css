@@ -314,6 +314,13 @@
     -fx-font-size: 14px;
 }
 
+.short-move-table .table-row-cell.rapid-crash-row {
+    -fx-border-color: #d94a4a;
+    -fx-border-width: 1.5px;
+    -fx-border-radius: 4px;
+    -fx-background-color: #fff0f0;
+}
+
 .scanner-table .column-header-background,
 .scanner-table .column-header,
 .scanner-table .filler {

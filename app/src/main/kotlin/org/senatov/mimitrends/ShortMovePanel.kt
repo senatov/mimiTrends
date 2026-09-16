@@ -101,7 +101,11 @@ class ShortMovePanel(
                         graphic = if (empty || item == null || tableRow?.item == null) null else
                             ShortMoveCompanyGraphic.create(tableRow.item, item, watchlist)
                         styleClass.remove("short-move-recurring-jump")
-                        if (!empty && tableRow?.item?.pattern == ShortMovePattern.RECURRING_SHARP_JUMP) {
+                        if (!empty && tableRow?.item?.pattern in setOf(
+                                ShortMovePattern.RECURRING_SHARP_JUMP,
+                                ShortMovePattern.RAPID_CRASH
+                            )
+                        ) {
                             styleClass += "short-move-recurring-jump"
                         }
                     }
@@ -217,8 +221,9 @@ class ShortMovePanel(
 
                 override fun updateItem(item: ShortMove?, empty: Boolean) {
                     super.updateItem(item, empty)
-                    styleClass.remove("user-watchlist-row")
+                    styleClass.removeAll("user-watchlist-row", "rapid-crash-row")
                     if (!empty && item != null && watchlist.contains(item.symbol)) styleClass += "user-watchlist-row"
+                    if (!empty && item?.pattern == ShortMovePattern.RAPID_CRASH) styleClass += "rapid-crash-row"
                     tooltip = if (!empty && item?.isRetained == true) javafx.scene.control.Tooltip(
                         "Recently detected · no longer confirmed by the latest scan"
                     ) else null
@@ -267,6 +272,7 @@ class ShortMovePanel(
     }
 
     private fun directionLabel(move: ShortMove): String = when (move.pattern) {
+        ShortMovePattern.RAPID_CRASH -> "‼ RAPID CRASH"
         ShortMovePattern.RECURRING_SHARP_JUMP -> recurringDirection(move)
         ShortMovePattern.POST_DROP_STRUGGLE -> "◆ POST-DROP"
         ShortMovePattern.CONFIRMED_EXTENDED_DROP -> "◆ CONFIRMED DROP"
@@ -329,6 +335,7 @@ class ShortMovePanel(
 
         private companion object {
             fun directionText(move: ShortMove): String = when (move.pattern) {
+                ShortMovePattern.RAPID_CRASH -> "‼ RAPID CRASH"
                 ShortMovePattern.RECURRING_SHARP_JUMP -> recurringDirection(move)
                 ShortMovePattern.POST_DROP_STRUGGLE -> "◆ POST-DROP"
                 ShortMovePattern.CONFIRMED_EXTENDED_DROP -> "◆ CONFIRMED DROP"

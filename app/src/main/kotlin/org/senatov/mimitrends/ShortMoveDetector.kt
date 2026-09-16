@@ -37,6 +37,7 @@ internal fun ShortMove.isActionableOpportunity(): Boolean =
             pattern == ShortMovePattern.RECOVERY_AFTER_EXTENDED_DROP)
 
 internal enum class ShortMovePattern {
+    RAPID_CRASH,
     RECURRING_SHARP_JUMP,
     DIRECTIONAL,
     POST_DROP_STRUGGLE,
@@ -55,12 +56,33 @@ internal object ShortMoveDetector {
         limit: Int = 10
     ): List<ShortMove> = barsBySymbol.mapNotNull { (symbol, bars) ->
         TradableCorridorDetector.detect(symbol, bars, nowEpochSeconds)
+            ?: detectRapidCrash(symbol, bars, nowEpochSeconds)
             ?: detectRecurringSharpJump(symbol, bars, nowEpochSeconds)
             ?: detectPostDropStruggle(symbol, bars, nowEpochSeconds)
             ?: detectConfirmedExtendedDrop(symbol, bars, nowEpochSeconds)
             ?: detectRecoveryAfterExtendedDrop(symbol, bars, nowEpochSeconds)
             ?: calculate(symbol, bars, nowEpochSeconds)
     }.sortedByDescending { rankingScore(it, nowEpochSeconds) }.take(limit)
+
+    private fun detectRapidCrash(symbol: String, bars: List<MinuteBar>, nowEpochSeconds: Long): ShortMove? {
+        val recent = bars.sortedBy(MinuteBar::minuteEpochSeconds)
+        val latest = recent.lastOrNull()?.takeIf { it.minuteEpochSeconds >= nowEpochSeconds - MAX_AGE_MINUTES * 60 } ?: return null
+        val start = recent.lastOrNull { it.minuteEpochSeconds <= latest.minuteEpochSeconds - (RAPID_CRASH_WINDOW_MINUTES - 1) * 60L }
+            ?: return null
+        if (start.close <= 0.0 || latest.close <= 0.0) return null
+        val change = percent(start.close, latest.close)
+        if (change > -RAPID_CRASH_MIN_PERCENT) return null
+        val window = recent.filter { it.minuteEpochSeconds in start.minuteEpochSeconds..latest.minuteEpochSeconds }
+        if (window.size < RAPID_CRASH_MIN_BARS || window.zipWithNext()
+                .any { it.second.minuteEpochSeconds - it.first.minuteEpochSeconds > 60L }
+        ) return null
+        val directionalCloses = window.zipWithNext().count { it.second.close < it.first.close }
+        if (directionalCloses < RAPID_CRASH_MIN_DOWN_BARS) return null
+        return ShortMove(
+            symbol, change, start.close, latest.close, start.minuteEpochSeconds,
+            latest.minuteEpochSeconds, window.size, ShortMovePattern.RAPID_CRASH, latest.minuteEpochSeconds
+        )
+    }
 
     private fun detectRecurringSharpJump(
         symbol: String,
@@ -202,6 +224,7 @@ internal object ShortMoveDetector {
         val ageMinutes = ((nowEpochSeconds - freshnessEpoch).coerceAtLeast(0L) / 60.0)
         val freshness = (1.0 - ageMinutes / FRESHNESS_DECAY_MINUTES).coerceAtLeast(MIN_FRESHNESS_WEIGHT)
         val patternWeight = when (move.pattern) {
+            ShortMovePattern.RAPID_CRASH -> RAPID_CRASH_WEIGHT
             ShortMovePattern.RECURRING_SHARP_JUMP -> RECURRING_JUMP_WEIGHT
             ShortMovePattern.POST_DROP_STRUGGLE -> POST_DROP_WEIGHT
             ShortMovePattern.CONFIRMED_EXTENDED_DROP -> EXTENDED_DROP_WEIGHT
@@ -229,6 +252,11 @@ internal object ShortMoveDetector {
     }
 
     private const val MIN_DROP_PERCENT = 0.7
+    private const val RAPID_CRASH_WINDOW_MINUTES = 5L
+    private const val RAPID_CRASH_MIN_PERCENT = 2.0
+    private const val RAPID_CRASH_MIN_BARS = 4
+    private const val RAPID_CRASH_MIN_DOWN_BARS = 3
+    private const val RAPID_CRASH_WEIGHT = 4.0
     private const val MIN_SHARP_MOVE_PERCENT = 3.0
     private const val SHARP_JUMP_WINDOW_MINUTES = 5L
     private const val SHARP_JUMP_RETENTION_MINUTES = 20L
