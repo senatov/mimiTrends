@@ -190,8 +190,10 @@ internal class MarketDataService(
 
     fun loadPriorityResult(symbol: String, criteria: ScannerCriteria): ScanResult? {
         if (!org.senatov.mimitrends.scanner.MarketCalendar.isOpen(symbol)) return null
+        analysisCache.invalidate(symbol)
         val priorityCriteria = criteria.copy(
-            scanIntervalSeconds = PriorityScanCoordinator.PRIORITY_SCAN_INTERVAL_SECONDS
+            // A user-initiated selection is an explicit refresh, not a cache read.
+            scanIntervalSeconds = 0
         )
         val evaluation = loadAndEvaluate(symbol, priorityCriteria)
         return evaluation.primary ?: evaluation.fallback.firstNotNullOfOrNull { it } ?: evaluation.longTerm

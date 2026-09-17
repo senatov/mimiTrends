@@ -55,8 +55,8 @@ internal object ShortMoveDetector {
         nowEpochSeconds: Long,
         limit: Int = 10
     ): List<ShortMove> = barsBySymbol.mapNotNull { (symbol, bars) ->
-        TradableCorridorDetector.detect(symbol, bars, nowEpochSeconds)
-            ?: detectRapidCrash(symbol, bars, nowEpochSeconds)
+        detectRapidCrash(symbol, bars, nowEpochSeconds)
+            ?: TradableCorridorDetector.detect(symbol, bars, nowEpochSeconds)
             ?: detectRecurringSharpJump(symbol, bars, nowEpochSeconds)
             ?: detectPostDropStruggle(symbol, bars, nowEpochSeconds)
             ?: detectConfirmedExtendedDrop(symbol, bars, nowEpochSeconds)

@@ -19,6 +19,11 @@ internal class MarketAnalysisCache {
         entries[symbol] = Entry(fingerprint(bars, criteria), evaluation.copy(reusedAnalysis = false))
     }
 
+    @Synchronized
+    fun invalidate(symbol: String) {
+        entries.remove(symbol)
+    }
+
     private fun fingerprint(bars: List<MinuteBar>, criteria: ScannerCriteria): Fingerprint {
         val latest = bars.lastOrNull()
         return Fingerprint(latest?.minuteEpochSeconds ?: 0L, latest?.close ?: Double.NaN, latest?.volume ?: Double.NaN,
