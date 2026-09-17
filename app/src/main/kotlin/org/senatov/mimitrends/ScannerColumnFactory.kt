@@ -227,7 +227,7 @@ internal class ScannerColumnFactory(
                     text = null
                     contentDisplay = ContentDisplay.LEFT
                     val cachedProfile = companyProfiles[symbol]
-                    val cachedName = cachedProfile?.name ?: "Loading company…"
+                    val cachedName = cachedProfile?.name ?: symbol
                     graphic = companyGraphic(symbol, cachedName, cachedProfile?.logoBytes, tableRow.item)
                     tooltip = companyTooltip(symbol, cachedProfile)
                     val now = System.currentTimeMillis()

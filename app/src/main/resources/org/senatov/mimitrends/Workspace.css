@@ -461,7 +461,8 @@
 
 .content-split-pane > .split-pane-divider,
 .table-split-pane > .split-pane-divider {
-    -fx-background-color: transparent;
+    -fx-background-color: linear-gradient(to right, rgba(112, 132, 155, 0.34), rgba(112, 132, 155, 0.68), rgba(112, 132, 155, 0.34));
+    -fx-background-radius: 5px;
 }
 
 .content-split-pane > .split-pane-divider:hover,
