@@ -182,7 +182,7 @@ class ShortMovePanel(
         rows.addListener(ListChangeListener<ShortMove> { updateFilterPresentation() })
         table.placeholder = empty
         table.columnResizePolicy = TableView.UNCONSTRAINED_RESIZE_POLICY
-        table.fixedCellSize = -1.0
+        table.fixedCellSize = 25.0
         VBox.setVgrow(table, Priority.ALWAYS)
         table.styleClass += listOf("scanner-table", "short-move-table")
         table.setRowFactory {

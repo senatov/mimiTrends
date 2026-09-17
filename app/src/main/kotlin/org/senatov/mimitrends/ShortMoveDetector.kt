@@ -252,8 +252,8 @@ internal object ShortMoveDetector {
     }
 
     private const val MIN_DROP_PERCENT = 0.7
-    private const val RAPID_CRASH_WINDOW_MINUTES = 5L
-    private const val RAPID_CRASH_MIN_PERCENT = 2.0
+    private const val RAPID_CRASH_WINDOW_MINUTES = 4L
+    private const val RAPID_CRASH_MIN_PERCENT = 0.6
     private const val RAPID_CRASH_MIN_BARS = 4
     private const val RAPID_CRASH_MIN_DOWN_BARS = 3
     private const val RAPID_CRASH_WEIGHT = 4.0

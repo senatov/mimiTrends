@@ -138,7 +138,7 @@ class ShortMoveDetectorTest {
     }
 
     @Test
-    fun `ranks upward and downward candles by absolute move`() {
+    fun `prioritizes a confirmed rapid crash over ordinary directional moves`() {
         val now = 10_000L
         val ranked = ShortMoveDetector.rank(mapOf(
             "UP" to bars("UP", now, 103.0),
@@ -148,7 +148,8 @@ class ShortMoveDetectorTest {
 
         assertEquals(listOf("DOWN", "UP"), ranked.map(ShortMove::symbol))
         assertTrue(ranked.first().changePercent < 0.0)
-        assertEquals(5, ranked.first().barCount)
+        assertEquals(4, ranked.first().barCount)
+        assertEquals(ShortMovePattern.RAPID_CRASH, ranked.first().pattern)
     }
 
     @Test

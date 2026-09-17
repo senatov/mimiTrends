@@ -157,7 +157,7 @@ class ScannerPanel(
         }
         table.placeholder = empty
         table.columnResizePolicy = TableView.UNCONSTRAINED_RESIZE_POLICY
-        table.fixedCellSize = -1.0
+        table.fixedCellSize = 25.0
         ScannerTableInteraction.install(
             table, onOpen, { onInspect(it) }, ::copySearchKeyword, ClipboardText::copy, openStock, search::clear,
             { watchlist.contains(it) }, ::removePinned

@@ -176,7 +176,7 @@
     -fx-border-color: #d7d8da;
     -fx-border-radius: 8px;
     -fx-background-radius: 8px;
-    -fx-padding: 8px;
+    -fx-padding: 3px;
 }
 .trend-chart-card {
     -fx-background-color: rgba(255,255,255,0.84);
@@ -184,7 +184,7 @@
     -fx-border-color: #c8d0da;
     -fx-border-radius: 12px;
     -fx-border-width: 1px;
-    -fx-padding: 7px;
+    -fx-padding: 4px;
     -fx-effect: dropshadow(gaussian, rgba(31,54,79,0.10), 8, 0.10, 0, 2);
 }
 .chart-card-content { -fx-background-color: transparent; }
@@ -193,12 +193,12 @@
     -fx-background-radius: 8px;
     -fx-border-color: #d6dee7;
     -fx-border-radius: 8px;
-    -fx-padding: 8px 10px;
+    -fx-padding: 5px 8px;
 }
 .chart-viewer-shell {
     -fx-background-color: white;
     -fx-background-radius: 8px;
-    -fx-padding: 5px 0 0 0;
+    -fx-padding: 2px 0 0 0;
 }
 .chart-instrument-title {
     -fx-font-family: "SF Pro Display", "SansSerif";
@@ -352,10 +352,13 @@
     -fx-border-color: #c8d0da;
     -fx-border-radius: 12px;
     -fx-border-width: 1px;
-    -fx-padding: 7px;
+    -fx-padding: 4px;
     -fx-effect: dropshadow(gaussian, rgba(31,54,79,0.10), 8, 0.10, 0, 2);
 }
-.table-section-header { -fx-padding: 0 3px 2px 3px; }
+
+.table-section-header {
+    -fx-padding: 0 2px 1px 2px;
+}
 .table-section-title {
     -fx-font-family: "System";
     -fx-font-size: 14px;
@@ -370,6 +373,13 @@
 }
 .short-move-table .table-cell.short-move-up { -fx-text-fill: #16834a; -fx-font-weight: 600; }
 .short-move-table .table-cell.short-move-down { -fx-text-fill: #bd3c3c; -fx-font-weight: 600; }
+
+.short-move-table .table-row-cell.rapid-crash-row {
+    -fx-border-color: #d94a4a;
+    -fx-border-width: 1.5px;
+    -fx-border-radius: 4px;
+    -fx-background-color: #fff0f0;
+}
 .short-move-table .table-cell.short-move-struggle { -fx-text-fill: #8a5600; -fx-font-weight: 600; }
 .short-move-table .table-cell.short-move-recurring-jump,
 .short-move-table .table-row-cell:selected .table-cell.short-move-recurring-jump {
@@ -649,7 +659,7 @@
 .scanner-table .column-header {
     -fx-border-color: transparent -mimi-table-grid #bcc4cc transparent;
     -fx-border-width: 0 1px 1px 0;
-    -fx-padding: 2px 5px;
+    -fx-padding: 1px 4px;
 }
 .scanner-table .column-header .label {
     -fx-font-family: "System";
@@ -673,7 +683,7 @@
     -fx-font-weight: 400;
     -fx-border-color: transparent -mimi-table-grid rgba(156,169,181,0.28) transparent;
     -fx-border-width: 0 1px 1px 0;
-    -fx-padding: 2px 5px;
+    -fx-padding: 1px 4px;
     -fx-alignment: center-left;
 }
 .scanner-table .table-row-cell:selected .table-cell { -fx-text-fill: -mimi-table-text; }
