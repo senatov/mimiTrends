@@ -160,6 +160,7 @@ class MainController(private val apiKey: String?, initialSymbol: String = "AAPL"
             currentSymbol = it
             status.setLoading(true)
             status.update("Refreshing market data: $it")
+            scannerPanel.setRefreshing(it, true)
             loadLocalChart(it)
         }
     ) { symbol, result, error ->
@@ -167,7 +168,10 @@ class MainController(private val apiKey: String?, initialSymbol: String = "AAPL"
             log.warn(LogTag.API, "short-move chart refresh failed symbol={}", symbol, error)
             status.update("Market refresh failed: $symbol · showing cached chart", true, requestStatus.formatError(symbol, error))
         }
+        result?.let { scannerPanel.applyPriorityResult(symbol, it) }
+        scannerPanel.setRefreshing(symbol, false)
         currentSignal = result
+        shortMoveRefresh.request()
         loadLocalChart(symbol)
     }
     private val liveAggregator = FinnhubMinuteAggregator { bar ->

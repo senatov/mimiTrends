@@ -686,6 +686,11 @@
     -fx-padding: 1px 4px;
     -fx-alignment: center-left;
 }
+
+.scanner-table .label {
+    -fx-font-family: "System";
+    -fx-font-smoothing-type: lcd;
+}
 .scanner-table .table-row-cell:selected .table-cell { -fx-text-fill: -mimi-table-text; }
 .scanner-table .pattern-content { -fx-padding: 0; }
 .scanner-table .pattern-primary {
