@@ -41,7 +41,9 @@ internal class DynamicMarketUniverse(
                 .distinct().take(MAX_SYMBOLS_PER_REGION)
             stabilize(previous?.selection?.symbols.orEmpty().filter { it.contains('.') == european }, desired, core)
         }
-        val symbols = (regionalSymbols.flatten() + pinned).distinct()
+        val symbols = (regionalSymbols.flatten() + pinned.filter {
+            MarketUniverseSelector.includes(it, criteria.marketRegion)
+        }).distinct()
         val ranks = regionalSymbols.flatMap { region ->
             region.mapIndexed { index, symbol -> symbol to index + 1 }
         }.toMap()

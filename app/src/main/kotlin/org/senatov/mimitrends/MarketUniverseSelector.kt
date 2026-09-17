@@ -10,11 +10,14 @@ internal object MarketUniverseSelector {
     ).filter { symbol -> includes(symbol, criteria.marketRegion) }
 
     fun includes(symbol: String, region: MarketRegion): Boolean {
-        val european = symbol.contains('.')
+        val normalized = symbol.uppercase()
+        val european = normalized.contains('.')
         return when (region) {
-            MarketRegion.BOTH -> true
+            MarketRegion.BOTH -> !european || isGermanListing(normalized)
             MarketRegion.US -> !european
-            MarketRegion.EUROPE -> european
+            MarketRegion.EUROPE -> isGermanListing(normalized)
         }
     }
+
+    private fun isGermanListing(symbol: String): Boolean = symbol.endsWith(".DE")
 }

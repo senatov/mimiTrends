@@ -6,7 +6,7 @@ import org.senatov.mimitrends.model.ScannerCriteria
 
 class DynamicMarketUniverseTest {
     @Test
-    fun `keeps pinned instruments outside the selected region and invalidates the cached universe`() {
+    fun `filters pinned instruments outside the selected region and invalidates the cached universe`() {
         val universe = DynamicMarketUniverse()
         val criteria = ScannerCriteria(
             marketRegion = org.senatov.mimitrends.model.MarketRegion.US,
@@ -15,7 +15,7 @@ class DynamicMarketUniverseTest {
 
         assertEquals(listOf("AAPL"), universe.select(criteria).symbols)
         universe.replacePinned(listOf("ifx.de"))
-        assertEquals(listOf("AAPL", "IFX.DE"), universe.select(criteria).symbols)
+        assertEquals(listOf("AAPL"), universe.select(criteria).symbols)
     }
 
     @Test
