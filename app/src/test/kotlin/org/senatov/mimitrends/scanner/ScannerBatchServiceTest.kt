@@ -1,0 +1,130 @@
+@file:Suppress("SqlNoDataSourceInspection")
+
+package org.senatov.mimitrends.scanner
+
+import org.senatov.mimitrends.application.*
+import org.senatov.mimitrends.ui.*
+import org.senatov.mimitrends.scanner.*
+import org.senatov.mimitrends.shortmove.*
+import org.senatov.mimitrends.signals.*
+import org.senatov.mimitrends.research.*
+import org.senatov.mimitrends.market.*
+import org.senatov.mimitrends.providers.*
+import org.senatov.mimitrends.company.*
+import org.senatov.mimitrends.services.*
+import org.senatov.mimitrends.shared.*
+
+import org.junit.jupiter.api.Test
+import org.senatov.mimitrends.db.AnalyticsRepository
+import org.senatov.mimitrends.db.MarketRepository
+import org.senatov.mimitrends.model.ScannerCriteria
+import java.nio.file.Files
+import java.sql.DriverManager
+import java.time.Instant
+import kotlin.test.assertEquals
+import kotlin.test.assertNotNull
+import kotlin.test.assertNull
+import kotlin.test.assertTrue
+
+class ScannerBatchServiceTest {
+    @Test
+    fun `persists and completes an evaluated batch`() {
+        val path = Files.createTempDirectory("mimitrends-batch").resolve("test.db")
+        val repository = MarketRepository(path)
+        val analytics = AnalyticsRepository(path)
+        val service = ScannerBatchService(
+            { symbol, _ ->
+                ScanEvaluation(
+                    TestScanResult.create(symbol = symbol), emptyList(),
+                    sourceStatus = "YAHOO", latestDataEpochSeconds = Instant.now().epochSecond - 90
+                )
+            },
+            analytics, repository, { "TEST" }
+        )
+
+        val result = service.execute(
+            listOf("ONE", "TWO"), ScannerCriteria(
+                minimumTableResults = 1, resultLimit = 2
+            ), { true }, { _, _ -> })
+
+        assertNotNull(result)
+        assertEquals(2, result.active.size)
+        assertEquals(mapOf("YAHOO" to 2), result.sourceCoverage)
+        assertTrue(requireNotNull(result.oldestDataAgeSeconds) >= 90)
+        analytics.close()
+        repository.close()
+        DriverManager.getConnection("jdbc:sqlite:$path").use { connection ->
+            connection.createStatement().executeQuery(
+                "SELECT status, evaluated_symbols, published_symbols FROM scan_runs"
+            ).use { row ->
+                row.next()
+                assertEquals("COMPLETE", row.getString(1))
+                assertEquals(2, row.getInt(2))
+                assertEquals(2, row.getInt(3))
+            }
+        }
+    }
+
+    @Test
+    fun `marks a cancelled batch as aborted`() {
+        val path = Files.createTempDirectory("mimitrends-cancelled-batch").resolve("test.db")
+        val repository = MarketRepository(path)
+        val analytics = AnalyticsRepository(path)
+        val service = ScannerBatchService(
+            { _, _ -> error("must not evaluate") }, analytics, repository, { "TEST" }
+        )
+
+        assertNull(service.execute(listOf("TEST"), ScannerCriteria(), { false }, { _, _ -> }))
+
+        analytics.close()
+        repository.close()
+        DriverManager.getConnection("jdbc:sqlite:$path").use { connection ->
+            connection.createStatement().executeQuery("SELECT status FROM scan_runs").use { row ->
+                row.next()
+                assertEquals("ABORTED", row.getString(1))
+            }
+        }
+    }
+
+    @Test
+    fun `persists the detector rejection reason`() {
+        val path = Files.createTempDirectory("mimitrends-rejected-batch").resolve("test.db")
+        val repository = MarketRepository(path)
+        val analytics = AnalyticsRepository(path)
+        val service = ScannerBatchService(
+            { _, _ -> ScanEvaluation(null, emptyList(), "NO_HIGHER_LOW") },
+            analytics, repository, { "TEST" }
+        )
+
+        service.execute(listOf("TEST"), ScannerCriteria(), { true }, { _, _ -> })
+
+        analytics.close()
+        repository.close()
+        DriverManager.getConnection("jdbc:sqlite:$path").use { connection ->
+            connection.createStatement().executeQuery("SELECT rejection_reason FROM scan_candidates").use { row ->
+                row.next()
+                assertEquals("NO_HIGHER_LOW", row.getString(1))
+            }
+        }
+    }
+
+    @Test
+    fun `keeps a pinned instrument visible when it has no current signal`() {
+        val path = Files.createTempDirectory("mimitrends-pinned-batch").resolve("test.db")
+        val repository = MarketRepository(path)
+        val analytics = AnalyticsRepository(path)
+        val monitored = TestScanResult.create(symbol = "IFX.DE").copy(signalSource = "Pinned · monitoring")
+        val service = ScannerBatchService(
+            { _, _ -> ScanEvaluation(null, emptyList(), "NO_CURRENT_SIGNAL", monitored = monitored) },
+            analytics, repository, { "TEST" }
+        )
+
+        val result = service.execute(
+            listOf("IFX.DE"), ScannerCriteria(), { true }, { _, _ -> }, setOf("IFX.DE")
+        )
+
+        assertEquals(listOf("IFX.DE"), requireNotNull(result).active.map { it.symbol })
+        analytics.close()
+        repository.close()
+    }
+}

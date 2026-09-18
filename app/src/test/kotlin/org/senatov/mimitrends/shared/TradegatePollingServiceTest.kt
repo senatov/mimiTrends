@@ -1,0 +1,114 @@
+package org.senatov.mimitrends.shared
+
+import org.senatov.mimitrends.application.*
+import org.senatov.mimitrends.ui.*
+import org.senatov.mimitrends.scanner.*
+import org.senatov.mimitrends.shortmove.*
+import org.senatov.mimitrends.signals.*
+import org.senatov.mimitrends.research.*
+import org.senatov.mimitrends.market.*
+import org.senatov.mimitrends.providers.*
+import org.senatov.mimitrends.company.*
+import org.senatov.mimitrends.services.*
+import org.senatov.mimitrends.shared.*
+
+import org.junit.jupiter.api.Test
+import org.senatov.mimitrends.db.MarketRepository
+import org.senatov.mimitrends.model.ProviderInstrument
+import java.nio.file.Files
+import java.time.Instant
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
+import kotlin.test.assertEquals
+import kotlin.test.assertNull
+
+class TradegatePollingServiceTest {
+    @Test
+    fun `uses Berlin weekday trading session`() {
+        val repository = MarketRepository(Files.createTempDirectory("mimitrends-tradegate-hours").resolve("test.db"))
+        val service = TradegatePollingService(repository)
+
+        assertFalse(service.isTradingSession(Instant.parse("2026-08-04T05:59:59Z")))
+        assertTrue(service.isTradingSession(Instant.parse("2026-08-04T06:00:00Z")))
+        assertFalse(service.isTradingSession(Instant.parse("2026-08-04T20:00:00Z")))
+        assertFalse(service.isTradingSession(Instant.parse("2026-08-08T10:00:00Z")))
+
+        service.close()
+        repository.close()
+    }
+
+    @Test
+    fun `treats bad request as transient but not found as permanent`() {
+        val repository = MarketRepository(Files.createTempDirectory("mimitrends-tradegate-status").resolve("test.db"))
+        val service = TradegatePollingService(repository)
+
+        assertFalse(service.isPermanentInstrumentStatus(400))
+        assertTrue(service.isPermanentInstrumentStatus(404))
+
+        service.close()
+        repository.close()
+    }
+
+    @Test
+    fun `reuses a verified provider isin before searching by company name`() {
+        val repository = MarketRepository(Files.createTempDirectory("mimitrends-tradegate-isin").resolve("test.db"))
+        repository.upsertProviderInstrument(
+            ProviderInstrument(
+                "EURONEXT", "NOKIA.HE", "FI0009000681", "ETLX", "EUR", "NOKIA CORPORATION"
+            )
+        )
+        repository.upsertProviderInstrument(
+            ProviderInstrument(
+                "LANG_SCHWARZ", "NOKIA.HE", "41540", "LSSI", "EUR", "NOKIA CORP."
+            )
+        )
+        val service = TradegatePollingService(repository)
+
+        assertEquals("FI0009000681", service.knownIsin("NOKIA.HE")?.identifier)
+
+        service.close()
+        repository.close()
+    }
+
+    @Test
+    fun `does not reuse an Euronext index as an equity isin`() {
+        val repository = MarketRepository(Files.createTempDirectory("mimitrends-tradegate-index").resolve("test.db"))
+        repository.upsertProviderInstrument(
+            ProviderInstrument(
+                "EURONEXT", "ISP.MI", "FRIX00006976", "XPAR", "EUR", "EN G IN190525 D034"
+            )
+        )
+        val service = TradegatePollingService(repository)
+
+        assertNull(service.knownIsin("ISP.MI"))
+
+        service.close()
+        repository.close()
+    }
+
+    @Test
+    fun `prefers the company matching listing over an unrelated cached isin`() {
+        val repository = MarketRepository(Files.createTempDirectory("mimitrends-tradegate-company").resolve("test.db"))
+        repository.upsertCompanyProfile(
+            org.senatov.mimitrends.model.CompanyProfile(
+                "CPR.MI", "CAMPARI", "Milan", null, null, 1L
+            )
+        )
+        repository.upsertProviderInstrument(
+            ProviderInstrument(
+                "ARIVA", "CPR.MI", "CA75888V1004", "ARIVA", "EUR", "REGEN III Corp."
+            )
+        )
+        repository.upsertProviderInstrument(
+            ProviderInstrument(
+                "EURONEXT", "CPR.MI", "NL0015435975", "MTAH", "EUR", "CAMPARI"
+            )
+        )
+        val service = TradegatePollingService(repository)
+
+        assertEquals("NL0015435975", service.knownIsin("CPR.MI")?.identifier)
+
+        service.close()
+        repository.close()
+    }
+}
