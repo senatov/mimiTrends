@@ -444,11 +444,13 @@
     -fx-background-color: transparent;
     -fx-border-color: transparent transparent rgba(118, 142, 166, 0.35) transparent;
     -fx-border-width: 0 0 2px 0;
+    -fx-padding: 8px 10px 7px 10px;
 }
 
 .insight-sidebar .tab .tab-label {
-    -fx-text-fill: #6a7d91;
-    -fx-font-weight: 500;
+    -fx-text-fill: #30465d;
+    -fx-font-size: 14px;
+    -fx-font-weight: 700;
 }
 
 .insight-sidebar .tab:hover {
@@ -463,7 +465,8 @@
 
 .insight-sidebar .tab:selected .tab-label {
     -fx-text-fill: #123f69;
-    -fx-font-weight: 700;
+    -fx-font-size: 14px;
+    -fx-font-weight: 800;
 }
 
 .short-move-table .table-cell.opportunity-high,

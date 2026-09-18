@@ -29,6 +29,7 @@ internal class ModerateCandidatePanel(
     private var recentSymbols = emptySet<String>()
     private val anomalySymbols = linkedSetOf<String>()
     private var stateMessage = "Building fresh market context…"
+    private var countListener: (Int) -> Unit = {}
 
     init {
         children.setAll(
@@ -46,12 +47,19 @@ internal class ModerateCandidatePanel(
         stateMessage = "No candidates meet the current safety and entry thresholds"
         recentSymbols = moves.take(RECENT_TABLE_LIMIT).mapTo(linkedSetOf(), ShortMove::symbol)
         displayed = ModeratePositiveCandidateSelector.select(moves.toList()).take(MAX_CANDIDATES)
+        countListener(displayed.size)
         render()
         displayed.forEach(::requestName)
     }
 
+    fun setCountListener(listener: (Int) -> Unit) {
+        countListener = listener
+        listener(displayed.size)
+    }
+
     fun showBuildingContext(symbolCount: Int) {
         displayed = emptyList()
+        countListener(0)
         stateMessage = "Building fresh context for $symbolCount symbols…"
         render()
     }

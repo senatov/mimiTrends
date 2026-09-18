@@ -9,10 +9,14 @@ internal class InsightSidebar(
 ) : TabPane() {
     private val inspector = SignalInspectorPanel()
     private val universe = UniversePanel()
+    private val positiveWatchTab = Tab().apply {
+        isClosable = false
+        content = positiveWatch
+    }
 
     init {
         tabs.setAll(
-            Tab("Positive watch", positiveWatch),
+            positiveWatchTab,
             Tab("Signal", inspector),
             Tab("Universe", universe)
         )
@@ -22,6 +26,9 @@ internal class InsightSidebar(
         prefWidth = 292.0
         maxWidth = 350.0
         styleClass += "insight-sidebar"
+        positiveWatch.setCountListener { count ->
+            positiveWatchTab.text = "Positive watch ($count)"
+        }
     }
 
     fun showSignal(result: ScanResult) {

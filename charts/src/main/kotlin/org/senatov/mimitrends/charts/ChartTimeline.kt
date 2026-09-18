@@ -83,9 +83,9 @@ internal class ChartTimeline private constructor(
         private const val CONTEXT_BARS = 180
         private const val DETAIL_BEFORE_SIGNAL = 12
         private const val DETAIL_AFTER_SIGNAL = 60
+        private const val FUTURE_SLOTS = 60
         private const val MIN_CONTEXT_SLOTS = 12
         private const val MAX_CONTEXT_SLOTS = 146
-        private const val FUTURE_SLOTS = 60
         private const val MAX_REQUESTED_BARS = 24
         private const val MAX_EVENT_DISTANCE_SECONDS = 90L
         private const val DISPLAY_STEP_SECONDS = 60L
@@ -151,7 +151,12 @@ internal class ChartTimeline private constructor(
             val reservedSlots = reservedBars.count { it.minuteEpochSeconds < bars[detailStart].minuteEpochSeconds }
             val aggregateSlots = (contextSlots - reservedSlots).coerceAtLeast(1)
             val futureBars = if (future.isEmpty()) emptyList() else TrendChartSupport.aggregate(future, FUTURE_SLOTS)
-            val selected = (reservedBars + TrendChartSupport.aggregate(context, aggregateSlots) + detail + futureBars)
+            // Short contexts are kept to at most two source bars per candle; this avoids
+            // turning a normal nearby move into a misleading oversized OHLC candle.
+            val contextDisplay = if (context.size <= 100) context.chunked(2)
+                .map { TrendChartSupport.aggregate(it, 1).single() }
+            else TrendChartSupport.aggregate(context, aggregateSlots)
+            val selected = (reservedBars + contextDisplay + detail + futureBars)
                 .distinctBy(MinuteBar::minuteEpochSeconds)
                 .sortedBy(MinuteBar::minuteEpochSeconds)
             val displayStart = selected.first().minuteEpochSeconds
