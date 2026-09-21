@@ -35,7 +35,7 @@ class ScannerPanel(
     private val onOpen: (ScanResult) -> Unit,
     private val shortMovePanel: ShortMovePanel,
     savedColumns: String = "",
-    initialTableDivider: Double = 0.68,
+    initialTableDivider: Double = 0.60,
     private val loadProfile: ((String) -> CompletableFuture<CompanyProfile>)? = null,
     private val openStock: (String) -> Unit = {},
     private val onShowDetectedToday: () -> Unit = {},
@@ -242,7 +242,7 @@ class ScannerPanel(
     }
 
     fun savedColumnLayout(): String = columnLayout.capture(autoFitter.manuallySizedColumnIds())
-    fun tableDividerPosition(): Double = tableSplit.dividers.firstOrNull()?.position ?: 0.68
+    fun tableDividerPosition(): Double = tableSplit.dividers.firstOrNull()?.position ?: 0.60
     internal fun focusSignalSearch() = search.focusField()
     internal fun focusMoveSearch() = shortMovePanel.focusSearch()
     fun setDetectedTodayCount(count: Int) {

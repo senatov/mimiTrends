@@ -182,6 +182,33 @@ class ShortMoveDetectorTest {
     }
 
     @Test
+    fun `detects rapid crash at zero point thirty two percent threshold`() {
+        val now = 12_000L
+        val closes = listOf(100.0, 99.90, 99.80, 99.68)
+        val bars = closes.mapIndexed { index, close ->
+            bar("THRESHOLD", now - (closes.lastIndex - index) * 60, close, close)
+        }
+
+        val result = ShortMoveDetector.rank(mapOf("THRESHOLD" to bars), now).single()
+
+        assertEquals(ShortMovePattern.RAPID_CRASH, result.pattern)
+        assertEquals(-0.32, result.changePercent, 1e-9)
+    }
+
+    @Test
+    fun `does not detect rapid crash below zero point thirty two percent threshold`() {
+        val now = 13_000L
+        val closes = listOf(100.0, 99.90, 99.80, 99.681)
+        val bars = closes.mapIndexed { index, close ->
+            bar("BELOW_THRESHOLD", now - (closes.lastIndex - index) * 60, close, close)
+        }
+
+        val result = ShortMoveDetector.rank(mapOf("BELOW_THRESHOLD" to bars), now).single()
+
+        assertEquals(ShortMovePattern.DIRECTIONAL, result.pattern)
+    }
+
+    @Test
     fun `ignores stale and single-bar symbols`() {
         val now = 10_000L
         val ranked = ShortMoveDetector.rank(

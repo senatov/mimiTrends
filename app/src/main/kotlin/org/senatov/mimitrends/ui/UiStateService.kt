@@ -24,7 +24,7 @@ import java.util.Properties
 data class UiState(
     val x: Double? = null, val y: Double? = null, val width: Double = 1120.0, val height: Double = 720.0,
     val maximized: Boolean = false, val symbol: String = "AAPL", val range: String = "3M", val dividerPosition: Double = 0.34,
-    val scannerColumns: String = "", val shortMoveColumns: String = "", val tableDividerPosition: Double = 0.68,
+    val scannerColumns: String = "", val shortMoveColumns: String = "", val tableDividerPosition: Double = 0.60,
     val sidebarVisible: Boolean = true
 )
 
@@ -43,7 +43,7 @@ class UiStateService(private val path: Path = Path.of(System.getProperty("user.h
                 p.getProperty("maximized", "false").toBoolean(), p.getProperty("symbol", "AAPL"), p.getProperty("range", "3M"),
                 p.getProperty("dividerPosition", "0.34").toDouble().coerceIn(0.15, 0.75),
                 p.getProperty("scannerColumns", ""), p.getProperty("shortMoveColumns", ""),
-                p.getProperty("tableDividerPosition", "0.68").toDouble().coerceIn(0.45, 0.82),
+                migratedTableDividerPosition(p),
                 p.getProperty("sidebarVisible", "true").toBoolean()
             )
         }.onFailure { log.error(LogTag.IO, "UI state load failed", it) }.getOrDefault(UiState())
@@ -81,6 +81,7 @@ class UiStateService(private val path: Path = Path.of(System.getProperty("user.h
             setProperty("dividerPosition", dividerPosition.coerceIn(0.15, 0.75).toString())
             setProperty("scannerColumns", scannerColumns); setProperty("shortMoveColumns", shortMoveColumns)
             setProperty("tableDividerPosition", tableDividerPosition.coerceIn(0.45, 0.82).toString())
+            setProperty("tableDividerLayoutVersion", TABLE_DIVIDER_LAYOUT_VERSION.toString())
             setProperty("sidebarVisible", sidebarVisible.toString())
         }
         Files.newOutputStream(path).use { p.store(it, "MiMiTrends UI state") }
@@ -100,5 +101,18 @@ class UiStateService(private val path: Path = Path.of(System.getProperty("user.h
     private fun overlaps(a: Rectangle2D, b: Rectangle2D): Boolean {
         log.trace(LogTag.UI, "overlaps()")
         return minOf(a.maxX, b.maxX) - maxOf(a.minX, b.minX) >= 100 && minOf(a.maxY, b.maxY) - maxOf(a.minY, b.minY) >= 80
+    }
+
+    private fun migratedTableDividerPosition(properties: Properties): Double {
+        val saved = properties.getProperty("tableDividerPosition")?.toDoubleOrNull() ?: return DEFAULT_TABLE_DIVIDER
+        val layoutVersion = properties.getProperty("tableDividerLayoutVersion")?.toIntOrNull() ?: 1
+        val adjusted = if (layoutVersion < TABLE_DIVIDER_LAYOUT_VERSION) saved - LEGACY_DIVIDER_ADJUSTMENT else saved
+        return adjusted.coerceIn(0.45, 0.82)
+    }
+
+    private companion object {
+        const val DEFAULT_TABLE_DIVIDER = 0.60
+        const val LEGACY_DIVIDER_ADJUSTMENT = 0.03
+        const val TABLE_DIVIDER_LAYOUT_VERSION = 2
     }
 }

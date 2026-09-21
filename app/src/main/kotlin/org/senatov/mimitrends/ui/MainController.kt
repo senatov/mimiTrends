@@ -30,7 +30,7 @@ import java.util.concurrent.atomic.*
 class MainController(
     private val apiKey: String?, initialSymbol: String = "AAPL", initialRange: String = "3M",
     initialDividerPosition: Double = 0.34, scannerColumns: String = "", shortMoveColumns: String = "",
-    initialTableDivider: Double = 0.68, initialSidebarVisible: Boolean = true,
+    initialTableDivider: Double = 0.60, initialSidebarVisible: Boolean = true,
     private val openExternal: (String) -> Unit = {}
 ) {
     private val log = LoggerFactory.getLogger(MainController::class.java)

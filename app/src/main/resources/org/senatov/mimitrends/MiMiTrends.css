@@ -757,7 +757,7 @@
     -fx-padding: 0;
 }
 .table-split-pane > .split-pane-divider {
-    -fx-padding: 0 4px;
+    -fx-padding: 0 2px;
     -fx-background-color: linear-gradient(to right, #d7dde5, #8fa2b8, #d7dde5);
     -fx-background-radius: 5px;
     -fx-cursor: h-resize;

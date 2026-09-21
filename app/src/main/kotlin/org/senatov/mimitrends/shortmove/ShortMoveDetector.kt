@@ -83,7 +83,7 @@ internal object ShortMoveDetector {
             ?: return null
         if (start.close <= 0.0 || latest.close <= 0.0) return null
         val change = percent(start.close, latest.close)
-        if (change > -RAPID_CRASH_MIN_PERCENT) return null
+        if (change > -RAPID_CRASH_MIN_PERCENT + PERCENT_COMPARISON_EPSILON) return null
         val window = recent.filter { it.minuteEpochSeconds in start.minuteEpochSeconds..latest.minuteEpochSeconds }
         if (window.size < RAPID_CRASH_MIN_BARS || window.zipWithNext()
                 .any { it.second.minuteEpochSeconds - it.first.minuteEpochSeconds > 60L }
@@ -273,7 +273,8 @@ internal object ShortMoveDetector {
 
     private const val MIN_DROP_PERCENT = 0.7
     private const val RAPID_CRASH_WINDOW_MINUTES = 4L
-    private const val RAPID_CRASH_MIN_PERCENT = 0.6
+    private const val RAPID_CRASH_MIN_PERCENT = 0.32
+    private const val PERCENT_COMPARISON_EPSILON = 1e-9
     private const val RAPID_CRASH_MIN_BARS = 4
     private const val RAPID_CRASH_MIN_DOWN_BARS = 3
     private const val RAPID_CRASH_WEIGHT = 4.0
