@@ -178,9 +178,9 @@
 }
 
 .insight-sidebar-toggle {
-    -fx-min-width: 24px;
-    -fx-pref-width: 24px;
-    -fx-max-width: 24px;
+    -fx-min-width: 20px;
+    -fx-pref-width: 20px;
+    -fx-max-width: 20px;
     -fx-min-height: 52px;
     -fx-pref-height: 52px;
     -fx-padding: 0;

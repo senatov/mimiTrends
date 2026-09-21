@@ -21,7 +21,7 @@ import javafx.scene.layout.Region
 internal class InsightSidebarHost(
     private val sidebar: InsightSidebar,
     initiallyExpanded: Boolean
-) : HBox(4.0) {
+) : HBox(1.0) {
     private val toggle = Button()
     var isExpanded: Boolean = initiallyExpanded
         private set

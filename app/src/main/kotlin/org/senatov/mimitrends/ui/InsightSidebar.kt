@@ -34,9 +34,9 @@ internal class InsightSidebar(
         )
         tabs.forEach { it.isClosable = false }
         tabClosingPolicy = TabClosingPolicy.UNAVAILABLE
-        minWidth = 270.0
-        prefWidth = 292.0
-        maxWidth = 350.0
+        minWidth = 310.0
+        prefWidth = 330.0
+        maxWidth = 390.0
         styleClass += "insight-sidebar"
         positiveWatch.setCountListener { count ->
             positiveWatchTab.text = "Positive watch ($count)"
