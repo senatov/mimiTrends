@@ -320,11 +320,14 @@ class AnalyticsRepository(
 
     fun backupIfDue(): Path? = database.backupIfDue()
 
+    fun performShutdownMaintenance() = applyRetention().also {
+        log.info(LogTag.DB, "database shutdown cleanup completed {}", DatabaseFileMaintenance.clean(database.path))
+    }
+
     override fun close() {
         duckAnalytics.close()
         database.close()
     }
-
     private fun migrate() = locked {
         connection.createStatement().use { it.executeUpdate("CREATE TABLE IF NOT EXISTS schema_migrations(version INTEGER PRIMARY KEY, applied_at INTEGER NOT NULL)") }
         AnalyticsMigrations.values.forEach { (version, statements) ->

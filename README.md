@@ -628,8 +628,15 @@ Candidate publication and scan completion occur in one transaction. This prevent
 
 - raw minute bars: 90 days;
 - 5/15/60-minute aggregates: 730 days;
-- scan runs, candidates, and quality records: 180 days;
+- the SQLite aggregate tail: 45 days after it has been verified in DuckDB;
+- scan runs and their cascading candidates: 180 days;
+- data-quality diagnostics: 14 days;
 - instrument metadata, corporate actions, observed sessions, FX rates, baselines, and outcomes: retained.
+
+Retention is applied during startup and again during the asynchronous shutdown sequence. Shutdown maintenance also keeps only the three
+newest daily SQLite backups, preserves the newest migration rollback copy, removes additional migration backups and legacy DuckDB
+`.bak` files after 30 days, and removes abandoned `.tmp` files after one day. Active databases, current settings, broker transactions,
+and the newest recovery copy are not deleted.
 
 More detail is available in [Analytics storage](Doc/AnalyticsStorage.md).
 

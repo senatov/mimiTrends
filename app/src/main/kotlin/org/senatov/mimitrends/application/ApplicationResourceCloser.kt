@@ -47,6 +47,9 @@ internal object ApplicationResourceCloser {
         batchScheduler.shutdownNow()
         awaitTermination(batchScheduler, log)
         repository.close()
+        runCatching(analytics::performShutdownMaintenance).onFailure { error ->
+            log.warn(LogTag.DB, "database shutdown maintenance failed", error)
+        }
         analytics.close()
     }
 

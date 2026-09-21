@@ -55,8 +55,15 @@ open-market scan begins.
 
 - raw minute bars: 90 days;
 - 5/15/60 minute aggregates: 730 days;
-- scan runs, candidates and quality observations: 180 days;
+- the verified SQLite aggregate tail: 45 days;
+- scan runs and cascading candidates: 180 days;
+- quality observations: 14 days;
 - instrument metadata, corporate actions, sessions, FX rates, baselines and outcomes: retained.
+
+The same retention pass runs during asynchronous shutdown. It also keeps the three newest daily SQLite
+backups and the newest migration rollback copy, removes older migration and legacy DuckDB backups after
+30 days, and removes abandoned temporary files after one day. Active databases, settings, broker
+transactions, and the newest recovery copy are preserved.
 
 SQLite uses WAL, foreign keys, a five-second busy timeout, memory temporary storage, a 20 MiB page
 cache and a 256 MiB memory-map ceiling. Writes use prepared statements and batches. `PRAGMA optimize`
