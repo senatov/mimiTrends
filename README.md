@@ -162,7 +162,8 @@ The primary question is not “What did this stock do over the last year?” but
 
 ## What the application does
 
-- scans US, European, or combined watchlists;
+- scans US, European, or combined watchlists, processing up to 90 eligible instruments per regular
+  cycle and rotating through larger universes without starving either region;
 - refreshes the first HTML page of wallstreetONLINE's performance and most-traded tables before every
   scan, merges duplicate instruments, sorts the combined discovery set by percentage performance, and
   evaluates the leading 30 resolvable equities through the same scanner as the configured watchlist;
@@ -180,6 +181,11 @@ The primary question is not “What did this stock do over the last year?” but
   `Cooling`, and decays their ranking score while always giving active signals priority;
 - rechecks published `Strong` and `Extreme` signals every minute in a separate priority task, updating
   their rows immediately and stopping when they fall below `Strong`;
+- marks a close-to-close decline of at least 0.50% within four minutes as `RAPID_CRASH` without
+  additional candle-count or one-direction path requirements, and displays its setup cell as bold red
+  text on a light-yellow background;
+- marks a close-to-close rise above 1.00% within four minutes as `RAPID_RISE` and scans that instrument
+  every minute outside the regular rotation until the rapid rise is no longer confirmed;
 - stores minute OHLCV history, company profiles, derived statistics, scan runs, and signal outcomes in SQLite;
 - refreshes visible European quotes and executable bid/ask with timestamped observations from Tradegate, Euronext, Lang & Schwarz, and
   wallstreetONLINE where an instrument can be resolved safely;
@@ -325,6 +331,19 @@ Yahoo and minute bars aggregated from Finnhub trades may extend the series used 
 These are public website integrations rather than contracted APIs and can change without notice. Users must enable and use Lang &
 Schwarz only when their use complies with that website's terms. Failures are isolated per provider, logged without cookies or
 credentials, and do not stop the rest of the scan.
+
+### Rapid four-minute moves
+
+The trading-opportunities table gives the newest severe directional moves explicit priority. `RAPID_CRASH`
+compares confirmed closing prices across the available four-minute window and activates at a decline of
+0.50% or more. It does not require every intermediate close to fall, so a brief counter-move does not hide
+the net crash. The setup is shown in red on a light-yellow cell to keep it distinct from ordinary downside
+diagnostics.
+
+`RAPID_RISE` uses the same close-to-close window but requires a rise strictly greater than 1.00%. Once
+detected, the instrument joins the independent one-minute priority scanner and remains there only while the
+condition is still confirmed. These fixed percentages are alert thresholds, not forecasts or trading advice;
+their significance can differ between instruments with different liquidity and normal volatility.
 
 ### Early three-minute momentum
 

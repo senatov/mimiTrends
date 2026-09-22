@@ -18,6 +18,13 @@ import kotlin.test.assertTrue
 
 class ScanCyclePlannerTest {
     @Test
+    fun `scans ninety symbols in the default cycle`() {
+        val symbols = (1..120).map { "S$it" }
+
+        assertEquals(90, ScanCyclePlanner().order(symbols).size)
+    }
+
+    @Test
     fun `alternates regions and rotates the leading symbol`() {
         val planner = ScanCyclePlanner()
         val symbols = listOf("A", "B", "C.DE", "D.DE")

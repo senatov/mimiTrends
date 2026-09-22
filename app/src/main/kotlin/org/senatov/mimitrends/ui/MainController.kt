@@ -57,7 +57,7 @@ class MainController(
     private val wallstreetOnlineClient = WallstreetOnlineMarketDataClient()
     private val wallstreetOnlineDiscovery = WallstreetOnlineDiscoveryService(wallstreetOnlineClient, yahooFinance)
     private val dynamicUniverse = DynamicMarketUniverse(wallstreetOnlineDiscovery::discover)
-    private val userWatchlist = UserWatchlistController(repository, dynamicUniverse, ::startScanner)
+    private val userWatchlist: UserWatchlistController = UserWatchlistController(repository, dynamicUniverse, ::startScanner)
     private var profileService = CompanyProfileService(
         repository, apiKey?.let(::FinnhubProfileClient), persistentCompanyLogoClient(repository)
     )
@@ -66,18 +66,18 @@ class MainController(
         { message, error, details -> status.update(message, error, details) },
         { symbol, error -> requestStatus.formatError(symbol, error) }, log
     )
-    private val shortMovePanel = ShortMovePanel(
+    private val shortMovePanel: ShortMovePanel = ShortMovePanel(
         ::openShortMoveChart,
         shortMoveColumns, { symbol -> profileService.load(symbol) }, ClipboardText::copy,
         stockPageOpener::open, userWatchlist.actions
     )
-    private val moderateCandidatePanel = ModerateCandidatePanel(
+    private val moderateCandidatePanel: ModerateCandidatePanel = ModerateCandidatePanel(
         ::openShortMoveChart,
         { symbol -> profileService.load(symbol) }, ClipboardText::copy, stockPageOpener::open
     )
     private val insightSidebar = InsightSidebar(moderateCandidatePanel)
     private val insightSidebarHost = InsightSidebarHost(insightSidebar, initialSidebarVisible)
-    private val scannerPanel = ScannerPanel(
+    private val scannerPanel: ScannerPanel = ScannerPanel(
         onOpen = ::openScannerResult,
         shortMovePanel = shortMovePanel,
         savedColumns = scannerColumns,
@@ -94,14 +94,7 @@ class MainController(
             currencyConverter::price, { loadLocalChart(currentSymbol) }, status::update, log
         )
     }
-    private val shortMoveRefresh = ShortMoveRefreshCoordinator(shortMoveLoader::load, log) { moves ->
-        Platform.runLater {
-            if (!closing.get()) {
-                shortMovePanel.show(moves)
-                moderateCandidatePanel.show(moves)
-            }
-        }
-    }
+    private val shortMoveRefresh = ShortMoveRefreshCoordinator(shortMoveLoader::load, log, publish = ::publishShortMoves)
     private val batchScheduler = Executors.newSingleThreadScheduledExecutor { task ->
         Thread(task, "mimitrends-scanner-rotation").apply { isDaemon = true }
     }
@@ -116,9 +109,6 @@ class MainController(
         actions.importTrades, status::update, requestStatus::formatError, log,
         { loadLocalChart(currentSymbol) }
     )
-    private var rotationTask: ScheduledFuture<*>? = null
-    private val scanGeneration = AtomicLong()
-    private val scanCyclePlanner = ScanCyclePlanner()
     private var providerUniverse = emptyList<String>()
     private val closing = AtomicBoolean()
     private val chartDataLoader = ChartDataLoader(repository, analytics, exchangeRates)
@@ -158,12 +148,46 @@ class MainController(
         { symbol -> marketData.loadPriorityResult(symbol, scannerCriteria) },
         { symbol, result ->
             val retained = recentEvents.priorityUpdate(symbol, result, System.currentTimeMillis())
+            shortMoveRefresh.request()
             Platform.runLater {
                 scannerPanel.applyPriorityResult(symbol, retained)
                 moderateCandidatePanel.setAnomalyPresent(symbol, retained != null)
             }
+        },
+        isUrgent = { symbol ->
+            shortMoveLoader.load(listOf(symbol)).any { it.pattern == ShortMovePattern.RAPID_RISE }
         }
     )
+    private val scanCycle by lazy {
+        ScanCycleCoordinator(
+            criteriaProvider = { scannerCriteria },
+            dynamicUniverse = dynamicUniverse,
+            analytics = analytics,
+            configureProviderUniverse = ::configureProviderUniverse,
+            liveTicks = liveTicks,
+            shortMoveRefresh = shortMoveRefresh,
+            priorityScanner = priorityScanner,
+            savedResultQuotes = savedResultQuotes,
+            resultDeduplicator = resultDeduplicator,
+            marketData = marketData,
+            insightSidebar = insightSidebar,
+            shortMovePanel = shortMovePanel,
+            moderateCandidatePanel = moderateCandidatePanel,
+            scannerPanel = scannerPanel,
+            status = status,
+            scheduler = batchScheduler,
+            scannerBatch = scannerBatch,
+            watchlistSymbols = { userWatchlist.symbols },
+            shortMoveLoader = shortMoveLoader,
+            recentEvents = recentEvents,
+            scalableProvider = scalableProvider,
+            wallstreetOnlineProvider = wallstreetOnlineProvider,
+            arivaReferences = arivaReferences,
+            detectedTodayCount = { analytics.loadTodayDetections().size },
+            isClosing = closing::get,
+            log = log
+        )
+    }
     private val focusedSignals = FocusedSignalController(
         evaluate = { symbol -> marketData.loadPriorityResult(symbol, scannerCriteria) },
         refreshQuote = { savedResultQuotes.refresh(listOf(it)).single() },
@@ -252,9 +276,8 @@ class MainController(
     fun close() {
         log.debug(LogTag.UI, "close()")
         if (!closing.compareAndSet(false, true)) return
-        scanGeneration.incrementAndGet()
+        scanCycle.stop()
         chartSelection.close()
-        rotationTask?.cancel(false)
         researchReport.close()
         observationUiBridge.close()
         try {
@@ -277,144 +300,7 @@ class MainController(
     fun shortMoveColumnLayout(): String = shortMovePanel.savedColumnLayout()
     fun tableDividerPosition(): Double = scannerPanel.tableDividerPosition()
     fun sidebarVisible(): Boolean = insightSidebarHost.isExpanded
-    private fun startScanner() {
-        log.debug(LogTag.API, "startScanner(symbols={})", scannerCriteria.symbols.size)
-        priorityScanner.replaceCandidates(emptyList())
-        recentEvents.clear()
-        scanCyclePlanner.reset()
-        val generation = scanGeneration.incrementAndGet()
-        val criteria = scannerCriteria
-        rotationTask?.cancel(false)
-        lateinit var scan: () -> Unit
-        scan = scan@{
-            if (closing.get()) return@scan
-            val cycleStartedNanos = System.nanoTime()
-            val universe = dynamicUniverse.select(scannerCriteria)
-            if (closing.get() || generation != scanGeneration.get()) return@scan
-            val selectedSymbols = universe.symbols
-            configureProviderUniverse(selectedSymbols)
-            analytics.recordUniverseSelection(universe.ranks, universe.discovered)
-            Platform.runLater {
-                insightSidebar.showUniverse(universe)
-                moderateCandidatePanel.showBuildingContext(selectedSymbols.size)
-            }
-            val nowMillis = System.currentTimeMillis()
-            val symbols = scanCyclePlanner.order(selectedSymbols.filter { symbol ->
-                ScanMarketEligibility.isActive(symbol, liveTicks[symbol], nowMillis)
-            })
-            shortMoveRefresh.replaceSymbols(symbols)
-            log.info(
-                LogTag.API, "scan started symbols={} discovered={} recentWindow={}m",
-                symbols.size, universe.discovered.size, criteria.maxSignalAgeMinutes
-            )
-            if (symbols.isEmpty()) {
-                priorityScanner.replaceCandidates(emptyList())
-                val now = java.time.Instant.now()
-                val nextOpening = MarketCalendar.nextOpening(selectedSymbols, now)
-                val resumeDelaySeconds = nextOpening?.let {
-                    java.time.Duration.between(now, it.instant).seconds.coerceAtLeast(1) + 5L
-                } ?: criteria.scanIntervalSeconds
-                val resumeText = nextOpening?.let(MarketHoursFormatter::nextOpening) ?: "market schedule unavailable"
-                val persisted = savedResultQuotes.refresh(analytics.loadLatestPublishedResults(criteria.resultLimit))
-                val saved = resultDeduplicator.deduplicate(
-                    if (persisted.isNotEmpty()) persisted
-                    else marketData.closedMarketSnapshot(MarketUniverseSelector.select(scannerCriteria), criteria)
-                )
-                val userZone = java.time.ZoneId.systemDefault()
-                val marketHours = MarketHoursFormatter.priceData(selectedSymbols, now, userZone)
-                val brokerHours = MarketHoursFormatter.scalable(now, userZone)
-                val localZoneName = java.time.format.DateTimeFormatter.ofPattern("z").format(now.atZone(userZone))
-                log.info(
-                    LogTag.DB, "closed-market snapshot source={} results={}",
-                    if (persisted.isNotEmpty()) "PERSISTED" else "CLOSED_CACHE", saved.size
-                )
-                Platform.runLater {
-                    scannerPanel.beginScan(1, 1, emptyList())
-                    saved.forEach(scannerPanel::update)
-                    scannerPanel.completeScan(criteria.resultLimit)
-                    moderateCandidatePanel.setAnomalySymbols(saved.map(ScanResult::symbol))
-                    scannerPanel.showCountdown(resumeDelaySeconds)
-                    scannerPanel.showMarketClosed(
-                        saved.size, persisted.isNotEmpty(), resumeText,
-                        localZoneName, marketHours, brokerHours
-                    )
-                    status.update(
-                        if (saved.isEmpty())
-                            "All selected markets are closed · scanner paused until $resumeText"
-                        else if (persisted.isNotEmpty())
-                            "Markets closed · showing ${saved.size} saved results · resumes $resumeText"
-                        else "Markets closed · showing ${saved.size} cached results · resumes $resumeText"
-                    )
-                }
-                rotationTask = batchScheduler.schedule(
-                    { runCatching(scan).onFailure { log.error(LogTag.API, "scheduled market-open resume failed", it) } },
-                    resumeDelaySeconds, TimeUnit.SECONDS
-                )
-                return@scan
-            }
-            Platform.runLater {
-                scannerPanel.beginScan(1, 1, symbols)
-                status.update("Scanning ${symbols.size}/${selectedSymbols.size} eligible symbols · reversals and corridors")
-            }
-            val batch = scannerBatch.execute(
-                symbols, criteria,
-                { generation == scanGeneration.get() && !closing.get() },
-                { completed, symbol ->
-                    Platform.runLater {
-                        status.update("Market data: analyzed $completed/${symbols.size} · $symbol")
-                    }
-                },
-                userWatchlist.symbols
-            ) ?: return@scan
-            val detectedTodayCount = analytics.loadTodayDetections().size
-            val errors = batch.errors
-            if (errors.isNotEmpty()) {
-                log.warn(LogTag.API, "scan completed with failures count={} sample={}", errors.size, errors.take(3).joinToString("; "))
-            }
-            val active = resultDeduplicator.deduplicate(batch.active)
-            dynamicUniverse.record(active)
-            scanCyclePlanner.replacePriority(active.map(ScanResult::symbol))
-            val shortMoves = shortMoveLoader.load(symbols)
-            val retained = recentEvents.merge(active, System.currentTimeMillis(), criteria.resultLimit)
-            val displayed = retained
-            scalableProvider.replaceSymbols(displayed.map(ScanResult::symbol))
-            wallstreetOnlineProvider.replaceSymbols(displayed.map(ScanResult::symbol))
-            arivaReferences.replaceSymbols(displayed.map(ScanResult::symbol))
-            priorityScanner.replaceCandidates(active)
-            val elapsedMillis = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - cycleStartedNanos)
-            val nextDelayMillis = ScanCyclePresentation.nextDelayMillis(criteria.scanIntervalSeconds, elapsedMillis)
-            val nextDelaySeconds = ScanCyclePresentation.countdownSeconds(nextDelayMillis)
-            val diagnostics = ScanCyclePresentation.diagnostics(batch, elapsedMillis)
-            Platform.runLater {
-                if (generation != scanGeneration.get()) return@runLater
-                shortMovePanel.show(shortMoves)
-                moderateCandidatePanel.show(shortMoves)
-                moderateCandidatePanel.setAnomalySymbols(displayed.map(ScanResult::symbol))
-                if (active.isEmpty() && errors.size == symbols.size && symbols.isNotEmpty()) {
-                    scannerPanel.abortScan()
-                    status.update("Yahoo scan produced no data; previous table retained", true, errors.joinToString("\n"))
-                } else {
-                    displayed.forEach(scannerPanel::update)
-                    scannerPanel.completeScan(criteria.resultLimit)
-                    scannerPanel.setDetectedTodayCount(detectedTodayCount)
-                    scannerPanel.showCountdown(nextDelaySeconds)
-                    val marketState = if (symbols.isEmpty()) "all selected markets closed"
-                    else "${batch.strictCount.coerceAtMost(active.size)} strict impulses + ${batch.adaptiveCount} adaptive"
-                    log.info(LogTag.API, "scan completed: {} diagnostics={}", marketState, diagnostics)
-                    status.update(
-                        if (active.isEmpty()) "No current candidates · $diagnostics · next in ${nextDelaySeconds}s"
-                        else "Hybrid scan complete · $marketState · $diagnostics · next in ${nextDelaySeconds}s"
-                    )
-                }
-            }
-            if (generation != scanGeneration.get()) return@scan
-            rotationTask = batchScheduler.schedule(
-                { runCatching(scan).onFailure { log.error(LogTag.API, "scheduled Yahoo scan failed", it) } },
-                nextDelayMillis, TimeUnit.MILLISECONDS
-            )
-        }
-        batchScheduler.execute { runCatching(scan).onFailure { log.error(LogTag.API, "initial scanner cycle failed", it) } }
-    }
+    private fun startScanner() = scanCycle.start()
 
     private fun configureProviderUniverse(symbols: List<String>) {
         if (symbols == providerUniverse) return
@@ -424,6 +310,23 @@ class MainController(
         euronextProvider.configure(providerCriteria)
         log.info(LogTag.API, "provider polling universe updated symbols={}", symbols.size)
     }
+
+    private fun publishShortMoves(moves: List<ShortMove>) {
+        if (closing.get()) return
+        priorityScanner.addUrgentSymbols(rapidRiseSymbols(moves))
+        Platform.runLater {
+            if (!closing.get()) {
+                shortMovePanel.show(moves)
+                moderateCandidatePanel.show(moves)
+            }
+        }
+    }
+
+    private fun rapidRiseSymbols(moves: Collection<ShortMove>): List<String> = moves
+        .asSequence()
+        .filter { it.pattern == ShortMovePattern.RAPID_RISE }
+        .map(ShortMove::symbol)
+        .toList()
 
     private fun openShortMoveChart(symbol: String, moveEpochSeconds: Long) {
         // Starting the load clears the previous instrument, so install its focus request afterwards.

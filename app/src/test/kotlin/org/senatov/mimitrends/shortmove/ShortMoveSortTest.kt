@@ -51,6 +51,16 @@ class ShortMoveSortTest {
     }
 
     @Test
+    fun `rapid rise sorts ahead of ordinary positive direction`() {
+        val moves = listOf(
+            shortMove("UP", 2.0),
+            shortMove("RAPID", 1.1, ShortMovePattern.RAPID_RISE)
+        )
+
+        assertEquals(listOf("RAPID", "UP"), moves.sortedWith(ShortMoveSort.direction).map(ShortMove::symbol))
+    }
+
+    @Test
     fun `period sorts intervals by their position on the time axis`() {
         val late = shortMove("LATE", 1.0, start = 300L, end = 500L)
         val early = shortMove("EARLY", 1.0, start = 100L, end = 200L)

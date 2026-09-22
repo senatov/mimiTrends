@@ -47,5 +47,39 @@ class PriorityScanCoordinatorTest {
         }
     }
 
+    @Test
+    fun `keeps an urgent rising symbol outside the ordinary queue`() {
+        val updates = mutableListOf<ScanResult?>()
+        PriorityScanCoordinator(
+            evaluate = { null },
+            onResult = { _, scanResult -> updates += scanResult },
+            isUrgent = { true }
+        ).use { coordinator ->
+            coordinator.addUrgentSymbols(listOf("rise"))
+
+            coordinator.runOnce()
+
+            assertEquals(listOf<ScanResult?>(null), updates)
+            assertEquals(setOf("RISE"), coordinator.trackedSymbols())
+            coordinator.clearUrgentSymbols()
+            assertTrue(coordinator.trackedSymbols().isEmpty())
+        }
+    }
+
+    @Test
+    fun `stops urgent scanning when the rapid rise ends`() {
+        PriorityScanCoordinator(
+            evaluate = { null },
+            onResult = { _, _ -> },
+            isUrgent = { false }
+        ).use { coordinator ->
+            coordinator.addUrgentSymbols(listOf("RISE"))
+
+            coordinator.runOnce()
+
+            assertTrue(coordinator.trackedSymbols().isEmpty())
+        }
+    }
+
     private fun result(score: Double) = TestScanResult.create(anomalyScore = score)
 }

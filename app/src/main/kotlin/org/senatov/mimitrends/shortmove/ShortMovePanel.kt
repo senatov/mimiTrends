@@ -115,7 +115,8 @@ class ShortMovePanel(
                         styleClass.remove("short-move-recurring-jump")
                         if (!empty && tableRow?.item?.pattern in setOf(
                                 ShortMovePattern.RECURRING_SHARP_JUMP,
-                                ShortMovePattern.RAPID_CRASH
+                                ShortMovePattern.RAPID_CRASH,
+                                ShortMovePattern.RAPID_RISE
                             )
                         ) {
                             styleClass += "short-move-recurring-jump"
@@ -130,7 +131,7 @@ class ShortMovePanel(
             styleClass += "status-column"
             setCellValueFactory { ReadOnlyDoubleWrapper(it.value.opportunityScore.toDouble()) }
             comparator = Comparator.comparingDouble(Number::toDouble)
-            setCellFactory { OpportunityCell() }
+            setCellFactory { ShortMoveOpportunityCell() }
             prefWidth = 104.0; minWidth = 82.0
         }
         val priceRange = TableColumn<ShortMove, ShortMove>("Range").apply {
@@ -139,7 +140,7 @@ class ShortMovePanel(
             setCellValueFactory { ReadOnlyObjectWrapper(it.value) }
             comparator = ShortMoveSort.priceRange
             isSortable = true
-            setCellFactory { PriceRangeCell() }
+            setCellFactory { ShortMovePriceRangeCell() }
             prefWidth = 82.0; minWidth = 62.0
         }
         val direction = TableColumn<ShortMove, ShortMove>("Setup").apply {
@@ -147,14 +148,14 @@ class ShortMovePanel(
             styleClass += "status-column"
             setCellValueFactory { ReadOnlyObjectWrapper(it.value) }
             comparator = ShortMoveSort.direction
-            setCellFactory { DirectionCell() }; prefWidth = 135.0
+            setCellFactory { ShortMoveDirectionCell() }; prefWidth = 135.0
         }
         val move = TableColumn<ShortMove, Number>("Room").apply {
             id = "move"
             styleClass += "numeric-column"
             setCellValueFactory { ReadOnlyDoubleWrapper(it.value.changePercent) }
             comparator = Comparator.comparingDouble(Number::toDouble)
-            setCellFactory { PercentCell() }; prefWidth = 105.0
+            setCellFactory { ShortMovePercentCell() }; prefWidth = 105.0
         }
         val period = TableColumn<ShortMove, ShortMove>("Period").apply {
             id = "period"
@@ -186,7 +187,7 @@ class ShortMovePanel(
                 TableColumnAutoFitter.Spec(company, { companyNames[it.symbol] ?: it.symbol }, 80.0, 240.0),
                 TableColumnAutoFitter.Spec(opportunity, { "${it.opportunityScore}%" }, 82.0, 112.0),
                 TableColumnAutoFitter.Spec(priceRange, ShortMovePricePresentation::text, 62.0, 88.0),
-                TableColumnAutoFitter.Spec(direction, ::directionLabel, 82.0, 155.0),
+                TableColumnAutoFitter.Spec(direction, ::shortMoveDirectionLabel, 82.0, 155.0),
                 TableColumnAutoFitter.Spec(move, { "%+.2f%%".format(it.changePercent) }, 54.0, 76.0),
                 TableColumnAutoFitter.Spec(period, {
                     "${time.format(Instant.ofEpochSecond(it.startedAtEpochSeconds))}–${time.format(Instant.ofEpochSecond(it.endedAtEpochSeconds))}"
@@ -237,9 +238,8 @@ class ShortMovePanel(
 
                 override fun updateItem(item: ShortMove?, empty: Boolean) {
                     super.updateItem(item, empty)
-                    styleClass.removeAll("user-watchlist-row", "rapid-crash-row")
+                    styleClass.remove("user-watchlist-row")
                     if (!empty && item != null && watchlist.contains(item.symbol)) styleClass += "user-watchlist-row"
-                    if (!empty && item?.pattern == ShortMovePattern.RAPID_CRASH) styleClass += "rapid-crash-row"
                     tooltip = if (!empty && item?.isRetained == true) javafx.scene.control.Tooltip(
                         "Recently detected · no longer confirmed by the latest scan"
                     ) else null
@@ -263,9 +263,16 @@ class ShortMovePanel(
 
     internal fun show(moves: Collection<ShortMove>, nowEpochSeconds: Long = Instant.now().epochSecond) {
         val selected = table.selectionModel.selectedItem?.identity()
-        val current = moves.asSequence().filter(ShortMove::isActionableOpportunity)
-            .sortedByDescending(ShortMove::opportunityScore).take(MAX_VISIBLE_MOVES).toList()
-        val displayed = eventRetainer.merge(current, nowEpochSeconds).filter(ShortMove::isActionableOpportunity)
+        val current = moves.asSequence().filter { move ->
+            move.isActionableOpportunity() || move.pattern == ShortMovePattern.RAPID_CRASH ||
+                    move.pattern == ShortMovePattern.RAPID_RISE
+        }.sortedWith(
+            compareBy<ShortMove>(::shortMoveAlertPriority).thenByDescending(ShortMove::opportunityScore)
+        ).take(MAX_VISIBLE_MOVES).toList()
+        val displayed = eventRetainer.merge(current, nowEpochSeconds).filter { move ->
+            move.isActionableOpportunity() || move.pattern == ShortMovePattern.RAPID_CRASH ||
+                    move.pattern == ShortMovePattern.RAPID_RISE
+        }
         rows.setAll(displayed)
         selected?.let { identity ->
             sortedRows.firstOrNull { it.identity() == identity }?.let(table.selectionModel::select)
@@ -287,16 +294,6 @@ class ShortMovePanel(
         search.clear()
     }
 
-    private fun directionLabel(move: ShortMove): String = when (move.pattern) {
-        ShortMovePattern.RAPID_CRASH -> "‼ RAPID CRASH"
-        ShortMovePattern.RECURRING_SHARP_JUMP -> recurringDirection(move)
-        ShortMovePattern.POST_DROP_STRUGGLE -> "◆ POST-DROP"
-        ShortMovePattern.CONFIRMED_EXTENDED_DROP -> "◆ CONFIRMED DROP"
-        ShortMovePattern.RECOVERY_AFTER_EXTENDED_DROP -> setupLabel(move, "◆ DROP RECOVERY")
-        ShortMovePattern.TRADABLE_CORRIDOR -> setupLabel(move, "▰ CORRIDOR")
-        ShortMovePattern.DIRECTIONAL -> if (move.changePercent >= 0.0) "▲ UP" else "▼ DOWN"
-    }
-
     private fun requestCompanyName(move: ShortMove) {
         if (companyNames.containsKey(move.symbol)) return
         companyNames[move.symbol] = move.symbol
@@ -313,7 +310,7 @@ class ShortMovePanel(
         filteredRows.setPredicate { move ->
             query.isBlank() || move.symbol.lowercase().contains(query) ||
                     (companyNames[move.symbol] ?: move.symbol).lowercase().contains(query) ||
-                    directionLabel(move).lowercase().contains(query)
+                    shortMoveDirectionLabel(move).lowercase().contains(query)
         }
         updateFilterPresentation()
     }
@@ -335,90 +332,9 @@ class ShortMovePanel(
         }
     }
 
-    private class DirectionCell : TableCell<ShortMove, ShortMove>() {
-        override fun updateItem(item: ShortMove?, empty: Boolean) {
-            super.updateItem(item, empty)
-            val label = item?.let(::directionText)
-            text = if (empty) null else label
-            styleClass.removeAll("short-move-up", "short-move-down", "short-move-struggle")
-            if (!empty && label != null) styleClass += when {
-                label.contains("RECURRING") -> "short-move-recurring-jump"
-                label.contains("POST-DROP") -> "short-move-struggle"
-                label.contains("UP") -> "short-move-up"
-                else -> "short-move-down"
-            }
-        }
-
-        private companion object {
-            fun directionText(move: ShortMove): String = when (move.pattern) {
-                ShortMovePattern.RAPID_CRASH -> "‼ RAPID CRASH"
-                ShortMovePattern.RECURRING_SHARP_JUMP -> recurringDirection(move)
-                ShortMovePattern.POST_DROP_STRUGGLE -> "◆ POST-DROP"
-                ShortMovePattern.CONFIRMED_EXTENDED_DROP -> "◆ CONFIRMED DROP"
-                ShortMovePattern.RECOVERY_AFTER_EXTENDED_DROP -> setupLabel(move, "◆ DROP RECOVERY")
-                ShortMovePattern.TRADABLE_CORRIDOR -> setupLabel(move, "▰ CORRIDOR")
-                ShortMovePattern.DIRECTIONAL -> if (move.changePercent >= 0.0) "▲ UP" else "▼ DOWN"
-            }
-        }
-
-    }
-
-    private class PercentCell : TableCell<ShortMove, Number>() {
-        override fun updateItem(item: Number?, empty: Boolean) {
-            super.updateItem(item, empty); text = if (empty || item == null) null else "%+.2f%%".format(item.toDouble())
-            styleClass.removeAll("short-move-up", "short-move-down")
-            if (!empty && item != null) styleClass += if (item.toDouble() >= 0.0) "short-move-up" else "short-move-down"
-        }
-    }
-
-    private class OpportunityCell : TableCell<ShortMove, Number>() {
-        override fun updateItem(item: Number?, empty: Boolean) {
-            super.updateItem(item, empty)
-            styleClass.removeAll("opportunity-high", "opportunity-good", "opportunity-wait", "opportunity-late", "opportunity-avoid")
-            if (empty || item == null || item.toInt() < 0) {
-                text = null; tooltip = null
-                return
-            }
-            val value = item.toInt().coerceIn(0, 100)
-            text = "$value%"
-            styleClass += when {
-                value >= 80 -> "opportunity-high"
-                value >= 60 -> "opportunity-good"
-                value >= 40 -> "opportunity-wait"
-                value >= 20 -> "opportunity-late"
-                else -> "opportunity-avoid"
-            }
-            tooltip = tableRow?.item?.let { move ->
-                val retentionNote = if (move.isRetained) {
-                    "Recently detected; no longer confirmed by the latest scan."
-                } else null
-                javafx.scene.control.Tooltip(
-                    listOfNotNull(retentionNote, move.opportunityDetails.takeIf(String::isNotBlank)).joinToString("\n")
-                )
-            }
-        }
-    }
-
-    private class PriceRangeCell : TableCell<ShortMove, ShortMove>() {
-        override fun updateItem(item: ShortMove?, empty: Boolean) {
-            super.updateItem(item, empty)
-            text = if (empty || item == null) null else ShortMovePricePresentation.text(item)
-            styleClass.removeAll("short-move-up", "short-move-down")
-            if (!empty && item != null) {
-                styleClass += if (item.changePercent >= 0.0) "short-move-up" else "short-move-down"
-            }
-        }
-    }
-
     private companion object {
         const val MAX_VISIBLE_MOVES = 10
     }
 }
 
 private fun ShortMove.identity() = symbol to endedAtEpochSeconds
-
-private fun setupLabel(move: ShortMove, activeLabel: String): String =
-    if (move.isRetained) "$activeLabel · RECENT" else activeLabel
-
-private fun recurringDirection(move: ShortMove): String =
-    if (move.changePercent >= 0.0) "⚠ RECURRING UP" else "⚠ RECURRING DOWN"

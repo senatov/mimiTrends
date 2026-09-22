@@ -374,11 +374,18 @@
 .short-move-table .table-cell.short-move-up { -fx-text-fill: #16834a; -fx-font-weight: 600; }
 .short-move-table .table-cell.short-move-down { -fx-text-fill: #bd3c3c; -fx-font-weight: 600; }
 
-.short-move-table .table-row-cell.rapid-crash-row {
-    -fx-border-color: #d94a4a;
-    -fx-border-width: 1.5px;
-    -fx-border-radius: 4px;
-    -fx-background-color: #fff0f0;
+.short-move-table .table-cell.rapid-crash-cell,
+.short-move-table .table-row-cell:selected .table-cell.rapid-crash-cell {
+    -fx-text-fill: #c62828;
+    -fx-font-weight: 800;
+    -fx-background-color: #fff4bf;
+}
+
+.short-move-table .table-cell.rapid-rise-cell,
+.short-move-table .table-row-cell:selected .table-cell.rapid-rise-cell {
+    -fx-text-fill: #087a3d;
+    -fx-font-weight: 800;
+    -fx-background-color: #e8f7d7;
 }
 .short-move-table .table-cell.short-move-struggle { -fx-text-fill: #8a5600; -fx-font-weight: 600; }
 .short-move-table .table-cell.short-move-recurring-jump,

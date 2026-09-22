@@ -182,9 +182,9 @@ class ShortMoveDetectorTest {
     }
 
     @Test
-    fun `detects rapid crash at zero point thirty two percent threshold`() {
+    fun `detects rapid crash at zero point five percent threshold`() {
         val now = 12_000L
-        val closes = listOf(100.0, 99.90, 99.80, 99.68)
+        val closes = listOf(100.0, 100.15, 99.90, 99.50)
         val bars = closes.mapIndexed { index, close ->
             bar("THRESHOLD", now - (closes.lastIndex - index) * 60, close, close)
         }
@@ -192,13 +192,13 @@ class ShortMoveDetectorTest {
         val result = ShortMoveDetector.rank(mapOf("THRESHOLD" to bars), now).single()
 
         assertEquals(ShortMovePattern.RAPID_CRASH, result.pattern)
-        assertEquals(-0.32, result.changePercent, 1e-9)
+        assertEquals(-0.50, result.changePercent, 1e-9)
     }
 
     @Test
-    fun `does not detect rapid crash below zero point thirty two percent threshold`() {
+    fun `does not detect rapid crash below zero point five percent threshold`() {
         val now = 13_000L
-        val closes = listOf(100.0, 99.90, 99.80, 99.681)
+        val closes = listOf(100.0, 99.90, 99.80, 99.501)
         val bars = closes.mapIndexed { index, close ->
             bar("BELOW_THRESHOLD", now - (closes.lastIndex - index) * 60, close, close)
         }
@@ -206,6 +206,39 @@ class ShortMoveDetectorTest {
         val result = ShortMoveDetector.rank(mapOf("BELOW_THRESHOLD" to bars), now).single()
 
         assertEquals(ShortMovePattern.DIRECTIONAL, result.pattern)
+    }
+
+    @Test
+    fun `detects rapid crash without requiring consecutive falling closes`() {
+        val now = 13_500L
+        val bars = listOf(
+            bar("MIXED_CRASH", now - 3 * 60, 100.0, 100.0),
+            bar("MIXED_CRASH", now - 60, 100.0, 100.3),
+            bar("MIXED_CRASH", now, 100.3, 99.4)
+        )
+
+        val result = ShortMoveDetector.rank(mapOf("MIXED_CRASH" to bars), now).single()
+
+        assertEquals(ShortMovePattern.RAPID_CRASH, result.pattern)
+        assertEquals(-0.6, result.changePercent, 1e-9)
+    }
+
+    @Test
+    fun `detects rapid rise only above one percent in four minutes`() {
+        val now = 14_000L
+        val rapid = listOf(
+            bar("RAPID", now - 3 * 60, 100.0, 100.0),
+            bar("RAPID", now, 100.0, 101.01)
+        )
+        val boundary = listOf(
+            bar("BOUNDARY", now - 3 * 60, 100.0, 100.0),
+            bar("BOUNDARY", now, 100.0, 101.0)
+        )
+
+        val ranked = ShortMoveDetector.rank(mapOf("RAPID" to rapid, "BOUNDARY" to boundary), now)
+
+        assertEquals(ShortMovePattern.RAPID_RISE, ranked.first { it.symbol == "RAPID" }.pattern)
+        assertEquals(ShortMovePattern.DIRECTIONAL, ranked.first { it.symbol == "BOUNDARY" }.pattern)
     }
 
     @Test
@@ -236,7 +269,7 @@ class ShortMoveDetectorTest {
     }
 
     @Test
-    fun `does not classify a strong v recovery as post drop struggle`() {
+    fun `classifies a strong v recovery as rapid rise rather than post drop struggle`() {
         val now = 20_000L
         val closes = listOf(100.0, 96.0, 96.3, 98.5, 99.5)
         val bars = closes.mapIndexed { index, close ->
@@ -245,7 +278,7 @@ class ShortMoveDetectorTest {
 
         val result = ShortMoveDetector.rank(mapOf("RECOVERY" to bars), now).single()
 
-        assertEquals(ShortMovePattern.DIRECTIONAL, result.pattern)
+        assertEquals(ShortMovePattern.RAPID_RISE, result.pattern)
     }
 
     @Test

@@ -22,6 +22,7 @@ import java.util.concurrent.TimeUnit
 internal class PriorityScanCoordinator(
     private val evaluate: (String) -> ScanResult?,
     private val onResult: (String, ScanResult?) -> Unit,
+    private val isUrgent: (String) -> Boolean = { false },
     private val intervalSeconds: Long = PRIORITY_SCAN_INTERVAL_SECONDS
 ) : AutoCloseable {
     private val log = LoggerFactory.getLogger(javaClass)
@@ -29,33 +30,62 @@ internal class PriorityScanCoordinator(
         Thread(task, "mimitrends-priority-scanner").apply { isDaemon = true }
     }
     private val lock = Any()
-    private val symbols = linkedSetOf<String>()
+    private val candidateSymbols = linkedSetOf<String>()
+    private val urgentSymbols = linkedSetOf<String>()
     private var task: ScheduledFuture<*>? = null
     private var generation = 0L
 
     fun replaceCandidates(results: Collection<ScanResult>) {
         synchronized(lock) {
             generation++
-            symbols.clear()
-            results.filter(::requiresPriorityScan).mapTo(symbols, ScanResult::symbol)
-            if (symbols.isEmpty()) stopLocked() else ensureScheduledLocked()
+            candidateSymbols.clear()
+            results.filter(::requiresPriorityScan).mapTo(candidateSymbols, ScanResult::symbol)
+            updateScheduleLocked()
         }
+    }
+
+    fun addUrgentSymbols(values: Collection<String>) {
+        synchronized(lock) {
+            generation++
+            values.map(String::uppercase).mapTo(urgentSymbols) { it }
+            updateScheduleLocked()
+        }
+    }
+
+    fun clearUrgentSymbols() {
+        synchronized(lock) {
+            generation++
+            urgentSymbols.clear()
+            updateScheduleLocked()
+        }
+    }
+
+    private fun updateScheduleLocked() {
+        if (candidateSymbols.isEmpty() && urgentSymbols.isEmpty()) stopLocked() else ensureScheduledLocked()
     }
 
     private fun ensureScheduledLocked() {
         if (task?.isDone == false) return
-        log.info(LogTag.API, "priority scan started symbols={} interval={}s", symbols.size, intervalSeconds)
+        log.info(
+            LogTag.API, "priority scan started symbols={} interval={}s",
+            (candidateSymbols + urgentSymbols).size, intervalSeconds
+        )
         task = scheduler.scheduleWithFixedDelay(::runOnce, intervalSeconds, intervalSeconds, TimeUnit.SECONDS)
     }
 
     internal fun runOnce() {
-        val (scanGeneration, snapshot) = synchronized(lock) { generation to symbols.toList() }
+        val (scanGeneration, snapshot) = synchronized(lock) { generation to (candidateSymbols + urgentSymbols).toList() }
         snapshot.forEach { symbol ->
             runCatching {
                 val result = evaluate(symbol)
-                if (synchronized(lock) { generation == scanGeneration && symbol in symbols }) {
+                if (synchronized(lock) {
+                        generation == scanGeneration && (symbol in candidateSymbols || symbol in urgentSymbols)
+                    }
+                ) {
                     onResult(symbol, result)
-                    if (result == null || !requiresPriorityScan(result)) remove(symbol)
+                    val urgent = synchronized(lock) { symbol in urgentSymbols }
+                    if (urgent && !isUrgent(symbol)) removeUrgent(symbol)
+                    if (result == null || !requiresPriorityScan(result)) removeCandidate(symbol)
                 }
             }
                 .onFailure { error ->
@@ -64,12 +94,19 @@ internal class PriorityScanCoordinator(
         }
     }
 
-    internal fun trackedSymbols(): Set<String> = synchronized(lock) { symbols.toSet() }
+    internal fun trackedSymbols(): Set<String> = synchronized(lock) { (candidateSymbols + urgentSymbols).toSet() }
 
-    private fun remove(symbol: String) {
+    private fun removeCandidate(symbol: String) {
         synchronized(lock) {
-            symbols.remove(symbol)
-            if (symbols.isEmpty()) stopLocked()
+            candidateSymbols.remove(symbol)
+            updateScheduleLocked()
+        }
+    }
+
+    private fun removeUrgent(symbol: String) {
+        synchronized(lock) {
+            urgentSymbols.remove(symbol)
+            updateScheduleLocked()
         }
     }
 
@@ -82,7 +119,8 @@ internal class PriorityScanCoordinator(
     override fun close() {
         synchronized(lock) {
             generation++
-            symbols.clear()
+            candidateSymbols.clear()
+            urgentSymbols.clear()
             stopLocked()
         }
         scheduler.shutdownNow()
