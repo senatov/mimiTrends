@@ -151,6 +151,30 @@
     -fx-border-color: #7aa5d8;
 }
 
+.toolbar-text-button {
+    -fx-font-family: "System";
+    -fx-font-size: 12px;
+    -fx-font-weight: 500;
+    -fx-text-fill: #29445f;
+    -fx-padding: 4px 10px;
+    -fx-background-color: linear-gradient(to bottom, #ffffff, #e5ebf1);
+    -fx-background-radius: 7px;
+    -fx-border-color: #aeb9c4;
+    -fx-border-radius: 7px;
+    -fx-effect: dropshadow(gaussian, rgba(28, 50, 72, 0.16), 4, 0.08, 0, 1);
+}
+
+.toolbar-text-button:hover {
+    -fx-background-color: linear-gradient(to bottom, #ffffff, #dce8f3);
+    -fx-border-color: #7f9fbe;
+}
+
+.toolbar-text-button:pressed {
+    -fx-translate-y: 1px;
+    -fx-background-color: linear-gradient(to bottom, #dce5ed, #f3f6f9);
+    -fx-effect: innershadow(gaussian, rgba(35, 58, 80, 0.18), 3, 0.08, 0, 1);
+}
+
 .title-actions > .toolbar-action-separator {
     -fx-padding: 3px 2px;
 }
@@ -160,7 +184,7 @@
     -fx-border-width: 0 0 0 1px;
 }
 
-.table-section, .trend-chart-card, .insight-sidebar {
+.table-section, .trend-chart-card {
     -fx-background-color: -mimi-surface;
     -fx-background-radius: 7px;
     -fx-border-color: -mimi-border;
@@ -169,33 +193,51 @@
     -fx-effect: null;
 }
 
-.table-section { -fx-padding: 8px; }
-.trend-chart-card { -fx-padding: 6px; }
-.insight-sidebar { -fx-padding: 5px; }
-
-.insight-sidebar-host {
+.chart-drawer {
     -fx-background-color: transparent;
 }
 
-.insight-sidebar-toggle {
-    -fx-min-width: 20px;
-    -fx-pref-width: 20px;
-    -fx-max-width: 20px;
-    -fx-min-height: 52px;
-    -fx-pref-height: 52px;
-    -fx-padding: 0;
-    -fx-font-size: 19px;
-    -fx-font-weight: 300;
-    -fx-text-fill: -mimi-text-secondary;
-    -fx-background-color: -mimi-surface;
-    -fx-background-radius: 6px;
+.chart-drawer-header {
+    -fx-min-height: 30px;
+    -fx-pref-height: 30px;
+    -fx-padding: 1px 3px 1px 8px;
+    -fx-background-color: linear-gradient(to bottom, #fbfcfd, #e9edf2);
+    -fx-background-radius: 7px;
     -fx-border-color: -mimi-border;
-    -fx-border-radius: 6px;
+    -fx-border-radius: 7px;
 }
 
-.insight-sidebar-toggle:hover {
-    -fx-text-fill: -mimi-accent;
-    -fx-border-color: -mimi-accent;
+.chart-drawer-title {
+    -fx-font-family: "System";
+    -fx-font-size: 12px;
+    -fx-font-weight: 500;
+    -fx-text-fill: -mimi-text-secondary;
+}
+
+.chart-drawer-toggle {
+    -fx-font-family: "System";
+    -fx-font-size: 12px;
+    -fx-font-weight: 500;
+    -fx-text-fill: #29445f;
+    -fx-padding: 3px 12px;
+    -fx-background-color: linear-gradient(to bottom, #ffffff, #dfe7ef);
+    -fx-background-radius: 6px;
+    -fx-border-color: #aeb9c4;
+    -fx-border-radius: 6px;
+    -fx-effect: dropshadow(gaussian, rgba(28, 50, 72, 0.14), 3, 0.08, 0, 1);
+}
+
+.chart-drawer-toggle:pressed {
+    -fx-translate-y: 1px;
+    -fx-effect: innershadow(gaussian, rgba(35, 58, 80, 0.18), 3, 0.08, 0, 1);
+}
+
+.table-section {
+    -fx-padding: 8px;
+}
+
+.trend-chart-card {
+    -fx-padding: 6px;
 }
 
 .table-section-header { -fx-padding: 1px 3px 6px 3px; }
@@ -269,13 +311,14 @@
     -fx-font-size: 8px;
     -fx-text-fill: #8b67a8;
 }
-.table-section-title, .positive-watch-title, .inspector-title {
+
+.table-section-title {
     -fx-font-size: 16px;
     -fx-font-weight: 600;
     -fx-text-fill: -mimi-text;
 }
 
-.scanner-cycle, .short-move-caption, .positive-watch-caption {
+.scanner-cycle, .short-move-caption {
     -fx-text-fill: -mimi-text-secondary;
 }
 
@@ -472,7 +515,7 @@
 }
 
 /* Compact layered controls: JavaFX approximation of macOS Liquid Glass depth. */
-.table-section, .trend-chart-card, .insight-sidebar {
+.table-section, .trend-chart-card {
     -fx-background-color:
         linear-gradient(to bottom, rgba(255,255,255,0.96), rgba(247,250,253,0.88));
     -fx-background-radius: 10px;
@@ -483,13 +526,12 @@
 
 .table-section { -fx-padding: 5px; }
 .trend-chart-card { -fx-padding: 5px; }
-.insight-sidebar { -fx-padding: 4px; }
 
 .table-section-header {
     -fx-padding: 3px 4px 7px 4px;
 }
 
-.button, .table-search-clear, .insight-sidebar-toggle {
+.button, .table-search-clear {
     -fx-background-color:
         linear-gradient(to bottom, rgba(255,255,255,0.98), rgba(226,233,241,0.94));
     -fx-background-radius: 8px;
@@ -499,14 +541,13 @@
     -fx-effect: dropshadow(gaussian, rgba(31, 54, 79, 0.12), 4, 0.10, 0, 1);
 }
 
-.button:hover, .table-search-clear:hover, .insight-sidebar-toggle:hover {
+.button:hover, .table-search-clear:hover {
     -fx-background-color:
         linear-gradient(to bottom, #ffffff, #dce8f4);
     -fx-border-color: -mimi-accent;
 }
 
-.button:pressed, .table-search-clear:pressed,
-.insight-sidebar-toggle:pressed {
+.button:pressed, .table-search-clear:pressed {
     -fx-translate-y: 1px;
     -fx-background-color: linear-gradient(to bottom, #d6e0ea, #edf3f8);
     -fx-effect: innershadow(gaussian, rgba(31,54,79,0.25), 4, 0.12, 0, 1);

@@ -15,10 +15,6 @@
     -fx-padding: 12px 14px;
 }
 
-.density-comfortable .inspector-section {
-    -fx-padding: 12px;
-}
-
 .theme-dark {
     -mimi-canvas: #10151b;
     -mimi-surface: #171e26;
@@ -36,10 +32,10 @@
 }
 
 .theme-dark .title-toolbar,
+.theme-dark .chart-drawer-header,
 .theme-dark .request-status-bar,
 .theme-dark .table-section,
-.theme-dark .trend-chart-card,
-.theme-dark .insight-sidebar {
+.theme-dark .trend-chart-card {
     -fx-background-color: -mimi-surface;
 }
 
@@ -68,15 +64,10 @@
 .theme-dark .button,
 .theme-dark .table-columns-button,
 .theme-dark .table-search-clear,
-.theme-dark .insight-sidebar-toggle,
-.theme-dark .insight-sidebar .tab {
+.theme-dark .toolbar-text-button,
+.theme-dark .chart-drawer-toggle {
     -fx-background-color: linear-gradient(to bottom, #2a3541, #202934);
     -fx-border-color: #526273;
-}
-
-.theme-dark .insight-sidebar .tab:selected {
-    -fx-background-color: linear-gradient(to bottom, #294c70, #203b59);
-    -fx-border-color: #5796df;
 }
 
 .theme-dark .table-search-field {
@@ -95,35 +86,17 @@
     -fx-background-color: rgba(100, 73, 126, 0.42);
 }
 
-.theme-dark .chart-card-header,
-.theme-dark .inspector-section {
+.theme-dark .chart-card-header {
     -fx-background-color: -mimi-surface-muted;
     -fx-border-color: -mimi-border;
 }
 
-.theme-dark .chart-cursor-details,
-.theme-dark .inspector-line {
+.theme-dark .chart-cursor-details {
     -fx-text-fill: #c4ced8;
-}
-
-.theme-dark .inspector-status-positive {
-    -fx-text-fill: -mimi-positive;
-}
-
-.theme-dark .inspector-status-warning {
-    -fx-text-fill: -mimi-warning;
-}
-
-.theme-dark .inspector-status-muted {
-    -fx-text-fill: -mimi-text-secondary;
 }
 
 .theme-dark .chart-state-overlay {
     -fx-background-color: rgba(23, 30, 38, 0.90);
-}
-
-.theme-dark .inspector-section-caption {
-    -fx-text-fill: #8797a8;
 }
 
 .theme-dark .chart-mode-switch {
@@ -195,12 +168,4 @@
 
 .theme-dark .workspace-empty-mark {
     -fx-border-color: #365978;
-}
-
-.theme-dark .insight-sidebar .tab .tab-label {
-    -fx-text-fill: #a9b5c1;
-}
-
-.theme-dark .insight-sidebar .tab:selected .tab-label {
-    -fx-text-fill: #82b6ef;
 }

@@ -51,10 +51,10 @@ class App : Application() {
         val controller = MainController(
             apiKey, uiState.symbol, uiState.range, uiState.dividerPosition,
             uiState.scannerColumns, uiState.shortMoveColumns, uiState.tableDividerPosition,
-            uiState.sidebarVisible,
+            uiState.chartVisible,
             ::openInDefaultBrowser
         )
-        val scene = Scene(controller.createView(), 1120.0, 720.0)
+        val scene = Scene(controller.createView(), 820.0, 500.0)
         scene.stylesheets += requireNotNull(javaClass.getResource("/org/senatov/mimitrends/MiMiTrends.css")).toExternalForm()
         scene.stylesheets += requireNotNull(javaClass.getResource("/org/senatov/mimitrends/Workspace.css")).toExternalForm()
         scene.stylesheets += requireNotNull(javaClass.getResource("/org/senatov/mimitrends/ChartWorkspace.css")).toExternalForm()
@@ -64,8 +64,8 @@ class App : Application() {
         listOf("/icons/icon_512x512.png", "/icons/icon_128x128.png").forEach { path ->
             javaClass.getResourceAsStream(path)?.use { stage.icons += Image(it) }
         }
-        stage.minWidth = 860.0
-        stage.minHeight = 560.0
+        stage.minWidth = 720.0
+        stage.minHeight = 420.0
         stage.scene = scene
         uiStateService.restore(stage, uiState)
         stage.setOnCloseRequest {
@@ -74,7 +74,7 @@ class App : Application() {
             uiStateService.save(
                 stage, controller.selectedSymbol(), controller.selectedRange(), controller.dividerPosition(),
                 controller.scannerColumnLayout(), controller.shortMoveColumnLayout(), controller.tableDividerPosition(),
-                controller.sidebarVisible()
+                controller.chartVisible()
             )
             controller.showClosing()
             CompletableFuture.runAsync(controller::close).whenComplete(BiConsumer<Void?, Throwable?> { _, error ->

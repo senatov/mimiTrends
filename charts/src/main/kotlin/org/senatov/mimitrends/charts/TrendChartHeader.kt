@@ -18,7 +18,7 @@ internal class TrendChartHeader(
     onTradesChanged: () -> Unit,
     onRangeChanged: (String) -> Unit
 ) : VBox(6.0) {
-    private val instrument = Label("Select a scanner result")
+    private val instrument = Label("Select a live radar alert")
     private val price = Label()
     private val performance = Label()
     private val context = Label("Price and volume history")

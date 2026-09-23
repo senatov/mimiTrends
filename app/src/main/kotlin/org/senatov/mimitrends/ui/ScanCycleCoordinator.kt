@@ -31,7 +31,7 @@ internal class ScanCycleCoordinator(
     private val savedResultQuotes: SavedResultQuoteRefresher,
     private val resultDeduplicator: InstrumentResultDeduplicator,
     private val marketData: MarketDataService,
-    private val insightSidebar: InsightSidebar,
+    private val presentUniverse: (DynamicUniverseSelection) -> Unit,
     private val shortMovePanel: ShortMovePanel,
     private val scannerPanel: ScannerPanel,
     private val status: MainStatusController,
@@ -78,9 +78,7 @@ internal class ScanCycleCoordinator(
         if (isClosing() || activeGeneration != generation.get()) return
         val selectedSymbols = universe.symbols
         analytics.recordUniverseSelection(universe.ranks, universe.discovered)
-        Platform.runLater {
-            insightSidebar.showUniverse(universe)
-        }
+        Platform.runLater { presentUniverse(universe) }
         val nowMillis = System.currentTimeMillis()
         val symbols = planner.order(selectedSymbols.filter { symbol ->
             ScanMarketEligibility.isActive(symbol, liveTicks[symbol], nowMillis)
@@ -101,7 +99,10 @@ internal class ScanCycleCoordinator(
             symbols, criteria,
             { activeGeneration == generation.get() && !isClosing() },
             { completed, symbol ->
-                Platform.runLater { status.update("Market data: analyzed $completed/${symbols.size} · $symbol") }
+                Platform.runLater {
+                    shortMovePanel.showScanProgress(completed, symbols.size, selectedSymbols.size)
+                    status.update("Market data: analyzed $completed/${symbols.size} · $symbol")
+                }
             },
             watchlistSymbols()
         ) ?: return
@@ -125,6 +126,7 @@ internal class ScanCycleCoordinator(
 
     private fun beginVisibleScan(symbols: List<String>, universeSize: Int) = Platform.runLater {
         scannerPanel.beginScan(1, 1, symbols)
+        shortMovePanel.showScanProgress(0, symbols.size, universeSize)
         status.update("Scanning ${symbols.size}/$universeSize liquid symbols · corridors and rapid crashes")
     }
 

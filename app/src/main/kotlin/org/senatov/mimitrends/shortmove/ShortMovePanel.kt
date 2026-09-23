@@ -52,14 +52,15 @@ class ShortMovePanel(
     private val sortedRows = SortedList(filteredRows)
     private val table = TableView(sortedRows)
     private val time = DateTimeFormatter.ofPattern("HH:mm").withZone(ZoneId.systemDefault())
-    private val updateCaption = Label("Fresh bottom reversals + stable corridors · waiting").apply {
+    private val updateCaption = Label("Waiting for the first focused scan").apply {
         styleClass += "short-move-caption"
         maxWidth = Double.MAX_VALUE
         tooltip = javafx.scene.control.Tooltip(text)
     }
+    private val scanCaption = Label("Scan waiting").apply { styleClass += "short-move-caption" }
     private val companyNames = java.util.concurrent.ConcurrentHashMap<String, String>()
     private val search = TableSearchField.create(
-        "Find move…", ::applyFilter, ::openFirstMatch, table::requestFocus,
+        "Find alert…", ::applyFilter, ::openFirstMatch, table::requestFocus,
         watchlist.search, ::pinSuggestion
     )
     private val filterCount = Label().apply {
@@ -68,12 +69,12 @@ class ShortMovePanel(
         isManaged = false
     }
     private val empty = WorkspaceEmptyState.create(
-        "No actionable opportunities now",
-        "Fresh confirmed bottom reversals and stable tradable corridors will appear here."
+        "No live corridor or crash alerts",
+        "Stable two-hour corridors and confirmed four-minute rapid crashes will appear here."
     )
     private val noMatches = WorkspaceEmptyState.create(
         "No matching movements",
-        "Try another company, ticker, or direction.", "Clear search"
+        "Try another company, ticker, or event type.", "Clear search"
     ) { search.clear(); table.requestFocus() }
     private val eventRetainer = ShortMoveEventRetainer()
     private val columnLayout: TableColumnLayout<ShortMove>
@@ -94,8 +95,8 @@ class ShortMovePanel(
         val headerActions = HBox(7.0)
         val header = HBox(
             8.0,
-            Label("Trading opportunities").apply { styleClass += "table-section-title" },
-            updateCaption, spacer, headerActions
+            Label("Live radar").apply { styleClass += "table-section-title" },
+            updateCaption, scanCaption, spacer, headerActions
         ).apply {
             alignment = Pos.CENTER_LEFT
             styleClass += listOf("table-section-header", "short-move-header")
@@ -121,72 +122,51 @@ class ShortMovePanel(
             }
             prefWidth = 210.0; minWidth = 90.0
         }
-        val opportunity = TableColumn<ShortMove, Number>("Opportunity").apply {
-            id = "opportunity"
-            styleClass += "status-column"
-            setCellValueFactory { ReadOnlyDoubleWrapper(it.value.opportunityScore.toDouble()) }
-            comparator = Comparator.comparingDouble(Number::toDouble)
-            setCellFactory { ShortMoveOpportunityCell() }
-            prefWidth = 104.0; minWidth = 82.0
-        }
-        val priceRange = TableColumn<ShortMove, ShortMove>("Range").apply {
-            id = "price_range"
-            styleClass += "numeric-column"
-            setCellValueFactory { ReadOnlyObjectWrapper(it.value) }
-            comparator = ShortMoveSort.priceRange
-            isSortable = true
-            setCellFactory { ShortMovePriceRangeCell() }
-            prefWidth = 82.0; minWidth = 62.0
-        }
-        val direction = TableColumn<ShortMove, ShortMove>("Setup").apply {
+        val direction = TableColumn<ShortMove, ShortMove>("Event").apply {
             id = "direction"
             styleClass += "status-column"
             setCellValueFactory { ReadOnlyObjectWrapper(it.value) }
             comparator = ShortMoveSort.direction
-            setCellFactory { ShortMoveDirectionCell() }; prefWidth = 135.0
+            setCellFactory { ShortMoveDirectionCell() }; prefWidth = 155.0
         }
-        val move = TableColumn<ShortMove, Number>("Room").apply {
-            id = "move"
+        val movement = TableColumn<ShortMove, ShortMove>("Movement").apply {
+            id = "movement"
             styleClass += "numeric-column"
-            setCellValueFactory { ReadOnlyDoubleWrapper(it.value.changePercent) }
-            comparator = Comparator.comparingDouble(Number::toDouble)
-            setCellFactory { ShortMovePercentCell() }; prefWidth = 105.0
+            setCellValueFactory { ReadOnlyObjectWrapper(it.value) }
+            comparator = Comparator.comparingDouble { move: ShortMove -> move.changePercent }
+            setCellFactory { ShortMoveMovementCell() }; prefWidth = 170.0
         }
-        val period = TableColumn<ShortMove, ShortMove>("Period").apply {
-            id = "period"
+        val price = TableColumn<ShortMove, Number>("Price").apply {
+            id = "price"
+            styleClass += "numeric-column"
+            setCellValueFactory { ReadOnlyDoubleWrapper(ShortMovePresentation.currentPrice(it.value)) }
+            comparator = Comparator.comparingDouble(Number::toDouble)
+            setCellFactory { ShortMoveCurrentPriceCell() }
+            prefWidth = 100.0
+        }
+        val age = TableColumn<ShortMove, ShortMove>("Age").apply {
+            id = "age"
             styleClass += "temporal-column"
             setCellValueFactory { ReadOnlyObjectWrapper(it.value) }
-            comparator = ShortMoveSort.period
-            setCellFactory {
-                object : TableCell<ShortMove, ShortMove>() {
-                    override fun updateItem(item: ShortMove?, empty: Boolean) {
-                        super.updateItem(item, empty)
-                        text = if (empty || item == null) null else
-                            "${time.format(Instant.ofEpochSecond(item.startedAtEpochSeconds))}–${time.format(Instant.ofEpochSecond(item.endedAtEpochSeconds))}"
-                    }
-                }
-            }
-            prefWidth = 135.0
+            comparator = Comparator.comparingLong(ShortMove::eventEpochSeconds)
+            setCellFactory { ShortMoveAgeCell() }
+            prefWidth = 72.0
         }
-        table.columns.setAll(company, opportunity, direction, move, priceRange, period)
+        table.columns.setAll(company, direction, movement, price, age)
         listOf(
-            opportunity to "Current timing relevance from 0 to 100%. This is not a probability of profit.",
-            priceRange to "Current price and upper corridor target, or movement start and end prices.",
-            direction to "Detected movement type and its observed direction.",
-            move to "Remaining upside to the corridor target, or price change across the displayed period.",
-            period to "Local start and end time of the detected movement."
+            direction to "Confirmed live event type. RECENT means it is retained but no longer confirmed.",
+            movement to "Four-minute decline for a crash, or corridor width and remaining room for a corridor.",
+            price to "Latest observed price used by the focused radar.",
+            age to "Time since the latest confirmed event observation."
         ).forEach { (column, description) -> TableColumnHelp.install(column, description) }
         columnLayout = TableColumnLayout(table, savedColumns).also(TableColumnLayout<ShortMove>::install)
         autoFitter = TableColumnAutoFitter(
             table, listOf(
                 TableColumnAutoFitter.Spec(company, { companyNames[it.symbol] ?: it.symbol }, 80.0, 240.0),
-                TableColumnAutoFitter.Spec(opportunity, { "${it.opportunityScore}%" }, 82.0, 112.0),
-                TableColumnAutoFitter.Spec(priceRange, ShortMovePricePresentation::text, 62.0, 88.0),
-                TableColumnAutoFitter.Spec(direction, ::shortMoveDirectionLabel, 82.0, 155.0),
-                TableColumnAutoFitter.Spec(move, { "%+.2f%%".format(it.changePercent) }, 54.0, 76.0),
-                TableColumnAutoFitter.Spec(period, {
-                    "${time.format(Instant.ofEpochSecond(it.startedAtEpochSeconds))}–${time.format(Instant.ofEpochSecond(it.endedAtEpochSeconds))}"
-                }, 82.0, 105.0)
+                TableColumnAutoFitter.Spec(direction, ::shortMoveDirectionLabel, 112.0, 180.0),
+                TableColumnAutoFitter.Spec(movement, ShortMovePresentation::movement, 130.0, 210.0),
+                TableColumnAutoFitter.Spec(price, { "%,.2f".format(ShortMovePresentation.currentPrice(it)) }, 70.0, 110.0),
+                TableColumnAutoFitter.Spec(age, { ShortMovePresentation.age(it, Instant.now().epochSecond) }, 54.0, 82.0)
             ), columnLayout.savedWidths(), columnLayout.manuallySizedColumnIds()
         )
         headerActions.children += listOf(search, filterCount)
@@ -194,7 +174,7 @@ class ShortMovePanel(
         rows.addListener(ListChangeListener<ShortMove> { updateFilterPresentation() })
         table.placeholder = empty
         table.columnResizePolicy = TableView.UNCONSTRAINED_RESIZE_POLICY
-        table.fixedCellSize = 25.0
+        table.fixedCellSize = 30.0
         VBox.setVgrow(table, Priority.ALWAYS)
         table.styleClass += listOf("scanner-table", "short-move-table")
         table.setRowFactory {
@@ -273,7 +253,7 @@ class ShortMovePanel(
         val recentCount = displayed.count(ShortMove::isRetained)
         val activeCount = displayed.size - recentCount
         updateCaption.text =
-            "$activeCount active · $recentCount recent · updated ${time.format(Instant.ofEpochSecond(nowEpochSeconds))}"
+            "$activeCount live · $recentCount recent · updated ${time.format(Instant.ofEpochSecond(nowEpochSeconds))}"
         updateCaption.tooltip?.text = updateCaption.text
         displayed.forEach(::requestCompanyName)
         autoFitter.request()
@@ -281,6 +261,10 @@ class ShortMovePanel(
 
     internal fun savedColumnLayout(): String = columnLayout.capture(autoFitter.manuallySizedColumnIds())
     internal fun focusSearch() = search.focusField()
+
+    internal fun showScanProgress(completed: Int, cycleSize: Int, poolSize: Int) {
+        scanCaption.text = "Scan $completed/$cycleSize · pool $poolSize"
+    }
 
     private fun pinSuggestion(suggestion: TableSearchSuggestion) {
         watchlist.add(suggestion.symbol)

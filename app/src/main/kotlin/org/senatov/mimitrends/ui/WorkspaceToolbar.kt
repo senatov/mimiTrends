@@ -1,28 +1,23 @@
 package org.senatov.mimitrends.ui
 
-import org.senatov.mimitrends.application.*
-import org.senatov.mimitrends.ui.*
-import org.senatov.mimitrends.scanner.*
-import org.senatov.mimitrends.shortmove.*
-import org.senatov.mimitrends.signals.*
-import org.senatov.mimitrends.research.*
-import org.senatov.mimitrends.market.*
-import org.senatov.mimitrends.providers.*
-import org.senatov.mimitrends.company.*
-import org.senatov.mimitrends.services.*
-import org.senatov.mimitrends.shared.*
-
 import javafx.scene.Parent
+import javafx.scene.control.Button
+import javafx.scene.control.Tooltip
+import javafx.scene.input.KeyCombination
 
 internal object WorkspaceToolbar {
     fun configure(
         root: Parent,
         buttons: WorkspaceActionButtons,
+        onUniverse: () -> Unit,
         onRefresh: () -> Unit,
         onSettings: () -> Unit,
         onImport: () -> Unit,
         onAbout: () -> Unit
     ) {
+        buttons.universe.tooltip = Tooltip("Show the rotating liquid candidate pool")
+        buttons.universe.accessibleText = "Show the rotating liquid candidate pool"
+        buttons.universe.setOnAction { onUniverse() }
         configure(buttons.refresh, ToolbarIcon.REFRESH, "Refresh local chart", WorkspaceShortcuts.refresh, onRefresh)
         configure(buttons.settings, ToolbarIcon.SETTINGS, "Scanner and currency settings", WorkspaceShortcuts.settings, onSettings)
         configure(
@@ -44,10 +39,10 @@ internal object WorkspaceToolbar {
     }
 
     private fun configure(
-        button: javafx.scene.control.Button,
+        button: Button,
         icon: ToolbarIcon,
         tooltip: String,
-        shortcut: javafx.scene.input.KeyCombination,
+        shortcut: KeyCombination,
         action: () -> Unit
     ) {
         ToolbarIconButton.configure(button, icon, tooltip, shortcut)

@@ -19,19 +19,16 @@ MiMiTrends is informational software. It does not place orders, provide investme
 
 ## At a glance
 
-### Scanner and signal chart
+### Compact live radar
 
-<img src="./Doc/MainWindow.png" alt="MiMiTrends scanner and signal-focused chart" width="900">
+The default 820×500 workspace is intentionally list-first. One `Live radar` table shows only confirmed
+`RAPID_CRASH` and `TRADABLE_CORRIDOR` events with their measured movement, current price, and age. The
+chart starts collapsed and opens when an alert is selected; the activity-ranked liquid universe is available
+from a compact toolbar button instead of occupying a permanent sidebar.
 
-*The workspace keeps the focused corridor/crash radar, liquid-universe coverage, minute candles, volume,
-and imported broker executions visible together.*
-
-### Scanner settings
-
-<img src="./Doc/ScannerSettings.png" alt="MiMiTrends adaptive anomaly scanner settings" width="900">
-
-*Detection, trend, universe, provider, and appearance controls are grouped in one settings window.
-Each analytical field includes a short explanation of what it changes.*
+The interface keeps the system font, compact three-dimensional command buttons, and native macOS-style
+spacing. Legacy anomaly, outcome, entry-quality, and opportunity-probability columns are not part of the
+main radar because they do not answer the immediate question: what is moving now?
 
 ### Broker CSV import
 
@@ -115,20 +112,19 @@ path; Finnhub is an optional enhancement for supported US symbols.
 
 ## Why it exists
 
-Traditional charts are useful for studying price history, but they often require the user to inspect many instruments manually. MiMiTrends reverses that workflow:
+Traditional charts are useful for studying price history, but they require the user to inspect many
+instruments manually. MiMiTrends reverses that workflow: it rotates through a broad liquid universe,
+publishes only confirmed four-minute crashes and stable two-hour corridors, and keeps the chart secondary
+until the user chooses an alert to inspect.
 
-1. collect and normalize recent market data;
-2. compare the latest completed candles with the instrument's own historical behavior;
-3. reject ordinary movement and unconfirmed volume spikes;
-4. rank only fresh, statistically unusual candidates;
-5. show the signal, its strength, entry context, volume confirmation, and subsequent movement.
-
-The primary question is not “What did this stock do over the last year?” but “What unusual event is happening now, how strong is it, and is the move being confirmed?”
+The primary question is: “Which liquid stock has entered a useful corridor or is falling sharply right now?”
 
 ## What the application does
 
 - scans US, European, or combined watchlists, processing up to 90 eligible instruments per regular
   cycle and rotating through larger universes without starving either region;
+- presents accepted events in one compact live-radar table; the chart is collapsible and the complete
+  activity-ranked universe opens on demand;
 - refreshes at most 20 wallstreetONLINE discovery candidates every 30 minutes and evaluates resolved
   equities through the same rotating radar as the configured watchlist;
 - ranks the rotating universe by recent session turnover and feed freshness so subsequent cycles spend
@@ -153,8 +149,6 @@ The primary question is not “What did this stock do over the last year?” but
 - pauses scanning while every selected market is closed and resumes after the earliest next opening;
 - displays quote age in the leading `Delay` column and sorts it numerically, distinguishing current
   observations from stale ones without hiding delayed-but-useful European candidates;
-- marks statistically repeating two- or three-minute price paths with a bright-red `↻` indicator beside
-  the company name; the tooltip reports the measured cycle strength;
 - shortens displayed company names and copied `Search Words` by removing trailing legal forms,
   punctuation, share-class labels, and leading or trailing `The`;
 - provides a signal-focused chart with a consistently styled full-history fallback;

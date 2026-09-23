@@ -29,8 +29,8 @@ import java.util.concurrent.atomic.*
 
 class MainController(
     private val apiKey: String?, initialSymbol: String = "AAPL", initialRange: String = "3M",
-    initialDividerPosition: Double = 0.34, scannerColumns: String = "", shortMoveColumns: String = "",
-    initialTableDivider: Double = 0.60, initialSidebarVisible: Boolean = true,
+    initialDividerPosition: Double = 0.52, scannerColumns: String = "", shortMoveColumns: String = "",
+    initialTableDivider: Double = 0.60, initialChartVisible: Boolean = false,
     private val openExternal: (String) -> Unit = {}
 ) {
     private val log = LoggerFactory.getLogger(MainController::class.java)
@@ -70,8 +70,8 @@ class MainController(
         shortMoveColumns, { symbol -> profileService.load(symbol) }, ClipboardText::copy,
         stockPageOpener::open, userWatchlist.actions
     )
-    private val insightSidebar = InsightSidebar()
-    private val insightSidebarHost = InsightSidebarHost(insightSidebar, initialSidebarVisible)
+    private val chartDrawer = ChartDrawer(trendChart, initialChartVisible)
+    private val universeDialog = UniverseDialog { count -> actions.universe.text = "Pool $count" }
     private val scannerPanel: ScannerPanel = ScannerPanel(
         onOpen = ::openScannerResult,
         shortMovePanel = shortMovePanel,
@@ -111,7 +111,7 @@ class MainController(
             closing::get, status, { symbol, error -> requestStatus.formatError(symbol, error) }, log
         )
     }
-    private val initialDivider = initialDividerPosition.coerceIn(0.15, 0.75)
+    private val initialDivider = initialDividerPosition.coerceIn(0.35, 0.72)
     private val contentSplitPane = SplitPane()
     private var finnhubClient: FinnhubWebSocketClient? = null
     private val liveTicks = ConcurrentHashMap<String, Long>()
@@ -159,7 +159,7 @@ class MainController(
             savedResultQuotes = savedResultQuotes,
             resultDeduplicator = resultDeduplicator,
             marketData = marketData,
-            insightSidebar = insightSidebar,
+            presentUniverse = universeDialog::update,
             shortMovePanel = shortMovePanel,
             scannerPanel = scannerPanel,
             status = status,
@@ -221,11 +221,12 @@ class MainController(
         tradegateProvider.configure(scannerCriteria)
         euronextProvider.configure(scannerCriteria)
         val appLayers = MainViewFactory.create(
-            actions, scannerPanel, trendChart,
-            insightSidebarHost, contentSplitPane, requestStatus, initialDivider
+            actions, scannerPanel, shortMovePanel,
+            chartDrawer, contentSplitPane, requestStatus, initialDivider
         )
         WorkspaceToolbar.configure(
             appLayers, actions,
+            { universeDialog.show(actions.universe.scene?.window) },
             { loadLocalChart(currentSymbol) }, ::showScannerSettings,
             { scalableImport.chooseAndImport(actions.importTrades.scene?.window, scalableImportResults::handle) },
             { AboutDialog.show(actions.about.scene?.window) })
@@ -278,7 +279,7 @@ class MainController(
     fun scannerColumnLayout(): String = scannerPanel.savedColumnLayout()
     fun shortMoveColumnLayout(): String = shortMovePanel.savedColumnLayout()
     fun tableDividerPosition(): Double = scannerPanel.tableDividerPosition()
-    fun sidebarVisible(): Boolean = insightSidebarHost.isExpanded
+    fun chartVisible(): Boolean = chartDrawer.isExpanded
     private fun startScanner() = scanCycle.start()
 
     private fun configureProviderUniverse(symbols: List<String>) {
@@ -308,6 +309,7 @@ class MainController(
 
     private fun openShortMoveChart(symbol: String, moveEpochSeconds: Long) {
         // Starting the load clears the previous instrument, so install its focus request afterwards.
+        chartDrawer.show()
         shortMoveSelection.open(symbol)
         trendChart.showSignalFocus(moveEpochSeconds)
     }

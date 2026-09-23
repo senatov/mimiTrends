@@ -22,15 +22,15 @@ import java.nio.file.Path
 import java.util.Properties
 
 data class UiState(
-    val x: Double? = null, val y: Double? = null, val width: Double = 1120.0, val height: Double = 720.0,
-    val maximized: Boolean = false, val symbol: String = "AAPL", val range: String = "3M", val dividerPosition: Double = 0.34,
+    val x: Double? = null, val y: Double? = null, val width: Double = 820.0, val height: Double = 500.0,
+    val maximized: Boolean = false, val symbol: String = "AAPL", val range: String = "3M", val dividerPosition: Double = 0.52,
     val scannerColumns: String = "", val shortMoveColumns: String = "", val tableDividerPosition: Double = 0.60,
-    val sidebarVisible: Boolean = true
+    val chartVisible: Boolean = false
 )
 
 class UiStateService(private val path: Path = Path.of(System.getProperty("user.home"), ".mimi", "trends", "ui-state.properties")) {
     private val log = LoggerFactory.getLogger(javaClass)
-    private var normalBounds = Rectangle2D(0.0, 0.0, 1120.0, 720.0)
+    private var normalBounds = Rectangle2D(0.0, 0.0, 820.0, 500.0)
 
     fun load(): UiState {
         log.debug(LogTag.IO, "load(path={})", path)
@@ -39,12 +39,12 @@ class UiStateService(private val path: Path = Path.of(System.getProperty("user.h
             val p = Properties().also { Files.newInputStream(path).use(it::load) }
             UiState(
                 p.getProperty("x")?.toDouble(), p.getProperty("y")?.toDouble(),
-                p.getProperty("width", "1120").toDouble(), p.getProperty("height", "720").toDouble(),
+                migratedDimension(p, "width", 820.0, 880.0), migratedDimension(p, "height", 500.0, 560.0),
                 p.getProperty("maximized", "false").toBoolean(), p.getProperty("symbol", "AAPL"), p.getProperty("range", "3M"),
-                p.getProperty("dividerPosition", "0.34").toDouble().coerceIn(0.15, 0.75),
+                p.getProperty("dividerPosition", "0.52").toDouble().coerceIn(0.35, 0.72),
                 p.getProperty("scannerColumns", ""), p.getProperty("shortMoveColumns", ""),
                 migratedTableDividerPosition(p),
-                p.getProperty("sidebarVisible", "true").toBoolean()
+                p.getProperty("chartVisible", "false").toBoolean()
             )
         }.onFailure { log.error(LogTag.IO, "UI state load failed", it) }.getOrDefault(UiState())
     }
@@ -69,7 +69,7 @@ class UiStateService(private val path: Path = Path.of(System.getProperty("user.h
     fun save(
         stage: Stage, symbol: String, range: String, dividerPosition: Double,
         scannerColumns: String, shortMoveColumns: String, tableDividerPosition: Double,
-        sidebarVisible: Boolean
+        chartVisible: Boolean
     ) {
         log.debug(LogTag.IO, "save(symbol={}, range={}, maximized={}, divider={})", symbol, range, stage.isMaximized, dividerPosition)
         if (!stage.isMaximized && !stage.isFullScreen) normalBounds = Rectangle2D(stage.x, stage.y, stage.width, stage.height)
@@ -78,11 +78,12 @@ class UiStateService(private val path: Path = Path.of(System.getProperty("user.h
             setProperty("x", normalBounds.minX.toString()); setProperty("y", normalBounds.minY.toString())
             setProperty("width", normalBounds.width.toString()); setProperty("height", normalBounds.height.toString())
             setProperty("maximized", stage.isMaximized.toString()); setProperty("symbol", symbol); setProperty("range", range)
-            setProperty("dividerPosition", dividerPosition.coerceIn(0.15, 0.75).toString())
+            setProperty("dividerPosition", dividerPosition.coerceIn(0.35, 0.72).toString())
             setProperty("scannerColumns", scannerColumns); setProperty("shortMoveColumns", shortMoveColumns)
             setProperty("tableDividerPosition", tableDividerPosition.coerceIn(0.45, 0.82).toString())
             setProperty("tableDividerLayoutVersion", TABLE_DIVIDER_LAYOUT_VERSION.toString())
-            setProperty("sidebarVisible", sidebarVisible.toString())
+            setProperty("chartVisible", chartVisible.toString())
+            setProperty("workspaceLayoutVersion", WORKSPACE_LAYOUT_VERSION.toString())
         }
         Files.newOutputStream(path).use { p.store(it, "MiMiTrends UI state") }
     }
@@ -110,9 +111,16 @@ class UiStateService(private val path: Path = Path.of(System.getProperty("user.h
         return adjusted.coerceIn(0.45, 0.82)
     }
 
+    private fun migratedDimension(properties: Properties, key: String, fallback: Double, compactMaximum: Double): Double {
+        val saved = properties.getProperty(key)?.toDoubleOrNull() ?: return fallback
+        val layoutVersion = properties.getProperty("workspaceLayoutVersion")?.toIntOrNull() ?: 1
+        return if (layoutVersion < WORKSPACE_LAYOUT_VERSION) saved.coerceAtMost(compactMaximum) else saved
+    }
+
     private companion object {
         const val DEFAULT_TABLE_DIVIDER = 0.60
         const val LEGACY_DIVIDER_ADJUSTMENT = 0.03
         const val TABLE_DIVIDER_LAYOUT_VERSION = 2
+        const val WORKSPACE_LAYOUT_VERSION = 3
     }
 }

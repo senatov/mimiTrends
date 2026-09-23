@@ -1,18 +1,5 @@
 package org.senatov.mimitrends.ui
 
-import org.senatov.mimitrends.application.*
-import org.senatov.mimitrends.ui.*
-import org.senatov.mimitrends.scanner.*
-import org.senatov.mimitrends.shortmove.*
-import org.senatov.mimitrends.signals.*
-import org.senatov.mimitrends.research.*
-import org.senatov.mimitrends.market.*
-import org.senatov.mimitrends.providers.*
-import org.senatov.mimitrends.company.*
-import org.senatov.mimitrends.services.*
-import org.senatov.mimitrends.shared.*
-
-import javafx.application.Platform
 import javafx.geometry.Insets
 import javafx.geometry.Pos
 import javafx.scene.Parent
@@ -23,23 +10,22 @@ import javafx.scene.layout.HBox
 import javafx.scene.layout.Priority
 import javafx.scene.layout.StackPane
 import javafx.scene.layout.VBox
-import org.senatov.mimitrends.charts.TrendChartView
+import org.senatov.mimitrends.scanner.ScannerPanel
+import org.senatov.mimitrends.shortmove.ShortMovePanel
 
 internal object MainViewFactory {
     fun create(
         actions: WorkspaceActionButtons,
         scannerPanel: ScannerPanel,
-        trendChart: TrendChartView,
-        insightSidebar: InsightSidebarHost,
+        radarPanel: ShortMovePanel,
+        chartDrawer: ChartDrawer,
         contentSplitPane: SplitPane,
         requestStatus: RequestStatusPane,
         initialDivider: Double
     ): Parent {
-        val titleIdentity = HBox(
-            6.0,
-            Label("MiMiTrends").apply { styleClass += "app-title" },
-            Label("v${BuildInfo.version}").apply { styleClass += "app-version" }
-        ).apply { alignment = Pos.BASELINE_LEFT }
+        val titleIdentity = HBox(Label("MiMiTrends").apply { styleClass += "app-title" }).apply {
+            alignment = Pos.BASELINE_LEFT
+        }
         val titleBar = BorderPane().apply {
             styleClass += "title-toolbar"
             left = titleIdentity
@@ -47,16 +33,12 @@ internal object MainViewFactory {
         }
         contentSplitPane.apply {
             orientation = javafx.geometry.Orientation.VERTICAL
-            val chartArea = HBox(2.0, trendChart, insightSidebar).apply {
-                HBox.setHgrow(trendChart, Priority.ALWAYS)
-                minHeight = 0.0
-            }
-            items.setAll(scannerPanel, chartArea)
-            SplitPane.setResizableWithParent(scannerPanel, true)
-            SplitPane.setResizableWithParent(chartArea, true)
+            items.setAll(radarPanel, chartDrawer)
+            SplitPane.setResizableWithParent(radarPanel, true)
+            SplitPane.setResizableWithParent(chartDrawer, true)
             styleClass += "content-split-pane"
         }
-        Platform.runLater { contentSplitPane.setDividerPosition(0, initialDivider) }
+        chartDrawer.attach(contentSplitPane, initialDivider)
         SplitPaneReset.install(contentSplitPane, initialDivider)
         val content = VBox(contentSplitPane).apply {
             padding = Insets(7.0, 8.0, 8.0, 8.0)
@@ -70,8 +52,8 @@ internal object MainViewFactory {
             StackPane.setAlignment(scannerPanel.marketClosedOverlay, Pos.CENTER)
             WorkspaceShortcuts.install(
                 this, mapOf(
-                    WorkspaceShortcuts.findSignals to scannerPanel::focusSignalSearch,
-                    WorkspaceShortcuts.findMoves to scannerPanel::focusMoveSearch
+                    WorkspaceShortcuts.findSignals to radarPanel::focusSearch,
+                    WorkspaceShortcuts.findMoves to radarPanel::focusSearch
                 )
             )
         }

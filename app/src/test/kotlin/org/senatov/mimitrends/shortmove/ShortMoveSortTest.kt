@@ -22,27 +22,4 @@ class ShortMoveSortTest {
         assertEquals(listOf("CRASH", "CORRIDOR"), moves.sortedWith(ShortMoveSort.direction).map(ShortMove::symbol))
     }
 
-    @Test
-    fun `price range sorts by displayed opening price`() {
-        val moves = listOf(
-            shortMove("CHEAP", ShortMovePattern.TRADABLE_CORRIDOR, open = 20.0),
-            shortMove("EXPENSIVE", ShortMovePattern.RAPID_CRASH, open = 300.0),
-            shortMove("MIDDLE", ShortMovePattern.RAPID_CRASH, open = 100.0)
-        )
-        assertEquals(
-            listOf("CHEAP", "MIDDLE", "EXPENSIVE"),
-            moves.sortedWith(ShortMoveSort.priceRange).map(ShortMove::symbol)
-        )
-    }
-
-    @Test
-    fun `period sorts intervals by their position on the time axis`() {
-        val late = shortMove("LATE", ShortMovePattern.RAPID_CRASH, start = 300L, end = 500L)
-        val early = shortMove("EARLY", ShortMovePattern.RAPID_CRASH, start = 100L, end = 200L)
-        val middle = shortMove("MIDDLE", ShortMovePattern.RAPID_CRASH, start = 180L, end = 300L)
-        assertEquals(
-            listOf("EARLY", "MIDDLE", "LATE"),
-            listOf(late, early, middle).sortedWith(ShortMoveSort.period).map(ShortMove::symbol)
-        )
-    }
 }

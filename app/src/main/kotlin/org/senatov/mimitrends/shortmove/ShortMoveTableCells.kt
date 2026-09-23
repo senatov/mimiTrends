@@ -2,6 +2,8 @@ package org.senatov.mimitrends.shortmove
 
 import javafx.scene.control.TableCell
 import javafx.scene.control.Tooltip
+import java.time.Instant
+import java.util.Locale
 
 internal fun shortMoveAlertPriority(move: ShortMove): Int = when (move.pattern) {
     ShortMovePattern.RAPID_CRASH -> 0
@@ -9,7 +11,7 @@ internal fun shortMoveAlertPriority(move: ShortMove): Int = when (move.pattern) 
 }
 
 internal fun shortMoveDirectionLabel(move: ShortMove): String = when (move.pattern) {
-    ShortMovePattern.RAPID_CRASH -> "‼ RAPID CRASH"
+    ShortMovePattern.RAPID_CRASH -> retainedLabel(move, "‼ RAPID CRASH")
     ShortMovePattern.TRADABLE_CORRIDOR -> retainedLabel(move, "▰ CORRIDOR")
 }
 
@@ -32,52 +34,33 @@ internal class ShortMoveDirectionCell : TableCell<ShortMove, ShortMove>() {
     }
 }
 
-internal class ShortMovePercentCell : TableCell<ShortMove, Number>() {
-    override fun updateItem(item: Number?, empty: Boolean) {
-        super.updateItem(item, empty)
-        text = if (empty || item == null) null else "%+.2f%%".format(item.toDouble())
-        styleClass.removeAll("short-move-up", "short-move-down")
-        if (!empty && item != null) styleClass += if (item.toDouble() >= 0.0) "short-move-up" else "short-move-down"
-    }
-}
-
-internal class ShortMoveOpportunityCell : TableCell<ShortMove, Number>() {
-    override fun updateItem(item: Number?, empty: Boolean) {
-        super.updateItem(item, empty)
-        styleClass.removeAll(
-            "opportunity-high", "opportunity-good", "opportunity-wait",
-            "opportunity-late", "opportunity-avoid"
-        )
-        if (empty || item == null || item.toInt() < 0) {
-            text = null
-            tooltip = null
-            return
-        }
-        val value = item.toInt().coerceIn(0, 100)
-        text = "$value%"
-        styleClass += when {
-            value >= 80 -> "opportunity-high"
-            value >= 60 -> "opportunity-good"
-            value >= 40 -> "opportunity-wait"
-            value >= 20 -> "opportunity-late"
-            else -> "opportunity-avoid"
-        }
-        tooltip = tableRow?.item?.let { move ->
-            val retentionNote = if (move.isRetained) {
-                "Recently detected; no longer confirmed by the latest scan."
-            } else null
-            Tooltip(listOfNotNull(retentionNote, move.opportunityDetails.takeIf(String::isNotBlank)).joinToString("\n"))
-        }
-    }
-}
-
-internal class ShortMovePriceRangeCell : TableCell<ShortMove, ShortMove>() {
+internal class ShortMoveMovementCell : TableCell<ShortMove, ShortMove>() {
     override fun updateItem(item: ShortMove?, empty: Boolean) {
         super.updateItem(item, empty)
-        text = if (empty || item == null) null else ShortMovePricePresentation.text(item)
+        text = if (empty || item == null) null else ShortMovePresentation.movement(item)
+        tooltip = if (empty || item == null) null else Tooltip(ShortMovePresentation.details(item))
         styleClass.removeAll("short-move-up", "short-move-down")
-        if (!empty && item != null) {
-            styleClass += if (item.changePercent >= 0.0) "short-move-up" else "short-move-down"
+        if (!empty && item != null) styleClass += when (item.pattern) {
+            ShortMovePattern.RAPID_CRASH -> "short-move-down"
+            ShortMovePattern.TRADABLE_CORRIDOR -> "short-move-up"
         }
+    }
+}
+
+internal class ShortMoveAgeCell : TableCell<ShortMove, ShortMove>() {
+    override fun updateItem(item: ShortMove?, empty: Boolean) {
+        super.updateItem(item, empty)
+        text = if (empty || item == null) null else ShortMovePresentation.age(item, Instant.now().epochSecond)
+        tooltip = if (empty || item == null) null else Tooltip(
+            if (item.isRetained) "Recent alert; no longer confirmed by the latest scan."
+            else "Time since the latest confirmed event observation."
+        )
+    }
+}
+
+internal class ShortMoveCurrentPriceCell : TableCell<ShortMove, Number>() {
+    override fun updateItem(item: Number?, empty: Boolean) {
+        super.updateItem(item, empty)
+        text = if (empty || item == null) null else String.format(Locale.ROOT, "%,.2f", item.toDouble())
     }
 }

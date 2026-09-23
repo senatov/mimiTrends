@@ -1,17 +1,5 @@
 package org.senatov.mimitrends.ui
 
-import org.senatov.mimitrends.application.*
-import org.senatov.mimitrends.ui.*
-import org.senatov.mimitrends.scanner.*
-import org.senatov.mimitrends.shortmove.*
-import org.senatov.mimitrends.signals.*
-import org.senatov.mimitrends.research.*
-import org.senatov.mimitrends.market.*
-import org.senatov.mimitrends.providers.*
-import org.senatov.mimitrends.company.*
-import org.senatov.mimitrends.services.*
-import org.senatov.mimitrends.shared.*
-
 import javafx.geometry.Orientation
 import javafx.geometry.Pos
 import javafx.scene.control.Button
@@ -20,13 +8,16 @@ import javafx.scene.layout.HBox
 
 internal class WorkspaceActionButtons {
     val refresh = Button()
+    val universe = Button("Pool —").apply { styleClass += "toolbar-text-button" }
     val settings = Button()
     val importTrades = Button()
     val about = Button()
-    val all: List<Button> = listOf(refresh, settings, importTrades, about)
+    val all: List<Button> = listOf(refresh, universe, settings, importTrades, about)
 
     fun createToolbar(): HBox = HBox(
         8.0,
+        universe,
+        Separator(Orientation.VERTICAL).apply { styleClass += "toolbar-action-separator" },
         refresh, settings, importTrades,
         Separator(Orientation.VERTICAL).apply { styleClass += "toolbar-action-separator" },
         about
