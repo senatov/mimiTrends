@@ -357,14 +357,6 @@
     -fx-font-size: 14px;
 }
 
-.short-move-table .table-cell.rapid-crash-cell,
-.short-move-table .table-row-cell:selected .table-cell.rapid-crash-cell {
-    -fx-text-fill: #c62828;
-    -fx-font-weight: 400;
-    -fx-effect: null;
-    -fx-background-color: #fff4bf;
-}
-
 .scanner-table .column-header-background,
 .scanner-table .column-header,
 .scanner-table .filler {
