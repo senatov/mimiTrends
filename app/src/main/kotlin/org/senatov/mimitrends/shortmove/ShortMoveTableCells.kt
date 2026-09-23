@@ -5,21 +5,12 @@ import javafx.scene.control.Tooltip
 
 internal fun shortMoveAlertPriority(move: ShortMove): Int = when (move.pattern) {
     ShortMovePattern.RAPID_CRASH -> 0
-    ShortMovePattern.RAPID_RISE -> 1
-    else -> 2
+    ShortMovePattern.TRADABLE_CORRIDOR -> 1
 }
 
 internal fun shortMoveDirectionLabel(move: ShortMove): String = when (move.pattern) {
     ShortMovePattern.RAPID_CRASH -> "‼ RAPID CRASH"
-    ShortMovePattern.RAPID_RISE -> "‼ RAPID RISE"
-    ShortMovePattern.RECURRING_SHARP_JUMP ->
-        if (move.changePercent >= 0.0) "⚠ RECURRING UP" else "⚠ RECURRING DOWN"
-
-    ShortMovePattern.POST_DROP_STRUGGLE -> "◆ POST-DROP"
-    ShortMovePattern.CONFIRMED_EXTENDED_DROP -> "◆ CONFIRMED DROP"
-    ShortMovePattern.RECOVERY_AFTER_EXTENDED_DROP -> retainedLabel(move, "◆ DROP RECOVERY")
     ShortMovePattern.TRADABLE_CORRIDOR -> retainedLabel(move, "▰ CORRIDOR")
-    ShortMovePattern.DIRECTIONAL -> if (move.changePercent >= 0.0) "▲ UP" else "▼ DOWN"
 }
 
 private fun retainedLabel(move: ShortMove, activeLabel: String): String =
@@ -32,14 +23,10 @@ internal class ShortMoveDirectionCell : TableCell<ShortMove, ShortMove>() {
         text = if (empty) null else label
         styleClass.removeAll(
             "short-move-up", "short-move-down", "short-move-struggle",
-            "rapid-crash-cell", "rapid-rise-cell"
+            "rapid-crash-cell"
         )
         if (!empty && item != null && label != null) styleClass += when {
             item.pattern == ShortMovePattern.RAPID_CRASH -> "rapid-crash-cell"
-            item.pattern == ShortMovePattern.RAPID_RISE -> "rapid-rise-cell"
-            label.contains("RECURRING") -> "short-move-recurring-jump"
-            label.contains("POST-DROP") -> "short-move-struggle"
-            label.contains("UP") -> "short-move-up"
             else -> "short-move-down"
         }
     }

@@ -18,13 +18,7 @@ import javafx.scene.layout.HBox
 
 internal object ShortMoveCompanyGraphic {
     fun create(move: ShortMove, name: String, watchlist: InstrumentWatchlistActions): HBox {
-        val displayedName =
-            if (move.pattern in setOf(
-                    ShortMovePattern.RECURRING_SHARP_JUMP,
-                    ShortMovePattern.RAPID_CRASH,
-                    ShortMovePattern.RAPID_RISE
-                )
-            ) "⚠ $name" else name
+        val displayedName = if (move.pattern == ShortMovePattern.RAPID_CRASH) "⚠ $name" else name
         val content = HBox(5.0, Label(displayedName)).apply { alignment = Pos.CENTER_LEFT }
         val venue = MarketVenuePresentation.forInstrument(move.symbol, watchlist.liveSource(move.symbol))
         content.children += MarketVenueFlag.create(venue)

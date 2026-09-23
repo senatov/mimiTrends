@@ -149,5 +149,7 @@ class ShortMoveRefreshCoordinatorTest {
         return condition()
     }
 
-    private fun move(symbol: String) = ShortMove(symbol, 1.0, 10.0, 10.1, 0L, 60L, 2)
+    private fun move(symbol: String) = ShortMove(
+        symbol, -1.0, 10.0, 9.9, 0L, 60L, 2, ShortMovePattern.RAPID_CRASH
+    )
 }

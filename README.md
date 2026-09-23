@@ -1,41 +1,17 @@
 # MiMiTrends
 
-> **MiMiTrends is primarily an experimental, recreational mathematics project.** It began as a
-> personal response to reading books full of stock-market formulas: an attempt to turn some of those
-> ideas into a visible, testable desktop program. It is not a trading system, investment research, or
-> a promise that a statistically unusual move will continue.
-
-The implementation is original and combines the ideas below rather than reproducing one published
-strategy. The main mathematical reference shelf behind the formulas used in the program is:
-
-- Ruey S. Tsay, *Analysis of Financial Time Series* — returns, volatility, time-series behaviour,
-  regression, and statistical diagnostics;
-- Perry J. Kaufman, *Trading Systems and Methods* — momentum, trend efficiency, noise, drawdown,
-  and separating persistent movement from an isolated price jump;
-- Ernest P. Chan, *Algorithmic Trading: Winning Strategies and Their Rationale* — quantitative
-  momentum and mean-reversion ideas, signal construction, backtesting, and realistic validation;
-- David Aronson, *Evidence-Based Technical Analysis* — statistical testing of market rules,
-  data-mining bias, and the need to validate apparent patterns rather than trust chart intuition;
-- Marcos López de Prado, *Advances in Financial Machine Learning* — feature engineering,
-  walk-forward evaluation, sample dependence, probability calibration, and protection against
-  overfitting;
-- Robert Kissell, *The Science of Algorithmic Trading and Portfolio Management* — VWAP, liquidity,
-  volume profiles, transaction costs, and market-microstructure context.
-
-These references inspired the project's use of percentage and logarithmic returns, median/MAD robust
-Z-scores, relative volume, VWAP distance, regression slope and R², path efficiency, realized volatility,
-logistic probabilities, Brier scores, and walk-forward evaluation. The exact composite scores,
-thresholds, gap/reversal rules, and UI classifications are MiMiTrends-specific heuristics and should be
-treated as experiments, not formulas endorsed by the cited authors.
-
-See [Financial and statistical methods](Doc/FinancialMathReferences.md) for method-level sources and the exact
-implementation locations they support.
+> **MiMiTrends is a focused live-session radar.** Its primary job is to cover a broad liquid US and
+> European equity universe, identify stable intraday trading corridors, and surface sudden live price
+> drops. It is not a trading system, investment research, or a promise that a detected setup will be
+> profitable.
 
 <img src="./Doc/AppIcon-1024.png" alt="MiMiTrends application icon" width="128">
 
-**A local-first desktop scanner for fresh US and European market anomalies.**
+**A local-first desktop radar for liquid US and European equities.**
 
-MiMiTrends watches a configurable universe of US and European equities, detects unusual recent price activity, ranks the results, and explains why each instrument was selected. Adaptive selection drives the result set; configured thresholds are guardrails rather than a fixed checklist that leaves the table empty.
+MiMiTrends watches a rotating universe of liquid equities and publishes only two setup families:
+`TRADABLE_CORRIDOR` and `RAPID_CRASH`. The active radar intentionally avoids long-horizon trend,
+entry-quality, downside-safety, predictive-model, and walk-forward research calculations.
 
 The application is written in Kotlin/JVM and JavaFX. It is designed as a cross-platform desktop application for macOS, Windows, and Linux. **The current builds and user interface have so far been tested only on macOS.** Windows and Linux packaging is implemented, but those distributions should be treated as unverified until they receive platform-specific testing.
 
@@ -47,19 +23,8 @@ MiMiTrends is informational software. It does not place orders, provide investme
 
 <img src="./Doc/MainWindow.png" alt="MiMiTrends scanner and signal-focused chart" width="900">
 
-*Freshness is the first sortable column. Pattern rows show their watch priority as a percentage, while
-Outcome progresses from `Collecting` to a preliminary `Beta` probability and finally a validated `Model`
-probability. The workspace keeps fresh signals, actionable corridors and recoveries, the explanation
-panel, minute candles, volume, entry, current price, and EMA 9/21 plus the retrospective Trend 30 overlay
-visible together. Executed trades can be overlaid without leaving the chart.*
-
-### Positive watch
-
-<img src="./Doc/PositiveWatch.png" alt="MiMiTrends positive watch list and intraday trend chart" width="900">
-
-*Positive watch ranks downside-safety candidates separately from anomaly signals. Confirmation counts,
-entry quality, estimated safety, current-session candles, EMA 9/21, and the latest 30-candle direction
-remain visible without presenting the result as investment advice.*
+*The workspace keeps the focused corridor/crash radar, liquid-universe coverage, minute candles, volume,
+and imported broker executions visible together.*
 
 ### Scanner settings
 
@@ -167,13 +132,11 @@ The primary question is not “What did this stock do over the last year?” but
 - refreshes the first HTML page of wallstreetONLINE's performance and most-traded tables before every
   scan, merges duplicate instruments, sorts the combined discovery set by percentage performance, and
   evaluates the leading 30 resolvable equities through the same scanner as the configured watchlist;
-- detects fresh upward and downward one-minute impulses;
-- requires an exceptional price move or candle range, not volume alone;
-- confirms candidates using candle structure, relative volume, log-volume anomaly, or immediate continuation;
-- applies a configurable minimum absolute move so tiny changes in quiet stocks do not become misleading signals;
-- supplements a sparse strict result set with relaxed impulses and persistent rising trends;
-- adapts thresholds to retain the strongest defensible candidates instead of treating the configured
-  target as a mandatory quota;
+- ranks the rotating universe by recent session turnover and feed freshness so subsequent cycles spend
+  more coverage on actively traded instruments;
+- detects stable two-hour intraday corridors with repeated edge touches and bounded drift;
+- detects a close-to-close decline of at least 0.50% within four minutes as `RAPID_CRASH`, without
+  additional candle-count or one-direction path requirements;
 - displays an animated message over the toolbar during startup until the first analytical pass completes; cached snapshots do not dismiss it;
 - labels analytical data age explicitly in minutes (for example, `801 min.`);
 - ranks completed results atomically instead of changing the visible table while a scan is running;
@@ -181,12 +144,8 @@ The primary question is not “What did this stock do over the last year?” but
   `Cooling`, and decays their ranking score while always giving active signals priority;
 - rechecks published `Strong` and `Extreme` signals every minute in a separate priority task, updating
   their rows immediately and stopping when they fall below `Strong`;
-- marks a close-to-close decline of at least 0.50% within four minutes as `RAPID_CRASH` without
-  additional candle-count or one-direction path requirements, and displays its setup cell as bold red
-  text on a light-yellow background;
-- marks a close-to-close rise above 1.00% within four minutes as `RAPID_RISE` and scans that instrument
-  every minute outside the regular rotation until the rapid rise is no longer confirmed;
-- stores minute OHLCV history, company profiles, derived statistics, scan runs, and signal outcomes in SQLite;
+- displays `RAPID_CRASH` as bold red text on a light-yellow cell and rechecks it outside the normal queue;
+- stores minute OHLCV history, company profiles, compact scan runs, and accepted corridor/crash events in SQLite;
 - refreshes visible European quotes and executable bid/ask with timestamped observations from Tradegate, Euronext, Lang & Schwarz, and
   wallstreetONLINE where an instrument can be resolved safely;
 - never labels a crawled quote as fresh using its HTTP download time: the provider's own observation
@@ -332,7 +291,7 @@ These are public website integrations rather than contracted APIs and can change
 Schwarz only when their use complies with that website's terms. Failures are isolated per provider, logged without cookies or
 credentials, and do not stop the rest of the scan.
 
-### Rapid four-minute moves
+### Rapid four-minute crashes
 
 The trading-opportunities table gives the newest severe directional moves explicit priority. `RAPID_CRASH`
 compares confirmed closing prices across the available four-minute window and activates at a decline of
@@ -340,10 +299,10 @@ compares confirmed closing prices across the available four-minute window and ac
 the net crash. The setup is shown in red on a light-yellow cell to keep it distinct from ordinary downside
 diagnostics.
 
-`RAPID_RISE` uses the same close-to-close window but requires a rise strictly greater than 1.00%. Once
-detected, the instrument joins the independent one-minute priority scanner and remains there only while the
-condition is still confirmed. These fixed percentages are alert thresholds, not forecasts or trading advice;
-their significance can differ between instruments with different liquidity and normal volatility.
+Once detected, the instrument joins the independent one-minute priority scanner and remains there only
+while the crash condition is still confirmed. The fixed percentage is an alert threshold, not a forecast
+or trading advice; its significance can differ between instruments with different liquidity and normal
+volatility.
 
 ### Early three-minute momentum
 
@@ -467,41 +426,12 @@ The database stores both the target horizon and the actual elapsed time. This av
 
 This apparatus is intended for later empirical work: measuring continuation rates, evaluating thresholds, comparing signal classes, and detecting whether an apparently strong score has predictive value. The application does not yet present these records as a backtest or claim a validated trading edge.
 
-### Research dataset and walk-forward evaluation
+### Focused runtime and legacy data
 
-The analytics database also keeps an episode-sampled research dataset independent of the table publication
-decision. At most one sample per symbol, signal family, and direction is stored within fifteen minutes.
-Rejected evaluations become long-direction control samples, allowing detector outcomes to be compared with
-ordinary market observations instead of only with other published signals.
-
-Each sample captures only information available at observation time: trailing 1/3/5/10/30/60-minute
-returns, recent range and realized volatility, VWAP and session-extreme distances, relative recent volume,
-trend efficiency, detector score, anomaly metrics, source quality, and acceptance/publication state. Future
-5/10/30-minute returns and favorable/adverse excursions are written later to separate outcome records.
-
-`AnalyticsRepository.walkForwardResearchReport` evaluates historical probability estimates using earlier
-trading days only. It reports predicted and actual win rates, Brier score, average friction-adjusted return,
-and sample/day counts by signal family and direction. This is an evaluation foundation, not an assertion of
-predictive edge; model fitting and user-facing research reports can build on the same point-in-time dataset.
-The `About` dialog's `Prediction diagnostics` action shows these metrics for the 5-, 10-, and 30-minute horizons and can
-export the complete locale-independent report as CSV without blocking market-data collection.
-Its `Backfill history` action replays retained minute bars at fifteen-minute observation intervals. Each
-detector invocation receives only bars available at that historical instant; 5/10/30-minute outcomes are
-attached afterward from the same session. Backfill runs on a dedicated worker, is safe to repeat, and leaves
-the live scanner executor available.
-
-Prediction maintenance is automatic. Thirty seconds after startup, and then every six hours, a dedicated
-research worker checks historical coverage, fills missing retained history, and trains Smile regularized
-logistic models for the 5-, 10-, and 30-minute horizons. Training requires at least 300 completed samples
-across seven trading days. The latest two days are held out chronologically; a candidate becomes active only
-when its Brier score improves on the smoothed signal-family baseline and its highest-probability quartile does
-not underperform the validation population. Models are versioned in SQLite, unchanged datasets are skipped,
-and rejected candidates never replace the active model.
-
-An active model uses detector metrics available identically in historical and live paths. Its validated
-probability replaces the displayed beta probability, while historical return/excursion statistics remain
-visible. The UI identifies the logistic source, model id, and training sample count. If no validated model is
-available, the existing walk-forward beta calibration remains the automatic fallback.
+The active application no longer creates research samples, runs historical backfills, trains predictive
+models, or enriches rows with trend, safety, entry-quality, or model-calibration scores. Existing legacy
+analytics tables are left intact for database compatibility and are cleaned by the normal retention process;
+the focused radar does not read them during scanning.
 
 ### Scan rotation and source diagnostics
 

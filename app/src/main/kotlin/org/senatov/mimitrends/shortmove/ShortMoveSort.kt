@@ -33,14 +33,8 @@ internal object ShortMoveSort {
     }
 
     private fun directionPosition(move: ShortMove): Int = when (move.pattern) {
-        ShortMovePattern.RAPID_CRASH -> -5
-        ShortMovePattern.RECURRING_SHARP_JUMP -> -4
-        ShortMovePattern.CONFIRMED_EXTENDED_DROP -> -3
-        ShortMovePattern.POST_DROP_STRUGGLE -> -2
-        ShortMovePattern.DIRECTIONAL -> if (move.changePercent < 0.0) -1 else 2
-        ShortMovePattern.RAPID_RISE -> 1
-        ShortMovePattern.RECOVERY_AFTER_EXTENDED_DROP -> 3
-        ShortMovePattern.TRADABLE_CORRIDOR -> 4
+        ShortMovePattern.RAPID_CRASH -> 0
+        ShortMovePattern.TRADABLE_CORRIDOR -> 1
     }
 
     private fun periodMidpoint(move: ShortMove): Long = move.startedAtEpochSeconds +

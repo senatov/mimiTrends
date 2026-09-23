@@ -42,7 +42,7 @@ class MainController(
         repository::loadInstrumentIsin,
         { symbol -> repository.loadCompanyProfile(symbol)?.name }
     )
-    private val shortMoveLoader = ShortMoveLoader(repository, analytics, exchangeRates)
+    private val shortMoveLoader = ShortMoveLoader(repository, exchangeRates)
     private var currentSymbol = initialSymbol
     private var currentSignal: ScanResult? = null
     private val actions = WorkspaceActionButtons()
@@ -52,7 +52,6 @@ class MainController(
     private var scannerCriteria: ScannerCriteria = scannerSettings.load()
     private val currencyConverter = ScanResultCurrencyConverter(exchangeRates) { scannerCriteria }
     private val status = MainStatusController(requestStatus, trendChart, actions.refresh, log)
-    private val scannerEngine = ScannerEngine()
     private val yahooFinance = YahooFinanceClient()
     private val wallstreetOnlineClient = WallstreetOnlineMarketDataClient()
     private val wallstreetOnlineDiscovery = WallstreetOnlineDiscoveryService(wallstreetOnlineClient, yahooFinance)
@@ -71,11 +70,7 @@ class MainController(
         shortMoveColumns, { symbol -> profileService.load(symbol) }, ClipboardText::copy,
         stockPageOpener::open, userWatchlist.actions
     )
-    private val moderateCandidatePanel: ModerateCandidatePanel = ModerateCandidatePanel(
-        ::openShortMoveChart,
-        { symbol -> profileService.load(symbol) }, ClipboardText::copy, stockPageOpener::open
-    )
-    private val insightSidebar = InsightSidebar(moderateCandidatePanel)
+    private val insightSidebar = InsightSidebar()
     private val insightSidebarHost = InsightSidebarHost(insightSidebar, initialSidebarVisible)
     private val scannerPanel: ScannerPanel = ScannerPanel(
         onOpen = ::openScannerResult,
@@ -102,9 +97,6 @@ class MainController(
         Thread(task, "mimitrends-priority-csv-import").apply { isDaemon = true; priority = Thread.MAX_PRIORITY }
     }
     private val scalableImport = ScalableImportAction(analytics, importExecutor)
-    private val researchReport = ResearchReportAction(
-        analytics, repository, scannerEngine, { scannerCriteria }, status::update
-    )
     private val scalableImportResults = ScalableImportResultHandler(
         actions.importTrades, status::update, requestStatus::formatError, log,
         { loadLocalChart(currentSymbol) }
@@ -124,7 +116,7 @@ class MainController(
     private var finnhubClient: FinnhubWebSocketClient? = null
     private val liveTicks = ConcurrentHashMap<String, Long>()
     private val feedStatus = FeedStatusResolver(liveTicks)
-    private val marketData = MarketDataService(repository, analytics, scannerEngine, yahooFinance, feedStatus::status)
+    private val marketData = MarketDataService(repository, yahooFinance, feedStatus::status)
     private val scannerBatch = ScannerBatchService(marketData::loadAndEvaluate, analytics, repository, feedStatus::status)
     private val observationBus = MarketObservationBus()
     private val observationRecorder = ProviderObservationRecorder(repository, observationBus)
@@ -151,11 +143,10 @@ class MainController(
             shortMoveRefresh.request()
             Platform.runLater {
                 scannerPanel.applyPriorityResult(symbol, retained)
-                moderateCandidatePanel.setAnomalyPresent(symbol, retained != null)
             }
         },
         isUrgent = { symbol ->
-            shortMoveLoader.load(listOf(symbol)).any { it.pattern == ShortMovePattern.RAPID_RISE }
+            shortMoveLoader.load(listOf(symbol)).any { it.pattern == ShortMovePattern.RAPID_CRASH }
         }
     )
     private val scanCycle by lazy {
@@ -172,7 +163,6 @@ class MainController(
             marketData = marketData,
             insightSidebar = insightSidebar,
             shortMovePanel = shortMovePanel,
-            moderateCandidatePanel = moderateCandidatePanel,
             scannerPanel = scannerPanel,
             status = status,
             scheduler = batchScheduler,
@@ -234,7 +224,6 @@ class MainController(
         scannerPanel.setAppearance(scannerCriteria.tableAppearance)
         tradegateProvider.configure(scannerCriteria)
         euronextProvider.configure(scannerCriteria)
-        researchReport.start()
         val appLayers = MainViewFactory.create(
             actions, scannerPanel, trendChart,
             insightSidebarHost, contentSplitPane, requestStatus, initialDivider
@@ -243,7 +232,7 @@ class MainController(
             appLayers, actions,
             { loadLocalChart(currentSymbol) }, ::showScannerSettings,
             { scalableImport.chooseAndImport(actions.importTrades.scene?.window, scalableImportResults::handle) },
-            { AboutDialog.show(actions.about.scene?.window) { researchReport.show(actions.about.scene?.window) } })
+            { AboutDialog.show(actions.about.scene?.window) })
         WorkspaceAppearance.apply(appLayers, scannerCriteria.tableAppearance)
         trendChart.setDarkTheme(scannerCriteria.tableAppearance.theme == UiTheme.DARK)
         apiKey?.takeIf(String::isNotBlank)?.let(::restartFinnhubLive)
@@ -255,13 +244,8 @@ class MainController(
             )
             Platform.runLater {
                 scannerPanel.showSnapshot(saved, scannerCriteria.resultLimit)
-                moderateCandidatePanel.setAnomalySymbols(saved.map(ScanResult::symbol))
             }
             detectedToday.refreshCount()
-        }
-        batchScheduler.execute {
-            marketData.ensureCachedInstrumentMetadata()
-            if (analytics.stats().aggregateBars == 0L) marketData.backfillCachedAnalytics()
         }
         startScanner()
         Platform.runLater { loadLocalChart(currentSymbol) }
@@ -278,7 +262,6 @@ class MainController(
         if (!closing.compareAndSet(false, true)) return
         scanCycle.stop()
         chartSelection.close()
-        researchReport.close()
         observationUiBridge.close()
         try {
             shortMoveRefresh.close()
@@ -313,18 +296,17 @@ class MainController(
 
     private fun publishShortMoves(moves: List<ShortMove>) {
         if (closing.get()) return
-        priorityScanner.addUrgentSymbols(rapidRiseSymbols(moves))
+        priorityScanner.addUrgentSymbols(rapidCrashSymbols(moves))
         Platform.runLater {
             if (!closing.get()) {
                 shortMovePanel.show(moves)
-                moderateCandidatePanel.show(moves)
             }
         }
     }
 
-    private fun rapidRiseSymbols(moves: Collection<ShortMove>): List<String> = moves
+    private fun rapidCrashSymbols(moves: Collection<ShortMove>): List<String> = moves
         .asSequence()
-        .filter { it.pattern == ShortMovePattern.RAPID_RISE }
+        .filter { it.pattern == ShortMovePattern.RAPID_CRASH }
         .map(ShortMove::symbol)
         .toList()
 
@@ -338,7 +320,6 @@ class MainController(
         log.debug(LogTag.UI, "openScannerResult(symbol={}, age={})", result.symbol, result.signalAgeMinutes)
         currentSymbol = result.symbol
         currentSignal = result
-        insightSidebar.showSignal(result)
         trendChart.showSignalFocus()
         loadLocalChart(result.symbol)
     }

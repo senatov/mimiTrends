@@ -22,13 +22,12 @@ import javafx.scene.image.ImageView
 import javafx.stage.Window
 
 internal object AboutDialog {
-    fun show(owner: Window?, onPredictionDiagnostics: () -> Unit) {
-        val diagnostics = ButtonType("Prediction diagnostics")
+    fun show(owner: Window?) {
         val dialog = Dialog<ButtonType>().apply {
             owner?.let(::initOwner)
             WorkspaceDialogAppearance.apply(this, owner)
             title = "About MiMiTrends"
-            dialogPane.buttonTypes.setAll(diagnostics, ButtonType.OK)
+            dialogPane.buttonTypes.setAll(ButtonType.OK)
             dialogPane.headerText = "MiMiTrends ${BuildInfo.displayVersion}"
             javaClass.getResourceAsStream("/icons/icon_128x128.png")?.use { stream ->
                 dialogPane.graphic = ImageView(Image(stream)).apply {
@@ -87,7 +86,7 @@ internal object AboutDialog {
             dialogPane.prefHeight = 520.0
             isResizable = true
         }
-        if (dialog.showAndWait().orElse(null) == diagnostics) onPredictionDiagnostics()
+        dialog.showAndWait()
     }
 
     private fun tab(title: String, text: String) = Tab(title, TextArea(text).apply {

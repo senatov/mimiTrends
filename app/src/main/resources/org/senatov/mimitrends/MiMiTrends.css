@@ -381,58 +381,12 @@
     -fx-background-color: #fff4bf;
 }
 
-.short-move-table .table-cell.rapid-rise-cell,
-.short-move-table .table-row-cell:selected .table-cell.rapid-rise-cell {
-    -fx-text-fill: #087a3d;
-    -fx-font-weight: 800;
-    -fx-background-color: #e8f7d7;
-}
 .short-move-table .table-cell.short-move-struggle { -fx-text-fill: #8a5600; -fx-font-weight: 600; }
 .short-move-table .table-cell.short-move-recurring-jump,
 .short-move-table .table-row-cell:selected .table-cell.short-move-recurring-jump {
     -fx-text-fill: #7a1424;
     -fx-font-weight: 700;
 }
-.moderate-candidate-panel {
-    -fx-padding: 11px;
-    -fx-effect: dropshadow(gaussian, rgba(23,54,95,0.16), 11, 0.12, 0, 3);
-}
-.positive-watch-title { -fx-font-size: 14px; -fx-font-weight: 600; -fx-text-fill: #17365f; }
-.positive-watch-caption { -fx-font-size: 10px; -fx-text-fill: #64778b; -fx-padding: 0 0 4px 0; }
-.positive-watch-row {
-    -fx-background-color: rgba(232,239,247,0.82);
-    -fx-background-radius: 8px;
-    -fx-border-color: rgba(173,188,204,0.68);
-    -fx-border-radius: 8px;
-    -fx-padding: 8px 9px;
-    -fx-cursor: hand;
-    -fx-effect: dropshadow(gaussian, rgba(31,54,79,0.10), 5, 0.08, 0, 2);
-}
-.positive-watch-row:hover { -fx-background-color: rgba(217,229,242,0.96); -fx-border-color: #7890aa; }
-.positive-watch-company { -fx-font-size: 12px; -fx-font-weight: 600; -fx-text-fill: #17365f; }
-.positive-watch-confirmation {
-    -fx-font-size: 9px;
-    -fx-font-weight: 400;
-    -fx-text-fill: #708398;
-}
-.positive-watch-entry-quality {
-    -fx-font-size: 9px;
-    -fx-font-weight: 600;
-    -fx-text-fill: #8a5a12;
-}
-.positive-watch-score {
-    -fx-font-family: "SF Pro Text", "Helvetica Neue", "System";
-    -fx-font-size: 13px;
-    -fx-font-weight: 700;
-    -fx-text-fill: #ffe3a3;
-    -fx-background-color: #496f91;
-    -fx-background-radius: 999px;
-    -fx-border-color: rgba(255,218,145,0.78);
-    -fx-border-radius: 999px;
-    -fx-padding: 3px 8px;
-    -fx-effect: dropshadow(gaussian, rgba(23,54,95,0.24), 5, 0.12, 0, 2);
-}
-.positive-watch-empty { -fx-font-size: 11px; -fx-text-fill: #758596; -fx-padding: 12px 4px; }
 .insight-sidebar {
     -fx-background-color: rgba(248, 251, 254, 0.92);
     -fx-border-color: rgba(118, 142, 166, 0.42);

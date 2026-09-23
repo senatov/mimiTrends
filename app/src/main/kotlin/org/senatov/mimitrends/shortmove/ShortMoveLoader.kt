@@ -13,23 +13,16 @@ import org.senatov.mimitrends.services.*
 import org.senatov.mimitrends.shared.*
 
 import org.senatov.mimitrends.db.MarketRepository
-import org.senatov.mimitrends.db.AnalyticsRepository
 import org.senatov.mimitrends.model.MinuteBar
 import org.senatov.mimitrends.model.ProviderMinuteBar
-import org.senatov.mimitrends.scanner.ResearchFeatureExtractor
 
 internal class ShortMoveLoader(
     private val repository: MarketRepository,
-    private val analytics: AnalyticsRepository,
     private val exchangeRates: ExchangeRateService
 ) {
     fun load(symbols: Collection<String>, nowEpochSeconds: Long = java.time.Instant.now().epochSecond): List<ShortMove> {
-        val safetyCalibration = mapOf(
-            true to analytics.downsideSafetyCalibration(european = true),
-            false to analytics.downsideSafetyCalibration(european = false)
-        )
         val bars = symbols.associateWith { symbol ->
-            val from = nowEpochSeconds - PATTERN_LOOKBACK_DAYS * 86_400L
+            val from = nowEpochSeconds - RADAR_LOOKBACK_HOURS * 3_600L
             ShortMoveBarComposer.compose(
                 repository.loadMinuteBars(symbol, from).map { exchangeRates.convertBar(symbol, it) },
                 repository.loadProviderMinuteBars(symbol, from).map { observation ->
@@ -38,113 +31,15 @@ internal class ShortMoveLoader(
                 nowEpochSeconds
             )
         }
-        val ranked = ShortMoveDetector.rank(bars, nowEpochSeconds, Int.MAX_VALUE).map { move ->
-            val aggregatePrices = analytics.loadAggregatedBars(
-                move.symbol, TREND_RESOLUTION_MINUTES, nowEpochSeconds - TREND_LOOKBACK_DAYS * 86_400L
-            ).map { TrendPrice(it.bucketEpochSeconds, it.close) }
-            val recentPrices = bars[move.symbol].orEmpty().map { TrendPrice(it.minuteEpochSeconds, it.close) }
-            // Aggregates retain the instrument's source currency while recent bars may be converted for display.
-            // Never splice both price levels into one return series; fall back to recent bars only when aggregates
-            // do not yet cover enough distinct sessions.
-            val trendPrices = if (aggregatePrices.distinctBy { it.epochSeconds / 86_400L }.size >= 4) {
-                aggregatePrices
-            } else recentPrices
-            val trend = MultiHorizonTrendModel.assess(trendPrices)
-            val features = ResearchFeatureExtractor.extract(bars[move.symbol].orEmpty())
-            val quote = repository.loadLatestProviderQuote(move.symbol, (nowEpochSeconds - 120L) * 1_000L)
-            val entry = features?.let { extracted ->
-                EntryQualityModel.assess(
-                    EntryQualityInput(
-                        price = move.close,
-                        bid = quote?.bid ?: Double.NaN,
-                        ask = quote?.ask ?: Double.NaN,
-                        return1mPercent = extracted.return1mPercent,
-                        return3mPercent = extracted.return3mPercent,
-                        return5mPercent = extracted.return5mPercent,
-                        volatility30mPercent = extracted.realizedVolatility30m,
-                        vwapDistancePercent = extracted.vwapDistancePercent,
-                        sessionHighDistancePercent = extracted.sessionHighDistancePercent
-                    )
-                )
-            }
-            val safety = if (features != null && entry != null) ShortTermSafetyModel.assess(
-                move.symbol, bars[move.symbol].orEmpty(), features, entry, trend?.score, nowEpochSeconds,
-                safetyCalibration.getValue(move.symbol.contains('.'))
-            ) else null
-            val opportunity = opportunity(move, entry?.score, entry?.cooldownMinutes, safety?.score)
-            move.copy(
-                trendScore = trend?.score,
-                trendConfidence = trend?.confidence ?: 0,
-                trendLabel = trend?.label.orEmpty(),
-                trendDetails = trend?.details.orEmpty(),
-                entryQualityScore = entry?.score ?: -1,
-                entryQualityConfidence = entry?.confidence ?: 0,
-                entryQualityLabel = entry?.label ?: "Unavailable",
-                entryCooldownMinutes = entry?.cooldownMinutes ?: 0,
-                entryQualityDetails = entry?.details.orEmpty(),
-                safetyScore = safety?.score ?: -1,
-                safetyConfidence = safety?.confidence ?: 0,
-                safetyLabel = safety?.label ?: "Unavailable",
-                safetyDetails = safety?.details.orEmpty(),
-                opportunityScore = opportunity,
-                opportunityDetails = listOf(move.opportunityDetails, entry?.details, safety?.details)
-                    .filterNotNull().filter(String::isNotBlank).joinToString("\n")
-            )
-        }
+        val ranked = ShortMoveDetector.rank(bars, nowEpochSeconds, Int.MAX_VALUE)
         val companyName = { symbol: String -> repository.loadCompanyProfile(symbol)?.name }
-        val opportunities = ShortMoveCompanyRanking.distinct(
-            ranked.filter { it.opportunityScore >= 0 }.sortedByDescending(ShortMove::opportunityScore),
-            MAX_OPPORTUNITIES,
-            companyName
-        )
-        val recent = ShortMoveCompanyRanking.distinct(ranked, MAX_MOVES, companyName)
-        val moderate = ShortMoveCompanyRanking.distinct(
-            ModeratePositiveCandidateSelector.select(ranked), MAX_MODERATE_CANDIDATES, companyName
-        )
-        return (opportunities + recent + moderate).distinctBy(ShortMove::symbol)
+        return ShortMoveCompanyRanking.distinct(ranked, MAX_RADAR_RESULTS, companyName)
     }
-
-    private fun opportunity(move: ShortMove, entry: Int?, cooldownMinutes: Int?, safety: Int?): Int {
-        val base = when (move.pattern) {
-            ShortMovePattern.TRADABLE_CORRIDOR -> move.opportunityScore
-            ShortMovePattern.RECOVERY_AFTER_EXTENDED_DROP ->
-                listOfNotNull(entry?.takeIf { it >= 0 }, safety?.takeIf { it >= 0 }).averageOrNull()?.toInt() ?: 45
-
-            else -> -1
-        }
-        if (base < 0) return -1
-        return if ((cooldownMinutes ?: 0) > 0) base.coerceAtMost(39) else base.coerceIn(0, 100)
-    }
-
-    private fun List<Int>.averageOrNull(): Double? = if (isEmpty()) null else average()
 
     private companion object {
-        const val MAX_MOVES = 10
-        const val MAX_OPPORTUNITIES = 12
-        const val MAX_MODERATE_CANDIDATES = 6
-        const val PATTERN_LOOKBACK_DAYS = 30L
-        const val TREND_LOOKBACK_DAYS = 370L
-        const val TREND_RESOLUTION_MINUTES = 60
+        const val MAX_RADAR_RESULTS = 24
+        const val RADAR_LOOKBACK_HOURS = 12L
     }
-}
-
-internal object ModeratePositiveCandidateSelector {
-    fun select(ranked: List<ShortMove>): List<ShortMove> = ranked.filter { move ->
-        move.pattern == ShortMovePattern.DIRECTIONAL &&
-                move.changePercent in MIN_CURRENT_MOVE_PERCENT..MAX_CURRENT_MOVE_PERCENT &&
-                move.barCount >= MIN_BARS &&
-                move.safetyScore >= MIN_SAFETY_SCORE && move.safetyConfidence >= MIN_SAFETY_CONFIDENCE &&
-                move.entryQualityScore >= MIN_ENTRY_QUALITY && move.entryCooldownMinutes == 0
-    }.sortedWith(compareByDescending<ShortMove> { it.safetyScore }.thenByDescending { it.safetyConfidence })
-
-    fun positivityPercent(move: ShortMove): Int = move.safetyScore.coerceIn(0, 100)
-
-    private const val MIN_CURRENT_MOVE_PERCENT = -0.80
-    private const val MAX_CURRENT_MOVE_PERCENT = 1.75
-    private const val MIN_BARS = 3
-    private const val MIN_SAFETY_SCORE = 56
-    private const val MIN_SAFETY_CONFIDENCE = 50
-    private const val MIN_ENTRY_QUALITY = 48
 }
 
 internal object ShortMoveCompanyRanking {

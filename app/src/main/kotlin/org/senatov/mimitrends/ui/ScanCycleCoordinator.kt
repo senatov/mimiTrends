@@ -34,7 +34,6 @@ internal class ScanCycleCoordinator(
     private val marketData: MarketDataService,
     private val insightSidebar: InsightSidebar,
     private val shortMovePanel: ShortMovePanel,
-    private val moderateCandidatePanel: ModerateCandidatePanel,
     private val scannerPanel: ScannerPanel,
     private val status: MainStatusController,
     private val scheduler: ScheduledExecutorService,
@@ -85,7 +84,6 @@ internal class ScanCycleCoordinator(
         analytics.recordUniverseSelection(universe.ranks, universe.discovered)
         Platform.runLater {
             insightSidebar.showUniverse(universe)
-            moderateCandidatePanel.showBuildingContext(selectedSymbols.size)
         }
         val nowMillis = System.currentTimeMillis()
         val symbols = planner.order(selectedSymbols.filter { symbol ->
@@ -111,7 +109,7 @@ internal class ScanCycleCoordinator(
             watchlistSymbols()
         ) ?: return
         val active = resultDeduplicator.deduplicate(batch.active)
-        val shortMoves = updateScanState(symbols, active)
+        val shortMoves = updateScanState(symbols, active, batch.coverage)
         val displayed = recentEvents.merge(active, System.currentTimeMillis(), criteria.resultLimit)
         replaceProviderSymbols(displayed)
         priorityScanner.replaceCandidates(active)
@@ -130,14 +128,18 @@ internal class ScanCycleCoordinator(
 
     private fun beginVisibleScan(symbols: List<String>, universeSize: Int) = Platform.runLater {
         scannerPanel.beginScan(1, 1, symbols)
-        status.update("Scanning ${symbols.size}/$universeSize eligible symbols · reversals and corridors")
+        status.update("Scanning ${symbols.size}/$universeSize liquid symbols · corridors and rapid crashes")
     }
 
-    private fun updateScanState(symbols: List<String>, active: List<ScanResult>): List<ShortMove> {
-        dynamicUniverse.record(active)
+    private fun updateScanState(
+        symbols: List<String>,
+        active: List<ScanResult>,
+        coverage: List<ScanResult>
+    ): List<ShortMove> {
+        dynamicUniverse.record(coverage)
         planner.replacePriority(active.map(ScanResult::symbol))
         val shortMoves = shortMoveLoader.load(symbols)
-        priorityScanner.addUrgentSymbols(shortMoves.rapidRiseSymbols())
+        priorityScanner.addUrgentSymbols(shortMoves.rapidCrashSymbols())
         return shortMoves
     }
 
@@ -172,7 +174,6 @@ internal class ScanCycleCoordinator(
             scannerPanel.beginScan(1, 1, emptyList())
             saved.forEach(scannerPanel::update)
             scannerPanel.completeScan(criteria.resultLimit)
-            moderateCandidatePanel.setAnomalySymbols(saved.map(ScanResult::symbol))
             scannerPanel.showCountdown(delaySeconds)
             scannerPanel.showMarketClosed(
                 saved.size, persisted.isNotEmpty(), resumeText, localZoneName, marketHours, brokerHours
@@ -212,8 +213,6 @@ internal class ScanCycleCoordinator(
         Platform.runLater {
             if (activeGeneration != generation.get()) return@runLater
             shortMovePanel.show(shortMoves)
-            moderateCandidatePanel.show(shortMoves)
-            moderateCandidatePanel.setAnomalySymbols(displayed.map(ScanResult::symbol))
             if (active.isEmpty() && errors.size == symbols.size && symbols.isNotEmpty()) {
                 scannerPanel.abortScan()
                 status.update("Yahoo scan produced no data; previous table retained", true, errors.joinToString("\n"))
@@ -222,17 +221,17 @@ internal class ScanCycleCoordinator(
             displayed.forEach(scannerPanel::update)
             scannerPanel.completeScan(resultLimit)
             scannerPanel.setDetectedTodayCount(detectedCount)
-            val marketState = "${batch.strictCount.coerceAtMost(active.size)} strict impulses + ${batch.adaptiveCount} adaptive"
+            val marketState = "${active.size} live corridor/crash setups"
             status.update(
                 if (active.isEmpty()) "No current candidates · $diagnostics · next in ${nextDelaySeconds}s"
-                else "Hybrid scan complete · $marketState · $diagnostics · next in ${nextDelaySeconds}s"
+                else "Focused scan complete · $marketState · $diagnostics · next in ${nextDelaySeconds}s"
             )
             scannerPanel.showCountdown(nextDelaySeconds)
         }
     }
 }
 
-private fun Collection<ShortMove>.rapidRiseSymbols(): List<String> = asSequence()
-    .filter { it.pattern == ShortMovePattern.RAPID_RISE }
+private fun Collection<ShortMove>.rapidCrashSymbols(): List<String> = asSequence()
+    .filter { it.pattern == ShortMovePattern.RAPID_CRASH }
     .map(ShortMove::symbol)
     .toList()

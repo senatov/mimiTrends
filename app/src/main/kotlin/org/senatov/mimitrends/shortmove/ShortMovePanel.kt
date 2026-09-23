@@ -113,12 +113,7 @@ class ShortMovePanel(
                         graphic = if (empty || item == null || tableRow?.item == null) null else
                             ShortMoveCompanyGraphic.create(tableRow.item, item, watchlist)
                         styleClass.remove("short-move-recurring-jump")
-                        if (!empty && tableRow?.item?.pattern in setOf(
-                                ShortMovePattern.RECURRING_SHARP_JUMP,
-                                ShortMovePattern.RAPID_CRASH,
-                                ShortMovePattern.RAPID_RISE
-                            )
-                        ) {
+                        if (!empty && tableRow?.item?.pattern == ShortMovePattern.RAPID_CRASH) {
                             styleClass += "short-move-recurring-jump"
                         }
                     }
@@ -264,14 +259,12 @@ class ShortMovePanel(
     internal fun show(moves: Collection<ShortMove>, nowEpochSeconds: Long = Instant.now().epochSecond) {
         val selected = table.selectionModel.selectedItem?.identity()
         val current = moves.asSequence().filter { move ->
-            move.isActionableOpportunity() || move.pattern == ShortMovePattern.RAPID_CRASH ||
-                    move.pattern == ShortMovePattern.RAPID_RISE
+            move.isActionableOpportunity() || move.pattern == ShortMovePattern.RAPID_CRASH
         }.sortedWith(
             compareBy<ShortMove>(::shortMoveAlertPriority).thenByDescending(ShortMove::opportunityScore)
         ).take(MAX_VISIBLE_MOVES).toList()
         val displayed = eventRetainer.merge(current, nowEpochSeconds).filter { move ->
-            move.isActionableOpportunity() || move.pattern == ShortMovePattern.RAPID_CRASH ||
-                    move.pattern == ShortMovePattern.RAPID_RISE
+            move.isActionableOpportunity() || move.pattern == ShortMovePattern.RAPID_CRASH
         }
         rows.setAll(displayed)
         selected?.let { identity ->

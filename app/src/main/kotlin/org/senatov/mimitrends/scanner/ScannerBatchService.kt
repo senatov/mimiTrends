@@ -24,7 +24,8 @@ internal data class ScannerBatchResult(
     val errors: List<String>,
     val sourceCoverage: Map<String, Int>,
     val oldestDataAgeSeconds: Long?,
-    val reusedAnalyses: Int = 0
+    val reusedAnalyses: Int = 0,
+    val coverage: List<ScanResult> = emptyList()
 )
 
 internal class ScannerBatchService(
@@ -50,6 +51,7 @@ internal class ScannerBatchService(
         var oldestDataAgeSeconds: Long? = null
         var reusedAnalyses = 0
         val monitored = linkedMapOf<String, ScanResult>()
+        val coverage = mutableListOf<ScanResult>()
         val nowEpochSeconds = java.time.Instant.now().epochSecond
         symbols.forEachIndexed { index, symbol ->
             if (!isCurrent()) {
@@ -72,19 +74,17 @@ internal class ScannerBatchService(
                     evaluation.context?.let(contexts::add)
                     val accepted = evaluation.primary ?: evaluation.fallback.firstNotNullOfOrNull { it }
                     ?: evaluation.longTerm ?: evaluation.context
+                    evaluation.monitored?.let(coverage::add)
                     if (symbol in alwaysInclude) (accepted ?: evaluation.monitored)?.let { monitored[symbol] = it }
-                    analytics.recordScanCandidate(
-                        runId, symbol, accepted,
-                        if (accepted == null) evaluation.rejectionReason ?: "NO_CURRENT_SIGNAL" else null,
-                        accepted?.dataStatus ?: fallbackStatus(symbol), evaluation.researchFeatures
-                    )
+                    if (accepted != null) {
+                        analytics.recordScanCandidate(
+                            runId, symbol, accepted, null,
+                            accepted.dataStatus.ifBlank { fallbackStatus(symbol) }
+                        )
+                    }
                 }
                 .onFailure { error ->
                     errors += "$symbol: ${error.message ?: error.javaClass.simpleName}"
-                    analytics.recordScanCandidate(
-                        runId, symbol, null,
-                        "ERROR: ${error.message ?: error.javaClass.simpleName}", "UNAVAILABLE"
-                    )
                 }
             onProgress(index + 1, symbol)
         }
@@ -93,23 +93,19 @@ internal class ScannerBatchService(
             analytics.abortScan(runId)
             return null
         }
-        val calibratedStrict = strict.map(analytics::withCalibration)
-        val calibratedFallbacks = fallbackLevels.map { level -> level.map(analytics::withCalibration) }
-        val calibratedLongTerm = longTerm.map(analytics::withCalibration)
-        val calibratedContexts = contexts.map(analytics::withCalibration)
         val selection = AdaptiveResultSelector.select(
-            calibratedStrict, calibratedFallbacks, criteria.minimumTableResults, criteria.resultLimit,
-            calibratedLongTerm, calibratedContexts
+            strict, fallbackLevels, criteria.minimumTableResults, criteria.resultLimit,
+            longTerm, contexts
         )
         analytics.completeScan(runId, selection.results.map(ScanResult::symbol), errors.size)
-        val strictSymbols = calibratedStrict.mapTo(hashSetOf(), ScanResult::symbol)
+        val strictSymbols = strict.mapTo(hashSetOf(), ScanResult::symbol)
         val qualifiedStrictCount = selection.results.count { it.symbol in strictSymbols }
         val results = (selection.results + monitored.values.filterNot { monitoredResult ->
             selection.results.any { it.symbol == monitoredResult.symbol }
         }).distinctBy(ScanResult::symbol)
         return ScannerBatchResult(
             results, qualifiedStrictCount, selection.adaptiveCount, errors,
-            sourceCoverage.toMap(), oldestDataAgeSeconds, reusedAnalyses
+            sourceCoverage.toMap(), oldestDataAgeSeconds, reusedAnalyses, coverage
         )
     }
 }

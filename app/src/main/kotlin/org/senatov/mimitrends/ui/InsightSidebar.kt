@@ -14,38 +14,18 @@ import org.senatov.mimitrends.shared.*
 
 import javafx.scene.control.Tab
 import javafx.scene.control.TabPane
-import org.senatov.mimitrends.model.ScanResult
 
-internal class InsightSidebar(
-    positiveWatch: ModerateCandidatePanel
-) : TabPane() {
-    private val inspector = SignalInspectorPanel()
+internal class InsightSidebar : TabPane() {
     private val universe = UniversePanel()
-    private val positiveWatchTab = Tab().apply {
-        isClosable = false
-        content = positiveWatch
-    }
 
     init {
-        tabs.setAll(
-            positiveWatchTab,
-            Tab("Signal", inspector),
-            Tab("Universe", universe)
-        )
+        tabs.setAll(Tab("Liquid universe", universe))
         tabs.forEach { it.isClosable = false }
         tabClosingPolicy = TabClosingPolicy.UNAVAILABLE
         minWidth = 310.0
         prefWidth = 330.0
         maxWidth = 390.0
         styleClass += "insight-sidebar"
-        positiveWatch.setCountListener { count ->
-            positiveWatchTab.text = "Positive watch ($count)"
-        }
-    }
-
-    fun showSignal(result: ScanResult) {
-        inspector.show(result)
-        selectionModel.select(1)
     }
 
     fun showUniverse(selection: DynamicUniverseSelection) = universe.show(selection)

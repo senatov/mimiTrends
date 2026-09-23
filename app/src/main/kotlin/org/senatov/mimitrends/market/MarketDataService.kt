@@ -12,87 +12,25 @@ import org.senatov.mimitrends.company.*
 import org.senatov.mimitrends.services.*
 import org.senatov.mimitrends.shared.*
 
-import org.senatov.mimitrends.db.AnalyticsRepository
-import org.senatov.mimitrends.db.CorporateAction
-import org.senatov.mimitrends.db.InstrumentMetadata
 import org.senatov.mimitrends.db.MarketRepository
 import org.senatov.mimitrends.log.LogTag
 import org.senatov.mimitrends.marketdata.YahooFinanceClient
 import org.senatov.mimitrends.model.CompanyProfile
-import org.senatov.mimitrends.model.MarketTimeZone
 import org.senatov.mimitrends.model.MarketDataSource
 import org.senatov.mimitrends.model.MinuteBar
 import org.senatov.mimitrends.model.ResearchFeatures
 import org.senatov.mimitrends.model.ScanResult
 import org.senatov.mimitrends.model.ScannerCriteria
-import org.senatov.mimitrends.scanner.ResearchFeatureExtractor
-import org.senatov.mimitrends.scanner.ScannerEngine
 import org.slf4j.LoggerFactory
 
 internal class MarketDataService(
     private val repository: MarketRepository,
-    private val analytics: AnalyticsRepository,
-    private val scannerEngine: ScannerEngine,
     private val yahooFinance: YahooFinanceClient,
     private val dataStatus: (String) -> String
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
-    private val analysisCache = MarketAnalysisCache()
 
-    fun backfillCachedAnalytics() {
-        val from = java.time.Instant.now().epochSecond - 90 * 86_400L
-        val symbols = repository.listSymbols()
-        log.info(LogTag.DB, "analytics backfill started symbols={}", symbols.size)
-        symbols.forEach { symbol ->
-            runCatching {
-                val bars = repository.loadMinuteBars(symbol, from)
-                if (bars.isNotEmpty()) {
-                    repository.loadCompanyProfile(symbol)?.let { profile ->
-                        analytics.upsertInstrument(
-                            InstrumentMetadata(
-                                symbol, profile.name, profile.exchange, currency(symbol), MarketTimeZone.forSymbol(symbol).id
-                            )
-                        )
-                    }
-                    analytics.refreshDerived(symbol, bars, "SQLITE_BACKFILL")
-                    analytics.recordDataQuality(symbol, "SQLITE_BACKFILL", "CACHE", bars.last().minuteEpochSeconds, bars.size)
-                }
-            }.onFailure { error -> log.warn(LogTag.DB, "analytics backfill failed symbol={}", symbol, error) }
-        }
-        log.info(LogTag.DB, "analytics backfill completed symbols={}", symbols.size)
-    }
-
-    fun closedMarketSnapshot(symbols: List<String>, criteria: ScannerCriteria): List<ScanResult> {
-        val now = java.time.Instant.now().epochSecond
-        return symbols.mapNotNull { symbol ->
-            runCatching {
-                val bars = repository.loadMinuteBars(symbol, now - 30 * 86_400L)
-                val result = scannerEngine.evaluate(symbol, bars, criteria)
-                    ?: scannerEngine.evaluateFallback(symbol, bars, criteria)
-                    ?: return@runCatching null
-                val age = ((now - result.updatedAtMillis / 1_000L) / 60L).toInt().coerceAtLeast(1)
-                result.copy(
-                    signalAgeMinutes = age, dataStatus = "CLOSED CACHE",
-                    signalWindowLabel = "${result.signalWindowLabel} saved"
-                )
-            }.getOrNull()
-        }.sortedByDescending(ScanResult::anomalyScore).take(criteria.resultLimit)
-    }
-
-    fun ensureCachedInstrumentMetadata() {
-        repository.listSymbols().forEach { symbol ->
-            val profile = repository.loadCompanyProfile(symbol)
-            analytics.upsertInstrument(
-                InstrumentMetadata(
-                    symbol = symbol,
-                    name = profile?.name ?: symbol,
-                    exchange = profile?.exchange ?: if (symbol.contains('.')) "EUROPE" else "US",
-                    currency = currency(symbol),
-                    timezone = MarketTimeZone.forSymbol(symbol).id,
-                    aliases = symbol.substringBefore('.').takeIf { it != symbol }
-                ))
-        }
-    }
+    fun closedMarketSnapshot(symbols: List<String>, criteria: ScannerCriteria): List<ScanResult> = emptyList()
 
     fun loadAndEvaluate(symbol: String, criteria: ScannerCriteria): ScanEvaluation {
         val now = java.time.Instant.now().epochSecond
@@ -101,8 +39,6 @@ internal class MarketDataService(
         val needsBootstrap = cached.map { it.minuteEpochSeconds / 86_400L }.distinct().size < 2
         val localFresh = !needsBootstrap && latestLocal != null && latestLocal >= now - criteria.scanIntervalSeconds
         var source = MarketDataSource.SQLITE
-        var metadata: InstrumentMetadata? = null
-        var corporateActions = emptyList<CorporateAction>()
         val bars = if (localFresh) cached else {
             source = MarketDataSource.YAHOO
             val incrementalAfter = if (needsBootstrap) null else latestLocal?.takeIf { it >= now - 7 * 86_400 }
@@ -115,35 +51,15 @@ internal class MarketDataService(
                     oldProfile?.logoUrl, oldProfile?.logoBytes, System.currentTimeMillis()
                 )
             )
-            metadata = InstrumentMetadata(
-                symbol, series.companyName, series.exchange,
-                series.currency.ifBlank { currency(symbol) }, MarketTimeZone.forSymbol(symbol).id
-            )
-            corporateActions = series.events.map { event ->
-                CorporateAction(
-                    symbol, event.type, event.epochSeconds, event.ratio, event.amount, event.currency, "YAHOO"
-                )
-            }
             repository.loadMinuteBars(symbol, now - 30 * 86_400)
         }
         val analysisInput = currentAnalysisBars(bars, source, now)
-        if (source == MarketDataSource.SQLITE) repository.loadCompanyProfile(symbol)?.let { profile ->
-            metadata = InstrumentMetadata(
-                symbol, profile.name, profile.exchange,
-                currency(symbol), MarketTimeZone.forSymbol(symbol).id
-            )
-        }
         val declaredStatus = dataStatus(symbol)
         if (declaredStatus == "LIVE") source = MarketDataSource.FINNHUB
         val merged = mergeProviderTail(symbol, analysisInput, source, now)
         val effectiveStatus = if (merged.latestQuality == org.senatov.mimitrends.model.MarketObservationQuality.QUOTE_SNAPSHOT)
             merged.latestSource.name else declaredStatus
         val monitored = monitoredResult(symbol, merged, effectiveStatus, now)
-        analytics.recordMarketEvaluation(
-            metadata, corporateActions, symbol, merged.historySource.name,
-            effectiveStatus, merged.historyBars, merged.latestEpochSeconds, merged.latestSource.name,
-            merged.latestQuality
-        )
         if (!OpenMarketDataFreshness.isUsable(merged.latestAnalysisEpochSeconds, now)) {
             log.debug(
                 LogTag.API, "open-market data rejected as stale symbol={} latest={} now={}",
@@ -164,30 +80,16 @@ internal class MarketDataService(
                 latestDataEpochSeconds = merged.latestAnalysisEpochSeconds, monitored = monitored
             )
         }
-        analysisCache.reuse(symbol, merged.analysisBars, criteria, now * 1_000L)?.let { return it }
-        val researchFeatures = ResearchFeatureExtractor.extract(merged.analysisBars)
-        val prepare: (ScanResult) -> ScanResult = { result ->
-            result.forPresentation(merged, effectiveStatus, now)
-                .withRecentDynamics(merged.analysisBars)
-                .withExecutableQuote(now)
-                .withEntryQuality(researchFeatures)
-        }
-        val primary = scannerEngine.evaluate(symbol, merged.analysisBars, criteria)?.let(prepare)
-        val fallback = if (primary != null) emptyList() else RELAXATION_LEVELS.map { factor ->
-            scannerEngine.evaluateFallback(symbol, merged.analysisBars, criteria, factor)?.let(prepare)
-        }
-        val longTerm = scannerEngine.evaluateLongTerm(symbol, merged.analysisBars, criteria)?.let(prepare)
-        val context = scannerEngine.evaluateContext(symbol, merged.analysisBars, criteria)?.let(prepare)
-        val rejectionReason = if (primary == null && fallback.none { it != null } && longTerm == null && context == null) {
-            scannerEngine.rejectionReason(merged.analysisBars)
-        } else null
+        val move = ShortMoveDetector.rank(mapOf(symbol to merged.analysisBars), now, limit = 1).firstOrNull()
+        val primary = move?.toScanResult(merged.analysisBars, effectiveStatus, now)
         return ScanEvaluation(
-            primary, fallback, rejectionReason, longTerm,
-            researchFeatures, merged.latestSource.name,
-            merged.latestAnalysisEpochSeconds, context, monitored = monitored
-        ).also {
-            analysisCache.record(symbol, merged.analysisBars, criteria, it)
-        }
+            primary = primary,
+            fallback = emptyList(),
+            rejectionReason = if (primary == null) "NO_CORRIDOR_OR_RAPID_CRASH" else null,
+            sourceStatus = merged.latestSource.name,
+            latestDataEpochSeconds = merged.latestAnalysisEpochSeconds,
+            monitored = monitored
+        )
     }
 
     private fun monitoredResult(
@@ -199,7 +101,7 @@ internal class MarketDataService(
         val bars = snapshot.analysisBars.sortedBy(MinuteBar::minuteEpochSeconds)
         val latest = bars.lastOrNull() ?: return null
         val anchor = bars.lastOrNull { it.minuteEpochSeconds <= latest.minuteEpochSeconds - 10 * 60L } ?: bars.first()
-        val recent = bars.filter { it.minuteEpochSeconds >= latest.minuteEpochSeconds - 24 * 3_600L }
+        val recent = bars.filter { it.minuteEpochSeconds >= latest.minuteEpochSeconds - SESSION_ACTIVITY_HOURS * 3_600L }
         val result = ScanResult(
             symbol = symbol,
             price = snapshot.latestObservation?.bar?.close ?: latest.close,
@@ -228,13 +130,48 @@ internal class MarketDataService(
 
     fun loadPriorityResult(symbol: String, criteria: ScannerCriteria): ScanResult? {
         if (!org.senatov.mimitrends.scanner.MarketCalendar.isOpen(symbol)) return null
-        analysisCache.invalidate(symbol)
         val priorityCriteria = criteria.copy(
             // A user-initiated selection is an explicit refresh, not a cache read.
             scanIntervalSeconds = 0
         )
         val evaluation = loadAndEvaluate(symbol, priorityCriteria)
-        return evaluation.primary ?: evaluation.fallback.firstNotNullOfOrNull { it } ?: evaluation.longTerm
+        return evaluation.primary
+    }
+
+    private fun ShortMove.toScanResult(
+        bars: List<MinuteBar>,
+        status: String,
+        nowEpochSeconds: Long
+    ): ScanResult {
+        val recent = bars.filter { it.minuteEpochSeconds >= nowEpochSeconds - SESSION_ACTIVITY_HOURS * 3_600L }
+        val ageMinutes = ((nowEpochSeconds - endedAtEpochSeconds).coerceAtLeast(0L) / 60L).toInt()
+        val score = when (pattern) {
+            ShortMovePattern.RAPID_CRASH -> 100.0
+            ShortMovePattern.TRADABLE_CORRIDOR -> opportunityScore.coerceAtLeast(0).toDouble()
+        }
+        return ScanResult(
+            symbol = symbol,
+            price = close,
+            anomalyScore = score,
+            priceAnomaly = Double.NaN,
+            volumeAnomaly = Double.NaN,
+            rangeAnomaly = Double.NaN,
+            relativeVolume = Double.NaN,
+            candleBodyRatio = 0.0,
+            windowChangePercent = changePercent,
+            windowVolume = recent.takeLast(barCount).sumOf(MinuteBar::volume),
+            sessionVolume = recent.sumOf(MinuteBar::volume),
+            sessionTurnover = recent.sumOf { it.close * it.volume },
+            signalAgeMinutes = ageMinutes,
+            signalSource = if (pattern == ShortMovePattern.RAPID_CRASH) "Rapid crash" else "Tradable corridor",
+            updatedAtMillis = endedAtEpochSeconds * 1_000L,
+            dataStatus = status,
+            signalWindowLabel = if (pattern == ShortMovePattern.RAPID_CRASH) "4m" else "120m corridor",
+            signalPrice = open,
+            signalEpochMillis = eventEpochSeconds * 1_000L,
+            analysisUpdatedAtMillis = endedAtEpochSeconds * 1_000L,
+            scanEvaluatedAtMillis = nowEpochSeconds * 1_000L
+        ).withExecutableQuote(nowEpochSeconds)
     }
 
     private fun mergeProviderTail(
@@ -250,8 +187,6 @@ internal class MarketDataService(
         val providerBars = repository.loadProviderMinuteBars(symbol, nowEpochSeconds - PROVIDER_LOOKBACK_SECONDS)
         return ProviderBarTailMerger.merge(primary, providerBars, primarySource, nowEpochSeconds)
     }
-
-    private fun currency(symbol: String) = if (symbol.contains('.')) "EUR" else "USD"
 
     private fun ScanResult.forPresentation(
         snapshot: MarketDataSnapshot,
@@ -289,20 +224,8 @@ internal class MarketDataService(
 
     private fun ScanResult.withRecentDynamics(bars: List<MinuteBar>): ScanResult = RecentPriceDynamics.apply(this, bars)
 
-    private fun ScanResult.withEntryQuality(features: ResearchFeatures?): ScanResult {
-        if (features == null) return this
-        val assessment = EntryQualityModel.assess(EntryQualityModel.input(this, features))
-        return copy(
-            entryQualityScore = assessment.score,
-            entryQualityConfidence = assessment.confidence,
-            entryQualityLabel = assessment.label,
-            entryCooldownMinutes = assessment.cooldownMinutes,
-            entryQualityDetails = assessment.details
-        )
-    }
-
     private companion object {
-        val RELAXATION_LEVELS = listOf(0.85, 0.70, 0.55)
+        const val SESSION_ACTIVITY_HOURS = 8L
         const val EXECUTABLE_QUOTE_MAX_AGE_SECONDS = 2 * 60L
         const val PROVIDER_LOOKBACK_SECONDS = 4 * 3_600L
         val EXECUTABLE_PROVIDERS = MarketDataSource.entries

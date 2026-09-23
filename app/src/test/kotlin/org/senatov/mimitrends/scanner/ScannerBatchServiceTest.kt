@@ -87,7 +87,7 @@ class ScannerBatchServiceTest {
     }
 
     @Test
-    fun `persists the detector rejection reason`() {
+    fun `does not persist rejected symbols in focused mode`() {
         val path = Files.createTempDirectory("mimitrends-rejected-batch").resolve("test.db")
         val repository = MarketRepository(path)
         val analytics = AnalyticsRepository(path)
@@ -101,9 +101,9 @@ class ScannerBatchServiceTest {
         analytics.close()
         repository.close()
         DriverManager.getConnection("jdbc:sqlite:$path").use { connection ->
-            connection.createStatement().executeQuery("SELECT rejection_reason FROM scan_candidates").use { row ->
+            connection.createStatement().executeQuery("SELECT COUNT(*) FROM scan_candidates").use { row ->
                 row.next()
-                assertEquals("NO_HIGHER_LOW", row.getString(1))
+                assertEquals(0, row.getInt(1))
             }
         }
     }
