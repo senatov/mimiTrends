@@ -34,14 +34,16 @@ internal class MarketDataService(
 
     fun loadAndEvaluate(symbol: String, criteria: ScannerCriteria): ScanEvaluation {
         val now = java.time.Instant.now().epochSecond
-        val cached = repository.loadMinuteBars(symbol, now - 7 * 86_400)
+        val cached = repository.loadMinuteBars(symbol, now - RADAR_LOOKBACK_SECONDS)
         val latestLocal = cached.lastOrNull()?.minuteEpochSeconds
-        val needsBootstrap = cached.map { it.minuteEpochSeconds / 86_400L }.distinct().size < 2
+        val needsBootstrap = cached.isEmpty()
         val localFresh = !needsBootstrap && latestLocal != null && latestLocal >= now - criteria.scanIntervalSeconds
         var source = MarketDataSource.SQLITE
         val bars = if (localFresh) cached else {
             source = MarketDataSource.YAHOO
-            val incrementalAfter = if (needsBootstrap) null else latestLocal?.takeIf { it >= now - 7 * 86_400 }
+            val incrementalAfter = if (needsBootstrap) null else latestLocal?.takeIf {
+                it >= now - RADAR_LOOKBACK_SECONDS
+            }
             val series = yahooFinance.loadIntraday(symbol, incrementalAfter)
             series.bars.forEach(repository::upsertMinuteBar)
             val oldProfile = repository.loadCompanyProfile(symbol)
@@ -51,7 +53,7 @@ internal class MarketDataService(
                     oldProfile?.logoUrl, oldProfile?.logoBytes, System.currentTimeMillis()
                 )
             )
-            repository.loadMinuteBars(symbol, now - 30 * 86_400)
+            repository.loadMinuteBars(symbol, now - RADAR_LOOKBACK_SECONDS)
         }
         val analysisInput = currentAnalysisBars(bars, source, now)
         val declaredStatus = dataStatus(symbol)
@@ -225,6 +227,7 @@ internal class MarketDataService(
     private fun ScanResult.withRecentDynamics(bars: List<MinuteBar>): ScanResult = RecentPriceDynamics.apply(this, bars)
 
     private companion object {
+        const val RADAR_LOOKBACK_SECONDS = 12 * 3_600L
         const val SESSION_ACTIVITY_HOURS = 8L
         const val EXECUTABLE_QUOTE_MAX_AGE_SECONDS = 2 * 60L
         const val PROVIDER_LOOKBACK_SECONDS = 4 * 3_600L

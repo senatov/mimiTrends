@@ -76,7 +76,7 @@ class DynamicMarketUniverseTest {
     }
 
     @Test
-    fun `reuses a stable universe until the four hour refresh boundary`() {
+    fun `reuses a stable universe until the thirty minute refresh boundary`() {
         var now = 1_000L
         var discovered = listOf("MU", "NVDA")
         val universe = DynamicMarketUniverse({ discovered }, { now })
@@ -85,7 +85,7 @@ class DynamicMarketUniverseTest {
         assertEquals(listOf("AAPL", "MU", "NVDA"), universe.select(criteria).symbols)
         discovered = listOf("AMD", "META")
         assertEquals(listOf("AAPL", "MU", "NVDA"), universe.select(criteria).symbols)
-        now += 4 * 60 * 60 * 1_000L
+        now += 30 * 60 * 1_000L
         assertEquals(listOf("AAPL", "AMD", "META"), universe.select(criteria).symbols)
     }
 
@@ -98,7 +98,7 @@ class DynamicMarketUniverseTest {
 
         val initial = universe.select(criteria).symbols
         discovered = (1..50).map { "NEW$it" }
-        now += 4 * 60 * 60 * 1_000L
+        now += 30 * 60 * 1_000L
         val refreshed = universe.select(criteria).symbols
 
         assertEquals(5, refreshed.count { it.startsWith("NEW") })

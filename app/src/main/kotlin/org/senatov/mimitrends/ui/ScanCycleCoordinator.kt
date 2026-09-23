@@ -1,7 +1,6 @@
 package org.senatov.mimitrends.ui
 
 import javafx.application.Platform
-import org.senatov.mimitrends.company.ArivaReferenceService
 import org.senatov.mimitrends.db.AnalyticsRepository
 import org.senatov.mimitrends.market.*
 import org.senatov.mimitrends.log.LogTag
@@ -42,8 +41,6 @@ internal class ScanCycleCoordinator(
     private val shortMoveLoader: ShortMoveLoader,
     private val recentEvents: RecentEventRetainer,
     private val scalableProvider: ScalablePollingService,
-    private val wallstreetOnlineProvider: WallstreetOnlinePollingService,
-    private val arivaReferences: ArivaReferenceService,
     private val detectedTodayCount: () -> Int,
     private val isClosing: () -> Boolean,
     private val log: Logger
@@ -80,7 +77,6 @@ internal class ScanCycleCoordinator(
         val universe = dynamicUniverse.select(criteriaProvider())
         if (isClosing() || activeGeneration != generation.get()) return
         val selectedSymbols = universe.symbols
-        configureProviderUniverse(selectedSymbols)
         analytics.recordUniverseSelection(universe.ranks, universe.discovered)
         Platform.runLater {
             insightSidebar.showUniverse(universe)
@@ -89,6 +85,7 @@ internal class ScanCycleCoordinator(
         val symbols = planner.order(selectedSymbols.filter { symbol ->
             ScanMarketEligibility.isActive(symbol, liveTicks[symbol], nowMillis)
         })
+        configureProviderUniverse(symbols)
         shortMoveRefresh.replaceSymbols(symbols)
         log.info(
             LogTag.API,
@@ -146,8 +143,6 @@ internal class ScanCycleCoordinator(
     private fun replaceProviderSymbols(displayed: List<ScanResult>) {
         val symbols = displayed.map(ScanResult::symbol)
         scalableProvider.replaceSymbols(symbols)
-        wallstreetOnlineProvider.replaceSymbols(symbols)
-        arivaReferences.replaceSymbols(symbols)
     }
 
     private fun handleClosedMarkets(

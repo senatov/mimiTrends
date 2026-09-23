@@ -30,7 +30,7 @@ class YahooFinanceClient(
         log.debug(LogTag.API, "loadIntraday(symbol={}, after={})", symbol, afterEpochSeconds)
         val normalized = symbol.trim().uppercase()
         val period = if (afterEpochSeconds == null) {
-            "range=7d"
+            "range=1d"
         } else {
             // Include two preceding minutes so an incomplete cached bar is safely replaced by SQLite UPSERT.
             "period1=${(afterEpochSeconds - 120).coerceAtLeast(0)}&period2=${Instant.now().epochSecond + 60}"
@@ -40,7 +40,7 @@ class YahooFinanceClient(
         } catch (error: YahooEmptyOhlcvException) {
             if (afterEpochSeconds == null) throw error
             log.debug(LogTag.API, "incremental Yahoo response empty; retrying full window symbol={}", normalized)
-            requestSeries(normalized, "range=7d")
+            requestSeries(normalized, "range=1d")
         }
     }
 

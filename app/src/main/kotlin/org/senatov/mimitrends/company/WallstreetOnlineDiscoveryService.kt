@@ -37,15 +37,15 @@ internal class WallstreetOnlineDiscoveryService(
     @Synchronized
     fun discover(): List<String> {
         val now = nowMillis()
-        if (cachedSymbols.isNotEmpty() && now < refreshAfterMillis) return cachedSymbols
-        val current = movers()
+        if (now < refreshAfterMillis) return cachedSymbols
+        val current = movers().take(MAX_DISCOVERY_CANDIDATES)
+        refreshAfterMillis = now + REFRESH_INTERVAL_MILLIS
         val currentPaths = current.mapTo(hashSetOf(), WallstreetOnlineMover::path)
         synchronized(resolvedPaths) { resolvedPaths.keys.retainAll(currentPaths) }
         val symbols = current.mapNotNull { mover -> resolve(mover) }.distinct()
         log.info(LogTag.API, "wallstreetONLINE discovery candidates={} resolved={}", current.size, symbols.size)
         if (symbols.isNotEmpty()) {
             cachedSymbols = symbols
-            refreshAfterMillis = now + REFRESH_INTERVAL_MILLIS
         }
         return if (symbols.isNotEmpty()) symbols else cachedSymbols
     }
@@ -65,6 +65,7 @@ internal class WallstreetOnlineDiscoveryService(
     }
 
     private companion object {
-        const val REFRESH_INTERVAL_MILLIS = 10 * 60_000L
+        const val MAX_DISCOVERY_CANDIDATES = 20
+        const val REFRESH_INTERVAL_MILLIS = 30 * 60_000L
     }
 }

@@ -129,9 +129,8 @@ The primary question is not “What did this stock do over the last year?” but
 
 - scans US, European, or combined watchlists, processing up to 90 eligible instruments per regular
   cycle and rotating through larger universes without starving either region;
-- refreshes the first HTML page of wallstreetONLINE's performance and most-traded tables before every
-  scan, merges duplicate instruments, sorts the combined discovery set by percentage performance, and
-  evaluates the leading 30 resolvable equities through the same scanner as the configured watchlist;
+- refreshes at most 20 wallstreetONLINE discovery candidates every 30 minutes and evaluates resolved
+  equities through the same rotating radar as the configured watchlist;
 - ranks the rotating universe by recent session turnover and feed freshness so subsequent cycles spend
   more coverage on actively traded instruments;
 - detects stable two-hour intraday corridors with repeated edge touches and bounded drift;
@@ -146,8 +145,8 @@ The primary question is not “What did this stock do over the last year?” but
   their rows immediately and stopping when they fall below `Strong`;
 - displays `RAPID_CRASH` as bold red text on a light-yellow cell and rechecks it outside the normal queue;
 - stores minute OHLCV history, company profiles, compact scan runs, and accepted corridor/crash events in SQLite;
-- refreshes visible European quotes and executable bid/ask with timestamped observations from Tradegate, Euronext, Lang & Schwarz, and
-  wallstreetONLINE where an instrument can be resolved safely;
+- refreshes accepted US and European signals through Scalable when their ISIN is known; optional
+  Tradegate/Euronext adapters and the European Lang & Schwarz fallback remain explicitly configurable;
 - never labels a crawled quote as fresh using its HTTP download time: the provider's own observation
   timestamp is required;
 - uses exchange-local time zones and market calendars for US, Xetra, Euronext, and Helsinki instruments;
@@ -270,17 +269,14 @@ All user-facing thresholds can be adjusted in Settings.
 
 ### Additional public providers
 
-European coverage is corrected by independent provider adapters rather than by overwriting the Yahoo series. Tradegate and Euronext can
-be enabled and paced in Settings. Lang & Schwarz is a separate, disabled-by-default personal-use quote fallback for resolvable ISINs or
-unambiguous company names. When explicitly enabled, it reads the Germany, Europe, and Euro Stoxx tables in one bounded pass, accepts
-only recent timestamped bid/ask snapshots, and never converts their midpoint into an analytical candle. Before every normal scan,
-wallstreetONLINE discovery reads only the first HTML page of the
-public top-performance and most-traded tables. It merges duplicate paths, sorts the combined set by reported
-percentage performance, keeps the first 30 rows, resolves their equity tickers, and adds them to that scan's
-market universe. This is candidate discovery, not an endorsement and not a replacement for the normal signal
-quality gates. Separately, the low-priority quote crawler opens at most five matching instrument pages per
-pass and accepts a quote only when its ISIN matches the canonical instrument ISIN. The site's disallowed
-stock-search RPC is not used.
+Yahoo provides the broad OHLCV scan. Scalable refreshes up to 30 already accepted US or European signals
+when their ISIN is known; it is not used to crawl the full universe. Tradegate and Euronext remain optional
+and disabled by default. Lang & Schwarz is an explicitly enabled European fallback when Scalable cannot
+resolve a selected signal.
+
+wallstreetONLINE is now discovery-only: at most 20 entries from its public performance and most-traded
+pages are resolved every 30 minutes and added to the rotating universe. No background task repeatedly opens
+individual wallstreetONLINE quote pages. Manual “Open Stock” lookup remains available on demand.
 
 Every quote observation is stored in `provider_quotes` with provider, identifier, MIC, currency, bid/ask, and original observation
 time. A quote without an unambiguous provider timestamp is rejected. Quote-only sources can refresh a published row, but never create
@@ -435,7 +431,7 @@ the focused radar does not read them during scanning.
 
 ### Scan rotation and source diagnostics
 
-The configured universe is supplemented on every pass by up to 30 resolvable leaders from the first
+The configured universe is supplemented every 30 minutes by up to 20 resolvable leaders from the first
 wallstreetONLINE performance/most-traded HTML pages. Open-market scans alternate US and European symbols and
 rotate their starting positions between cycles, so the tail of a static or discovered list does
 not systematically receive the oldest evaluation. Recently active candidates remain at the front for three
@@ -452,7 +448,10 @@ parallel requests or database sharding are introduced.
 
 ### Yahoo Finance
 
-Yahoo Finance is the default history and fallback provider and does not require an API key. The application bootstraps recent minute history, then requests and upserts the missing tail. Yahoo's public chart endpoint is not a contracted API and may change without notice.
+Yahoo Finance is the default broad OHLCV provider and does not require an API key. A new symbol bootstraps
+one trading day of one-minute bars; later scans request only the missing tail. The focused detector reads at
+most the latest 12 hours from SQLite, which covers its two-hour corridor, four-minute crash, and current-session
+liquidity inputs. Yahoo's public chart endpoint is not a contracted API and may change without notice.
 
 Corrective provider quotes may refresh the displayed current price and executable bid/ask, but are never treated as minute bars and
 never extend the series used by the detectors. Freshness validation follows the analytical series, so a current snapshot cannot
@@ -460,10 +459,10 @@ disguise stale candle history.
 
 European quotes may be delayed. MiMiTrends labels data as live, delayed, Yahoo, or cached rather than assuming that every last bar is current. Open-market recommendations require the analytical candle history to be no more than three minutes old; an isolated newer quote can update the displayed price but cannot make stale analysis current.
 
-### European quote correction
+### Focused quote correction
 
-Timestamped public observations from Tradegate, Euronext, Lang & Schwarz, Scalable Capital, and wallstreetONLINE can update only the
-visible quote and executable bid/ask of European instruments. The leading
+Timestamped Scalable observations can update the visible quote and executable bid/ask of accepted US and
+European signals. Optional Tradegate/Euronext observations and the Lang & Schwarz fallback remain European-only. The leading
 `Delay` value is calculated from the timestamp of the latest candle
 used by the detectors, not from the moment MiMiTrends downloaded a page or from a newer isolated quote.
 `Updated` separately shows the timestamp of the latest displayed price. A provider that returns an old quote

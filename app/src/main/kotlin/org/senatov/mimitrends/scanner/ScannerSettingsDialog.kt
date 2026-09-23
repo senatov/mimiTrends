@@ -170,7 +170,7 @@ class ScannerSettingsDialog(
                     "Comma-separated tickers scanned by Yahoo. Restore Defaults reinstates the standard liquid US and European universe.",
                     symbols.apply { prefRowCount = 5; maxHeight = 130.0 })
             ),
-            Label("Only fresh directional price impulses are ranked. Volume alone cannot qualify a symbol. Historical Yahoo bars and live Finnhub bars are retained in SQLite.").apply {
+            Label("Only fresh tradable corridors and four-minute rapid crashes are published. Yahoo bootstraps one day, then loads only the missing tail; the focused radar reads the latest 12 hours from SQLite.").apply {
                 isWrapText = true; styleClass += "settings-footnote"
             }
         ).apply { padding = Insets(18.0) }

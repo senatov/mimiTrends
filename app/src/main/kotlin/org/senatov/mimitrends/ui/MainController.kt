@@ -133,8 +133,6 @@ class MainController(
             langSchwarzProvider.replaceSymbols(if (scannerCriteria.langSchwarzEnabled) symbols else emptyList())
         }
     )
-    private val wallstreetOnlineProvider = WallstreetOnlinePollingService(repository, observationRecorder)
-    private val arivaReferences = ArivaReferenceService(repository)
     private val recentEvents = RecentEventRetainer()
     private val priorityScanner = PriorityScanCoordinator(
         { symbol -> marketData.loadPriorityResult(symbol, scannerCriteria) },
@@ -171,8 +169,6 @@ class MainController(
             shortMoveLoader = shortMoveLoader,
             recentEvents = recentEvents,
             scalableProvider = scalableProvider,
-            wallstreetOnlineProvider = wallstreetOnlineProvider,
-            arivaReferences = arivaReferences,
             detectedTodayCount = { analytics.loadTodayDetections().size },
             isClosing = closing::get,
             log = log
@@ -268,7 +264,7 @@ class MainController(
             importExecutor.shutdownNow()
             ApplicationResourceCloser.close(
                 focusedSignals, priorityScanner, tradegateProvider, euronextProvider,
-                scalableProvider, langSchwarzProvider, wallstreetOnlineProvider, arivaReferences,
+                scalableProvider, langSchwarzProvider,
                 { finnhubClient?.close() }, batchScheduler, repository, analytics, log
             )
         } finally {

@@ -111,7 +111,7 @@ internal class DynamicMarketUniverse(
         const val TURNOVER_SCALE = 5.0
         const val ACTIVITY_MEMORY = 0.65
         const val DISCOVERY_WEIGHT = 3.0
-        const val REFRESH_INTERVAL_MILLIS = 4 * 60 * 60 * 1_000L
+        const val REFRESH_INTERVAL_MILLIS = 30 * 60 * 1_000L
     }
 }
 

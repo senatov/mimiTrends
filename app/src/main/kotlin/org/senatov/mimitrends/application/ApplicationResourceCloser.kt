@@ -27,8 +27,6 @@ internal object ApplicationResourceCloser {
         euronextProvider: AutoCloseable,
         scalableProvider: AutoCloseable,
         langSchwarzProvider: AutoCloseable,
-        wallstreetOnlineProvider: AutoCloseable,
-        arivaReferences: AutoCloseable,
         closeFinnhub: () -> Unit,
         batchScheduler: ExecutorService,
         repository: MarketRepository,
@@ -41,8 +39,6 @@ internal object ApplicationResourceCloser {
         euronextProvider.close()
         scalableProvider.close()
         langSchwarzProvider.close()
-        wallstreetOnlineProvider.close()
-        arivaReferences.close()
         closeFinnhub()
         batchScheduler.shutdownNow()
         awaitTermination(batchScheduler, log)
