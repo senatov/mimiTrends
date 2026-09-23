@@ -52,26 +52,56 @@ internal object ShortMoveDetector {
     }.sortedByDescending { rankingScore(it, nowEpochSeconds) }.take(limit)
 
     private fun detectRapidCrash(symbol: String, bars: List<MinuteBar>, nowEpochSeconds: Long): ShortMove? {
-        val move = detectRapidMove(symbol, bars, nowEpochSeconds) ?: return null
-        return move.takeIf { it.changePercent <= -RAPID_CRASH_MIN_PERCENT + PERCENT_COMPARISON_EPSILON }
-            ?.copy(pattern = ShortMovePattern.RAPID_CRASH)
+        val recent = bars.sortedBy(MinuteBar::minuteEpochSeconds)
+        val latest = recent.lastOrNull()
+            ?.takeIf { it.minuteEpochSeconds >= nowEpochSeconds - MAX_AGE_MINUTES * 60 }
+            ?: return null
+        val eligibleEnds = recent.filter {
+            it.minuteEpochSeconds >= nowEpochSeconds - CRASH_EVENT_LOOKBACK_MINUTES * 60
+        }
+        val rapid = eligibleEnds.mapNotNull { end ->
+            crashEndingAt(
+                symbol, recent, end, RAPID_MOVE_WINDOW_MINUTES, RAPID_CRASH_MIN_PERCENT,
+                anchorAtPeak = false
+            )
+        }
+        val sustained = eligibleEnds.mapNotNull { end ->
+            crashEndingAt(
+                symbol, recent, end, SUSTAINED_DROP_WINDOW_MINUTES, SUSTAINED_DROP_MIN_PERCENT,
+                anchorAtPeak = true
+            )
+        }
+        return (rapid + sustained).minWithOrNull(
+            compareBy<ShortMove>(ShortMove::changePercent).thenByDescending(ShortMove::endedAtEpochSeconds)
+        )
     }
 
-    private fun detectRapidMove(symbol: String, bars: List<MinuteBar>, nowEpochSeconds: Long): ShortMove? {
-        val recent = bars.sortedBy(MinuteBar::minuteEpochSeconds)
-        val latest = recent.lastOrNull()?.takeIf { it.minuteEpochSeconds >= nowEpochSeconds - MAX_AGE_MINUTES * 60 } ?: return null
-        val windowStart = latest.minuteEpochSeconds - RAPID_MOVE_WINDOW_MINUTES * 60L
-        val start = recent.lastOrNull {
-            it.minuteEpochSeconds in windowStart..latest.minuteEpochSeconds - (RAPID_MOVE_WINDOW_MINUTES - 1) * 60L
+    private fun crashEndingAt(
+        symbol: String,
+        bars: List<MinuteBar>,
+        end: MinuteBar,
+        windowMinutes: Long,
+        minimumDropPercent: Double,
+        anchorAtPeak: Boolean
+    ): ShortMove? {
+        val windowStart = end.minuteEpochSeconds - windowMinutes * 60L
+        val window = bars.filter { it.minuteEpochSeconds in windowStart..end.minuteEpochSeconds }
+        val minimumStartEpoch = end.minuteEpochSeconds - (windowMinutes - 1L) * 60L
+        val start = if (anchorAtPeak) {
+            window.maxByOrNull(MinuteBar::close)
+        } else {
+            window.lastOrNull { it.minuteEpochSeconds <= minimumStartEpoch }
         }
-            ?: return null
-        if (start.close <= 0.0 || latest.close <= 0.0) return null
-        val change = percent(start.close, latest.close)
-        val window = recent.filter { it.minuteEpochSeconds in start.minuteEpochSeconds..latest.minuteEpochSeconds }
+        if (start == null) return null
+        val elapsedMinutes = (end.minuteEpochSeconds - start.minuteEpochSeconds) / 60L
+        if (elapsedMinutes < MIN_CRASH_SPAN_MINUTES || start.close <= 0.0 || end.close <= 0.0) return null
+        val change = percent(start.close, end.close)
+        if (change > -minimumDropPercent + PERCENT_COMPARISON_EPSILON) return null
+        val eventBars = window.filter { it.minuteEpochSeconds >= start.minuteEpochSeconds }
         return ShortMove(
-            symbol, change, start.close, latest.close, start.minuteEpochSeconds,
-            latest.minuteEpochSeconds, window.size, ShortMovePattern.RAPID_CRASH,
-            eventEpochSeconds = latest.minuteEpochSeconds
+            symbol, change, start.close, end.close, start.minuteEpochSeconds,
+            end.minuteEpochSeconds, eventBars.size, ShortMovePattern.RAPID_CRASH,
+            eventEpochSeconds = end.minuteEpochSeconds
         )
     }
 
@@ -90,6 +120,10 @@ internal object ShortMoveDetector {
 
     private const val RAPID_MOVE_WINDOW_MINUTES = 4L
     private const val RAPID_CRASH_MIN_PERCENT = 0.50
+    private const val SUSTAINED_DROP_WINDOW_MINUTES = 15L
+    private const val SUSTAINED_DROP_MIN_PERCENT = 1.0
+    private const val CRASH_EVENT_LOOKBACK_MINUTES = 15L
+    private const val MIN_CRASH_SPAN_MINUTES = 3L
     private const val PERCENT_COMPARISON_EPSILON = 1e-9
     private const val RAPID_CRASH_WEIGHT = 4.0
     private const val FRESHNESS_DECAY_MINUTES = 15.0

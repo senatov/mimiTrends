@@ -130,8 +130,9 @@ The primary question is: “Which liquid stock has entered a useful corridor or 
 - ranks the rotating universe by recent session turnover and feed freshness so subsequent cycles spend
   more coverage on actively traded instruments;
 - detects stable two-hour intraday corridors with repeated edge touches and bounded drift;
-- detects a close-to-close decline of at least 0.50% within four minutes as `RAPID_CRASH`, without
-  additional candle-count or one-direction path requirements;
+- detects a close-to-close decline of at least 0.50% within four minutes, or a sustained decline of at
+  least 1.00% within fifteen minutes, as `RAPID_CRASH`; recent qualifying windows remain discoverable
+  when their market data arrives after the event;
 - displays an animated message over the toolbar during startup until the first analytical pass completes; cached snapshots do not dismiss it;
 - labels analytical data age explicitly in minutes (for example, `801 min.`);
 - ranks completed results atomically instead of changing the visible table while a scan is running;
@@ -139,7 +140,7 @@ The primary question is: “Which liquid stock has entered a useful corridor or 
   `Cooling`, and decays their ranking score while always giving active signals priority;
 - rechecks published `Strong` and `Extreme` signals every minute in a separate priority task, updating
   their rows immediately and stopping when they fall below `Strong`;
-- displays `RAPID_CRASH` as bold red text on a light-yellow cell and rechecks it outside the normal queue;
+- displays `RAPID_CRASH` as regular-weight red text on a light-yellow cell and rechecks it outside the normal queue;
 - stores minute OHLCV history, company profiles, compact scan runs, and accepted corridor/crash events in SQLite;
 - refreshes accepted US and European signals through Scalable when their ISIN is known; optional
   Tradegate/Euronext adapters and the European Lang & Schwarz fallback remain explicitly configurable;
@@ -284,10 +285,11 @@ credentials, and do not stop the rest of the scan.
 ### Rapid four-minute crashes
 
 The trading-opportunities table gives the newest severe directional moves explicit priority. `RAPID_CRASH`
-compares confirmed closing prices across the available four-minute window and activates at a decline of
-0.50% or more. It does not require every intermediate close to fall, so a brief counter-move does not hide
-the net crash. The setup is shown in red on a light-yellow cell to keep it distinct from ordinary downside
-diagnostics.
+searches recent confirmed closing prices for either a decline of 0.50% or more within four minutes or a
+sustained decline of 1.00% or more within fifteen minutes. Searching recent windows prevents a delayed
+market-data refresh from hiding a crash that has just happened. It does not require every intermediate
+close to fall, so a brief counter-move does not hide the net crash. The setup is shown as regular-weight
+red text on a light-yellow cell to keep it distinct from ordinary downside diagnostics.
 
 Once detected, the instrument joins the independent one-minute priority scanner and remains there only
 while the crash condition is still confirmed. The fixed percentage is an alert threshold, not a forecast

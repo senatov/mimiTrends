@@ -168,7 +168,9 @@ internal class MarketDataService(
             signalSource = if (pattern == ShortMovePattern.RAPID_CRASH) "Rapid crash" else "Tradable corridor",
             updatedAtMillis = endedAtEpochSeconds * 1_000L,
             dataStatus = status,
-            signalWindowLabel = if (pattern == ShortMovePattern.RAPID_CRASH) "4m" else "120m corridor",
+            signalWindowLabel = if (pattern == ShortMovePattern.RAPID_CRASH)
+                "${((endedAtEpochSeconds - startedAtEpochSeconds) / 60L).coerceAtLeast(1L)}m"
+            else "120m corridor",
             signalPrice = open,
             signalEpochMillis = eventEpochSeconds * 1_000L,
             analysisUpdatedAtMillis = endedAtEpochSeconds * 1_000L,

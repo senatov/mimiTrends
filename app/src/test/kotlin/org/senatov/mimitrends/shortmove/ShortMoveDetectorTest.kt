@@ -37,6 +37,33 @@ class ShortMoveDetectorTest {
     }
 
     @Test
+    fun `finds a recent qualifying crash after delayed data refresh`() {
+        val now = 30_000L
+        val bars = prices(
+            "AAPL", now - 4 * 60L,
+            341.46, 340.45, 339.52, 339.82, 339.57, 338.95, 338.85, 338.92, 338.65, 337.61, 337.27
+        )
+
+        val result = ShortMoveDetector.rank(mapOf("AAPL" to bars), now).single()
+
+        assertEquals(ShortMovePattern.RAPID_CRASH, result.pattern)
+        assertEquals(-1.227, result.changePercent, 0.001)
+        assertEquals(10 * 60L, result.endedAtEpochSeconds - result.startedAtEpochSeconds)
+    }
+
+    @Test
+    fun `does not turn an ordinary fifteen minute decline into a crash`() {
+        val now = 40_000L
+        val bars = prices(
+            "ORDINARY", now,
+            100.0, 99.95, 99.90, 99.85, 99.80, 99.75, 99.70, 99.65,
+            99.60, 99.55, 99.50, 99.45, 99.40, 99.35, 99.30, 99.20
+        )
+
+        assertTrue(ShortMoveDetector.rank(mapOf("ORDINARY" to bars), now).isEmpty())
+    }
+
+    @Test
     fun `ignores stale and single-bar symbols`() {
         val now = 20_000L
         val ranked = ShortMoveDetector.rank(

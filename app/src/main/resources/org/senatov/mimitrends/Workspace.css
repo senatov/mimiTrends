@@ -360,7 +360,8 @@
 .short-move-table .table-cell.rapid-crash-cell,
 .short-move-table .table-row-cell:selected .table-cell.rapid-crash-cell {
     -fx-text-fill: #c62828;
-    -fx-font-weight: 800;
+    -fx-font-weight: 400;
+    -fx-effect: null;
     -fx-background-color: #fff4bf;
 }
 
