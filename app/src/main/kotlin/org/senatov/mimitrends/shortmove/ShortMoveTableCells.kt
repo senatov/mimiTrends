@@ -27,21 +27,13 @@ internal class ShortMoveDirectionCell : TableCell<ShortMove, ShortMove>() {
             "short-move-up", "short-move-down", "short-move-struggle",
             "rapid-crash-cell"
         )
-        style = ""
         if (!empty && item != null && label != null) {
             if (item.pattern == ShortMovePattern.RAPID_CRASH) {
                 styleClass += "rapid-crash-cell"
-                style = RAPID_CRASH_TEXT_STYLE
             } else {
                 styleClass += "short-move-down"
             }
         }
-    }
-
-    private companion object {
-        const val RAPID_CRASH_TEXT_STYLE =
-            "-fx-font-family: 'System'; -fx-font-weight: normal; " +
-                    "-fx-text-fill: #c62828; -fx-effect: null; -fx-background-color: #fff4bf;"
     }
 }
 

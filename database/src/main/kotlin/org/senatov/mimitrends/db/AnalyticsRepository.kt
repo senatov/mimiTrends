@@ -307,8 +307,14 @@ class AnalyticsRepository(
     }
 
     fun importScalableTransactions(path: Path): BrokerImportResult {
-        val parsed = ScalableCsvImporter.parse(path)
-        return locked { transaction { brokerTransactions.import(parsed) } }
+        val parsed = ScalableCsvImporter.parseWithSummary(path)
+        return locked {
+            transaction {
+                brokerTransactions.import(
+                    parsed.transactions, parsed.rejected, parsed.duplicatesInFile
+                )
+            }
+        }
     }
 
     fun loadBrokerTrades(symbol: String, companyName: String): List<BrokerTrade> =

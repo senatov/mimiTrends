@@ -7,7 +7,11 @@ import java.time.Instant
 import org.senatov.mimitrends.model.BrokerTrade
 
 internal class BrokerTransactionStore(private val connection: Connection) {
-    fun import(transactions: List<BrokerTransaction>): BrokerImportResult {
+    fun import(
+        transactions: List<BrokerTransaction>,
+        rejected: Int = 0,
+        duplicatesInFile: Int = 0
+    ): BrokerImportResult {
         removeCancelledTransactions()
         var imported = 0
         connection.prepareStatement(INSERT_TRANSACTION).use { statement ->
@@ -36,7 +40,8 @@ internal class BrokerTransactionStore(private val connection: Connection) {
         return BrokerImportResult(
             parsed = transactions.size,
             imported = imported,
-            duplicates = transactions.size - imported,
+            duplicates = transactions.size - imported + duplicatesInFile,
+            rejected = rejected,
             linkedToSignals = linkedTransactionCount(),
             closedPositions = reconciliation.closedPositions,
             openPositions = reconciliation.openPositions,

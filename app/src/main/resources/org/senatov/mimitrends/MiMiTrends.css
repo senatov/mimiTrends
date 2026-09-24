@@ -371,8 +371,40 @@
     -fx-font-weight: 400;
     -fx-text-fill: #526b89;
 }
+
+.import-status {
+    -fx-font-family: "System";
+    -fx-font-size: 10px;
+    -fx-font-weight: 400;
+    -fx-text-fill: #526b89;
+    -fx-max-width: 300px;
+}
 .short-move-table .table-cell.short-move-up { -fx-text-fill: #16834a; -fx-font-weight: 600; }
 .short-move-table .table-cell.short-move-down { -fx-text-fill: #bd3c3c; -fx-font-weight: 600; }
+
+.short-move-table .table-row-cell.rapid-crash-row,
+.short-move-table .table-row-cell.rapid-crash-row:odd,
+.short-move-table .table-row-cell.rapid-crash-row:selected {
+    -fx-background-color: #fff0a8;
+}
+
+.short-move-table .table-row-cell.rapid-crash-row .table-cell {
+    -fx-background-color: transparent;
+    -fx-font-family: "System";
+    -fx-font-weight: 400;
+    -fx-effect: null;
+}
+
+.short-move-table .table-row-cell.rapid-crash-row .table-cell.short-move-down,
+.short-move-table .table-row-cell.rapid-crash-row .table-cell.rapid-crash-cell {
+    -fx-text-fill: #bd3c3c;
+    -fx-font-weight: 400;
+}
+
+.short-move-table .table-row-cell.rapid-crash-row .table-cell.short-move-recurring-jump {
+    -fx-text-fill: #202124;
+    -fx-font-weight: 400;
+}
 
 .short-move-table .table-cell.short-move-struggle { -fx-text-fill: #8a5600; -fx-font-weight: 600; }
 .short-move-table .table-cell.short-move-recurring-jump,

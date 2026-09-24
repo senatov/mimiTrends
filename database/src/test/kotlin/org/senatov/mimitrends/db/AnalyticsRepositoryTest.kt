@@ -391,6 +391,7 @@ class AnalyticsRepositoryTest {
         val second = analytics.importScalableTransactions(csv)
         assertEquals(2, first.parsed)
         assertEquals(2, first.imported)
+        assertEquals(1, first.rejected)
         assertEquals(0, first.duplicates)
         assertEquals(0, second.imported)
         assertEquals(2, second.duplicates)
@@ -432,6 +433,7 @@ class AnalyticsRepositoryTest {
 
             assertEquals(1, result.parsed)
             assertEquals(1, result.imported)
+            assertEquals(1, result.rejected)
             assertEquals(1, analytics.stats().brokerTransactions)
         }
     }

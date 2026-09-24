@@ -64,13 +64,14 @@ internal class ScanClockIndicator : Pane() {
         }
     }
 
-    fun showCountdown(seconds: Long) {
+    fun showCountdown(seconds: Long, onTick: (Long) -> Unit = {}) {
         stopAnimations()
         var remaining = seconds.coerceAtLeast(0L)
         fun render() {
             minuteRotation.angle = (remaining % 3_600L) / 10.0
             secondRotation.angle = (60L - remaining % 60L) * 6.0
             show("Next scan in %02d:%02d".format(remaining / 60L, remaining % 60L))
+            onTick(remaining)
         }
         render()
         countdown = Timeline(KeyFrame(Duration.seconds(1.0), {

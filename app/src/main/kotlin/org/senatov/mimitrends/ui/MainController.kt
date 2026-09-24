@@ -98,8 +98,11 @@ class MainController(
     }
     private val scalableImport = ScalableImportAction(analytics, importExecutor)
     private val scalableImportResults = ScalableImportResultHandler(
-        actions.importTrades, status::update, requestStatus::formatError, log,
-        { loadLocalChart(currentSymbol) }
+        actions.importTrades, actions.importStatus, status::update, requestStatus::formatError, log,
+        {
+            chartDrawer.show()
+            loadLocalChart(currentSymbol)
+        }
     )
     private var providerUniverse = emptyList<String>()
     private val closing = AtomicBoolean()

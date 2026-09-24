@@ -213,8 +213,9 @@ class ShortMovePanel(
 
                 override fun updateItem(item: ShortMove?, empty: Boolean) {
                     super.updateItem(item, empty)
-                    styleClass.remove("user-watchlist-row")
+                    styleClass.removeAll("user-watchlist-row", "rapid-crash-row")
                     if (!empty && item != null && watchlist.contains(item.symbol)) styleClass += "user-watchlist-row"
+                    if (!empty && item?.pattern == ShortMovePattern.RAPID_CRASH) styleClass += "rapid-crash-row"
                     tooltip = if (!empty && item?.isRetained == true) javafx.scene.control.Tooltip(
                         "Recently detected · no longer confirmed by the latest scan"
                     ) else null

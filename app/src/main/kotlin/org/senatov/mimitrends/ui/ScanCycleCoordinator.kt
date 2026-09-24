@@ -171,7 +171,7 @@ internal class ScanCycleCoordinator(
             scannerPanel.beginScan(1, 1, emptyList())
             saved.forEach(scannerPanel::update)
             scannerPanel.completeScan(criteria.resultLimit)
-            scannerPanel.showCountdown(delaySeconds)
+            scannerPanel.showCountdown(delaySeconds, showIdleStatus = false)
             scannerPanel.showMarketClosed(
                 saved.size, persisted.isNotEmpty(), resumeText, localZoneName, marketHours, brokerHours
             )

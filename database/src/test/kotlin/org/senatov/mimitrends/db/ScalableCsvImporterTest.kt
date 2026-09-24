@@ -20,6 +20,7 @@ class ScalableCsvImporterTest {
             )
 
             val transactions = ScalableCsvImporter.parse(csv, ZoneId.of("Europe/Berlin"))
+            val summary = ScalableCsvImporter.parseWithSummary(csv, ZoneId.of("Europe/Berlin"))
 
             assertEquals(listOf("buy-220", "buy-5", "sell-225"), transactions.map { it.reference })
             assertEquals(-3420.12, transactions.first().amount, 0.000_001)
@@ -28,6 +29,9 @@ class ScalableCsvImporterTest {
             assertEquals("Executed", transactions.last().status)
             assertEquals("Sell", transactions.last().type)
             assertEquals("US83406F1021", transactions.last().isin)
+            assertEquals(1, summary.rejected)
+            assertEquals(1, summary.duplicatesInFile)
+            assertEquals(5, summary.inputRows)
         } finally {
             Files.deleteIfExists(csv)
         }

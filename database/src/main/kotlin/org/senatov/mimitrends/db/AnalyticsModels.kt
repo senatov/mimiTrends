@@ -135,5 +135,6 @@ data class BrokerImportResult(
     val closedPositions: Int,
     val openPositions: Int,
     val correctedOrder: Int,
-    val unmatchedSells: Int
+    val unmatchedSells: Int,
+    val rejected: Int = 0
 )

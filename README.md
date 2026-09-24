@@ -21,8 +21,14 @@ MiMiTrends is informational software. It does not place orders, provide investme
 
 ### Compact live radar
 
+<img src="./Doc/LiveRadar.png" alt="MiMiTrends compact Live radar showing rapid-crash alerts" width="1043">
+
+*The primary workspace keeps confirmed live events visible without the retired multi-panel scanner. Rapid
+crashes use a full-width yellow row, while the status line reports scan progress and the active pool.*
+
 The default 820×500 workspace is intentionally list-first. One `Live radar` table shows only confirmed
-`RAPID_CRASH` and `TRADABLE_CORRIDOR` events with their measured movement, current price, and age. The
+`RAPID_CRASH` and `TRADABLE_CORRIDOR` events with their measured movement, current price, and age. Rapid
+crashes use a full-width yellow row with the same lightweight system typography as the movement values. The
 chart starts collapsed and opens when an alert is selected; the activity-ranked liquid universe is available
 from a compact toolbar button instead of occupying a permanent sidebar.
 
@@ -32,12 +38,11 @@ main radar because they do not answer the immediate question: what is moving now
 
 ### Broker CSV import
 
-<img src="./Doc/BrokerCsvImport.png" alt="Importing a broker transaction CSV into MiMiTrends" width="900">
-
 *The import action accepts the CSV format documented below. A Scalable Capital transaction export can
 be used directly, while transactions from any other broker can be converted to the same format.
 Imported executions can be shown on the corresponding price chart without sending portfolio or
-transaction data to a remote service.*
+transaction data to a remote service. After each import, the toolbar retains imported, rejected, duplicate,
+and corrected-row counts, and the chart opens and reloads the currently selected instrument.*
 
 #### CSV format for completed trades
 
@@ -134,6 +139,7 @@ The primary question is: “Which liquid stock has entered a useful corridor or 
   least 1.00% within fifteen minutes, as `RAPID_CRASH`; recent qualifying windows remain discoverable
   when their market data arrives after the event;
 - displays an animated message over the toolbar during startup until the first analytical pass completes; cached snapshots do not dismiss it;
+- shows a live textual countdown between analytical passes so the configured scan interval is visibly active;
 - labels analytical data age explicitly in minutes (for example, `801 min.`);
 - ranks completed results atomically instead of changing the visible table while a scan is running;
 - retains recently published events for up to twenty minutes after they stop qualifying, labels them as
@@ -668,8 +674,6 @@ separate JDK installation.
 ```bash
 ./Scripts/build-macos-dmg.zsh
 ```
-
-![Building the signed macOS DMG](Doc/MacOSPackaging.png)
 
 The script requires Xcode Command Line Tools and a `Developer ID Application` certificate in the
 login Keychain. It automatically selects the first matching certificate, signs the application and

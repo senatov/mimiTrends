@@ -15,6 +15,13 @@ object ScalableCsvImporter {
     )
 
     fun parse(path: Path, zoneId: ZoneId = ZoneId.of("Europe/Berlin")): List<BrokerTransaction> {
+        return parseWithSummary(path, zoneId).transactions
+    }
+
+    internal fun parseWithSummary(
+        path: Path,
+        zoneId: ZoneId = ZoneId.of("Europe/Berlin")
+    ): ScalableCsvParseResult {
         Files.newBufferedReader(path, StandardCharsets.UTF_8).use { reader ->
             val headerLine = reader.readLine() ?: error("The selected CSV file is empty")
             val headers = parseLine(headerLine).map { it.removePrefix("\uFEFF").trim() }
@@ -22,10 +29,16 @@ object ScalableCsvImporter {
                 "This is not a supported Scalable transactions CSV (missing: ${requiredHeaders - headers.toSet()})"
             }
             val positions = headers.withIndex().associate { it.value to it.index }
-            return reader.lineSequence().filter(String::isNotBlank).mapIndexedNotNull { index, line ->
+            var inputRows = 0
+            var cancelledRows = 0
+            val parsed = reader.lineSequence().filter(String::isNotBlank).mapIndexedNotNull { index, line ->
+                inputRows++
                 val values = parseLine(line)
                 fun value(name: String): String = values.getOrNull(positions.getValue(name))?.trim().orEmpty()
-                if (isCancelled(value("status"))) return@mapIndexedNotNull null
+                if (isCancelled(value("status"))) {
+                    cancelledRows++
+                    return@mapIndexedNotNull null
+                }
                 val canonical = headers.joinToString("\u001f") { value(it) }
                 BrokerTransaction(
                     source = "SCALABLE",
@@ -45,9 +58,16 @@ object ScalableCsvImporter {
                     tax = decimal(value("tax"), index, "tax"),
                     currency = value("currency").uppercase()
                 )
-            }.distinctBy { transaction ->
-                transaction.reference?.let { "reference:$it" } ?: "fingerprint:${transaction.fingerprint}"
             }.toList()
+            val transactions = parsed.distinctBy { transaction ->
+                transaction.reference?.let { "reference:$it" } ?: "fingerprint:${transaction.fingerprint}"
+            }
+            return ScalableCsvParseResult(
+                transactions = transactions,
+                inputRows = inputRows,
+                rejected = cancelledRows,
+                duplicatesInFile = parsed.size - transactions.size
+            )
         }
     }
 
@@ -92,3 +112,10 @@ object ScalableCsvImporter {
     private fun sha256(value: String): String = MessageDigest.getInstance("SHA-256")
         .digest(value.toByteArray(StandardCharsets.UTF_8)).joinToString("") { "%02x".format(it) }
 }
+
+internal data class ScalableCsvParseResult(
+    val transactions: List<BrokerTransaction>,
+    val inputRows: Int,
+    val rejected: Int,
+    val duplicatesInFile: Int
+)

@@ -403,9 +403,14 @@ class ScannerPanel(
         stagedRows.clear(); scanning = false
     }
 
-    fun showCountdown(seconds: Long) {
+    fun showCountdown(seconds: Long, showIdleStatus: Boolean = true) {
         log.debug(LogTag.UI, "showCountdown(seconds={})", seconds)
-        scanIndicator.showCountdown(seconds)
+        scanIndicator.showCountdown(seconds) { remaining ->
+            if (showIdleStatus) {
+                cycleStatus.text = "Up to date · next scan in %02d:%02d".format(remaining / 60L, remaining % 60L)
+                cycleStatus.tooltip = Tooltip("The scanner is active and waiting for the next scheduled pass.")
+            }
+        }
     }
 
     fun showMarketClosed(
