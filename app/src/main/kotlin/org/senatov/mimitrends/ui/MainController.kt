@@ -55,7 +55,10 @@ class MainController(
     private val yahooFinance = YahooFinanceClient()
     private val wallstreetOnlineClient = WallstreetOnlineMarketDataClient()
     private val wallstreetOnlineDiscovery = WallstreetOnlineDiscoveryService(wallstreetOnlineClient, yahooFinance)
-    private val dynamicUniverse = DynamicMarketUniverse(wallstreetOnlineDiscovery::discover)
+    private val weeklyMarketUniverse = WeeklyMarketUniverse()
+    private val dynamicUniverse = DynamicMarketUniverse(discover = {
+        weeklyMarketUniverse.symbols() + wallstreetOnlineDiscovery.discover()
+    })
     private val userWatchlist: UserWatchlistController = UserWatchlistController(repository, dynamicUniverse, ::startScanner)
     private var profileService = CompanyProfileService(
         repository, apiKey?.let(::FinnhubProfileClient), persistentCompanyLogoClient(repository)
@@ -248,6 +251,7 @@ class MainController(
             detectedToday.refreshCount()
         }
         startScanner()
+        weeklyMarketUniverse.refreshAsync(dynamicUniverse::invalidate)
         Platform.runLater { loadLocalChart(currentSymbol) }
         exchangeRateStartup.start()
         return appLayers
@@ -261,6 +265,7 @@ class MainController(
         log.debug(LogTag.UI, "close()")
         if (!closing.compareAndSet(false, true)) return
         scanCycle.stop()
+        weeklyMarketUniverse.close()
         chartSelection.close()
         observationUiBridge.close()
         try {

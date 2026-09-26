@@ -21,7 +21,11 @@ point-in-time samples and walk-forward outcomes but are not copied from, or clai
 above. Every predictive-model feature change increments `FEATURE_VERSION`, preventing incompatible stored weights
 from being applied silently.
 
-The dynamic universe uses current S&P 500 and Euro Stoxx 50 performance and turnover rankings from
-wallstreetONLINE, interleaves both rankings, and fills missing positions from the configured large-cap universe.
-Index membership supplies the capitalization/liquidity constraint; daily performance and turnover supply the
-activity ordering.
+The dynamic universe uses current performance and most-traded rankings from wallstreetONLINE, including
+German and US market lists. It interleaves those rankings with the configured universe. Observed session
+turnover, movement, and feed freshness influence subsequent scan order.
+
+A weekly TraderFox DAX/NYSE/S&P 500/Nasdaq 100 listing refresh supplies a bounded Germany/US candidate
+pool. A recent quote and large-cap index membership reduce exposure to dormant or thin listings, while observed
+turnover from subsequent scans provides the stronger liquidity signal. The public listing pages do not expose
+executable broker spreads; the selection does not estimate transaction cost.

@@ -279,6 +279,17 @@ wallstreetONLINE is now discovery-only: at most 20 entries from its public perfo
 pages are resolved every 30 minutes and added to the rotating universe. No background task repeatedly opens
 individual wallstreetONLINE quote pages. Manual “Open Stock” lookup remains available on demand.
 
+At startup, a separate background task checks a local weekly cache of TraderFox DAX, NYSE, S&P 500,
+and Nasdaq 100 listings. When the cache is at least seven days old, it downloads the four lists and
+atomically replaces the cached selection only after all responses pass completeness checks. The
+selection includes current DAX equities, up to 80 active NYSE equities also in the S&P 500, and up to
+40 active Nasdaq 100 equities outside NYSE. Entries need a recent quote and a price of at least 2
+in their listing currency. Larger absolute daily moves get the limited US slots first. Index membership
+is a broad liquidity screen; observed scan turnover and
+freshness continue to rank the rotating pool. These public lists do not provide broker availability
+or executable spreads, so they cannot establish the cheapest purchase venue. A failed refresh retains
+the last valid selection, and the scanner continues with its configured symbols.
+
 Every quote observation is stored in `provider_quotes` with provider, identifier, MIC, currency, bid/ask, and original observation
 time. A quote without an unambiguous provider timestamp is rejected. Quote-only sources can refresh a published row, but never create
 or extend analytical candles and therefore cannot manufacture price patterns or volume confirmation. Only genuine OHLCV history from
@@ -438,6 +449,10 @@ wallstreetONLINE performance/most-traded HTML pages. Open-market scans alternate
 rotate their starting positions between cycles, so the tail of a static or discovered list does
 not systematically receive the oldest evaluation. Recently active candidates remain at the front for three
 full cycles and also retain the dedicated one-minute priority refresh.
+
+The weekly TraderFox selection is restored immediately from `~/.mimi/trends/weekly-universe.properties`.
+An overdue refresh runs off the JavaFX thread; its new symbols enter the next universe selection after
+the current scan completes.
 
 The configured scan interval is measured from the start of one pass to the intended start of the next. If a
 pass takes longer than that interval, the next pass begins after a short safety delay instead of overlapping

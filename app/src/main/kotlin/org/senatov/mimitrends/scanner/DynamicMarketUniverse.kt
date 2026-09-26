@@ -26,6 +26,11 @@ internal class DynamicMarketUniverse(
     private var pinned = emptySet<String>()
 
     @Synchronized
+    fun invalidate() {
+        snapshot = null
+    }
+
+    @Synchronized
     fun replacePinned(symbols: Collection<String>) {
         pinned = symbols.mapTo(linkedSetOf()) { it.trim().uppercase() }
         snapshot = null

@@ -90,6 +90,18 @@ class DynamicMarketUniverseTest {
     }
 
     @Test
+    fun `weekly source replacement invalidates the current selection`() {
+        var discovered = listOf("OLD")
+        val universe = DynamicMarketUniverse(discover = { discovered })
+        val criteria = ScannerCriteria(symbols = listOf("AAPL"))
+
+        assertEquals(listOf("AAPL", "OLD"), universe.select(criteria).symbols)
+        discovered = listOf("NEW")
+        universe.invalidate()
+        assertEquals(listOf("AAPL", "NEW"), universe.select(criteria).symbols)
+    }
+
+    @Test
     fun `limits rotation to five symbols per region`() {
         var now = 0L
         var discovered = (1..50).map { "OLD$it" }
