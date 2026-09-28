@@ -36,6 +36,21 @@ fail() {
   exit 1
 }
 
+ensure_head_is_published() {
+  local upstream
+  upstream="$(git -C "$PROJECT_DIR" rev-parse --abbrev-ref --symbolic-full-name '@{upstream}' 2>/dev/null || true)"
+  [[ -n "$upstream" ]] || fail "current branch has no upstream; push it to GitHub before creating a release"
+
+  local remote_head
+  remote_head="$(git -C "$PROJECT_DIR" rev-parse "$upstream")"
+  git -C "$PROJECT_DIR" merge-base --is-ancestor HEAD "$upstream" || {
+    fail "HEAD $(git -C "$PROJECT_DIR" rev-parse --short HEAD) is not published in $upstream; push the current commits before creating a release"
+  }
+  [[ "$(git -C "$PROJECT_DIR" rev-parse HEAD)" == "$remote_head" ]] || {
+    fail "upstream reference $upstream is stale; fetch it and retry before creating a release"
+  }
+}
+
 while (( $# > 0 )); do
   case "$1" in
     --notarize)
@@ -79,6 +94,7 @@ fi
 [[ -x "$NOTES_SCRIPT" ]] || fail "release-notes script is missing or not executable: $NOTES_SCRIPT"
 command -v gh >/dev/null || fail "GitHub CLI is required; install it with: brew install gh"
 gh auth status >/dev/null 2>&1 || fail "GitHub CLI is not authenticated; run: gh auth login"
+ensure_head_is_published
 
 print "MiMiTrends GitHub release"
 print "  Repository: $REPOSITORY"
