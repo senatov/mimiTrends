@@ -13,6 +13,7 @@ import org.senatov.mimitrends.services.*
 import org.senatov.mimitrends.shared.*
 
 import org.senatov.mimitrends.marketdata.ProviderHttpException
+import org.senatov.mimitrends.marketdata.ProviderResponseException
 import java.util.concurrent.ThreadLocalRandom
 
 internal class ProviderBackoff {
@@ -30,10 +31,10 @@ internal class ProviderBackoff {
         consecutiveFailures = (consecutiveFailures + 1).coerceAtMost(MAX_FAILURES)
         val providerDelay = (error as? ProviderHttpException)?.retryAfterMillis
         val status = (error as? ProviderHttpException)?.statusCode
-        val exponential = when (status) {
-            403, 429, 503 -> BASE_BLOCK_MILLIS shl (consecutiveFailures - 1).coerceAtMost(6)
-            else -> TRANSIENT_BLOCK_MILLIS shl (consecutiveFailures - 1).coerceAtMost(4)
-        }
+        val throttled = status in setOf(403, 429, 503) || error is ProviderResponseException
+        val exponential = if (throttled) {
+            BASE_BLOCK_MILLIS shl (consecutiveFailures - 1).coerceAtMost(6)
+        } else TRANSIENT_BLOCK_MILLIS shl (consecutiveFailures - 1).coerceAtMost(4)
         val delay = maxOf(providerDelay ?: 0L, exponential).coerceAtMost(MAX_BLOCK_MILLIS)
         blockedUntilMillis = nowMillis + delay
         return delay

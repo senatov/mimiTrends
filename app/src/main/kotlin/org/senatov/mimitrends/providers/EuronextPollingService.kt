@@ -131,24 +131,27 @@ internal class EuronextPollingService(
     }
 
     private fun resolve(symbol: String): ProviderInstrument? {
+        val companyName = repository.loadCompanyProfile(symbol)?.name
         val expectedIsin = repository.loadInstrumentIsin(symbol)
         repository.loadProviderInstrument(PROVIDER, symbol)?.let { cached ->
             if (!cached.identifier.startsWith(INDEX_ISIN_PREFIX) &&
-                ProviderInstrumentSelector.matchesIdentity(expectedIsin, cached)
+                ProviderInstrumentSelector.matchesIdentity(expectedIsin, cached) &&
+                (expectedIsin != null || ProviderInstrumentSelector.matchesCompany(symbol, companyName, cached.resolvedName))
             ) return cached
             repository.deleteProviderInstrument(PROVIDER, symbol)
             log.info(
-                LogTag.API, "discarded non-equity Euronext instrument symbol={} identifier={}",
+                LogTag.API, "discarded mismatched Euronext instrument symbol={} identifier={}",
                 symbol, cached.identifier
             )
         }
         val now = System.currentTimeMillis()
         if ((unresolvedUntil[symbol] ?: 0L) > now) return null
-        val query = repository.loadCompanyProfile(symbol)?.name
+        val query = companyName
             ?.let { CompanySearchTerm.from(it, symbol) }
             ?: symbol.substringBefore('.')
-        val resolved = client.resolveInstrument(query)
-        if (resolved == null) {
+        val resolved = client.resolveInstrument(query, expectedIsin)
+        if (resolved == null || (expectedIsin == null &&
+                !ProviderInstrumentSelector.matchesCompany(symbol, companyName, resolved.name))) {
             unresolvedUntil[symbol] = now + UNRESOLVED_RETRY_MILLIS
             return null
         }

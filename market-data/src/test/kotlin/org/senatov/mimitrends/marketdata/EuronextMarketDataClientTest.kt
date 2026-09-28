@@ -24,6 +24,27 @@ class EuronextMarketDataClientTest {
     }
 
     @Test
+    fun `selects only the requested ISIN from ambiguous search results`() {
+        val selected = client.selectInstrument("""
+            [
+              {"isin":"NO0013340802","mic":"XOSL","name":"ATLANTIC SAPPHI TR",
+               "link":"/en/product/equities/NO0013340802-XOSL"},
+              {"isin":"DE0007164600","mic":"ETLX","name":"SAP SE",
+               "link":"/en/product/equities/DE0007164600-ETLX"}
+            ]
+        """.trimIndent(), "DE0007164600")
+
+        assertEquals(EuronextInstrument("DE0007164600", "ETLX", "SAP SE"), selected)
+    }
+
+    @Test
+    fun `reports text response instead of exposing Jackson parser error`() {
+        assertFailsWith<ProviderResponseException> { client.selectInstrument("Cannot process request") }
+        assertFailsWith<ProviderResponseException> { client.decodeQuoteBody("Cannot process request") }
+        assertFailsWith<ProviderResponseException> { client.decodeQuoteBody("{}") }
+    }
+
+    @Test
     fun `decrypts the website CryptoJS envelope`() {
         val decrypted = client.decryptEnvelope(
             "YOBUDMmRjsilgZr7cJgcpE2iaiqT1NL1yK+ECtrIKAw=",

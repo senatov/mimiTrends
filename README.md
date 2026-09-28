@@ -283,6 +283,10 @@ when their ISIN is known; it is not used to crawl the full universe. Tradegate a
 and disabled by default. Lang & Schwarz is an explicitly enabled European fallback when Scalable cannot
 resolve a selected signal.
 
+Euronext search results are accepted only for the expected ISIN when one is known. If its API returns
+an invalid quote response, polling reports a concise provider response error and pauses for at least
+one minute before retrying; no quote is stored from that response.
+
 wallstreetONLINE is used for discovery: its public top, flop, most-traded, gap, reversal, and high-range
 rankings are sampled every 30 minutes. Up to 40 distinct entries are selected in a balanced rotation
 across those categories, resolved to ticker symbols, and added to the rotating universe. The Liquid

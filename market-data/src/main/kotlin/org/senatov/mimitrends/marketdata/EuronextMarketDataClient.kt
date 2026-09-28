@@ -1,5 +1,7 @@
 package org.senatov.mimitrends.marketdata
 
+import com.fasterxml.jackson.core.JsonProcessingException
+import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.ObjectMapper
 import java.net.CookieManager
 import java.net.CookiePolicy
@@ -38,22 +40,26 @@ class EuronextMarketDataClient(
         .followRedirects(HttpClient.Redirect.NORMAL)
         .build()
 ) {
-    fun resolveInstrument(queryText: String): EuronextInstrument? {
+    fun resolveInstrument(queryText: String, expectedIsin: String? = null): EuronextInstrument? {
         val query = URLEncoder.encode(queryText.trim(), StandardCharsets.UTF_8)
         val response = send("$BASE_URL/en/instrumentSearch/searchJSON?q=$query")
         if (response.statusCode() != 200) {
             throw ProviderHttpException.from(response.statusCode(), response.headers(), "Euronext instrument search")
         }
-        return selectInstrument(response.body())
+        return selectInstrument(response.body(), expectedIsin)
     }
 
-    internal fun selectInstrument(json: String): EuronextInstrument? {
-        val choices = mapper.readTree(json).mapNotNull { node ->
+    internal fun selectInstrument(json: String, expectedIsin: String? = null): EuronextInstrument? {
+        val results = parseJson(json, "Euronext instrument search")
+        if (!results.isArray) throw ProviderResponseException("Euronext instrument search")
+        val choices = results.mapNotNull { node ->
             val isin = node.path("isin").asText()
             val mic = node.path("mic").asText()
             val name = node.path("name").asText()
             val link = node.path("link").asText()
-            if (isin.matches(VALID_ISIN) && mic.matches(VALID_MIC) && EQUITY_LINK.containsMatchIn(link)) {
+            if (isin.matches(VALID_ISIN) && mic.matches(VALID_MIC) && EQUITY_LINK.containsMatchIn(link) &&
+                (expectedIsin == null || isin.equals(expectedIsin, ignoreCase = true))
+            ) {
                 EuronextInstrument(isin, mic, name)
             } else null
         }
@@ -67,11 +73,18 @@ class EuronextMarketDataClient(
         if (response.statusCode() != 200) {
             throw ProviderHttpException.from(response.statusCode(), response.headers(), "Euronext quote for $product")
         }
-        val envelope = mapper.readTree(response.body())
-        val html = decryptEnvelope(
+        return parseQuote(decodeQuoteBody(response.body()))
+    }
+
+    internal fun decodeQuoteBody(body: String): String {
+        val operation = "Euronext quote"
+        val envelope = parseJson(body, operation)
+        if (!envelope.isObject || listOf("ct", "iv", "s").any { !envelope.path(it).isTextual }) {
+            throw ProviderResponseException(operation)
+        }
+        return decryptEnvelope(
             envelope.path("ct").asText(), envelope.path("iv").asText(), envelope.path("s").asText(), PASSWORD
         )
-        return parseQuote(html)
     }
 
     internal fun parseQuote(html: String): EuronextQuote {
@@ -99,7 +112,15 @@ class EuronextMarketDataClient(
         val cipher = Cipher.getInstance("AES/CBC/PKCS5Padding")
         cipher.init(Cipher.DECRYPT_MODE, SecretKeySpec(key, "AES"), IvParameterSpec(ivHex.hexBytes()))
         val jsonString = String(cipher.doFinal(Base64.getDecoder().decode(ciphertext)), StandardCharsets.UTF_8)
-        return mapper.readTree(jsonString).asText()
+        val payload = parseJson(jsonString, "Euronext decrypted quote")
+        if (!payload.isTextual) throw ProviderResponseException("Euronext decrypted quote")
+        return payload.asText()
+    }
+
+    private fun parseJson(body: String, operation: String): JsonNode = try {
+        mapper.readTree(body) ?: throw ProviderResponseException(operation)
+    } catch (_: JsonProcessingException) {
+        throw ProviderResponseException(operation)
     }
 
     private fun evpBytesToKey(password: ByteArray, salt: ByteArray): ByteArray {
