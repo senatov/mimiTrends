@@ -33,4 +33,26 @@ class ScalableCliClientTest {
                 .loadQuote("DE000ENER6Y0")
         }
     }
+
+    @Test
+    fun `checks broker session rather than public CLI capabilities`() {
+        val calls = mutableListOf<List<String>>()
+        val client = ScalableCliClient(commandRunner = { arguments ->
+            calls += arguments
+            """{"ok":false,"error":{"code":"no_session"}}"""
+        })
+
+        assertFailsWith<ScalableCliUnavailableException> { client.verifyAccess() }
+        assertEquals(listOf(listOf("whoami", "--json")), calls)
+    }
+
+    @Test
+    fun `rejects a quote for a different ISIN`() {
+        val client = ScalableCliClient(commandRunner = {
+            """{"ok":true,"data":{"result":{"isin":"US31810T1016","name":"FinVolution Group ADR",
+                "quote_mid_price":3.72,"quote_timestamp_utc":"2026-09-28T11:00:00Z"}}}"""
+        })
+
+        assertFailsWith<ScalableCliUnavailableException> { client.loadQuote("US6701002056") }
+    }
 }

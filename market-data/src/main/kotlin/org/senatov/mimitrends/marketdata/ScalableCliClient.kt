@@ -29,14 +29,18 @@ class ScalableCliClient(
     private val commandRunner: (List<String>) -> String = ScalableCliCommandRunner()::run
 ) : ScalableQuoteClient {
     override fun verifyAccess() {
-        val root = parse(commandRunner(listOf("capabilities", "--json")))
-        if (!root.path("ok").asBoolean(false)) throw ScalableCliUnavailableException("Scalable CLI access unavailable")
+        val root = parse(commandRunner(listOf("whoami", "--json")))
+        if (!root.path("ok").asBoolean(false)) throw ScalableCliUnavailableException("Scalable CLI login required")
     }
 
     override fun loadQuote(isin: String): ScalableQuote {
         val root = parse(commandRunner(listOf("broker", "quote", "--isin", isin, "--json")))
         if (!root.path("ok").asBoolean(false)) throw ScalableCliUnavailableException("Scalable quote unavailable")
         val result = root.path("data").path("result")
+        val returnedIsin = result.path("isin").asText("")
+        if (!returnedIsin.equals(isin, ignoreCase = true)) {
+            throw ScalableCliUnavailableException("Scalable quote ISIN does not match request")
+        }
         val midpoint = result.path("quote_mid_price").asDouble(Double.NaN)
         val timestamp = result.path("quote_timestamp_utc").asText("")
         if (!midpoint.isFinite() || midpoint <= 0.0 || timestamp.isBlank() ||
@@ -50,7 +54,7 @@ class ScalableCliClient(
             ?.takeUnless { it.isMissingNode || it.isNull }
             ?.asDouble()
         return ScalableQuote(
-            isin = result.path("isin").asText(isin),
+            isin = returnedIsin,
             name = result.path("name").asText(""),
             currency = result.path("quote_currency").asText("EUR"),
             midpoint = midpoint,
@@ -84,7 +88,12 @@ internal class ScalableCliCommandRunner(
         }
         val output = process.inputStream.bufferedReader().use { it.readText() }.trim()
         if (process.exitValue() != 0) {
-            throw ScalableCliUnavailableException("Scalable CLI is not authorized")
+            val errorCode = runCatching {
+                ObjectMapper().readTree(output).path("error").path("code").asText()
+            }.getOrNull()
+            throw ScalableCliUnavailableException(
+                if (errorCode == "no_session") "Scalable CLI login required" else "Scalable CLI command failed"
+            )
         }
         return output
     }

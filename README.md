@@ -281,7 +281,8 @@ All user-facing thresholds can be adjusted in Settings.
 Yahoo provides the broad OHLCV scan. Scalable refreshes up to 30 already accepted US or European signals
 when their ISIN is known; it is not used to crawl the full universe. Tradegate and Euronext remain optional
 and disabled by default. Lang & Schwarz is an explicitly enabled European fallback when Scalable cannot
-resolve a selected signal.
+resolve a selected signal. Scalable quotes require an active `sc` CLI login; a successful public
+`capabilities` command does not establish a broker session. Returned quote ISINs must match the request.
 
 Euronext search results are accepted only for the expected ISIN when one is known. If its API returns
 an invalid quote response, polling reports a concise provider response error and pauses for at least
