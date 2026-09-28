@@ -290,7 +290,11 @@ retries after five minutes without stopping the polling cycle.
 
 When Scalable shows `Login needed`, use the **Login** button in that row to open the official CLI
 device-code login in Terminal. The CLI session is stored in the macOS Keychain by default; MiMiTrends
-does not receive or save login credentials. The login window opens the authorization URL automatically.
+does not receive or save login credentials. The login window opens the authorization URL automatically;
+after the browser confirms the device code, the terminal process finishes and MiMiTrends refreshes
+Scalable quotes automatically. In the Live radar search field, type a company or ticker to filter
+current alerts, or choose a suggestion to add that instrument to the persistent watchlist. A tracked
+instrument is shown in Live radar when it produces a matching alert.
 
 Euronext search results are accepted only for the expected ISIN when one is known. If its API returns
 an invalid quote response, polling reports the content type and response length without logging the

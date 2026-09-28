@@ -60,9 +60,17 @@ class ShortMovePanel(
     private val scanCaption = Label("Scan waiting").apply { styleClass += "short-move-caption" }
     private val companyNames = java.util.concurrent.ConcurrentHashMap<String, String>()
     private val search = TableSearchField.create(
-        "Find alert…", ::applyFilter, ::openFirstMatch, table::requestFocus,
+        "Find or track stock…", ::applyFilter, ::openFirstMatch, table::requestFocus,
         watchlist.search, ::pinSuggestion
-    )
+    ).also {
+        javafx.scene.control.Tooltip.install(
+            it,
+            javafx.scene.control.Tooltip(
+                "Filter current alerts, or choose a company/ticker suggestion to add it to the watchlist. " +
+                        "Tracked stocks appear here when a matching alert is found."
+            )
+        )
+    }
     private val filterCount = Label().apply {
         styleClass += "table-filter-count"
         isVisible = false

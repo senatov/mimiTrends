@@ -30,13 +30,12 @@ internal object ScalableTerminalLoginLauncher {
 
     internal fun scriptFor(executable: Path): String = """
         #!/bin/zsh
-        set -o pipefail
         log_file=${'$'}(mktemp -t mimitrends-scalable-login)
         trap 'rm -f "${'$'}log_file"' EXIT
-        ${shellQuote(executable.toString())} login --local-read-only 2>&1 | tee "${'$'}log_file" &
+        ${shellQuote(executable.toString())} login --local-read-only >"${'$'}log_file" 2>&1 &
         login_pid=${'$'}!
         for attempt in {1..30}; do
-          activate_url=${'$'}(grep -Eo 'https://secure\\.scalable\\.capital/activate[^ )]+' "${'$'}log_file" | head -1)
+          activate_url=${'$'}(grep -Eo 'https://secure\.scalable\.capital/activate[^ )]+' "${'$'}log_file" | head -1)
           if [[ -n "${'$'}activate_url" ]]; then
             echo
             echo 'Opening the Scalable authorization page in your browser...'
@@ -47,6 +46,7 @@ internal object ScalableTerminalLoginLauncher {
         done
         wait "${'$'}login_pid"
         result=${'$'}?
+        cat "${'$'}log_file"
         echo
         if (( result == 0 )); then
           echo 'Scalable login complete. MiMiTrends will check the session automatically.'

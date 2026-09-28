@@ -252,7 +252,9 @@
 
 .source-login-button {
     -fx-font-size: 11px;
-    -fx-padding: 2px 7px;
+    -fx-min-height: 22px;
+    -fx-pref-height: 22px;
+    -fx-padding: 1px 7px;
 }
 
 .source-activity-table .table-cell {

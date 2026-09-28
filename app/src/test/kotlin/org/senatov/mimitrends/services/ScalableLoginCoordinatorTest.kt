@@ -33,7 +33,9 @@ class ScalableLoginCoordinatorTest {
         val script = ScalableTerminalLoginLauncher.scriptFor(Path.of("/tmp/O'Brien/sc"))
         assertTrue(script.contains("'/tmp/O'\"'\"'Brien/sc' login --local-read-only"))
         assertTrue(script.contains("open") && script.contains("activate_url"))
-        assertTrue(script.contains("tee") && script.contains("log_file"))
+        assertTrue(script.contains("https://secure\\.scalable\\.capital/activate"))
+        assertTrue(script.contains("login_pid") && script.contains("cat \"${'$'}log_file\""))
+        assertFalse(script.contains("| tee"))
         assertFalse(script.contains("password", ignoreCase = true))
     }
 }
