@@ -138,8 +138,8 @@ The primary question is: “Which liquid stock has entered a useful corridor or 
   cycle and rotating through larger universes without starving either region;
 - presents accepted events in one compact live-radar table; the chart is collapsible and the complete
   activity-ranked universe opens on demand;
-- refreshes at most 20 wallstreetONLINE discovery candidates every 30 minutes and evaluates resolved
-  equities through the same rotating radar as the configured watchlist;
+- samples wallstreetONLINE's top, flop, activity, gap, reversal, and range rankings every 30 minutes;
+  resolves up to 40 balanced candidates for the same rotating radar as the configured watchlist;
 - ranks the rotating universe by recent session turnover and feed freshness so subsequent cycles spend
   more coverage on actively traded instruments;
 - detects stable two-hour intraday corridors with repeated edge touches and bounded drift;
@@ -283,9 +283,14 @@ when their ISIN is known; it is not used to crawl the full universe. Tradegate a
 and disabled by default. Lang & Schwarz is an explicitly enabled European fallback when Scalable cannot
 resolve a selected signal.
 
-wallstreetONLINE is now discovery-only: at most 20 entries from its public performance and most-traded
-pages are resolved every 30 minutes and added to the rotating universe. No background task repeatedly opens
-individual wallstreetONLINE quote pages. Manual “Open Stock” lookup remains available on demand.
+wallstreetONLINE is used for discovery: its public top, flop, most-traded, gap, reversal, and high-range
+rankings are sampled every 30 minutes. Up to 40 distinct entries are selected in a balanced rotation
+across those categories, resolved to ticker symbols, and added to the rotating universe. The Liquid
+universe dialog shows each selected instrument's wallstreetONLINE categories. Ranking positions are
+discovery hints, not confirmed signals: the normal scanner still requires fresh Yahoo/Finnhub bars and
+its own pattern checks. Requests run on at most three workers with a 30-second batch limit; a failed
+refresh retains the last valid selection and retries after five minutes. No background task repeatedly
+opens individual wallstreetONLINE quote pages. Manual “Open Stock” lookup remains available on demand.
 
 At startup, a separate background task checks a local weekly cache of TraderFox DAX, NYSE, S&P 500,
 and Nasdaq 100 listings. When the cache is at least seven days old, it downloads the four lists and

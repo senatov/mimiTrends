@@ -14,6 +14,8 @@ import org.senatov.mimitrends.shared.*
 
 import org.junit.jupiter.api.Test
 import org.senatov.mimitrends.marketdata.WallstreetOnlineMover
+import org.senatov.mimitrends.marketdata.WallstreetOnlineCategory
+import org.senatov.mimitrends.marketdata.WallstreetOnlineRankedMover
 import kotlin.test.assertEquals
 
 class WallstreetOnlineDiscoveryServiceTest {
@@ -23,7 +25,7 @@ class WallstreetOnlineDiscoveryServiceTest {
         var now = 0L
         val queries = mutableListOf<String>()
         val service = WallstreetOnlineDiscoveryService(
-            movers = { table },
+            rankings = { table },
             resolve = { name -> queries += name; if (name.startsWith("Micron")) "MU" else "LITE" },
             nowMillis = { now }
         )
@@ -42,16 +44,59 @@ class WallstreetOnlineDiscoveryServiceTest {
     }
 
     @Test
-    fun `limits discovery resolution to twenty candidates`() {
+    fun `limits discovery resolution to forty candidates`() {
         val queries = mutableListOf<String>()
         val service = WallstreetOnlineDiscoveryService(
-            movers = { (1..35).map { mover("/aktien/test-$it", "Company $it") } },
+            rankings = { (1..55).map { mover("/aktien/test-$it", "Company $it") } },
             resolve = { name -> queries += name; "TEST${queries.size}" }
         )
 
-        assertEquals(20, service.discover().size)
-        assertEquals(20, queries.size)
+        assertEquals(40, service.discover().size)
+        assertEquals(40, queries.size)
     }
 
-    private fun mover(path: String, name: String) = WallstreetOnlineMover(name, path, 1.0, 1.0)
+    @Test
+    fun `keeps flop and volume candidates alongside top performers`() {
+        val rankings = (1..12).map { mover("/aktien/top-$it", "Top $it", WallstreetOnlineCategory.TOP, it) } +
+                (1..12).map { mover("/aktien/flop-$it", "Flop $it", WallstreetOnlineCategory.FLOP, it) } +
+                (1..12).map { mover("/aktien/volume-$it", "Volume $it", WallstreetOnlineCategory.MOST_TRADED, it) }
+        val service = WallstreetOnlineDiscoveryService(
+            rankings = { rankings }, resolve = { it.replace(' ', '_').uppercase() }
+        )
+
+        val symbols = service.discover()
+
+        assertEquals(36, symbols.size)
+        assertEquals(listOf("FLOP_1", "VOLUME_1", "TOP_1"), symbols.take(3))
+        assertEquals(setOf(WallstreetOnlineCategory.FLOP), service.categories("FLOP_1"))
+    }
+
+    @Test
+    fun `retains cached discovery and category when ranking refresh fails`() {
+        var now = 0L
+        var fail = false
+        var calls = 0
+        val service = WallstreetOnlineDiscoveryService(
+            rankings = {
+                calls++
+                if (fail) error("provider unavailable")
+                listOf(mover("/aktien/test", "Test", WallstreetOnlineCategory.FLOP))
+            },
+            resolve = { "TEST" }, nowMillis = { now }
+        )
+
+        assertEquals(listOf("TEST"), service.discover())
+        fail = true
+        now += 30 * 60_000L
+        assertEquals(listOf("TEST"), service.discover())
+        assertEquals(setOf(WallstreetOnlineCategory.FLOP), service.categories("TEST"))
+        assertEquals(listOf("TEST"), service.discover())
+        assertEquals(2, calls)
+    }
+
+    private fun mover(
+        path: String, name: String,
+        category: WallstreetOnlineCategory = WallstreetOnlineCategory.TOP,
+        rank: Int = 1
+    ) = WallstreetOnlineRankedMover(WallstreetOnlineMover(name, path, 1.0, 1.0), category, rank)
 }

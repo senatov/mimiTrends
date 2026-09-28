@@ -1,5 +1,7 @@
 package org.senatov.mimitrends.marketdata
 
+import org.senatov.mimitrends.log.LogTag
+import org.slf4j.LoggerFactory
 import java.net.URI
 import java.net.URLEncoder
 import java.net.http.HttpClient
@@ -10,6 +12,9 @@ import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
 import java.time.ZoneId
+import java.util.concurrent.Callable
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 
 data class WallstreetOnlineMover(
     val name: String,
@@ -35,14 +40,41 @@ class WallstreetOnlineMarketDataClient(
         .followRedirects(HttpClient.Redirect.NORMAL)
         .build()
 ) {
-    fun loadMovers(): List<WallstreetOnlineMover> {
-        val rankings = MOVER_PATHS.mapNotNull { path ->
-            runCatching { parseMovers(send("$BASE_URL$path")) }.getOrNull()
+    private val log = LoggerFactory.getLogger(javaClass)
+
+    fun loadRankings(): List<WallstreetOnlineRankedMover> {
+        val executor = Executors.newFixedThreadPool(3) { task ->
+            Thread(task, "mimitrends-wallstreet-rankings").apply { isDaemon = true }
         }
-        return rankings.maxOfOrNull(List<WallstreetOnlineMover>::size)?.let { maximum ->
-            (0 until maximum).flatMap { rank -> rankings.mapNotNull { it.getOrNull(rank) } }
-        }.orEmpty().distinctBy(WallstreetOnlineMover::path).take(DISCOVERY_RESULT_LIMIT)
+        var failedPages = 0
+        val rankings = try {
+            val requests = WallstreetOnlineRankingPages.entries.map { page ->
+                Callable { page to parseMovers(send("$BASE_URL${page.path}")) }
+            }
+            executor.invokeAll(requests, 30, TimeUnit.SECONDS).mapNotNull { future ->
+                runCatching { future.get() }.onFailure { failedPages++ }.getOrNull()
+            }
+        } finally {
+            executor.shutdownNow()
+        }
+        if (failedPages > 0) {
+            log.warn(
+                LogTag.API, "wallstreetONLINE rankings partially unavailable pages={} failed={}",
+                WallstreetOnlineRankingPages.entries.size, failedPages
+            )
+        }
+        if (rankings.none { it.second.isNotEmpty() }) {
+            throw ProviderDataUnavailableException("wallstreetONLINE rankings returned no stock rows")
+        }
+        return (0 until MAX_MOVERS_PER_PAGE).flatMap { index ->
+            rankings.mapNotNull { (page, movers) ->
+                movers.getOrNull(index)?.let { WallstreetOnlineRankedMover(it, page.category, index + 1) }
+            }
+        }
     }
+
+    fun loadMovers(): List<WallstreetOnlineMover> = loadRankings().map(WallstreetOnlineRankedMover::mover)
+        .distinctBy(WallstreetOnlineMover::path).take(DISCOVERY_RESULT_LIMIT)
 
     fun loadQuote(path: String): WallstreetOnlineQuote {
         require(DETAIL_PATH.matches(path)) { "Invalid wallstreetONLINE instrument path" }
@@ -153,22 +185,7 @@ class WallstreetOnlineMarketDataClient(
         const val FUTURE_TOLERANCE_MILLIS = 5 * 60_000L
         val QUOTE_ZONE: ZoneId = ZoneId.of("Europe/Berlin")
         const val DISCOVERY_RESULT_LIMIT = 100
-        internal val MOVER_PATHS = listOf(
-            // Broad market rankings are intentionally included before index-only
-            // lists so that liquid mid-caps (for example ELMOS) can enter discovery.
-            "/statistik/top-aktien-performance",
-            "/statistik/top-aktien-meistgehandelt",
-            "/statistik/top-50-deutsche-aktien",
-            "/statistik/top-50-us-aktien",
-            "/statistik/top-cdax-aktien-performance",
-            "/statistik/top-cdax-aktien-meistgehandelt",
-            "/statistik/top-nasdaq100-aktien-performance",
-            "/statistik/top-nasdaq100-aktien-meistgehandelt",
-            "/statistik/top-sp500-aktien-performance",
-            "/statistik/top-sp500-aktien-meistgehandelt",
-            "/statistik/top-eurostoxx-aktien-performance",
-            "/statistik/top-eurostoxx-aktien-meistgehandelt"
-        )
+        internal val MOVER_PATHS = WallstreetOnlineRankingPages.entries.map(WallstreetOnlineRankingPage::path)
         val DETAIL_PATH = Regex("/aktien/[a-z0-9-]+-aktie")
         val ISIN_QUERY = Regex("[A-Z]{2}[A-Z0-9]{9}[0-9]", RegexOption.IGNORE_CASE)
         const val VALIDATION_COMPANY = "Northern Data"

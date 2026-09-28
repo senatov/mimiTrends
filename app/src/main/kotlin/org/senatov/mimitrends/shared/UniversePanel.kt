@@ -2,6 +2,7 @@ package org.senatov.mimitrends.shared
 
 import javafx.scene.control.Label
 import javafx.scene.control.ScrollPane
+import javafx.scene.control.Tooltip
 import javafx.scene.layout.HBox
 import javafx.scene.layout.Priority
 import javafx.scene.layout.Region
@@ -29,13 +30,21 @@ internal class UniversePanel : VBox(5.0) {
         val europe = selection.symbols.size - us
         summary.text = "${selection.symbols.size} rotating candidates · US $us · Europe $europe · activity-ranked"
         entries.children.setAll(selection.symbols.map { symbol ->
-            val source = if (symbol in selection.discovered) "dynamic" else "fallback"
+            val categories = selection.sourceCategories[symbol].orEmpty().map { it.label }
+            val source = when {
+                categories.isNotEmpty() -> "wO ${categories.first()}${if (categories.size > 1) " +${categories.size - 1}" else ""}"
+                symbol in selection.discovered -> "dynamic"
+                else -> "fallback"
+            }
             HBox(
                 6.0,
                 Label("${selection.ranks[symbol] ?: 0}.").apply { styleClass += "universe-rank" },
                 Label(symbol).apply { styleClass += "universe-symbol" },
                 Region().also { HBox.setHgrow(it, Priority.ALWAYS) },
-                Label(source).apply { styleClass += "universe-source" }
+                Label(source).apply {
+                    styleClass += "universe-source"
+                    if (categories.isNotEmpty()) tooltip = Tooltip("wallstreetONLINE: ${categories.joinToString()}")
+                }
             ).apply { styleClass += "universe-row" }
         })
     }

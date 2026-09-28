@@ -14,12 +14,14 @@ import org.senatov.mimitrends.shared.*
 
 import org.senatov.mimitrends.model.ScanResult
 import org.senatov.mimitrends.model.ScannerCriteria
+import org.senatov.mimitrends.marketdata.WallstreetOnlineCategory
 import kotlin.math.abs
 import kotlin.math.ln1p
 
 internal class DynamicMarketUniverse(
     private val discover: () -> List<String> = { emptyList() },
-    private val nowMillis: () -> Long = System::currentTimeMillis
+    private val nowMillis: () -> Long = System::currentTimeMillis,
+    private val categories: (String) -> Set<WallstreetOnlineCategory> = { emptySet() }
 ) {
     private val activity = mutableMapOf<String, Double>()
     private var snapshot: UniverseSnapshot? = null
@@ -64,7 +66,8 @@ internal class DynamicMarketUniverse(
         val ranks = regionalSymbols.flatMap { region ->
             region.mapIndexed { index, symbol -> symbol to index + 1 }
         }.toMap()
-        return DynamicUniverseSelection(symbols, symbols.filter(discovered::contains), ranks).also {
+        val sourceCategories = symbols.associateWith(categories).filterValues { it.isNotEmpty() }
+        return DynamicUniverseSelection(symbols, symbols.filter(discovered::contains), ranks, sourceCategories).also {
             snapshot = UniverseSnapshot(signature, nowMillis(), it)
         }
     }
@@ -123,5 +126,6 @@ internal class DynamicMarketUniverse(
 internal data class DynamicUniverseSelection(
     val symbols: List<String>,
     val discovered: List<String>,
-    val ranks: Map<String, Int>
+    val ranks: Map<String, Int>,
+    val sourceCategories: Map<String, Set<WallstreetOnlineCategory>> = emptyMap()
 )

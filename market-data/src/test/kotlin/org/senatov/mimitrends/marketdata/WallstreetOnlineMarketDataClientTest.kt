@@ -12,6 +12,9 @@ class WallstreetOnlineMarketDataClientTest {
         assertEquals(true, WallstreetOnlineMarketDataClient.MOVER_PATHS.contains("/statistik/top-50-us-aktien"))
         assertEquals(true, WallstreetOnlineMarketDataClient.MOVER_PATHS.contains("/statistik/top-aktien-meistgehandelt"))
         assertEquals(true, WallstreetOnlineMarketDataClient.MOVER_PATHS.contains("/statistik/top-cdax-aktien-meistgehandelt"))
+        assertEquals(true, WallstreetOnlineMarketDataClient.MOVER_PATHS.contains("/statistik/flop-aktien-performance"))
+        assertEquals(true, WallstreetOnlineMarketDataClient.MOVER_PATHS.contains("/statistik/gap-down-aktien"))
+        assertEquals(true, WallstreetOnlineMarketDataClient.MOVER_PATHS.contains("/statistik/reversal-up-aktien"))
     }
     @Test fun `parses movers in document order before discovery ranks by performance`() {
         val html = """

@@ -60,9 +60,10 @@ class MainController(
         wallstreetOnlineClient, yahooFinance, activity = sourceActivity
     )
     private val weeklyMarketUniverse = WeeklyMarketUniverse(activity = sourceActivity)
-    private val dynamicUniverse = DynamicMarketUniverse(discover = {
-        weeklyMarketUniverse.symbols() + wallstreetOnlineDiscovery.discover()
-    })
+    private val dynamicUniverse = DynamicMarketUniverse(
+        discover = { weeklyMarketUniverse.symbols() + wallstreetOnlineDiscovery.discover() },
+        categories = wallstreetOnlineDiscovery::categories
+    )
     private val userWatchlist: UserWatchlistController = UserWatchlistController(repository, dynamicUniverse, ::startScanner)
     private var profileService = CompanyProfileService(
         repository, apiKey?.let(::FinnhubProfileClient), persistentCompanyLogoClient(repository)

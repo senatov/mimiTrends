@@ -15,6 +15,7 @@ import org.senatov.mimitrends.shared.*
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
 import org.senatov.mimitrends.model.ScannerCriteria
+import org.senatov.mimitrends.marketdata.WallstreetOnlineCategory
 
 class DynamicMarketUniverseTest {
     @Test
@@ -57,6 +58,18 @@ class DynamicMarketUniverseTest {
 
         assertEquals(listOf("AAPL", "MU", "SRT3.DE"), selection.symbols)
         assertEquals(listOf("MU", "SRT3.DE"), selection.discovered)
+    }
+
+    @Test
+    fun `retains discovery category for the selected symbol`() {
+        val universe = DynamicMarketUniverse(
+            discover = { listOf("MU") },
+            categories = { if (it == "MU") setOf(WallstreetOnlineCategory.FLOP) else emptySet() }
+        )
+
+        val selection = universe.select(ScannerCriteria(symbols = listOf("AAPL")))
+
+        assertEquals(setOf(WallstreetOnlineCategory.FLOP), selection.sourceCategories["MU"])
     }
 
     @Test
