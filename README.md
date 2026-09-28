@@ -21,10 +21,18 @@ MiMiTrends is informational software. It does not place orders, provide investme
 
 ### Compact live radar
 
+The workspace places a live source activity table beside the radar. Its rows cover Yahoo, Finnhub,
+Tradegate, Euronext, Scalable, Lang & Schwarz, wallstreetONLINE, and TraderFox. `Last` shows the age
+of the most recent source operation (`3 min.`); a dash means no operation has been observed in this
+session. `Processed (selected)` shows records returned by the latest operation and, in green
+parentheses, records that passed source validation or matching. Counts describe the latest operation,
+not a session total. A source failure is available in the row tooltip. The divider can be dragged to
+give either table more space; on narrow windows, the source table moves below the radar.
+
 <img src="./Doc/LiveRadar.png" alt="MiMiTrends compact Live radar showing rapid-crash alerts" width="1043">
 
-*The primary workspace keeps confirmed live events visible without the retired multi-panel scanner. Rapid
-crashes use a full-width yellow row, while the status line reports scan progress and the active pool.*
+*This screenshot shows the alert table before the source activity pane was added. Rapid crashes use a
+full-width yellow row, while the status line reports scan progress and the active pool.*
 
 The default 820×500 workspace is intentionally list-first. One `Live radar` table shows only confirmed
 `RAPID_CRASH` and `TRADABLE_CORRIDOR` events with their measured movement, current price, and age. Rapid

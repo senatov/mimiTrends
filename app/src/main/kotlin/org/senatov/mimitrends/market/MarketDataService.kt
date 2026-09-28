@@ -21,12 +21,14 @@ import org.senatov.mimitrends.model.MinuteBar
 import org.senatov.mimitrends.model.ResearchFeatures
 import org.senatov.mimitrends.model.ScanResult
 import org.senatov.mimitrends.model.ScannerCriteria
+import org.senatov.mimitrends.providers.SourceActivity
 import org.slf4j.LoggerFactory
 
 internal class MarketDataService(
     private val repository: MarketRepository,
     private val yahooFinance: YahooFinanceClient,
-    private val dataStatus: (String) -> String
+    private val dataStatus: (String) -> String,
+    private val sourceActivity: SourceActivity? = null
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
 
@@ -44,7 +46,17 @@ internal class MarketDataService(
             val incrementalAfter = if (needsBootstrap) null else latestLocal?.takeIf {
                 it >= now - RADAR_LOOKBACK_SECONDS
             }
-            val series = yahooFinance.loadIntraday(symbol, incrementalAfter)
+            val series = try {
+                yahooFinance.loadIntraday(symbol, incrementalAfter).also { result ->
+                    sourceActivity?.record(
+                        "Yahoo", result.bars.size,
+                        currentAnalysisBars(result.bars, MarketDataSource.YAHOO, now).size
+                    )
+                }
+            } catch (error: Exception) {
+                sourceActivity?.record("Yahoo", 0, 0, failed = true)
+                throw error
+            }
             series.bars.forEach(repository::upsertMinuteBar)
             val oldProfile = repository.loadCompanyProfile(symbol)
             repository.upsertCompanyProfile(

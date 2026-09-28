@@ -246,6 +246,32 @@
     -fx-padding: 0 2px;
 }
 
+.source-activity-panel {
+    -fx-padding: 8px;
+}
+
+.source-activity-table .table-cell {
+    -fx-alignment: center-left;
+}
+
+.source-selected-count {
+    -fx-text-fill: #17633b;
+    -fx-font-weight: 600;
+}
+
+.theme-dark .source-selected-count {
+    -fx-text-fill: #52c887;
+}
+
+.source-activity-table .table-cell.source-failed-age {
+    -fx-text-fill: -mimi-negative;
+}
+
+.radar-split-pane {
+    -fx-background-color: transparent;
+    -fx-padding: 0;
+}
+
 .table-search-control {
     -fx-alignment: center-left;
 }

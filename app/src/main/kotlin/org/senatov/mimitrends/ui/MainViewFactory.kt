@@ -1,6 +1,7 @@
 package org.senatov.mimitrends.ui
 
 import javafx.geometry.Insets
+import javafx.geometry.Orientation
 import javafx.geometry.Pos
 import javafx.scene.Parent
 import javafx.scene.control.Label
@@ -12,12 +13,14 @@ import javafx.scene.layout.StackPane
 import javafx.scene.layout.VBox
 import org.senatov.mimitrends.scanner.ScannerPanel
 import org.senatov.mimitrends.shortmove.ShortMovePanel
+import org.senatov.mimitrends.providers.SourceActivityPanel
 
 internal object MainViewFactory {
     fun create(
         actions: WorkspaceActionButtons,
         scannerPanel: ScannerPanel,
         radarPanel: ShortMovePanel,
+        sourceActivityPanel: SourceActivityPanel,
         chartDrawer: ChartDrawer,
         contentSplitPane: SplitPane,
         requestStatus: RequestStatusPane,
@@ -31,10 +34,25 @@ internal object MainViewFactory {
             left = titleIdentity
             right = actions.createToolbar()
         }
+        val radarSplitPane = SplitPane(radarPanel, sourceActivityPanel).apply {
+            setDividerPositions(0.64)
+            styleClass += "radar-split-pane"
+            widthProperty().addListener { _, _, width ->
+                val next = when {
+                    width.toDouble() <= 930.0 -> Orientation.VERTICAL
+                    width.toDouble() >= 1_030.0 -> Orientation.HORIZONTAL
+                    else -> orientation
+                }
+                if (orientation != next) {
+                    orientation = next
+                    setDividerPositions(if (next == Orientation.HORIZONTAL) 0.64 else 0.60)
+                }
+            }
+        }
         contentSplitPane.apply {
             orientation = javafx.geometry.Orientation.VERTICAL
-            items.setAll(radarPanel, chartDrawer)
-            SplitPane.setResizableWithParent(radarPanel, true)
+            items.setAll(radarSplitPane, chartDrawer)
+            SplitPane.setResizableWithParent(radarSplitPane, true)
             SplitPane.setResizableWithParent(chartDrawer, true)
             styleClass += "content-split-pane"
         }

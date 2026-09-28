@@ -29,7 +29,8 @@ internal class ScalablePollingService(
     private val repository: MarketRepository,
     private val observationSink: MarketObservationSink,
     private val fallback: (Collection<String>) -> Unit,
-    private val client: ScalableQuoteClient = ScalableCliClient()
+    private val client: ScalableQuoteClient = ScalableCliClient(),
+    private val activity: SourceActivity? = null
 ) : AutoCloseable {
     private val log = LoggerFactory.getLogger(javaClass)
     private val scheduler = Executors.newSingleThreadScheduledExecutor { task ->
@@ -56,14 +57,24 @@ internal class ScalablePollingService(
         }
         try {
             client.verifyAccess()
-            val unresolved = targets.filterNot(::pollSymbol)
+            var received = 0
+            var accepted = 0
+            val unresolved = targets.filter { symbol ->
+                val result = pollSymbol(symbol)
+                received += result.first
+                if (result.second) accepted++
+                !result.second
+            }
+            activity?.record("Scalable", received, accepted)
             fallback(unresolved)
             log.debug(LogTag.API, "Scalable provider refreshed symbols={} fallback={}", targets.size, unresolved.size)
         } catch (error: ScalableCliUnavailableException) {
+            activity?.record("Scalable", 0, 0, failed = true)
             fallback(targets)
             log.info(LogTag.API, "Scalable provider unavailable; using Lang & Schwarz fallback cause={}", error.message)
             return
         } catch (error: Exception) {
+            if (error !is InterruptedException) activity?.record("Scalable", 0, 0, failed = true)
             fallback(targets)
             if (error !is InterruptedException) {
                 log.warn(LogTag.API, "Scalable provider failed; using Lang & Schwarz fallback", error)
@@ -75,18 +86,23 @@ internal class ScalablePollingService(
         }
     }
 
-    private fun pollSymbol(symbol: String): Boolean {
-        val isin = repository.loadInstrumentIsin(symbol) ?: return false
-        return try {
-            store(symbol, client.loadQuote(isin))
-            true
+    private fun pollSymbol(symbol: String): Pair<Int, Boolean> {
+        val isin = repository.loadInstrumentIsin(symbol) ?: return 0 to false
+        val quote = try {
+            client.loadQuote(isin)
         } catch (error: ScalableCliUnavailableException) {
             log.debug(LogTag.API, "Scalable quote unavailable symbol={} cause={}", symbol, error.message)
-            false
+            return 0 to false
+        }
+        return try {
+            1 to store(symbol, quote)
+        } catch (error: ScalableCliUnavailableException) {
+            log.debug(LogTag.API, "Scalable quote rejected symbol={} cause={}", symbol, error.message)
+            1 to false
         }
     }
 
-    private fun store(symbol: String, quote: ScalableQuote) {
+    private fun store(symbol: String, quote: ScalableQuote): Boolean {
         val now = System.currentTimeMillis()
         if (quote.observedAtMillis !in (now - MAX_QUOTE_AGE_MILLIS)..(now + FUTURE_TOLERANCE_MILLIS)) {
             throw ScalableCliUnavailableException("Scalable quote is stale")
@@ -114,6 +130,7 @@ internal class ScalablePollingService(
         if (stored) {
             observationSink.publish(MarketPriceObservation(PROVIDER, symbol, quote.midpoint, quote.observedAtMillis))
         }
+        return stored
     }
 
     private fun schedule(delayMillis: Long, expectedGeneration: Long) {

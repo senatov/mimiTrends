@@ -32,7 +32,8 @@ import java.time.ZoneId
 internal class EuronextPollingService(
     private val repository: MarketRepository,
     private val client: EuronextMarketDataClient = EuronextMarketDataClient(),
-    private val observationSink: MarketObservationSink = MarketObservationSink {}
+    private val observationSink: MarketObservationSink = MarketObservationSink {},
+    private val activity: SourceActivity? = null
 ) : MarketObservationSource {
     private val log = LoggerFactory.getLogger(javaClass)
     private val scheduler = Executors.newSingleThreadScheduledExecutor { task ->
@@ -70,10 +71,12 @@ internal class EuronextPollingService(
                 if (symbols.isEmpty() || generation != expectedGeneration) return
                 symbols[index].also { index = (index + 1) % symbols.size }
             }
-            runCatching { poll(symbol) }
+            var received = false
+            runCatching { poll(symbol) { received = true } }
                 .onSuccess { backoff.success() }
                 .onFailure { error ->
                     if (error is InterruptedException) return@onFailure
+                    activity?.record(PROVIDER_LABEL, if (received) 1 else 0, 0, failed = true)
                     if (error is ProviderDataUnavailableException) {
                         backoff.success()
                         log.debug(LogTag.API, "Euronext quote unavailable symbol={} cause={}", symbol, error.message)
@@ -101,10 +104,12 @@ internal class EuronextPollingService(
                 !local.toLocalTime().isBefore(OPEN) && local.toLocalTime().isBefore(CLOSE)
     }
 
-    private fun poll(symbol: String) {
+    private fun poll(symbol: String, onQuote: () -> Unit = {}) {
         val instrument = resolve(symbol) ?: return
         val source = EuronextInstrument(instrument.identifier, instrument.mic, instrument.resolvedName)
         val quote = client.loadQuote(source)
+        onQuote()
+        activity?.record(PROVIDER_LABEL, 1, 0)
         val now = System.currentTimeMillis()
         if (quote.observedAtMillis !in (now - MAX_QUOTE_AGE_MILLIS)..(now + FUTURE_TOLERANCE_MILLIS)) {
             throw ProviderDataUnavailableException("Euronext quote is stale for $symbol")
@@ -116,6 +121,7 @@ internal class EuronextPollingService(
             )
         )
         if (stored) {
+            activity?.record(PROVIDER_LABEL, 1, 1)
             observationSink.publish(MarketPriceObservation(PROVIDER, symbol, quote.last, quote.observedAtMillis))
             log.debug(
                 LogTag.DB, "Euronext quote stored symbol={} isin={} mic={} price={}",
@@ -158,6 +164,7 @@ internal class EuronextPollingService(
 
     private companion object {
         const val PROVIDER = "EURONEXT"
+        const val PROVIDER_LABEL = "Euronext"
         const val INDEX_ISIN_PREFIX = "FRIX"
         const val UNRESOLVED_RETRY_MILLIS = 24 * 60 * 60_000L
         const val MAX_QUOTE_AGE_MILLIS = 10 * 60_000L

@@ -16,17 +16,22 @@ import org.senatov.mimitrends.log.LogTag
 import org.senatov.mimitrends.marketdata.WallstreetOnlineMarketDataClient
 import org.senatov.mimitrends.marketdata.WallstreetOnlineMover
 import org.senatov.mimitrends.marketdata.YahooFinanceClient
+import org.senatov.mimitrends.providers.SourceActivity
 import org.slf4j.LoggerFactory
 
 /** Turns the current public mover tables into symbols that the regular scanner can evaluate. */
 internal class WallstreetOnlineDiscoveryService(
     private val movers: () -> List<WallstreetOnlineMover>,
     private val resolve: (String) -> String?,
-    private val nowMillis: () -> Long = System::currentTimeMillis
+    private val nowMillis: () -> Long = System::currentTimeMillis,
+    private val activity: SourceActivity? = null
 ) {
-    constructor(wallstreetOnline: WallstreetOnlineMarketDataClient, yahoo: YahooFinanceClient) : this(
+    constructor(
+        wallstreetOnline: WallstreetOnlineMarketDataClient, yahoo: YahooFinanceClient,
+        activity: SourceActivity? = null
+    ) : this(
         wallstreetOnline::loadMovers,
-        { query -> yahoo.resolveEquity(query)?.symbol }
+        { query -> yahoo.resolveEquity(query)?.symbol }, activity = activity
     )
 
     private val log = LoggerFactory.getLogger(javaClass)
@@ -38,11 +43,18 @@ internal class WallstreetOnlineDiscoveryService(
     fun discover(): List<String> {
         val now = nowMillis()
         if (now < refreshAfterMillis) return cachedSymbols
-        val current = movers().take(MAX_DISCOVERY_CANDIDATES)
+        val loaded = try {
+            movers()
+        } catch (error: Exception) {
+            activity?.record("wallstreetONLINE", 0, 0, failed = true)
+            throw error
+        }
+        val current = loaded.take(MAX_DISCOVERY_CANDIDATES)
         refreshAfterMillis = now + REFRESH_INTERVAL_MILLIS
         val currentPaths = current.mapTo(hashSetOf(), WallstreetOnlineMover::path)
         synchronized(resolvedPaths) { resolvedPaths.keys.retainAll(currentPaths) }
         val symbols = current.mapNotNull { mover -> resolve(mover) }.distinct()
+        activity?.record("wallstreetONLINE", loaded.size, symbols.size)
         log.info(LogTag.API, "wallstreetONLINE discovery candidates={} resolved={}", current.size, symbols.size)
         if (symbols.isNotEmpty()) {
             cachedSymbols = symbols

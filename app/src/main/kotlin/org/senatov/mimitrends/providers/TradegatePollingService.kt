@@ -32,7 +32,8 @@ import java.util.concurrent.TimeUnit
 internal class TradegatePollingService(
     private val repository: MarketRepository,
     private val client: TradegateMarketDataClient = TradegateMarketDataClient(),
-    private val observationSink: MarketObservationSink = MarketObservationSink {}
+    private val observationSink: MarketObservationSink = MarketObservationSink {},
+    private val activity: SourceActivity? = null
 ) : MarketObservationSource {
     private val log = LoggerFactory.getLogger(javaClass)
     private val scheduler = Executors.newSingleThreadScheduledExecutor { task ->
@@ -70,10 +71,12 @@ internal class TradegatePollingService(
                 if (symbols.isEmpty() || generation != expectedGeneration) return
                 symbols[index].also { index = (index + 1) % symbols.size }
             }
-            runCatching { poll(symbol) }
+            var received = false
+            runCatching { poll(symbol) { received = true } }
                 .onSuccess { backoff.success() }
                 .onFailure { error ->
                     if (error is InterruptedException) return@onFailure
+                    activity?.record(PROVIDER_LABEL, if (received) 1 else 0, 0, failed = true)
                     if (error is ProviderDataUnavailableException) {
                         backoff.success()
                         log.debug(LogTag.API, "Tradegate quote unavailable symbol={} cause={}", symbol, error.message)
@@ -105,9 +108,11 @@ internal class TradegatePollingService(
         task = scheduler.schedule({ pollNextSafely(expectedGeneration) }, delayMillis, TimeUnit.MILLISECONDS)
     }
 
-    private fun poll(symbol: String) {
+    private fun poll(symbol: String, onQuote: () -> Unit = {}) {
         val instrument = resolve(symbol) ?: return
         val quote = client.loadQuote(instrument.identifier)
+        onQuote()
+        activity?.record(PROVIDER_LABEL, 1, 0)
         val executableMidpoint = quote.bid?.takeIf { it > 0.0 }?.let { bid ->
             quote.ask?.takeIf { it >= bid }?.let { ask -> (bid + ask) / 2.0 }
         } ?: throw ProviderDataUnavailableException("Tradegate returned no executable bid/ask for $symbol")
@@ -119,6 +124,7 @@ internal class TradegatePollingService(
             )
         )
         if (stored) {
+            activity?.record(PROVIDER_LABEL, 1, 1)
             observationSink.publish(MarketPriceObservation(PROVIDER, symbol, executableMidpoint, quote.observedAtMillis))
             log.debug(
                 LogTag.DB, "Tradegate quote stored symbol={} isin={} price={}",
@@ -194,6 +200,7 @@ internal class TradegatePollingService(
 
     private companion object {
         const val PROVIDER = "TRADEGATE"
+        const val PROVIDER_LABEL = "Tradegate"
         const val MIC = "XGAT"
         const val CURRENCY = "EUR"
         const val UNRESOLVED_RETRY_MILLIS = 24 * 60 * 60_000L

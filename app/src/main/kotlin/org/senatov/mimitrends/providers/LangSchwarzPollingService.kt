@@ -26,7 +26,8 @@ import java.util.concurrent.TimeUnit
 internal class LangSchwarzPollingService(
     private val repository: MarketRepository,
     private val observationSink: MarketObservationSink,
-    private val client: LangSchwarzMarketDataClient = LangSchwarzMarketDataClient()
+    private val client: LangSchwarzMarketDataClient = LangSchwarzMarketDataClient(),
+    private val activity: SourceActivity? = null
 ) : AutoCloseable {
     private val log = LoggerFactory.getLogger(javaClass)
     private val scheduler = Executors.newSingleThreadScheduledExecutor { task ->
@@ -57,10 +58,17 @@ internal class LangSchwarzPollingService(
                 symbols
             }
             val listings = client.loadEuropeanListings()
-            targets.forEach { symbol -> match(symbol, listings)?.let { store(symbol, it) } }
+            val selectedIds = hashSetOf<String>()
+            targets.forEach { symbol ->
+                match(symbol, listings)?.let { listing ->
+                    if (store(symbol, listing)) selectedIds += listing.itemId
+                }
+            }
+            activity?.record("Lang & Schwarz", listings.size, selectedIds.size)
             backoff.success()
         } catch (error: Exception) {
             if (error !is InterruptedException) {
+                activity?.record("Lang & Schwarz", 0, 0, failed = true)
                 nextDelayMillis = backoff.failure(error)
                 log.warn(
                     LogTag.API, "Lang & Schwarz table crawl paused operation=poll delay={}ms cause={}",
@@ -83,7 +91,7 @@ internal class LangSchwarzPollingService(
         return LangSchwarzListingMatcher.match(symbol, profile.name, identifiers, listings)
     }
 
-    private fun store(symbol: String, listing: LangSchwarzListing) {
+    private fun store(symbol: String, listing: LangSchwarzListing): Boolean {
         val now = System.currentTimeMillis()
         repository.upsertProviderInstrument(
             ProviderInstrument(
@@ -99,6 +107,7 @@ internal class LangSchwarzPollingService(
         if (stored) {
             observationSink.publish(MarketPriceObservation(PROVIDER, symbol, listing.midpoint, listing.observedAtMillis))
         }
+        return stored
     }
 
     private fun schedule(delayMillis: Long, expectedGeneration: Long) {

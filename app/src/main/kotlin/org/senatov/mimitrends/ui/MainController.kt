@@ -53,9 +53,13 @@ class MainController(
     private val currencyConverter = ScanResultCurrencyConverter(exchangeRates) { scannerCriteria }
     private val status = MainStatusController(requestStatus, trendChart, actions.refresh, log)
     private val yahooFinance = YahooFinanceClient()
+    private val sourceActivity = SourceActivity()
+    private val sourceActivityPanel = SourceActivityPanel(sourceActivity)
     private val wallstreetOnlineClient = WallstreetOnlineMarketDataClient()
-    private val wallstreetOnlineDiscovery = WallstreetOnlineDiscoveryService(wallstreetOnlineClient, yahooFinance)
-    private val weeklyMarketUniverse = WeeklyMarketUniverse()
+    private val wallstreetOnlineDiscovery = WallstreetOnlineDiscoveryService(
+        wallstreetOnlineClient, yahooFinance, activity = sourceActivity
+    )
+    private val weeklyMarketUniverse = WeeklyMarketUniverse(activity = sourceActivity)
     private val dynamicUniverse = DynamicMarketUniverse(discover = {
         weeklyMarketUniverse.symbols() + wallstreetOnlineDiscovery.discover()
     })
@@ -122,7 +126,7 @@ class MainController(
     private var finnhubClient: FinnhubWebSocketClient? = null
     private val liveTicks = ConcurrentHashMap<String, Long>()
     private val feedStatus = FeedStatusResolver(liveTicks)
-    private val marketData = MarketDataService(repository, yahooFinance, feedStatus::status)
+    private val marketData = MarketDataService(repository, yahooFinance, feedStatus::status, sourceActivity)
     private val scannerBatch = ScannerBatchService(marketData::loadAndEvaluate, analytics, repository, feedStatus::status)
     private val observationBus = MarketObservationBus()
     private val observationRecorder = ProviderObservationRecorder(repository, observationBus)
@@ -131,13 +135,19 @@ class MainController(
         userWatchlist::observe
     )
     private val observationUiBridge = MarketObservationUiBridge(observationBus.observations, observationPresenter::apply)
-    private val tradegateProvider = TradegatePollingService(repository, observationSink = observationRecorder)
-    private val euronextProvider = EuronextPollingService(repository, observationSink = observationRecorder)
-    private val langSchwarzProvider = LangSchwarzPollingService(repository, observationRecorder)
+    private val tradegateProvider = TradegatePollingService(
+        repository, observationSink = observationRecorder, activity = sourceActivity
+    )
+    private val euronextProvider = EuronextPollingService(
+        repository, observationSink = observationRecorder, activity = sourceActivity
+    )
+    private val langSchwarzProvider = LangSchwarzPollingService(
+        repository, observationRecorder, activity = sourceActivity
+    )
     private val scalableProvider = ScalablePollingService(
         repository, observationRecorder, { symbols ->
             langSchwarzProvider.replaceSymbols(if (scannerCriteria.langSchwarzEnabled) symbols else emptyList())
-        }
+        }, activity = sourceActivity
     )
     private val recentEvents = RecentEventRetainer()
     private val priorityScanner = PriorityScanCoordinator(
@@ -227,7 +237,7 @@ class MainController(
         tradegateProvider.configure(scannerCriteria)
         euronextProvider.configure(scannerCriteria)
         val appLayers = MainViewFactory.create(
-            actions, scannerPanel, shortMovePanel,
+            actions, scannerPanel, shortMovePanel, sourceActivityPanel,
             chartDrawer, contentSplitPane, requestStatus, initialDivider
         )
         WorkspaceToolbar.configure(
@@ -367,7 +377,7 @@ class MainController(
         )
         finnhubClient = FinnhubLiveStarter.restart(
             key, finnhubClient, scannerCriteria, liveTicks,
-            liveAggregator, log, status::update
+            liveAggregator, log, status::update, sourceActivity
         )
     }
 

@@ -4,6 +4,7 @@ import org.senatov.mimitrends.log.LogTag
 import org.senatov.mimitrends.marketdata.TraderFoxEquity
 import org.senatov.mimitrends.marketdata.TraderFoxList
 import org.senatov.mimitrends.marketdata.TraderFoxUniverseClient
+import org.senatov.mimitrends.providers.SourceActivity
 import org.slf4j.LoggerFactory
 import java.nio.file.Files
 import java.nio.file.Path
@@ -16,7 +17,8 @@ import java.util.concurrent.Executors
 internal class WeeklyMarketUniverse(
     private val load: (TraderFoxList) -> List<TraderFoxEquity> = TraderFoxUniverseClient()::load,
     private val path: Path = Path.of(System.getProperty("user.home"), ".mimi", "trends", "weekly-universe.properties"),
-    private val nowMillis: () -> Long = System::currentTimeMillis
+    private val nowMillis: () -> Long = System::currentTimeMillis,
+    private val activity: SourceActivity? = null
 ) : AutoCloseable {
     private val log = LoggerFactory.getLogger(javaClass)
     private val executor = Executors.newSingleThreadExecutor { task ->
@@ -31,7 +33,10 @@ internal class WeeklyMarketUniverse(
         executor.execute {
             runCatching { refreshIfDue() }
                 .onSuccess { if (it) onUpdated() }
-                .onFailure { log.warn(LogTag.API, "weekly market universe refresh failed; retaining cached symbols", it) }
+                .onFailure {
+                    activity?.record("TraderFox", 0, 0, failed = true)
+                    log.warn(LogTag.API, "weekly market universe refresh failed; retaining cached symbols", it)
+                }
         }
     }
 
@@ -49,6 +54,7 @@ internal class WeeklyMarketUniverse(
             "TraderFox universe response is incomplete"
         }
         val selected = select(dax, nyse, sp500, nasdaq100, now)
+        activity?.record("TraderFox", dax.size + nyse.size + sp500.size + nasdaq100.size, selected.size)
         require(selected.size >= 100 && selected.count { it.endsWith(".DE") } >= 35) {
             "TraderFox universe has too few current equities"
         }
