@@ -23,10 +23,12 @@ MiMiTrends is informational software. It does not place orders, provide investme
 
 The workspace places a live source activity table beside the radar. Its rows cover Yahoo, Finnhub,
 Tradegate, Euronext, Scalable, Lang & Schwarz, wallstreetONLINE, and TraderFox. `Last` shows the age
-of the most recent source operation (`3 min.`); a dash means no operation has been observed in this
-session. `Processed (selected)` shows records returned by the latest operation and, in green
-parentheses, records that passed source validation or matching. Counts describe the latest operation,
-not a session total. A source failure is available in the row tooltip. The divider can be dragged to
+of the most recent source operation (`3 min.`). When no request is due, it can instead show an explicit
+state such as `Disabled`, `No signals`, `Login needed`, or `Weekly cache`; a dash means no operation
+or state has been observed in this session. `Received (valid)` shows records returned by the latest
+operation and, in green parentheses, records that passed source validation or matching. The units
+vary by source (minute bars, trades, quotes, or discovery entries), and these counts are not scanner
+signal-filter results or session totals. A source failure is available in the row tooltip. The divider can be dragged to
 give either table more space; on narrow windows, the source table moves below the radar.
 
 <img src="./Doc/LiveRadar.png" alt="MiMiTrends compact Live radar showing rapid-crash alerts" width="1043">
@@ -283,10 +285,13 @@ when their ISIN is known; it is not used to crawl the full universe. Tradegate a
 and disabled by default. Lang & Schwarz is an explicitly enabled European fallback when Scalable cannot
 resolve a selected signal. Scalable quotes require an active `sc` CLI login; a successful public
 `capabilities` command does not establish a broker session. Returned quote ISINs must match the request.
+Each Scalable batch logs its target, received, accepted, fallback counts, and duration. Failed access
+retries after five minutes without stopping the polling cycle.
 
 Euronext search results are accepted only for the expected ISIN when one is known. If its API returns
-an invalid quote response, polling reports a concise provider response error and pauses for at least
-one minute before retrying; no quote is stored from that response.
+an invalid quote response, polling reports the content type and response length without logging the
+body, then pauses for at least one minute before retrying; no quote is stored from that response.
+Tradegate and Euronext retain their polling position and backoff across rotating scan universes.
 
 wallstreetONLINE is used for discovery: its public top, flop, most-traded, gap, reversal, and high-range
 rankings are sampled every 30 minutes. Up to 40 distinct entries are selected in a balanced rotation
@@ -505,7 +510,9 @@ therefore remains visibly stale and cannot displace a newer observation or make 
 
 ### Finnhub
 
-Finnhub is optional. With a user-provided API key, one WebSocket connection subscribes to selected US symbols and aggregates trades into minute OHLCV bars. Finnhub also acts as a company-profile and logo fallback.
+Finnhub is optional. With a user-provided API key, one WebSocket connection follows the active US
+scan rotation, subscribing to newly selected symbols and unsubscribing from departed ones (up to
+200 at once). It aggregates trades into minute OHLCV bars and also acts as a company-profile and logo fallback.
 
 Configure the key in **Settings → Finnhub live feed**, through `FINNHUB_API_KEY`, or through an ignored project `.env` file. The final local fallback is:
 

@@ -37,17 +37,21 @@ internal class SourceActivityPanel(private val activity: SourceActivity) : VBox(
                 object : TableCell<SourceActivitySnapshot, SourceActivitySnapshot>() {
                     override fun updateItem(item: SourceActivitySnapshot?, empty: Boolean) {
                         super.updateItem(item, empty)
-                        text = if (empty || item == null) null else age(item.lastContactMillis)
+                        text = if (empty || item == null) null else item.status ?: age(item.lastContactMillis)
                         styleClass.remove("source-failed-age")
                         if (!empty && item?.failed == true) styleClass += "source-failed-age"
-                        tooltip = item?.lastContactMillis?.let { millis ->
-                            Tooltip(java.time.Instant.ofEpochMilli(millis).atZone(java.time.ZoneId.systemDefault()).toString())
+                        tooltip = item?.let { snapshot ->
+                            val contact = snapshot.lastContactMillis?.let { millis ->
+                                java.time.Instant.ofEpochMilli(millis).atZone(java.time.ZoneId.systemDefault()).toString()
+                            }
+                            listOfNotNull(snapshot.status, contact?.let { "Last contact: $it" })
+                                .takeIf(List<String>::isNotEmpty)?.joinToString("\n")?.let(::Tooltip)
                         }
                     }
                 }
             }
         }
-        val counts = TableColumn<SourceActivitySnapshot, SourceActivitySnapshot>("Processed (selected)").apply {
+        val counts = TableColumn<SourceActivitySnapshot, SourceActivitySnapshot>("Received (valid)").apply {
             setCellValueFactory { ReadOnlyObjectWrapper(it.value) }
             minWidth = 125.0
             prefWidth = 150.0
@@ -64,7 +68,8 @@ internal class SourceActivityPanel(private val activity: SourceActivity) : VBox(
                         if (item?.failed == true && !empty) {
                             tooltip = Tooltip("Latest source operation failed")
                         } else if (!empty && item != null) {
-                            tooltip = Tooltip("Processed records; selected records that passed source validation")
+                            tooltip = Tooltip("Latest source operation: ${unit(item.source)} received, " +
+                                "${item.accepted} valid. Units differ by source; this is not the signal filter.")
                         } else tooltip = null
                     }
                 }
@@ -99,5 +104,12 @@ internal class SourceActivityPanel(private val activity: SourceActivity) : VBox(
         val seconds = ((System.currentTimeMillis() - lastMillis).coerceAtLeast(0L) / 1_000L)
         return if (seconds < 60) "<1 min." else if (seconds < 3_600) "${seconds / 60} min."
         else if (seconds < 86_400) "${seconds / 3_600} h." else "${seconds / 86_400} d."
+    }
+
+    private fun unit(source: String): String = when (source) {
+        "Yahoo" -> "minute bars"
+        "Finnhub" -> "trades"
+        "wallstreetONLINE", "TraderFox" -> "discovery entries"
+        else -> "quotes"
     }
 }

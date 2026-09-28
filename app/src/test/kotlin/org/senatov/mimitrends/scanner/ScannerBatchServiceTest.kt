@@ -87,7 +87,7 @@ class ScannerBatchServiceTest {
     }
 
     @Test
-    fun `does not persist rejected symbols in focused mode`() {
+    fun `persists rejected symbols and their reason in focused mode`() {
         val path = Files.createTempDirectory("mimitrends-rejected-batch").resolve("test.db")
         val repository = MarketRepository(path)
         val analytics = AnalyticsRepository(path)
@@ -101,9 +101,46 @@ class ScannerBatchServiceTest {
         analytics.close()
         repository.close()
         DriverManager.getConnection("jdbc:sqlite:$path").use { connection ->
-            connection.createStatement().executeQuery("SELECT COUNT(*) FROM scan_candidates").use { row ->
+            connection.createStatement().executeQuery(
+                "SELECT rejection_reason,accepted FROM scan_candidates WHERE symbol='TEST'"
+            ).use { row ->
                 row.next()
-                assertEquals(0, row.getInt(1))
+                assertEquals("NO_HIGHER_LOW", row.getString(1))
+                assertEquals(0, row.getInt(2))
+            }
+            connection.createStatement().executeQuery("SELECT evaluated_symbols FROM scan_runs").use { row ->
+                row.next()
+                assertEquals(1, row.getInt(1))
+            }
+        }
+    }
+
+    @Test
+    fun `records evaluation failures without marking them as accepted`() {
+        val path = Files.createTempDirectory("mimitrends-failed-batch").resolve("test.db")
+        val repository = MarketRepository(path)
+        val analytics = AnalyticsRepository(path)
+        val service = ScannerBatchService(
+            { _, _ -> error("upstream request failed") }, analytics, repository, { "TEST" }
+        )
+
+        val result = service.execute(listOf("TEST"), ScannerCriteria(), { true }, { _, _ -> })
+
+        assertEquals(1, requireNotNull(result).errors.size)
+        analytics.close()
+        repository.close()
+        DriverManager.getConnection("jdbc:sqlite:$path").use { connection ->
+            connection.createStatement().executeQuery(
+                "SELECT evaluated_symbols,accepted_symbols,failures FROM scan_runs"
+            ).use { row ->
+                assertTrue(row.next())
+                assertEquals(1, row.getInt(1))
+                assertEquals(0, row.getInt(2))
+                assertEquals(1, row.getInt(3))
+            }
+            connection.createStatement().executeQuery("SELECT rejection_reason FROM scan_candidates").use { row ->
+                assertTrue(row.next())
+                assertEquals("EVALUATION_ERROR", row.getString(1))
             }
         }
     }

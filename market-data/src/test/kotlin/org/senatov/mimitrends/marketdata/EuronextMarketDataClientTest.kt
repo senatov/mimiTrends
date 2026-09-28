@@ -45,6 +45,14 @@ class EuronextMarketDataClientTest {
     }
 
     @Test
+    fun `classifies text response without including its body`() {
+        val error = assertFailsWith<ProviderResponseException> {
+            client.validateQuoteResponse("Cannot process request", "text/plain")
+        }
+        assertEquals("Euronext quote non-JSON response type=text/plain length=22 returned an invalid response", error.message)
+    }
+
+    @Test
     fun `decrypts the website CryptoJS envelope`() {
         val decrypted = client.decryptEnvelope(
             "YOBUDMmRjsilgZr7cJgcpE2iaiqT1NL1yK+ECtrIKAw=",

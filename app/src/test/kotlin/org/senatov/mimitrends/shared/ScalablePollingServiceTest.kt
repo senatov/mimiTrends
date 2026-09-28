@@ -69,6 +69,28 @@ class ScalablePollingServiceTest {
     }
 
     @Test
+    fun `retries after unavailable access without replacing symbols`() {
+        repository().use { repository ->
+            val calls = java.util.concurrent.atomic.AtomicInteger()
+            val retried = CountDownLatch(2)
+            val unavailable = object : ScalableQuoteClient {
+                override fun verifyAccess() {
+                    calls.incrementAndGet()
+                    throw ScalableCliUnavailableException("not authorized")
+                }
+                override fun loadQuote(isin: String): ScalableQuote = error("not called")
+            }
+            val service = ScalablePollingService(repository, {}, { if (it.isNotEmpty()) retried.countDown() },
+                unavailable, unavailableRetryMillis = 25L)
+            service.use {
+                it.replaceSymbols(listOf("ENR.DE"))
+                assertTrue(retried.await(2, TimeUnit.SECONDS))
+            }
+            assertTrue(calls.get() >= 2)
+        }
+    }
+
+    @Test
     fun `rejects quote when isin metadata points to another company`() {
         repository().use { repository ->
             repository.upsertProviderInstrument(

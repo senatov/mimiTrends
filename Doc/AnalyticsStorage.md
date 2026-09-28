@@ -33,8 +33,9 @@ previously stored cancelled rows before matching executions into chart trades.
 
 1. Yahoo or Finnhub bars are UPSERTed into `minute_bars`.
 2. A completed scan refreshes observed sessions, aggregate bars, quality and robust time-of-day baselines.
-3. Every evaluated instrument is written to `scan_candidates`; empty results use `NO_CURRENT_SIGNAL`,
-   while provider failures retain the concrete error.
+3. Every attempted instrument is written to `scan_candidates`; empty results retain the detector's
+   rejection reason or use `NO_CURRENT_SIGNAL`. Failed evaluations use `EVALUATION_ERROR`, with the
+   detailed exception kept in the application log.
 4. Published rows are marked only after ranking completes, so the table can be evaluated without
    survivorship ambiguity.
 5. Later bars backfill `signal_outcomes` at 5, 10 and 30 minutes. These records are the basis for

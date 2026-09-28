@@ -49,6 +49,7 @@ class ProviderBackoffTest {
 
         assertEquals(60_000L, backoff.failure(ProviderResponseException("Euronext quote"), now))
         assertFalse(backoff.canRequest(now + 59_999L))
+        assertEquals(1L, backoff.remainingMillis(now + 59_999L))
         assertEquals(120_000L, backoff.failure(ProviderResponseException("Euronext quote"), now + 60_000L))
     }
 }

@@ -76,15 +76,17 @@ internal class ScannerBatchService(
                     ?: evaluation.longTerm ?: evaluation.context
                     evaluation.monitored?.let(coverage::add)
                     if (symbol in alwaysInclude) (accepted ?: evaluation.monitored)?.let { monitored[symbol] = it }
-                    if (accepted != null) {
-                        analytics.recordScanCandidate(
-                            runId, symbol, accepted, null,
-                            accepted.dataStatus.ifBlank { fallbackStatus(symbol) }
-                        )
-                    }
+                    analytics.recordScanCandidate(
+                        runId, symbol, accepted,
+                        if (accepted == null) evaluation.rejectionReason ?: "NO_CURRENT_SIGNAL" else null,
+                        accepted?.dataStatus?.takeIf(String::isNotBlank)
+                            ?: evaluation.sourceStatus.takeIf { it != "UNKNOWN" }
+                            ?: fallbackStatus(symbol)
+                    )
                 }
                 .onFailure { error ->
                     errors += "$symbol: ${error.message ?: error.javaClass.simpleName}"
+                    analytics.recordScanCandidate(runId, symbol, null, "EVALUATION_ERROR", "ERROR")
                 }
             onProgress(index + 1, symbol)
         }

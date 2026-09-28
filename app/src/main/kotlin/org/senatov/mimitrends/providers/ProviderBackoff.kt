@@ -20,13 +20,20 @@ internal class ProviderBackoff {
     private var consecutiveFailures = 0
     private var blockedUntilMillis = 0L
 
+    @Synchronized
     fun canRequest(nowMillis: Long = System.currentTimeMillis()): Boolean = nowMillis >= blockedUntilMillis
 
+    @Synchronized
+    fun remainingMillis(nowMillis: Long = System.currentTimeMillis()): Long =
+        (blockedUntilMillis - nowMillis).coerceAtLeast(0L)
+
+    @Synchronized
     fun success() {
         consecutiveFailures = 0
         blockedUntilMillis = 0L
     }
 
+    @Synchronized
     fun failure(error: Throwable, nowMillis: Long = System.currentTimeMillis()): Long {
         consecutiveFailures = (consecutiveFailures + 1).coerceAtMost(MAX_FAILURES)
         val providerDelay = (error as? ProviderHttpException)?.retryAfterMillis

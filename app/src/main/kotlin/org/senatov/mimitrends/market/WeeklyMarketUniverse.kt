@@ -44,7 +44,10 @@ internal class WeeklyMarketUniverse(
         val now = nowMillis()
         if (snapshot.updatedAtMillis > 0 && now >= snapshot.updatedAtMillis &&
             now - snapshot.updatedAtMillis < REFRESH_INTERVAL_MILLIS
-        ) return false
+        ) {
+            activity?.markStatus("TraderFox", "Weekly cache")
+            return false
+        }
 
         val dax = load(TraderFoxList.DAX)
         val nyse = load(TraderFoxList.NYSE)
