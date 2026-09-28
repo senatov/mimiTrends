@@ -53,6 +53,14 @@ internal class ScalablePollingService(
         else activity?.markStatus("Scalable", "No signals")
     }
 
+    @Synchronized
+    fun requestRefresh() {
+        if (symbols.isEmpty()) return
+        generation++
+        task?.cancel(false)
+        schedule(0L, generation)
+    }
+
     private fun poll(expectedGeneration: Long) {
         val targets = synchronized(this) {
             if (generation != expectedGeneration || symbols.isEmpty()) return

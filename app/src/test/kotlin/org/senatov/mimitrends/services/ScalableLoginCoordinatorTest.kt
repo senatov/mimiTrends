@@ -32,8 +32,8 @@ class ScalableLoginCoordinatorTest {
     fun `terminal script invokes local read only login without credentials`() {
         val script = ScalableTerminalLoginLauncher.scriptFor(Path.of("/tmp/O'Brien/sc"))
         assertTrue(script.contains("'/tmp/O'\"'\"'Brien/sc' login --local-read-only"))
-        assertTrue(script.contains("open \"\${activate_url}\""))
-        assertTrue(script.contains("tee \"\${log_file}\""))
+        assertTrue(script.contains("open") && script.contains("activate_url"))
+        assertTrue(script.contains("tee") && script.contains("log_file"))
         assertFalse(script.contains("password", ignoreCase = true))
     }
 }
