@@ -54,7 +54,7 @@ class MainController(
     private val status = MainStatusController(requestStatus, trendChart, actions.refresh, log)
     private val yahooFinance = YahooFinanceClient()
     private val sourceActivity = SourceActivity()
-    private val sourceActivityPanel = SourceActivityPanel(sourceActivity)
+    private val sourceActivityPanel = SourceActivityPanel(sourceActivity) { scalableLogin.start() }
     private val wallstreetOnlineClient = WallstreetOnlineMarketDataClient()
     private val wallstreetOnlineDiscovery = WallstreetOnlineDiscoveryService(
         wallstreetOnlineClient, yahooFinance, activity = sourceActivity
@@ -112,7 +112,7 @@ class MainController(
             loadLocalChart(currentSymbol)
         }
     )
-    private var providerUniverse = emptyList<String>()
+    @Volatile private var providerUniverse = emptyList<String>()
     private val closing = AtomicBoolean()
     private val chartDataLoader = ChartDataLoader(repository, analytics, exchangeRates)
     private val chartSelection: ChartSelectionController by lazy {
@@ -124,7 +124,11 @@ class MainController(
     }
     private val initialDivider = initialDividerPosition.coerceIn(0.35, 0.72)
     private val contentSplitPane = SplitPane()
-    private var finnhubClient: FinnhubWebSocketClient? = null
+    @Volatile private var finnhubClient: FinnhubWebSocketClient? = null
+    private val finnhubSubscriptions = FinnhubSubscriptionManager(
+        { symbol -> finnhubClient?.subscribe(symbol) },
+        { symbol -> finnhubClient?.unsubscribe(symbol) }
+    )
     private val liveTicks = ConcurrentHashMap<String, Long>()
     private val feedStatus = FeedStatusResolver(liveTicks)
     private val marketData = MarketDataService(repository, yahooFinance, feedStatus::status, sourceActivity)
@@ -148,8 +152,12 @@ class MainController(
     private val scalableProvider = ScalablePollingService(
         repository, observationRecorder, { symbols ->
             langSchwarzProvider.replaceSymbols(if (scannerCriteria.langSchwarzEnabled) symbols else emptyList())
+            if (!scannerCriteria.langSchwarzEnabled) sourceActivity.markStatus("Lang & Schwarz", "Disabled")
+            else if (symbols.isEmpty()) sourceActivity.markStatus("Lang & Schwarz", "No fallback")
+            else sourceActivity.clearStatus("Lang & Schwarz")
         }, activity = sourceActivity
     )
+    private val scalableLogin = ScalableLoginUi(sourceActivity, scalableProvider, status)
     private val recentEvents = RecentEventRetainer()
     private val priorityScanner = PriorityScanCoordinator(
         { symbol -> marketData.loadPriorityResult(symbol, scannerCriteria) },
@@ -281,6 +289,7 @@ class MainController(
         observationUiBridge.close()
         try {
             shortMoveRefresh.close()
+            scalableLogin.close()
             importExecutor.shutdownNow()
             ApplicationResourceCloser.close(
                 focusedSignals, priorityScanner, tradegateProvider, euronextProvider,
@@ -302,6 +311,7 @@ class MainController(
     private fun startScanner() = scanCycle.start()
 
     private fun configureProviderUniverse(symbols: List<String>) {
+        finnhubSubscriptions.replace(symbols)
         if (symbols == providerUniverse) return
         providerUniverse = symbols
         val providerCriteria = scannerCriteria.copy(symbols = symbols)
@@ -377,9 +387,11 @@ class MainController(
             persistentCompanyLogoClient(repository)
         )
         finnhubClient = FinnhubLiveStarter.restart(
-            key, finnhubClient, scannerCriteria, liveTicks,
+            key, finnhubClient, liveTicks,
             liveAggregator, log, status::update, sourceActivity
         )
+        finnhubSubscriptions.reset()
+        finnhubSubscriptions.replace(providerUniverse)
     }
 
     private fun loadLocalChart(symbol: String) = chartSelection.load(symbol)

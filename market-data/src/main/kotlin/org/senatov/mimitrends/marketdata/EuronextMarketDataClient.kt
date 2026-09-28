@@ -73,7 +73,15 @@ class EuronextMarketDataClient(
         if (response.statusCode() != 200) {
             throw ProviderHttpException.from(response.statusCode(), response.headers(), "Euronext quote for $product")
         }
-        return parseQuote(decodeQuoteBody(response.body()))
+        val body = response.body()
+        validateQuoteResponse(body, response.headers().firstValue("Content-Type").orElse("unknown"))
+        return parseQuote(decodeQuoteBody(body))
+    }
+
+    internal fun validateQuoteResponse(body: String, contentType: String) {
+        if (body.trimStart().firstOrNull() != '{') {
+            throw ProviderResponseException("Euronext quote non-JSON response type=${contentType.take(80)} length=${body.length}")
+        }
     }
 
     internal fun decodeQuoteBody(body: String): String {

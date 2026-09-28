@@ -30,7 +30,9 @@ internal class ScalablePollingService(
     private val observationSink: MarketObservationSink,
     private val fallback: (Collection<String>) -> Unit,
     private val client: ScalableQuoteClient = ScalableCliClient(),
-    private val activity: SourceActivity? = null
+    private val activity: SourceActivity? = null,
+    private val pollIntervalMillis: Long = 30_000L,
+    private val unavailableRetryMillis: Long = 5 * 60_000L
 ) : AutoCloseable {
     private val log = LoggerFactory.getLogger(javaClass)
     private val scheduler = Executors.newSingleThreadScheduledExecutor { task ->
@@ -48,6 +50,15 @@ internal class ScalablePollingService(
         task = null
         fallback(emptyList())
         if (symbols.isNotEmpty()) schedule(0L, generation)
+        else activity?.markStatus("Scalable", "No signals")
+    }
+
+    @Synchronized
+    fun requestRefresh() {
+        if (symbols.isEmpty()) return
+        generation++
+        task?.cancel(false)
+        schedule(0L, generation)
     }
 
     private fun poll(expectedGeneration: Long) {
@@ -55,6 +66,8 @@ internal class ScalablePollingService(
             if (generation != expectedGeneration || symbols.isEmpty()) return
             symbols
         }
+        val startedNanos = System.nanoTime()
+        var nextDelayMillis = pollIntervalMillis
         try {
             client.verifyAccess()
             var received = 0
@@ -67,22 +80,25 @@ internal class ScalablePollingService(
             }
             activity?.record("Scalable", received, accepted)
             fallback(unresolved)
-            log.debug(LogTag.API, "Scalable provider refreshed symbols={} fallback={}", targets.size, unresolved.size)
+            log.info(LogTag.API, "Scalable provider refreshed symbols={} received={} accepted={} fallback={} durationMs={}",
+                targets.size, received, accepted, unresolved.size, TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startedNanos))
         } catch (error: ScalableCliUnavailableException) {
-            activity?.record("Scalable", 0, 0, failed = true)
+            nextDelayMillis = unavailableRetryMillis
+            activity?.record("Scalable", 0, 0, failed = true, status =
+                if (error.message == "Scalable CLI login required") "Login needed" else "Unavailable")
             fallback(targets)
             log.info(LogTag.API, "Scalable provider unavailable; using Lang & Schwarz fallback cause={}", error.message)
-            return
         } catch (error: Exception) {
+            nextDelayMillis = unavailableRetryMillis
             if (error !is InterruptedException) activity?.record("Scalable", 0, 0, failed = true)
             fallback(targets)
             if (error !is InterruptedException) {
                 log.warn(LogTag.API, "Scalable provider failed; using Lang & Schwarz fallback", error)
             }
-            return
-        }
-        synchronized(this) {
-            if (generation == expectedGeneration && symbols.isNotEmpty()) schedule(POLL_INTERVAL_MILLIS, generation)
+        } finally {
+            synchronized(this) {
+                if (generation == expectedGeneration && symbols.isNotEmpty()) schedule(nextDelayMillis, generation)
+            }
         }
     }
 
@@ -148,7 +164,6 @@ internal class ScalablePollingService(
         const val PROVIDER = "SCALABLE"
         const val MIC = "SCALABLE"
         const val MAX_SYMBOLS = 30
-        const val POLL_INTERVAL_MILLIS = 30_000L
         const val MAX_QUOTE_AGE_MILLIS = 2 * 60_000L
         const val FUTURE_TOLERANCE_MILLIS = 60_000L
     }

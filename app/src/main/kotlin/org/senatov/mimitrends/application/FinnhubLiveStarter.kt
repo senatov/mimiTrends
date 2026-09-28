@@ -13,7 +13,6 @@ import org.senatov.mimitrends.services.*
 import org.senatov.mimitrends.shared.*
 
 import org.senatov.mimitrends.log.LogTag
-import org.senatov.mimitrends.model.ScannerCriteria
 import org.senatov.mimitrends.ws.FinnhubMinuteAggregator
 import org.senatov.mimitrends.ws.FinnhubWebSocketClient
 import org.senatov.mimitrends.providers.SourceActivity
@@ -24,7 +23,6 @@ internal object FinnhubLiveStarter {
     fun restart(
         key: String,
         previous: FinnhubWebSocketClient?,
-        criteria: ScannerCriteria,
         liveTicks: ConcurrentHashMap<String, Long>,
         aggregator: FinnhubMinuteAggregator,
         log: Logger,
@@ -33,7 +31,11 @@ internal object FinnhubLiveStarter {
     ): FinnhubWebSocketClient? {
         previous?.close()
         liveTicks.clear()
-        if (key.isBlank()) return null
+        if (key.isBlank()) {
+            activity?.markStatus("Finnhub", "No API key")
+            return null
+        }
+        activity?.markStatus("Finnhub", "Connecting")
         val client = FinnhubWebSocketClient(
             apiKey = key,
             onTrade = java.util.function.Consumer { tick ->
@@ -42,12 +44,13 @@ internal object FinnhubLiveStarter {
                 aggregator.accept(tick)
             },
             onError = java.util.function.Consumer { error: Throwable ->
+                activity?.markStatus("Finnhub", "Disconnected", failed = true)
                 log.warn(LogTag.API, "Finnhub live feed unavailable; Yahoo fallback remains active", error)
                 javafx.application.Platform.runLater { setStatus("Finnhub unavailable · Yahoo/SQLite fallback active") }
             }
         )
-        MarketUniverseSelector.select(criteria).filterNot { it.contains('.') }.forEach(client::subscribe)
         client.connect().whenComplete { _, error ->
+            activity?.markStatus("Finnhub", if (error == null) "Connected" else "Disconnected", error != null)
             javafx.application.Platform.runLater {
                 setStatus(
                     if (error == null) "Finnhub live connected · Yahoo/SQLite history ready"

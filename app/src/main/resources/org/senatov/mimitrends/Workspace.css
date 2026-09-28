@@ -250,8 +250,14 @@
     -fx-padding: 8px;
 }
 
+.source-login-button {
+    -fx-font-size: 11px;
+    -fx-padding: 2px 7px;
+}
+
 .source-activity-table .table-cell {
     -fx-alignment: center-left;
+    -fx-font-size: 11px;
 }
 
 .source-selected-count {

@@ -43,6 +43,7 @@ internal class TradegatePollingService(
     private val backoff = ProviderBackoff()
     private var symbols = emptyList<String>()
     private var index = 0
+    private var enabled = false
     private var intervalMillis = 1_000L
     private var generation = 0L
     private var task: ScheduledFuture<*>? = null
@@ -52,10 +53,17 @@ internal class TradegatePollingService(
         task?.cancel(false)
         task = null
         generation++
-        backoff.success()
-        symbols = criteria.symbols.map(String::uppercase).filter(ProviderBarTailMerger::isEuropeanSymbol).distinct()
-        index = 0
-        if (!criteria.tradegateEnabled || symbols.isEmpty()) {
+        val nextSymbols = criteria.symbols.map(String::uppercase).filter(ProviderBarTailMerger::isEuropeanSymbol).distinct()
+        index = ProviderPollingCursor.nextIndex(symbols, index, nextSymbols)
+        symbols = nextSymbols
+        val wasEnabled = enabled
+        enabled = criteria.tradegateEnabled && symbols.isNotEmpty()
+        if (!wasEnabled && enabled) {
+            backoff.success()
+            activity?.clearStatus(PROVIDER_LABEL)
+        }
+        if (!enabled) {
+            activity?.markStatus(PROVIDER_LABEL, "Disabled")
             log.info(LogTag.API, "Tradegate provider disabled")
             return
         }
@@ -98,7 +106,7 @@ internal class TradegatePollingService(
         } finally {
             synchronized(this) {
                 if (generation == expectedGeneration && symbols.isNotEmpty()) {
-                    scheduleNext(backoff.jitteredDelay(intervalMillis), expectedGeneration)
+                    scheduleNext(maxOf(backoff.jitteredDelay(intervalMillis), backoff.remainingMillis()), expectedGeneration)
                 }
             }
         }
@@ -193,7 +201,7 @@ internal class TradegatePollingService(
         statusCode in PERMANENT_INSTRUMENT_STATUSES
 
     override fun close() {
-        synchronized(this) { generation++; task?.cancel(false); task = null; symbols = emptyList() }
+        synchronized(this) { generation++; task?.cancel(false); task = null; symbols = emptyList(); enabled = false }
         scheduler.shutdownNow()
         runCatching { scheduler.awaitTermination(20, TimeUnit.SECONDS) }
     }

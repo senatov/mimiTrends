@@ -7,6 +7,7 @@ import javafx.beans.property.ReadOnlyStringWrapper
 import javafx.collections.FXCollections
 import javafx.geometry.Pos
 import javafx.scene.control.Label
+import javafx.scene.control.Button
 import javafx.scene.control.TableCell
 import javafx.scene.control.TableColumn
 import javafx.scene.control.TableView
@@ -16,7 +17,10 @@ import javafx.scene.layout.Priority
 import javafx.scene.layout.VBox
 import javafx.util.Duration
 
-internal class SourceActivityPanel(private val activity: SourceActivity) : VBox(5.0) {
+internal class SourceActivityPanel(
+    private val activity: SourceActivity,
+    private val onScalableLogin: () -> Unit = {}
+) : VBox(5.0) {
     private val rows = FXCollections.observableArrayList<SourceActivitySnapshot>()
     private val table = TableView(rows)
     private val timer = Timeline(KeyFrame(Duration.seconds(5.0), javafx.event.EventHandler { refresh() })).apply {
@@ -31,40 +35,55 @@ internal class SourceActivityPanel(private val activity: SourceActivity) : VBox(
         }
         val last = TableColumn<SourceActivitySnapshot, SourceActivitySnapshot>("Last").apply {
             setCellValueFactory { ReadOnlyObjectWrapper(it.value) }
-            minWidth = 72.0
-            prefWidth = 90.0
+            minWidth = 108.0
+            prefWidth = 108.0
             setCellFactory {
                 object : TableCell<SourceActivitySnapshot, SourceActivitySnapshot>() {
                     override fun updateItem(item: SourceActivitySnapshot?, empty: Boolean) {
                         super.updateItem(item, empty)
-                        text = if (empty || item == null) null else age(item.lastContactMillis)
+                        text = if (empty || item == null) null else item.status ?: age(item.lastContactMillis)
                         styleClass.remove("source-failed-age")
                         if (!empty && item?.failed == true) styleClass += "source-failed-age"
-                        tooltip = item?.lastContactMillis?.let { millis ->
-                            Tooltip(java.time.Instant.ofEpochMilli(millis).atZone(java.time.ZoneId.systemDefault()).toString())
+                        tooltip = item?.let { snapshot ->
+                            val contact = snapshot.lastContactMillis?.let { millis ->
+                                java.time.Instant.ofEpochMilli(millis).atZone(java.time.ZoneId.systemDefault()).toString()
+                            }
+                            listOfNotNull(snapshot.status, contact?.let { "Last contact: $it" })
+                                .takeIf(List<String>::isNotEmpty)?.joinToString("\n")?.let(::Tooltip)
                         }
                     }
                 }
             }
         }
-        val counts = TableColumn<SourceActivitySnapshot, SourceActivitySnapshot>("Processed (selected)").apply {
+        val counts = TableColumn<SourceActivitySnapshot, SourceActivitySnapshot>("Items (valid)").apply {
             setCellValueFactory { ReadOnlyObjectWrapper(it.value) }
-            minWidth = 125.0
-            prefWidth = 150.0
+            minWidth = 105.0
+            prefWidth = 115.0
             setCellFactory {
                 object : TableCell<SourceActivitySnapshot, SourceActivitySnapshot>() {
                     override fun updateItem(item: SourceActivitySnapshot?, empty: Boolean) {
                         super.updateItem(item, empty)
                         text = null
-                        graphic = if (empty || item?.processed == null) null else HBox(
-                            3.0,
-                            Label(item.processed.toString()),
-                            Label("(${item.accepted})").apply { styleClass += "source-selected-count" }
-                        ).apply { alignment = Pos.CENTER_LEFT }
+                        graphic = when {
+                            empty || item == null -> null
+                            item.source == "Scalable" && item.status == "Login needed" -> Button("Login").apply {
+                                styleClass += "source-login-button"
+                                tooltip = Tooltip("Open Scalable CLI login in Terminal")
+                                setOnAction { onScalableLogin() }
+                            }
+
+                            item.processed == null -> null
+                            else -> HBox(
+                                3.0,
+                                Label(item.processed.toString()),
+                                Label("(${item.accepted})").apply { styleClass += "source-selected-count" }
+                            ).apply { alignment = Pos.CENTER_LEFT }
+                        }
                         if (item?.failed == true && !empty) {
                             tooltip = Tooltip("Latest source operation failed")
                         } else if (!empty && item != null) {
-                            tooltip = Tooltip("Processed records; selected records that passed source validation")
+                            tooltip = Tooltip("Latest source operation: ${unit(item.source)} received, " +
+                                "${item.accepted} valid. Units differ by source; this is not the signal filter.")
                         } else tooltip = null
                     }
                 }
@@ -81,10 +100,11 @@ internal class SourceActivityPanel(private val activity: SourceActivity) : VBox(
         children.setAll(
             HBox(Label("Sources").apply { styleClass += "table-section-title" }).apply {
                 styleClass += "table-section-header"
+                alignment = Pos.CENTER_LEFT
             },
             table
         )
-        minWidth = 320.0
+        minWidth = 350.0
         refresh()
         sceneProperty().addListener { _, _, scene -> if (scene == null) timer.stop() else timer.play() }
     }
@@ -99,5 +119,12 @@ internal class SourceActivityPanel(private val activity: SourceActivity) : VBox(
         val seconds = ((System.currentTimeMillis() - lastMillis).coerceAtLeast(0L) / 1_000L)
         return if (seconds < 60) "<1 min." else if (seconds < 3_600) "${seconds / 60} min."
         else if (seconds < 86_400) "${seconds / 3_600} h." else "${seconds / 86_400} d."
+    }
+
+    private fun unit(source: String): String = when (source) {
+        "Yahoo" -> "minute bars"
+        "Finnhub" -> "trades"
+        "wallstreetONLINE", "TraderFox" -> "discovery entries"
+        else -> "quotes"
     }
 }

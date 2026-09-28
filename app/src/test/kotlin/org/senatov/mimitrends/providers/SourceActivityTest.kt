@@ -25,4 +25,19 @@ class SourceActivityTest {
         assertEquals(1, rows["Tradegate"]?.accepted)
         assertFalse(rows["Tradegate"]?.failed ?: true)
     }
+
+    @Test
+    fun `status explains an idle or unavailable source without inventing contact`() {
+        val activity = SourceActivity()
+        activity.markStatus("Scalable", "No signals")
+        assertEquals(null, activity.snapshot().first { it.source == "Scalable" }.lastContactMillis)
+        assertEquals("No signals", activity.snapshot().first { it.source == "Scalable" }.status)
+
+        activity.record("Scalable", 0, 0, failed = true, status = "Login needed")
+        activity.clearStatus("Scalable")
+        val current = activity.snapshot().first { it.source == "Scalable" }
+        assertNotNull(current.lastContactMillis)
+        assertEquals(null, current.status)
+        assertFalse(current.failed)
+    }
 }
