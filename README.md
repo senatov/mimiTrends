@@ -749,6 +749,10 @@ user-visible commit subjects with `NEW:`, `FIX:`, `CHANGE:`, or `DOCS:` and foll
 specific description of the observable change. Unprefixed commits remain visible under
 `Other changes`, but categorized messages produce a clearer release history.
 
+Before running `Scripts/release-github.zsh`, push the current branch so its `HEAD` is available on
+GitHub. The release tag is created against that remote commit; the script checks this before
+building, so an unpublished local commit cannot leave a signed DMG and a bumped version behind.
+
 The notarized form uses the `MiMiNotary` keychain profile by default; override it with `--profile`.
 Apple explains the distribution requirements in
 [Notarizing macOS software before distribution](https://developer.apple.com/documentation/security/notarizing-macos-software-before-distribution)
