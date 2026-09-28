@@ -91,37 +91,6 @@ class ScalablePollingServiceTest {
     }
 
     @Test
-    fun `refreshes immediately when login becomes available`() {
-        repository().use { repository ->
-            repository.upsertProviderInstrument(
-                ProviderInstrument("EURONEXT", "ENR.DE", "DE000ENER6Y0", "XETR", "EUR", "Siemens Energy", 1_000)
-            )
-            val unavailable = CountDownLatch(1)
-            val received = CountDownLatch(1)
-            val loggedIn = java.util.concurrent.atomic.AtomicBoolean()
-            val client = object : ScalableQuoteClient {
-                override fun verifyAccess() {
-                    if (!loggedIn.get()) throw ScalableCliUnavailableException("Scalable CLI login required")
-                }
-
-                override fun loadQuote(isin: String) = successfulClient().loadQuote(isin)
-            }
-            val service = ScalablePollingService(
-                repository, { received.countDown() },
-                { if (it.isNotEmpty()) unavailable.countDown() }, client
-            )
-            service.use {
-                it.replaceSymbols(listOf("ENR.DE"))
-                assertTrue(unavailable.await(2, TimeUnit.SECONDS))
-                loggedIn.set(true)
-                it.requestRefresh()
-                assertTrue(received.await(2, TimeUnit.SECONDS))
-            }
-            assertEquals("SCALABLE", repository.loadLatestProviderQuote("ENR.DE", 0)?.provider)
-        }
-    }
-
-    @Test
     fun `rejects quote when isin metadata points to another company`() {
         repository().use { repository ->
             repository.upsertProviderInstrument(

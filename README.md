@@ -25,7 +25,7 @@ The workspace places a live source activity table beside the radar. Its rows cov
 Tradegate, Euronext, Scalable, Lang & Schwarz, wallstreetONLINE, and TraderFox. `Last` shows the age
 of the most recent source operation (`3 min.`). When no request is due, it can instead show an explicit
 state such as `Disabled`, `No signals`, `Login needed`, or `Weekly cache`; a dash means no operation
-or state has been observed in this session. `Items (valid)` shows records returned by the latest
+or state has been observed in this session. `Received (valid)` shows records returned by the latest
 operation and, in green parentheses, records that passed source validation or matching. The units
 vary by source (minute bars, trades, quotes, or discovery entries), and these counts are not scanner
 signal-filter results or session totals. A source failure is available in the row tooltip. The divider can be dragged to
@@ -287,14 +287,6 @@ resolve a selected signal. Scalable quotes require an active `sc` CLI login; a s
 `capabilities` command does not establish a broker session. Returned quote ISINs must match the request.
 Each Scalable batch logs its target, received, accepted, fallback counts, and duration. Failed access
 retries after five minutes without stopping the polling cycle.
-
-When Scalable shows `Login needed`, use the **Login** button in that row to open the official CLI
-device-code login in Terminal.
-Complete the authorization in your browser. MiMiTrends starts `sc login --local-read-only`, checks for
-the CLI session for up to ten minutes, and refreshes Scalable quotes as soon as access is available.
-The CLI stores the session in the macOS Keychain by default; MiMiTrends does not receive or save login
-credentials. The broker may require a new login when its session expires. Before the first login,
-enable Scalable CLI under **Profile → Security → Agentic Investing** in the Scalable web platform.
 
 Euronext search results are accepted only for the expected ISIN when one is known. If its API returns
 an invalid quote response, polling reports the content type and response length without logging the
