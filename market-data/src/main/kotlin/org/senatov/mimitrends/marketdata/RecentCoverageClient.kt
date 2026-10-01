@@ -65,11 +65,13 @@ class RecentCoverageClient(
     }
 
     private fun yahooNews(symbol: String, companyName: String): List<CoverageItem> {
-        val tickerItems = yahooSearch(symbol)
+        val tickerResult = runCatching { yahooSearch(symbol) }
+        val tickerItems = tickerResult.getOrDefault(emptyList())
         val name = searchName(companyName)
-        if (tickerItems.size >= 5 || name.equals(symbol, ignoreCase = true)) return tickerItems
-        val nameItems = yahooSearch(name).filter { matchesCompany(it.title, symbol, name) }
-        return tickerItems + nameItems
+        if (tickerItems.size >= 5 || name.equals(symbol, ignoreCase = true)) return tickerResult.getOrThrow()
+        val nameResult = runCatching { yahooSearch(name).filter { matchesCompany(it.title, symbol, name) } }
+        if (tickerResult.isFailure && nameResult.isFailure) throw tickerResult.exceptionOrNull()!!
+        return tickerItems + nameResult.getOrDefault(emptyList())
     }
 
     private fun yahooSearch(query: String): List<CoverageItem> {
@@ -84,17 +86,20 @@ class RecentCoverageClient(
     private fun wallstreetOnlineNews(symbol: String, companyName: String): List<CoverageItem> {
         val slug = searchName(companyName).lowercase(Locale.ROOT)
             .replace(Regex("[^a-z0-9]+"), "-").trim('-')
-        val stockNews = if (slug.length >= 4 && slug != symbol.lowercase(Locale.ROOT)) {
+        val stockResult = if (slug.length >= 4 && slug != symbol.lowercase(Locale.ROOT)) {
             runCatching {
                 val url = URI.create("https://www.wallstreet-online.de/aktien/$slug-aktie/nachrichten")
                 parseWallstreetOnlineStockNews(request(url), symbol, companyName)
-            }.getOrDefault(emptyList())
-        } else emptyList()
-        val feedNews = parseWallstreetOnline(
-            request(URI.create("https://www.wallstreet-online.de/rss/nachrichten-alle.xml")),
-            symbol, companyName
-        )
-        return stockNews + feedNews
+            }
+        } else Result.success(emptyList())
+        val feedResult = runCatching {
+            parseWallstreetOnline(
+                request(URI.create("https://www.wallstreet-online.de/rss/nachrichten-alle.xml")),
+                symbol, companyName
+            )
+        }
+        if (stockResult.isFailure && feedResult.isFailure) throw stockResult.exceptionOrNull()!!
+        return stockResult.getOrDefault(emptyList()) + feedResult.getOrDefault(emptyList())
     }
 
     private fun request(uri: URI): String {

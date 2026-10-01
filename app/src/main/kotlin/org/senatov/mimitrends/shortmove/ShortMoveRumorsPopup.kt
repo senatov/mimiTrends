@@ -20,7 +20,7 @@ internal class ShortMoveRumorsPopup(private val openExternal: (String) -> Unit) 
     private val executor = Executors.newFixedThreadPool(2) { task ->
         Thread(task, "recent-coverage").apply { isDaemon = true }
     }
-    private val clock = DateTimeFormatter.ofPattern("dd MMM HH:mm")
+    private val clock = DateTimeFormatter.ofPattern("dd MMM yy HH:mm")
         .withZone(ZoneId.systemDefault())
     private var popup: Popup? = null
 
