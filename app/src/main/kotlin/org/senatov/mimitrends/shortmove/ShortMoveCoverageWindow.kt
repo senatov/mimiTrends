@@ -2,12 +2,13 @@ package org.senatov.mimitrends.shortmove
 
 import javafx.application.Platform
 import javafx.geometry.Insets
+import javafx.scene.Scene
 import javafx.scene.control.Hyperlink
 import javafx.scene.control.Label
 import javafx.scene.control.ScrollPane
 import javafx.scene.control.Separator
 import javafx.scene.layout.VBox
-import javafx.stage.Popup
+import javafx.stage.Stage
 import org.senatov.mimitrends.marketdata.CoverageItem
 import org.senatov.mimitrends.marketdata.CoverageResult
 import org.senatov.mimitrends.marketdata.RecentCoverageClient
@@ -15,42 +16,42 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.concurrent.Executors
 
-internal class ShortMoveRumorsPopup(private val openExternal: (String) -> Unit) {
+internal class ShortMoveCoverageWindow(private val openExternal: (String) -> Unit) {
     private val client = RecentCoverageClient()
     private val executor = Executors.newFixedThreadPool(2) { task ->
         Thread(task, "recent-coverage").apply { isDaemon = true }
     }
     private val clock = DateTimeFormatter.ofPattern("dd MMM yy HH:mm")
         .withZone(ZoneId.systemDefault())
-    private var popup: Popup? = null
-
     fun show(anchor: javafx.scene.Node, symbol: String, companyName: String) {
-        popup?.hide()
         val content = VBox(8.0).apply {
             padding = Insets(12.0)
-            prefWidth = 455.0
-            styleClass += "rumors-popup"
+            styleClass += "rumors-content"
         }
         content.children += Label("Recent coverage · $symbol").apply { styleClass += "rumors-title" }
         content.children += Label("Loading recent messages…")
         val scroll = ScrollPane(content).apply {
             isFitToWidth = true
-            prefViewportHeight = 340.0
-            maxHeight = 390.0
             hbarPolicy = ScrollPane.ScrollBarPolicy.NEVER
+            styleClass += anchor.scene.root.styleClass.filter {
+                it.startsWith("theme-") || it.startsWith("density-")
+            }
         }
-        val current = Popup().apply {
-            isAutoHide = true
-            isHideOnEscape = true
-            this.content.add(scroll)
+        val scene = Scene(scroll, 520.0, 390.0).apply {
+            stylesheets.setAll(anchor.scene.stylesheets)
         }
-        popup = current
-        val bounds = anchor.localToScreen(anchor.boundsInLocal) ?: return
-        current.show(anchor, bounds.minX, bounds.maxY + 3.0)
+        val window = Stage().apply {
+            initOwner(anchor.scene.window)
+            title = "Recent coverage · $symbol"
+            this.scene = scene
+            minWidth = 360.0
+            minHeight = 240.0
+            show()
+        }
         executor.execute {
             val result = runCatching { client.load(symbol, companyName) }
             Platform.runLater {
-                if (popup !== current || !current.isShowing) return@runLater
+                if (!window.isShowing) return@runLater
                 content.children.setAll(Label("Recent coverage · $symbol").apply { styleClass += "rumors-title" })
                 result.onSuccess { render(content, it) }
                     .onFailure { content.children += Label("News sources are unavailable. Try again later.") }

@@ -42,12 +42,14 @@ crashes use a full-width yellow row with the same lightweight system typography 
 chart starts collapsed and opens when an alert is selected; the activity-ranked liquid universe is available
 from a compact toolbar button instead of occupying a permanent sidebar.
 
-The `Rumors` button beside each Event opens a small popup with recent linked headlines, publishers, and
-publication times when available. It searches Yahoo Finance by ticker and, when needed, company name;
+The `Rumors` button beside each Event opens an independent, resizable window with recent linked
+headlines, publishers, and publication times when available. It searches Yahoo Finance by ticker
+and, when needed, company name;
 it also reads matching items from Benzinga's public feed and wallstreetONLINE's stock news page and RSS
 on demand. The sources do
-not require a user login. The popup reports unavailable sources and
-empty results separately. Headlines are leads for further reading, not explanations confirmed by the scanner.
+not require a user login. The window reports unavailable sources and
+empty results separately. The window stays open while the radar updates or another app has focus, until
+the user closes it. Headlines are leads for further reading, not explanations confirmed by the scanner.
 
 The interface keeps the system font, compact three-dimensional command buttons, and native macOS-style
 spacing. Legacy anomaly, outcome, entry-quality, and opportunity-probability columns are not part of the

@@ -48,7 +48,7 @@ class ShortMovePanel(
     private val watchlist: InstrumentWatchlistActions = InstrumentWatchlistActions(),
     openExternal: (String) -> Unit = {}
 ) : VBox(5.0) {
-    private val rumorsPopup = ShortMoveRumorsPopup(openExternal)
+    private val coverageWindow = ShortMoveCoverageWindow(openExternal)
     private val rows = FXCollections.observableArrayList<ShortMove>()
     private val filteredRows = FilteredList(rows)
     private val sortedRows = SortedList(filteredRows)
@@ -139,10 +139,11 @@ class ShortMovePanel(
             comparator = ShortMoveSort.direction
             setCellFactory {
                 ShortMoveDirectionCell { button, move ->
-                    rumorsPopup.show(button, move.symbol, companyNames[move.symbol] ?: move.symbol)
+                    coverageWindow.show(button, move.symbol, companyNames[move.symbol] ?: move.symbol)
                 }
             }
-            prefWidth = 230.0
+            minWidth = 190.0
+            prefWidth = 190.0
         }
         val movement = TableColumn<ShortMove, ShortMove>("Movement").apply {
             id = "movement"
@@ -178,7 +179,7 @@ class ShortMovePanel(
         autoFitter = TableColumnAutoFitter(
             table, listOf(
                 TableColumnAutoFitter.Spec(company, { companyNames[it.symbol] ?: it.symbol }, 80.0, 240.0),
-                TableColumnAutoFitter.Spec(direction, { "${shortMoveDirectionLabel(it)}  Rumors" }, 175.0, 260.0),
+                TableColumnAutoFitter.Spec(direction, ::shortMoveDirectionLabel, 190.0, 230.0, reserveWidth = 66.0),
                 TableColumnAutoFitter.Spec(movement, ShortMovePresentation::movement, 130.0, 210.0),
                 TableColumnAutoFitter.Spec(price, { "%,.2f".format(ShortMovePresentation.currentPrice(it)) }, 70.0, 110.0),
                 TableColumnAutoFitter.Spec(age, { ShortMovePresentation.age(it, Instant.now().epochSecond) }, 54.0, 82.0)

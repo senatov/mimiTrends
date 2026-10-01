@@ -31,6 +31,9 @@
     -mimi-negative: #e16873;
 }
 
+.theme-dark .rumors-content .label { -fx-text-fill: -mimi-text; }
+.theme-dark .rumors-content .rumors-meta { -fx-text-fill: -mimi-text-secondary; -fx-opacity: 1; }
+
 .theme-dark .title-toolbar,
 .theme-dark .chart-drawer-header,
 .theme-dark .request-status-bar,

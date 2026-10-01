@@ -7,7 +7,6 @@ import javafx.scene.control.Label
 import javafx.scene.input.MouseEvent
 import javafx.scene.layout.HBox
 import javafx.geometry.Pos
-import javafx.geometry.Insets
 import java.time.Instant
 import java.util.Locale
 
@@ -31,15 +30,15 @@ internal class ShortMoveDirectionCell(
         super.updateItem(item, empty)
         val label = item?.let(::shortMoveDirectionLabel)
         text = null
-        graphic = if (empty || item == null || label == null) null else HBox(0.0).apply {
+        graphic = if (empty || item == null || label == null) null else HBox(8.0).apply {
             alignment = Pos.CENTER_LEFT
-            children += Label(label)
+            children += Label(label).apply { styleClass += "short-move-event-label" }
             val button = Button("Rumors").apply {
                 styleClass += "rumors-button"
+                minWidth = javafx.scene.layout.Region.USE_PREF_SIZE
                 addEventFilter(MouseEvent.MOUSE_CLICKED) { it.consume() }
                 setOnAction { showRumors(this, item) }
             }
-            HBox.setMargin(button, Insets(0.0, 0.0, 0.0, 10.0))
             children += button
         }
         styleClass.removeAll(
