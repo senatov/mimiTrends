@@ -392,7 +392,7 @@
 .rumors-content { -fx-background-color: -mimi-surface; }
 .rumors-title { -fx-font-size: 13px; -fx-font-weight: 600; }
 .rumors-link { -fx-padding: 0; -fx-text-alignment: left; }
-.rumors-meta { -fx-font-size: 10px; -fx-opacity: 0.7; }
+.rumors-meta { -fx-font-size: 12px; -fx-opacity: 0.85; }
 
 .short-move-table .table-row-cell.rapid-crash-row,
 .short-move-table .table-row-cell.rapid-crash-row:odd,

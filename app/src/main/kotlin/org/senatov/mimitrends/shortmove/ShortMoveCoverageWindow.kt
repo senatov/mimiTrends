@@ -12,11 +12,15 @@ import javafx.stage.Stage
 import org.senatov.mimitrends.marketdata.CoverageItem
 import org.senatov.mimitrends.marketdata.CoverageResult
 import org.senatov.mimitrends.marketdata.RecentCoverageClient
+import org.senatov.mimitrends.ui.WindowGeometryService
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.concurrent.Executors
 
 internal class ShortMoveCoverageWindow(private val openExternal: (String) -> Unit) {
+    private val geometry = WindowGeometryService(
+        "recent-coverage", 520.0, 390.0, minWidth = 360.0, minHeight = 240.0
+    )
     private val client = RecentCoverageClient()
     private val executor = Executors.newFixedThreadPool(2) { task ->
         Thread(task, "recent-coverage").apply { isDaemon = true }
@@ -46,6 +50,7 @@ internal class ShortMoveCoverageWindow(private val openExternal: (String) -> Uni
             this.scene = scene
             minWidth = 360.0
             minHeight = 240.0
+            geometry.attach(this)
             show()
         }
         executor.execute {

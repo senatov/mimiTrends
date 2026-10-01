@@ -17,6 +17,7 @@ import javafx.scene.control.Dialog
 import javafx.stage.Screen
 import javafx.stage.Stage
 import javafx.stage.Window
+import javafx.stage.WindowEvent
 import org.senatov.mimitrends.log.LogTag
 import org.slf4j.LoggerFactory
 import java.nio.file.Files
@@ -29,7 +30,9 @@ internal class WindowGeometryService(
     private val key: String,
     private val defaultWidth: Double,
     private val defaultHeight: Double,
-    private val path: Path = Path.of(System.getProperty("user.home"), ".mimi", "trends", "window-state.properties")
+    private val path: Path = Path.of(System.getProperty("user.home"), ".mimi", "trends", "window-state.properties"),
+    private val minWidth: Double = MIN_WIDTH,
+    private val minHeight: Double = MIN_HEIGHT
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
 
@@ -42,6 +45,11 @@ internal class WindowGeometryService(
             }
         }
         dialog.setOnHidden { attachedWindow?.let(::save) }
+    }
+
+    fun attach(stage: Stage) {
+        restore(stage)
+        stage.addEventHandler(WindowEvent.WINDOW_HIDDEN) { save(stage) }
     }
 
     internal fun loadBounds(): WindowBounds? {
@@ -72,8 +80,8 @@ internal class WindowGeometryService(
         val screens = Screen.getScreens().map(Screen::getVisualBounds)
         val primary = Screen.getPrimary().visualBounds
         val stored = loadBounds()
-        val width = (stored?.width ?: defaultWidth).coerceIn(MIN_WIDTH, screens.maxOf { it.width })
-        val height = (stored?.height ?: defaultHeight).coerceIn(MIN_HEIGHT, screens.maxOf { it.height })
+        val width = (stored?.width ?: defaultWidth).coerceIn(minWidth, screens.maxOf { it.width })
+        val height = (stored?.height ?: defaultHeight).coerceIn(minHeight, screens.maxOf { it.height })
         val owner = (window as? Stage)?.owner
         val centeredX = owner?.let { it.x + (it.width - width) / 2.0 }
             ?: (primary.minX + (primary.width - width) / 2.0)

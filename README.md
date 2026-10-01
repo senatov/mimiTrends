@@ -49,7 +49,8 @@ it also reads matching items from Benzinga's public feed and wallstreetONLINE's 
 on demand. The sources do
 not require a user login. The window reports unavailable sources and
 empty results separately. The window stays open while the radar updates or another app has focus, until
-the user closes it. Headlines are leads for further reading, not explanations confirmed by the scanner.
+the user closes it. Its position and size are restored the next time it opens. Headlines are leads for
+further reading, not explanations confirmed by the scanner.
 
 The interface keeps the system font, compact three-dimensional command buttons, and native macOS-style
 spacing. Legacy anomaly, outcome, entry-quality, and opportunity-probability columns are not part of the
