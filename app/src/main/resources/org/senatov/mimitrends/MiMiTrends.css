@@ -381,6 +381,17 @@
 }
 .short-move-table .table-cell.short-move-up { -fx-text-fill: #16834a; -fx-font-weight: 600; }
 .short-move-table .table-cell.short-move-down { -fx-text-fill: #bd3c3c; -fx-font-weight: 600; }
+.short-move-table .rumors-button {
+    -fx-font-size: 9px;
+    -fx-padding: 0 3px;
+    -fx-min-height: 16px;
+    -fx-pref-height: 16px;
+    -fx-max-height: 16px;
+}
+.rumors-popup { -fx-background-color: -color-bg-default; -fx-border-color: -color-border-default; -fx-border-width: 1px; }
+.rumors-title { -fx-font-size: 13px; -fx-font-weight: 600; }
+.rumors-link { -fx-padding: 0; -fx-text-alignment: left; }
+.rumors-meta { -fx-font-size: 10px; -fx-opacity: 0.7; }
 
 .short-move-table .table-row-cell.rapid-crash-row,
 .short-move-table .table-row-cell.rapid-crash-row:odd,

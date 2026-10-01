@@ -2,6 +2,12 @@ package org.senatov.mimitrends.shortmove
 
 import javafx.scene.control.TableCell
 import javafx.scene.control.Tooltip
+import javafx.scene.control.Button
+import javafx.scene.control.Label
+import javafx.scene.input.MouseEvent
+import javafx.scene.layout.HBox
+import javafx.geometry.Pos
+import javafx.geometry.Insets
 import java.time.Instant
 import java.util.Locale
 
@@ -18,11 +24,24 @@ internal fun shortMoveDirectionLabel(move: ShortMove): String = when (move.patte
 private fun retainedLabel(move: ShortMove, activeLabel: String): String =
     if (move.isRetained) "$activeLabel · RECENT" else activeLabel
 
-internal class ShortMoveDirectionCell : TableCell<ShortMove, ShortMove>() {
+internal class ShortMoveDirectionCell(
+    private val showRumors: (Button, ShortMove) -> Unit
+) : TableCell<ShortMove, ShortMove>() {
     override fun updateItem(item: ShortMove?, empty: Boolean) {
         super.updateItem(item, empty)
         val label = item?.let(::shortMoveDirectionLabel)
-        text = if (empty) null else label
+        text = null
+        graphic = if (empty || item == null || label == null) null else HBox(0.0).apply {
+            alignment = Pos.CENTER_LEFT
+            children += Label(label)
+            val button = Button("Rumors").apply {
+                styleClass += "rumors-button"
+                addEventFilter(MouseEvent.MOUSE_CLICKED) { it.consume() }
+                setOnAction { showRumors(this, item) }
+            }
+            HBox.setMargin(button, Insets(0.0, 0.0, 0.0, 10.0))
+            children += button
+        }
         styleClass.removeAll(
             "short-move-up", "short-move-down", "short-move-struggle",
             "rapid-crash-cell"

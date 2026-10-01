@@ -45,8 +45,10 @@ class ShortMovePanel(
     private val loadProfile: ((String) -> java.util.concurrent.CompletableFuture<CompanyProfile>)? = null,
     private val copyText: (String) -> Unit = {},
     private val openExternalChart: (String) -> Unit = {},
-    private val watchlist: InstrumentWatchlistActions = InstrumentWatchlistActions()
+    private val watchlist: InstrumentWatchlistActions = InstrumentWatchlistActions(),
+    openExternal: (String) -> Unit = {}
 ) : VBox(5.0) {
+    private val rumorsPopup = ShortMoveRumorsPopup(openExternal)
     private val rows = FXCollections.observableArrayList<ShortMove>()
     private val filteredRows = FilteredList(rows)
     private val sortedRows = SortedList(filteredRows)
@@ -135,7 +137,12 @@ class ShortMovePanel(
             styleClass += "status-column"
             setCellValueFactory { ReadOnlyObjectWrapper(it.value) }
             comparator = ShortMoveSort.direction
-            setCellFactory { ShortMoveDirectionCell() }; prefWidth = 155.0
+            setCellFactory {
+                ShortMoveDirectionCell { button, move ->
+                    rumorsPopup.show(button, move.symbol, companyNames[move.symbol] ?: move.symbol)
+                }
+            }
+            prefWidth = 230.0
         }
         val movement = TableColumn<ShortMove, ShortMove>("Movement").apply {
             id = "movement"
@@ -171,7 +178,7 @@ class ShortMovePanel(
         autoFitter = TableColumnAutoFitter(
             table, listOf(
                 TableColumnAutoFitter.Spec(company, { companyNames[it.symbol] ?: it.symbol }, 80.0, 240.0),
-                TableColumnAutoFitter.Spec(direction, ::shortMoveDirectionLabel, 112.0, 180.0),
+                TableColumnAutoFitter.Spec(direction, { "${shortMoveDirectionLabel(it)}  Rumors" }, 175.0, 260.0),
                 TableColumnAutoFitter.Spec(movement, ShortMovePresentation::movement, 130.0, 210.0),
                 TableColumnAutoFitter.Spec(price, { "%,.2f".format(ShortMovePresentation.currentPrice(it)) }, 70.0, 110.0),
                 TableColumnAutoFitter.Spec(age, { ShortMovePresentation.age(it, Instant.now().epochSecond) }, 54.0, 82.0)

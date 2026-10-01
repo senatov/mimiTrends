@@ -76,7 +76,7 @@ class MainController(
     private val shortMovePanel: ShortMovePanel = ShortMovePanel(
         ::openShortMoveChart,
         shortMoveColumns, { symbol -> profileService.load(symbol) }, ClipboardText::copy,
-        stockPageOpener::open, userWatchlist.actions
+        stockPageOpener::open, userWatchlist.actions, openExternal
     )
     private val chartDrawer = ChartDrawer(trendChart, initialChartVisible)
     private val universeDialog = UniverseDialog { count -> actions.universe.text = "Pool $count" }
