@@ -29,7 +29,8 @@ class TableColumnAutoFitter<T>(
     private val table: TableView<T>,
     private val specs: List<Spec<T>>,
     preservedWidths: Map<String, Double> = emptyMap(),
-    preservedManualIds: Set<String> = emptySet()
+    preservedManualIds: Set<String> = emptySet(),
+    private val fillAvailableWidth: Boolean = false
 ) {
     data class Spec<T>(
         val column: TableColumn<T, *>,
@@ -42,15 +43,20 @@ class TableColumnAutoFitter<T>(
 
     private val debounce = PauseTransition(Duration.millis(140.0)).apply { setOnFinished { fitNow() } }
     private val manuallySized = mutableSetOf<TableColumn<T, *>>()
+    private val manualWidths = mutableMapOf<TableColumn<T, *>, Double>()
     private var widthsBeforePointerAction = emptyMap<TableColumn<T, *>, Double>()
     private var applying = false
 
     init {
         specs.forEach { spec ->
             preservedWidths[spec.column.id]?.let { width ->
-                spec.column.prefWidth = width.coerceIn(spec.column.minWidth, spec.maxWidth)
+                val maximum = if (spec.column.id in preservedManualIds) spec.column.maxWidth else spec.maxWidth
+                spec.column.prefWidth = width.coerceIn(spec.column.minWidth, maximum)
             }
-            if (spec.column.id in preservedManualIds) manuallySized += spec.column
+            if (spec.column.id in preservedManualIds) {
+                manuallySized += spec.column
+                manualWidths[spec.column] = spec.column.prefWidth
+            }
         }
         table.addEventFilter(MouseEvent.MOUSE_PRESSED) { event ->
             if (event.button == MouseButton.PRIMARY) widthsBeforePointerAction = specs.associate { it.column to it.column.width }
@@ -75,13 +81,17 @@ class TableColumnAutoFitter<T>(
 
     fun resetManualSizing() {
         manuallySized.clear()
+        manualWidths.clear()
         request()
     }
 
     private fun rememberManualResize() {
         if (applying) return
         widthsBeforePointerAction.forEach { (column, width) ->
-            if (kotlin.math.abs(column.width - width) >= WIDTH_STABILITY_EPSILON) manuallySized += column
+            if (kotlin.math.abs(column.width - width) >= WIDTH_STABILITY_EPSILON) {
+                manuallySized += column
+                manualWidths[column] = column.width
+            }
         }
         widthsBeforePointerAction = emptyMap()
     }
@@ -94,10 +104,30 @@ class TableColumnAutoFitter<T>(
         val headerFont = table.lookupAll(".column-header .label").firstNotNullOfOrNull { (it as? Labeled)?.font }
             ?: cellFont
         val sampled = sample(table.items)
+        val measured = specs.associateWith { spec ->
+            if (spec.column in manuallySized) manualWidths[spec.column] ?: spec.column.prefWidth
+            else measure(spec, sampled, cellFont, headerFont)
+        }.toMutableMap()
+        var fillManualColumns = false
+        if (fillAvailableWidth) {
+            val automatic = specs.filter { it.flexible && it.column.isVisible && it.column !in manuallySized }
+            val flexible = automatic.ifEmpty {
+                fillManualColumns = true
+                specs.filter { it.flexible && it.column.isVisible }
+            }
+            val used = specs.filter { it.column.isVisible }.sumOf { measured.getValue(it) }
+            val headerWidth = table.lookup(".column-header-background")?.layoutBounds?.width
+                ?.takeIf { it > 0.0 } ?: table.width
+            val spare = (headerWidth - used - WIDTH_STABILITY_EPSILON).coerceAtLeast(0.0)
+            if (flexible.isNotEmpty() && spare >= WIDTH_STABILITY_EPSILON) {
+                val share = spare / flexible.size
+                flexible.forEach { measured[it] = measured.getValue(it) + share }
+            }
+        }
         applying = true
         try {
-            specs.filterNot { it.column in manuallySized }.forEach { spec ->
-                val width = measure(spec, sampled, cellFont, headerFont)
+            specs.filter { it.column !in manuallySized || (fillManualColumns && it.flexible) }.forEach { spec ->
+                val width = measured.getValue(spec)
                 if (kotlin.math.abs(spec.column.width - width) >= WIDTH_STABILITY_EPSILON) spec.column.prefWidth = width
             }
         } finally {

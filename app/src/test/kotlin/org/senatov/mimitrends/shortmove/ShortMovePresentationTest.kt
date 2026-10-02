@@ -28,12 +28,13 @@ class ShortMovePresentationTest {
     }
 
     @Test
-    fun `uses compact seconds minutes and hours for age`() {
+    fun `shows elapsed hours and minutes in age column`() {
         val move = move(ShortMovePattern.RAPID_CRASH, event = 1_000L)
 
-        assertEquals("42s", ShortMovePresentation.age(move, 1_042L))
-        assertEquals("2m", ShortMovePresentation.age(move, 1_120L))
-        assertEquals("2h", ShortMovePresentation.age(move, 8_200L))
+        assertEquals("00:00", ShortMovePresentation.age(move, 1_042L))
+        assertEquals("00:02", ShortMovePresentation.age(move, 1_120L))
+        assertEquals("02:00", ShortMovePresentation.age(move, 8_200L))
+        assertEquals("00:00", ShortMovePresentation.age(move, 900L))
     }
 
     private fun move(

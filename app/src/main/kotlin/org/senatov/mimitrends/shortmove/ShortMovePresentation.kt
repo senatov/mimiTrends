@@ -17,12 +17,8 @@ internal object ShortMovePresentation {
     }
 
     fun age(move: ShortMove, nowEpochSeconds: Long): String {
-        val seconds = (nowEpochSeconds - move.eventEpochSeconds).coerceAtLeast(0L)
-        return when {
-            seconds < 60L -> "${seconds}s"
-            seconds < 3_600L -> "${seconds / 60L}m"
-            else -> "${seconds / 3_600L}h"
-        }
+        val minutes = (nowEpochSeconds - move.eventEpochSeconds).coerceAtLeast(0L) / 60L
+        return "%02d:%02d".format(Locale.ROOT, minutes / 60L, minutes % 60L)
     }
 
     fun details(move: ShortMove): String = when (move.pattern) {

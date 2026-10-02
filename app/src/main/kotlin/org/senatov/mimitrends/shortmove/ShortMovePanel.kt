@@ -178,12 +178,12 @@ class ShortMovePanel(
         columnLayout = TableColumnLayout(table, savedColumns).also(TableColumnLayout<ShortMove>::install)
         autoFitter = TableColumnAutoFitter(
             table, listOf(
-                TableColumnAutoFitter.Spec(company, { companyNames[it.symbol] ?: it.symbol }, 80.0, 240.0),
-                TableColumnAutoFitter.Spec(direction, ::shortMoveDirectionLabel, 190.0, 230.0, reserveWidth = 66.0),
-                TableColumnAutoFitter.Spec(movement, ShortMovePresentation::movement, 130.0, 210.0),
+                TableColumnAutoFitter.Spec(company, { companyNames[it.symbol] ?: it.symbol }, 80.0, 240.0, flexible = true),
+                TableColumnAutoFitter.Spec(direction, ::shortMoveDirectionLabel, 190.0, 230.0, flexible = true, reserveWidth = 66.0),
+                TableColumnAutoFitter.Spec(movement, ShortMovePresentation::movement, 130.0, 210.0, flexible = true),
                 TableColumnAutoFitter.Spec(price, { "%,.2f".format(ShortMovePresentation.currentPrice(it)) }, 70.0, 110.0),
                 TableColumnAutoFitter.Spec(age, { ShortMovePresentation.age(it, Instant.now().epochSecond) }, 54.0, 82.0)
-            ), columnLayout.savedWidths(), columnLayout.manuallySizedColumnIds()
+            ), columnLayout.savedWidths(), columnLayout.manuallySizedColumnIds(), fillAvailableWidth = true
         )
         headerActions.children += listOf(search, filterCount)
         columnLayout.onReset = autoFitter::resetManualSizing

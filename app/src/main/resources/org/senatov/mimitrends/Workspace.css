@@ -257,9 +257,17 @@
     -fx-padding: 1px 7px;
 }
 
+.short-move-table .table-cell,
+.source-activity-table .table-cell {
+    -fx-font-size: 14px;
+}
+
 .source-activity-table .table-cell {
     -fx-alignment: center-left;
-    -fx-font-size: 11px;
+}
+
+.short-move-table .table-cell.status-column {
+    -fx-alignment: center;
 }
 
 .source-selected-count {
