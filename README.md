@@ -346,8 +346,10 @@ The trading-opportunities table gives the newest severe directional moves explic
 searches recent confirmed closing prices for either a decline of 0.50% or more within four minutes or a
 sustained decline of 1.00% or more within fifteen minutes. Searching recent windows prevents a delayed
 market-data refresh from hiding a crash that has just happened. It does not require every intermediate
-close to fall, so a brief counter-move does not hide the net crash. The setup is shown as regular-weight
-red text on a light-yellow cell to keep it distinct from ordinary downside diagnostics.
+close to fall, so a brief counter-move does not hide the net crash. A decline from a short upward spike
+must also break the preceding 15-minute low, so a return to the earlier price is not labeled a crash.
+The setup is shown as regular-weight red text on a light-yellow cell to keep it distinct from ordinary
+downside diagnostics.
 
 Once detected, the instrument joins the independent one-minute priority scanner and remains there only
 while the crash condition is still confirmed. The fixed percentage is an alert threshold, not a forecast

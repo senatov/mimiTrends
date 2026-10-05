@@ -97,6 +97,16 @@ internal object ShortMoveDetector {
         if (elapsedMinutes < MIN_CRASH_SPAN_MINUTES || start.close <= 0.0 || end.close <= 0.0) return null
         val change = percent(start.close, end.close)
         if (change > -minimumDropPercent + PERCENT_COMPARISON_EPSILON) return null
+        // A return from an upward spike is not a crash while the price stays above its earlier low.
+        val precedingLow = bars.asSequence()
+            .filter {
+                it.minuteEpochSeconds in
+                    (start.minuteEpochSeconds - SUSTAINED_DROP_WINDOW_MINUTES * 60L) until start.minuteEpochSeconds
+            }
+            .map(MinuteBar::close)
+            .filter { it > 0.0 }
+            .minOrNull()
+        if (precedingLow != null && end.close >= precedingLow) return null
         val eventBars = window.filter { it.minuteEpochSeconds >= start.minuteEpochSeconds }
         return ShortMove(
             symbol, change, start.close, end.close, start.minuteEpochSeconds,

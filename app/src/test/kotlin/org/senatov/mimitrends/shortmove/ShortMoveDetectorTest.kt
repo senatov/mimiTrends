@@ -64,6 +64,38 @@ class ShortMoveDetectorTest {
     }
 
     @Test
+    fun `does not report a reversal of an upward spike as a crash`() {
+        val now = 60_000L
+        val bars = listOf(
+            bar("NEM.DE", now - 20 * 60L, 63.20),
+            bar("NEM.DE", now - 18 * 60L, 64.55),
+            bar("NEM.DE", now - 17 * 60L, 64.675),
+            bar("NEM.DE", now - 15 * 60L, 63.625),
+            bar("NEM.DE", now - 12 * 60L, 63.825),
+            bar("NEM.DE", now - 5 * 60L, 63.325),
+            bar("NEM.DE", now, 63.375)
+        )
+
+        assertTrue(ShortMoveDetector.rank(mapOf("NEM.DE" to bars), now).isEmpty())
+    }
+
+    @Test
+    fun `detects a crash after an upward move when it breaks the preceding low`() {
+        val now = 61_000L
+        val bars = listOf(
+            bar("BREAK", now - 12 * 60L, 100.0),
+            bar("BREAK", now - 4 * 60L, 101.0),
+            bar("BREAK", now - 3 * 60L, 100.7),
+            bar("BREAK", now - 2 * 60L, 100.2),
+            bar("BREAK", now, 99.8)
+        )
+
+        val result = ShortMoveDetector.rank(mapOf("BREAK" to bars), now).single()
+        assertEquals(ShortMovePattern.RAPID_CRASH, result.pattern)
+        assertTrue(result.close < 100.0)
+    }
+
+    @Test
     fun `ignores stale and single-bar symbols`() {
         val now = 20_000L
         val ranked = ShortMoveDetector.rank(
