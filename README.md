@@ -155,8 +155,8 @@ The primary question is: “Which liquid stock has entered a useful corridor or 
 - ranks the rotating universe by recent session turnover and feed freshness so subsequent cycles spend
   more coverage on actively traded instruments;
 - detects stable two-hour intraday corridors with repeated edge touches and bounded drift;
-- detects a close-to-close decline of at least 0.50% within four minutes, or a sustained decline of at
-  least 1.00% within fifteen minutes, as `RAPID_CRASH`; recent qualifying windows remain discoverable
+- detects a close-to-close decline of at least 0.30% within four minutes, or a sustained decline of at
+  least 0.60% within fifteen minutes, as `RAPID_CRASH`; recent qualifying windows remain discoverable
   when their market data arrives after the event;
 - displays an animated message over the toolbar during startup until the first analytical pass completes; cached snapshots do not dismiss it;
 - shows a live textual countdown between analytical passes so the configured scan interval is visibly active;
@@ -343,11 +343,15 @@ credentials, and do not stop the rest of the scan.
 ### Rapid four-minute crashes
 
 The trading-opportunities table gives the newest severe directional moves explicit priority. `RAPID_CRASH`
-searches recent confirmed closing prices for either a decline of 0.50% or more within four minutes or a
-sustained decline of 1.00% or more within fifteen minutes. Searching recent windows prevents a delayed
+searches recent confirmed closing prices for either a decline of 0.30% or more within four minutes or a
+sustained decline of 0.60% or more within fifteen minutes. Searching recent windows prevents a delayed
 market-data refresh from hiding a crash that has just happened. It does not require every intermediate
 close to fall, so a brief counter-move does not hide the net crash. A decline from a short upward spike
 must also break the preceding 15-minute low, so a return to the earlier price is not labeled a crash.
+The price must be at least 5 in the analyzed series currency. The event needs at least three bars
+without a gap over three minutes, two bars with reported trading volume, and 250,000 in reported
+turnover during the preceding 30 minutes. Sustained moves must also accelerate near the end.
+These checks use market data and work without a Scalable account.
 The setup is shown as regular-weight red text on a light-yellow cell to keep it distinct from ordinary
 downside diagnostics.
 

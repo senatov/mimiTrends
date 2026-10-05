@@ -2,17 +2,18 @@ package org.senatov.mimitrends.shortmove
 
 import org.junit.jupiter.api.Test
 import org.senatov.mimitrends.model.MinuteBar
+import org.senatov.mimitrends.model.VolumeStatus
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 class ShortMoveDetectorTest {
     @Test
-    fun `detects rapid crash at zero point five percent threshold`() {
+    fun `detects rapid crash at zero point three percent threshold`() {
         val now = 12_000L
-        val bars = prices("THRESHOLD", now, 100.0, 100.15, 99.90, 99.50)
+        val bars = prices("THRESHOLD", now, 100.0, 100.15, 99.90, 99.70)
         val result = ShortMoveDetector.rank(mapOf("THRESHOLD" to bars), now).single()
         assertEquals(ShortMovePattern.RAPID_CRASH, result.pattern)
-        assertEquals(-0.50, result.changePercent, 1e-9)
+        assertEquals(-0.30, result.changePercent, 1e-9)
     }
 
     @Test
@@ -20,7 +21,7 @@ class ShortMoveDetectorTest {
         val now = 13_000L
         val ranked = ShortMoveDetector.rank(
             mapOf(
-                "SMALL_DROP" to prices("SMALL_DROP", now, 100.0, 99.90, 99.80, 99.501),
+                "SMALL_DROP" to prices("SMALL_DROP", now, 100.0, 99.90, 99.80, 99.701),
                 "RISE" to prices("RISE", now, 100.0, 100.2, 100.7, 101.2)
             ), now
         )
@@ -61,6 +62,46 @@ class ShortMoveDetectorTest {
         )
 
         assertTrue(ShortMoveDetector.rank(mapOf("ORDINARY" to bars), now).isEmpty())
+    }
+
+    @Test
+    fun `detects an accelerating sustained decline at zero point six percent`() {
+        val now = 41_000L
+        val bars = prices(
+            "ACCELERATING", now,
+            100.0, 99.99, 99.98, 99.97, 99.96, 99.95, 99.94, 99.93,
+            99.92, 99.91, 99.90, 99.88, 99.83, 99.72, 99.55, 99.40
+        )
+
+        val result = ShortMoveDetector.rank(mapOf("ACCELERATING" to bars), now).single()
+        assertEquals(ShortMovePattern.RAPID_CRASH, result.pattern)
+        assertEquals(-0.60, result.changePercent, 1e-9)
+    }
+
+    @Test
+    fun `rejects low priced and thinly traded crashes without broker data`() {
+        val now = 42_000L
+        val cheap = prices("CHEAP", now, 1.83, 1.82, 1.80, 1.79)
+            .map { it.copy(volume = 100_000.0) }
+        val thin = prices("THIN", now, 75.0, 74.9, 74.8, 74.7)
+            .map { it.copy(volume = 10.0) }
+
+        assertTrue(ShortMoveDetector.rank(mapOf("CHEAP" to cheap, "THIN" to thin), now).isEmpty())
+    }
+
+    @Test
+    fun `requires reported volume and a continuous crash window`() {
+        val now = 43_000L
+        val missingVolume = prices("MISSING", now, 100.0, 99.9, 99.8, 99.7)
+            .map { it.copy(volume = 0.0, volumeStatus = VolumeStatus.MISSING) }
+        val sparse = listOf(
+            bar("SPARSE", now - 9 * 60L, 100.0),
+            bar("SPARSE", now - 5 * 60L, 99.9),
+            bar("SPARSE", now - 4 * 60L, 99.8),
+            bar("SPARSE", now, 99.0)
+        )
+
+        assertTrue(ShortMoveDetector.rank(mapOf("MISSING" to missingVolume, "SPARSE" to sparse), now).isEmpty())
     }
 
     @Test
@@ -134,7 +175,7 @@ class ShortMoveDetectorTest {
     }
 
     private fun bar(symbol: String, time: Long, close: Double) =
-        MinuteBar(symbol, time, close, close, close, close, 100.0)
+        MinuteBar(symbol, time, close, close, close, close, 1_000.0)
 
     private fun crash(symbol: String, change: Double) = ShortMove(
         symbol, change, 100.0, 100.0 + change, 0L, 60L, 2, ShortMovePattern.RAPID_CRASH
