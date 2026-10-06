@@ -3,6 +3,7 @@ package org.senatov.mimitrends.shortmove
 import org.junit.jupiter.api.Test
 import org.senatov.mimitrends.model.MinuteBar
 import org.senatov.mimitrends.model.VolumeStatus
+import org.senatov.mimitrends.model.RapidMoveSettings
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
@@ -17,15 +18,70 @@ class ShortMoveDetectorTest {
     }
 
     @Test
-    fun `does not emit sub-threshold moves or rapid rises`() {
+    fun `does not emit sub-threshold moves`() {
         val now = 13_000L
         val ranked = ShortMoveDetector.rank(
             mapOf(
                 "SMALL_DROP" to prices("SMALL_DROP", now, 100.0, 99.90, 99.80, 99.701),
-                "RISE" to prices("RISE", now, 100.0, 100.2, 100.7, 101.2)
+                "SMALL_RISE" to prices("SMALL_RISE", now, 100.0, 100.1, 100.2, 100.3)
             ), now
         )
         assertTrue(ranked.isEmpty())
+    }
+
+    @Test
+    fun `detects a brief rise above the previous high after a pullback`() {
+        val now = 13_000L
+        val bars = prices("RISE", now, 100.0, 100.1, 101.8, 100.4)
+        val result = ShortMoveDetector.rank(mapOf("RISE" to bars), now).single()
+        assertEquals(ShortMovePattern.RAPID_RISE, result.pattern)
+        assertEquals(1.8, result.changePercent, 1e-9)
+        assertEquals(now - 60, result.endedAtEpochSeconds)
+    }
+
+    @Test
+    fun `detects an intraminute peak after the close falls back`() {
+        val now = 13_000L
+        val ordinary = prices("PLTR", now, 169.5, 169.7, 170.47)
+        val bars = ordinary.toMutableList().apply {
+            this[2] = this[2].copy(high = 172.6)
+        }
+
+        val result = ShortMoveDetector.rank(mapOf("PLTR" to bars), now).single()
+        assertEquals(ShortMovePattern.RAPID_RISE, result.pattern)
+        assertEquals(172.6, result.close)
+        assertEquals(170.47, ShortMovePresentation.currentPrice(result))
+    }
+
+    @Test
+    fun `custom rapid thresholds change crash and rise detection`() {
+        val now = 13_000L
+        val settings = RapidMoveSettings(
+            crashPercent = 0.8, sustainedCrashPercent = 1.2,
+            risePercent = 1.5
+        )
+        val bars = mapOf(
+            "DROP" to prices("DROP", now, 100.0, 99.9, 99.8, 99.6),
+            "RISE" to prices("RISE", now, 100.0, 100.2, 100.6, 101.0)
+        )
+        assertTrue(ShortMoveDetector.rank(bars, now, settings = settings).isEmpty())
+        assertEquals(
+            2, ShortMoveDetector.rank(
+                bars, now,
+                settings = settings.copy(crashPercent = 0.3, risePercent = 0.8)
+            ).size
+        )
+    }
+
+    @Test
+    fun `rejects thin or unconfirmed rapid rises`() {
+        val now = 13_000L
+        val thin = prices("THIN_RISE", now, 100.0, 100.1, 101.8, 100.4)
+            .map { it.copy(volume = 1.0) }
+        val missing = prices("MISSING_RISE", now, 100.0, 100.1, 101.8, 100.4)
+            .map { it.copy(volumeStatus = VolumeStatus.MISSING) }
+
+        assertTrue(ShortMoveDetector.rank(mapOf("THIN_RISE" to thin, "MISSING_RISE" to missing), now).isEmpty())
     }
 
     @Test
@@ -159,6 +215,19 @@ class ShortMoveDetectorTest {
             ShortMovePattern.RAPID_CRASH, 1_060L
         )
         assertEquals(listOf(ShortMovePattern.RAPID_CRASH), retainer.merge(listOf(crash), 1_060L).map { it.pattern })
+    }
+
+    @Test
+    fun `rapid rise remains visible when corridor candidates fill the radar`() {
+        val now = 1_000L
+        val corridors = (1..10).map { corridor("CORRIDOR$it", now, 100.0, 101.0, 80) }
+        val rise = ShortMove(
+            "RISE", 1.8, 100.0, 101.8, now - 60, now, 2,
+            ShortMovePattern.RAPID_RISE
+        )
+
+        val visible = ShortMoveEventRetainer().merge(corridors + rise, now)
+        assertTrue(visible.any { it.symbol == "RISE" })
     }
 
     @Test

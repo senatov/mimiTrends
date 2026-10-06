@@ -9,6 +9,7 @@ import org.senatov.mimitrends.model.AnomalyWindow
 import org.senatov.mimitrends.model.MarketRegion
 import org.senatov.mimitrends.model.UiDensity
 import org.senatov.mimitrends.model.UiTheme
+import org.senatov.mimitrends.model.RapidMoveSettings
 import org.slf4j.LoggerFactory
 import java.nio.file.Files
 import java.nio.file.Path
@@ -60,7 +61,18 @@ class ScannerSettingsService(private val path: Path = Path.of(System.getProperty
                     evenRowColor = color(p.getProperty("table.evenRowColor"), "#FAFAFA"),
                     oddRowColor = color(p.getProperty("table.oddRowColor"), "#F0F0F0"),
                     selectionColor = migratedSelectionColor(p.getProperty("table.selectionColor")),
-                    gridColor = color(p.getProperty("table.gridColor"), "#9CA9B5")
+                    gridColor = color(p.getProperty("table.gridColor"), "#9CA9B5"),
+                    rapidRiseColor = color(p.getProperty("table.rapidRiseColor"), "#DDF5E3")
+                ),
+                rapidMoves = RapidMoveSettings(
+                    crashPercent = p.doubleIn("rapid.crashPercent", 0.30, 0.05, 20.0),
+                    crashWindowMinutes = p.intIn("rapid.crashWindowMinutes", 4, 4, 15),
+                    sustainedCrashPercent = p.doubleIn("rapid.sustainedCrashPercent", 0.60, 0.05, 20.0),
+                    sustainedCrashWindowMinutes = p.intIn("rapid.sustainedCrashWindowMinutes", 15, 5, 30),
+                    risePercent = p.doubleIn("rapid.risePercent", 1.5, 0.05, 20.0),
+                    riseWindowMinutes = p.intIn("rapid.riseWindowMinutes", 4, 1, 15),
+                    minimumPrice = p.doubleIn("rapid.minimumPrice", 5.0, 0.0, 10_000.0),
+                    minimumTurnover = p.doubleIn("rapid.minimumTurnover", 250_000.0, 0.0, 10_000_000.0)
                 ),
                 symbols = normalizeSymbols(p.getProperty("symbols", ScannerCriteria().symbols.joinToString(","))).let { stored ->
                     // Extend prior standard installation profiles with the broader liquid
@@ -114,6 +126,15 @@ class ScannerSettingsService(private val path: Path = Path.of(System.getProperty
             setProperty("table.oddRowColor", value.tableAppearance.oddRowColor)
             setProperty("table.selectionColor", value.tableAppearance.selectionColor)
             setProperty("table.gridColor", value.tableAppearance.gridColor)
+            setProperty("table.rapidRiseColor", value.tableAppearance.rapidRiseColor)
+            setProperty("rapid.crashPercent", value.rapidMoves.crashPercent.toString())
+            setProperty("rapid.crashWindowMinutes", value.rapidMoves.crashWindowMinutes.toString())
+            setProperty("rapid.sustainedCrashPercent", value.rapidMoves.sustainedCrashPercent.toString())
+            setProperty("rapid.sustainedCrashWindowMinutes", value.rapidMoves.sustainedCrashWindowMinutes.toString())
+            setProperty("rapid.risePercent", value.rapidMoves.risePercent.toString())
+            setProperty("rapid.riseWindowMinutes", value.rapidMoves.riseWindowMinutes.toString())
+            setProperty("rapid.minimumPrice", value.rapidMoves.minimumPrice.toString())
+            setProperty("rapid.minimumTurnover", value.rapidMoves.minimumTurnover.toString())
             setProperty("symbols", normalizeSymbols(value.symbols.joinToString(",")).joinToString(","))
         }
         Files.newOutputStream(path).use { p.store(it, "MiMiTrends scanner settings") }
@@ -131,6 +152,12 @@ class ScannerSettingsService(private val path: Path = Path.of(System.getProperty
 
     private fun color(value: String?, fallback: String): String =
         value?.takeIf { it.matches(Regex("#[0-9a-fA-F]{6}")) } ?: fallback
+
+    private fun Properties.doubleIn(key: String, fallback: Double, min: Double, max: Double): Double =
+        getProperty(key)?.toDoubleOrNull()?.takeIf(Double::isFinite)?.coerceIn(min, max) ?: fallback
+
+    private fun Properties.intIn(key: String, fallback: Int, min: Int, max: Int): Int =
+        getProperty(key)?.toIntOrNull()?.coerceIn(min, max) ?: fallback
 
     private fun migratedSelectionColor(value: String?): String =
         color(value, DEFAULT_SELECTION_COLOR).takeUnless { it.equals(LEGACY_SELECTION_COLOR, ignoreCase = true) }

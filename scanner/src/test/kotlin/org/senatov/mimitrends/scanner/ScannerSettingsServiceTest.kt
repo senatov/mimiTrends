@@ -5,11 +5,42 @@ import org.senatov.mimitrends.model.ScannerCriteria
 import org.senatov.mimitrends.model.TableAppearance
 import org.senatov.mimitrends.model.UiDensity
 import org.senatov.mimitrends.model.UiTheme
+import org.senatov.mimitrends.model.RapidMoveSettings
 import java.nio.file.Files
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 class ScannerSettingsServiceTest {
+    @Test
+    fun `persists rapid move thresholds and rise colour`() {
+        val path = Files.createTempDirectory("mimitrends-rapid-settings").resolve("scanner.properties")
+        val service = ScannerSettingsService(path)
+        service.save(
+            ScannerCriteria(
+                rapidMoves = RapidMoveSettings(crashPercent = 0.45, risePercent = 1.4, riseWindowMinutes = 3),
+                tableAppearance = TableAppearance(rapidRiseColor = "#BEEFD0")
+            )
+        )
+
+        val restored = service.load()
+        assertEquals(0.45, restored.rapidMoves.crashPercent)
+        assertEquals(1.4, restored.rapidMoves.risePercent)
+        assertEquals(3, restored.rapidMoves.riseWindowMinutes)
+        assertEquals("#BEEFD0", restored.tableAppearance.rapidRiseColor)
+    }
+
+    @Test
+    fun `uses existing crash thresholds when rapid settings are absent`() {
+        val path = Files.createTempDirectory("mimitrends-legacy-rapid").resolve("scanner.properties")
+        Files.writeString(path, "table.rapidRiseColor=invalid\nrapid.risePercent=invalid\n")
+
+        val restored = ScannerSettingsService(path).load()
+        assertEquals(0.30, restored.rapidMoves.crashPercent)
+        assertEquals(0.60, restored.rapidMoves.sustainedCrashPercent)
+        assertEquals(1.5, restored.rapidMoves.risePercent)
+        assertEquals("#DDF5E3", restored.tableAppearance.rapidRiseColor)
+    }
+
     @Test
     fun `persists workspace theme and density`() {
         val path = Files.createTempDirectory("mimitrends-appearance").resolve("scanner.properties")

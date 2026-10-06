@@ -94,12 +94,15 @@ internal class MarketDataService(
                 latestDataEpochSeconds = merged.latestAnalysisEpochSeconds, monitored = monitored
             )
         }
-        val move = ShortMoveDetector.rank(mapOf(symbol to merged.analysisBars), now, limit = 1).firstOrNull()
+        val move = ShortMoveDetector.rank(
+            mapOf(symbol to merged.analysisBars), now, limit = 1,
+            settings = criteria.rapidMoves
+        ).firstOrNull()
         val primary = move?.toScanResult(merged.analysisBars, effectiveStatus, now)
         return ScanEvaluation(
             primary = primary,
             fallback = emptyList(),
-            rejectionReason = if (primary == null) "NO_CORRIDOR_OR_RAPID_CRASH" else null,
+            rejectionReason = if (primary == null) "NO_CORRIDOR_OR_RAPID_MOVE" else null,
             sourceStatus = merged.latestSource.name,
             latestDataEpochSeconds = merged.latestAnalysisEpochSeconds,
             monitored = monitored
@@ -161,11 +164,12 @@ internal class MarketDataService(
         val ageMinutes = ((nowEpochSeconds - endedAtEpochSeconds).coerceAtLeast(0L) / 60L).toInt()
         val score = when (pattern) {
             ShortMovePattern.RAPID_CRASH -> 100.0
+            ShortMovePattern.RAPID_RISE -> 100.0
             ShortMovePattern.TRADABLE_CORRIDOR -> opportunityScore.coerceAtLeast(0).toDouble()
         }
         return ScanResult(
             symbol = symbol,
-            price = close,
+            price = latestPrice ?: close,
             anomalyScore = score,
             priceAnomaly = Double.NaN,
             volumeAnomaly = Double.NaN,
@@ -177,10 +181,14 @@ internal class MarketDataService(
             sessionVolume = recent.sumOf(MinuteBar::volume),
             sessionTurnover = recent.sumOf { it.close * it.volume },
             signalAgeMinutes = ageMinutes,
-            signalSource = if (pattern == ShortMovePattern.RAPID_CRASH) "Rapid crash" else "Tradable corridor",
+            signalSource = when (pattern) {
+                ShortMovePattern.RAPID_CRASH -> "Rapid crash"
+                ShortMovePattern.RAPID_RISE -> "Rapid rise"
+                ShortMovePattern.TRADABLE_CORRIDOR -> "Tradable corridor"
+            },
             updatedAtMillis = endedAtEpochSeconds * 1_000L,
             dataStatus = status,
-            signalWindowLabel = if (pattern == ShortMovePattern.RAPID_CRASH)
+            signalWindowLabel = if (pattern != ShortMovePattern.TRADABLE_CORRIDOR)
                 "${((endedAtEpochSeconds - startedAtEpochSeconds) / 60L).coerceAtLeast(1L)}m"
             else "120m corridor",
             signalPrice = open,

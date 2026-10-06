@@ -15,10 +15,12 @@ import org.senatov.mimitrends.shared.*
 import org.senatov.mimitrends.db.MarketRepository
 import org.senatov.mimitrends.model.MinuteBar
 import org.senatov.mimitrends.model.ProviderMinuteBar
+import org.senatov.mimitrends.model.RapidMoveSettings
 
 internal class ShortMoveLoader(
     private val repository: MarketRepository,
-    private val exchangeRates: ExchangeRateService
+    private val exchangeRates: ExchangeRateService,
+    private val settings: () -> RapidMoveSettings = { RapidMoveSettings() }
 ) {
     fun load(symbols: Collection<String>, nowEpochSeconds: Long = java.time.Instant.now().epochSecond): List<ShortMove> {
         val bars = symbols.associateWith { symbol ->
@@ -31,7 +33,7 @@ internal class ShortMoveLoader(
                 nowEpochSeconds
             )
         }
-        val ranked = ShortMoveDetector.rank(bars, nowEpochSeconds, Int.MAX_VALUE)
+        val ranked = ShortMoveDetector.rank(bars, nowEpochSeconds, Int.MAX_VALUE, settings())
         val companyName = { symbol: String -> repository.loadCompanyProfile(symbol)?.name }
         return ShortMoveCompanyRanking.distinct(ranked, MAX_RADAR_RESULTS, companyName)
     }

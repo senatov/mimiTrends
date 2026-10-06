@@ -127,7 +127,7 @@ internal class ScanCycleCoordinator(
     private fun beginVisibleScan(symbols: List<String>, universeSize: Int) = Platform.runLater {
         scannerPanel.beginScan(1, 1, symbols)
         shortMovePanel.showScanProgress(0, symbols.size, universeSize)
-        status.update("Scanning ${symbols.size}/$universeSize liquid symbols · corridors and rapid crashes")
+        status.update("Scanning ${symbols.size}/$universeSize liquid symbols · corridors and rapid moves")
     }
 
     private fun updateScanState(
@@ -218,7 +218,7 @@ internal class ScanCycleCoordinator(
             displayed.forEach(scannerPanel::update)
             scannerPanel.completeScan(resultLimit)
             scannerPanel.setDetectedTodayCount(detectedCount)
-            val marketState = "${active.size} live corridor/crash setups"
+            val marketState = "${active.size} live corridor/rapid-move setups"
             status.update(
                 if (active.isEmpty()) "No current candidates · $diagnostics · next in ${nextDelaySeconds}s"
                 else "Focused scan complete · $marketState · $diagnostics · next in ${nextDelaySeconds}s"

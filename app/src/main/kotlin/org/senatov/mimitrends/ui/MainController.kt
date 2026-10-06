@@ -42,7 +42,7 @@ class MainController(
         repository::loadInstrumentIsin,
         { symbol -> repository.loadCompanyProfile(symbol)?.name }
     )
-    private val shortMoveLoader = ShortMoveLoader(repository, exchangeRates)
+    private val shortMoveLoader = ShortMoveLoader(repository, exchangeRates) { scannerCriteria.rapidMoves }
     private var currentSymbol = initialSymbol
     private var currentSignal: ScanResult? = null
     private val actions = WorkspaceActionButtons()
@@ -243,6 +243,7 @@ class MainController(
         log.debug(LogTag.UI, "createView()")
         scannerPanel.setCurrency(scannerCriteria.displayCurrency, currencyConverter::price)
         scannerPanel.setAppearance(scannerCriteria.tableAppearance)
+        shortMovePanel.setAppearance(scannerCriteria.tableAppearance)
         tradegateProvider.configure(scannerCriteria)
         euronextProvider.configure(scannerCriteria)
         val appLayers = MainViewFactory.create(
@@ -373,6 +374,7 @@ class MainController(
                 euronextProvider.configure(result.criteria)
                 scannerPanel.setCurrency(result.criteria.displayCurrency, currencyConverter::price)
                 scannerPanel.setAppearance(result.criteria.tableAppearance)
+                shortMovePanel.setAppearance(result.criteria.tableAppearance)
                 actions.settings.scene?.root?.let { WorkspaceAppearance.apply(it, result.criteria.tableAppearance) }
                 trendChart.setDarkTheme(result.criteria.tableAppearance.theme == UiTheme.DARK)
                 loadLocalChart(currentSymbol)

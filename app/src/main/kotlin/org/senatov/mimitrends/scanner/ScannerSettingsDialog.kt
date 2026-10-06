@@ -28,6 +28,7 @@ import org.senatov.mimitrends.model.AnomalyWindow
 import org.senatov.mimitrends.model.MarketRegion
 import org.senatov.mimitrends.model.UiDensity
 import org.senatov.mimitrends.model.UiTheme
+import org.senatov.mimitrends.model.RapidMoveSettings
 import javafx.collections.FXCollections
 import javafx.scene.paint.Color
 import javafx.scene.text.Font
@@ -94,11 +95,13 @@ class ScannerSettingsDialog(
     private val oddRowColor = ColorPicker(Color.web(current.tableAppearance.oddRowColor))
     private val selectionColor = ColorPicker(Color.web(current.tableAppearance.selectionColor))
     private val gridColor = ColorPicker(Color.web(current.tableAppearance.gridColor))
+    private val rapidRiseColor = ColorPicker(Color.web(current.tableAppearance.rapidRiseColor))
+    private val rapidMoveEditor = RapidMoveSettingsEditor(current.rapidMoves)
 
     init {
         owner?.let(dialog::initOwner)
         dialog.title = "Scanner Settings"
-        dialog.headerText = "Anomaly Scanner"
+        dialog.headerText = null
         dialog.isResizable = true
         WorkspaceDialogAppearance.apply(dialog, owner)
         dialog.dialogPane.styleClass += "glass-settings-dialog"
@@ -170,10 +173,11 @@ class ScannerSettingsDialog(
                     "Comma-separated tickers scanned by Yahoo. Restore Defaults reinstates the standard liquid US and European universe.",
                     symbols.apply { prefRowCount = 5; maxHeight = 130.0 })
             ),
-            Label("Only fresh tradable corridors and four-minute rapid crashes are published. Yahoo bootstraps one day, then loads only the missing tail; the focused radar reads the latest 12 hours from SQLite.").apply {
+            Label("Fresh corridors and rapid price moves are published. Yahoo bootstraps one day, then loads only the missing tail; Live radar reads the latest 12 hours from SQLite.").apply {
                 isWrapText = true; styleClass += "settings-footnote"
             }
         ).apply { padding = Insets(18.0) }
+
 
         val providers = VBox(
             14.0,
@@ -247,20 +251,19 @@ class ScannerSettingsDialog(
                 settingRow("Selection", "Selected and hover highlight colour.", selectionColor),
                 settingRow("Dividers", "Column and row separator colour.", gridColor)
             ),
+            section(
+                "Live radar alerts",
+                settingRow("Rapid rise background", "Background of a rapid-rise row, including its selected state.", rapidRiseColor)
+            ),
             Label("Column order and width remain directly adjustable by dragging the table headers.").apply {
                 isWrapText = true; styleClass += "settings-footnote"
             }
         ).apply { padding = Insets(18.0) }
-        dialog.dialogPane.content = TabPane(
-            Tab("Scanner", ScrollPane(scanner).apply { isFitToWidth = true; styleClass += "settings-scroll" }).apply {
-                isClosable = false
-            },
-            Tab(
-                "Market Data Providers",
-                ScrollPane(providers).apply { isFitToWidth = true; styleClass += "settings-scroll" }).apply { isClosable = false },
-            Tab(
-                "Appearance",
-                ScrollPane(appearance).apply { isFitToWidth = true; styleClass += "settings-scroll" }).apply { isClosable = false }
+        dialog.dialogPane.content = SettingsNavigation.create(
+            listOf(
+                "Scanner" to scanner, "Rapid moves" to rapidMoveEditor.content,
+                "Market data providers" to providers, "Appearance" to appearance
+            )
         )
         dialog.dialogPane.prefWidth = DEFAULT_WIDTH
         dialog.dialogPane.prefHeight = DEFAULT_HEIGHT
@@ -292,46 +295,11 @@ class ScannerSettingsDialog(
         geometry.attach(dialog)
     }
 
-    private fun section(title: String, vararg content: javafx.scene.Node): VBox = VBox(10.0).apply {
-        styleClass += "settings-glass-card"
-        children += Label(title).apply { styleClass += "settings-section-title" }
-        children += content
-    }
+    private fun section(title: String, vararg content: javafx.scene.Node): VBox =
+        SettingsNavigation.section(title, *content)
 
-    private fun settingRow(title: String, detail: String, control: Control): HBox = HBox(12.0).apply {
-        alignment = javafx.geometry.Pos.CENTER_LEFT
-        val description = HBox(
-            6.0,
-            Label(title).apply { styleClass += "settings-row-title" },
-            helpButton(title, detail)
-        ).apply {
-            alignment = javafx.geometry.Pos.CENTER_LEFT
-            minWidth = 260.0; prefWidth = 300.0; maxWidth = 330.0
-        }
-        control.minWidth = 180.0
-        control.maxWidth = Double.MAX_VALUE
-        HBox.setHgrow(control, Priority.ALWAYS)
-        children += listOf(description, control)
-    }
-
-    private fun helpButton(title: String, detail: String): Button = Button("i").apply {
-        styleClass += "settings-info-button"
-        isFocusTraversable = false
-        tooltip = Tooltip(detail)
-        accessibleText = "$title information"
-        setOnAction {
-            val anchor = this
-            val message = Label(detail).apply {
-                isWrapText = true
-                maxWidth = 300.0
-                styleClass += "settings-info-content"
-            }
-            ContextMenu(CustomMenuItem(message, false)).apply {
-                styleClass += "settings-info-popup"
-                show(anchor, Side.BOTTOM, 0.0, 4.0)
-            }
-        }
-    }
+    private fun settingRow(title: String, detail: String, control: Control): HBox =
+        SettingsNavigation.row(title, detail, control)
 
     private fun applyDefaults() {
         val defaults = ScannerCriteria()
@@ -369,6 +337,8 @@ class ScannerSettingsDialog(
         oddRowColor.value = Color.web(defaults.tableAppearance.oddRowColor)
         selectionColor.value = Color.web(defaults.tableAppearance.selectionColor)
         gridColor.value = Color.web(defaults.tableAppearance.gridColor)
+        rapidRiseColor.value = Color.web(defaults.tableAppearance.rapidRiseColor)
+        rapidMoveEditor.restoreDefaults()
     }
 
     fun showAndWait(): ScannerSettingsResult? = dialog.showAndWait().orElse(null)
@@ -407,8 +377,10 @@ class ScannerSettingsDialog(
                 evenRowColor = hex(evenRowColor.value),
                 oddRowColor = hex(oddRowColor.value),
                 selectionColor = hex(selectionColor.value),
-                gridColor = hex(gridColor.value)
+                gridColor = hex(gridColor.value),
+                rapidRiseColor = hex(rapidRiseColor.value)
             ),
+            rapidMoves = rapidMoveEditor.value(),
             symbols = service.normalizeSymbols(symbols.text).also { require(it.isNotEmpty()) })
         ScannerSettingsResult(criteria, finnhubApiKey.text.trim().takeIf(String::isNotEmpty))
     }.onFailure { Alert(Alert.AlertType.ERROR, "Check numeric values and enter at least one symbol.", ButtonType.OK).showAndWait() }

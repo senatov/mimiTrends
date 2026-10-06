@@ -137,7 +137,19 @@ data class TableAppearance(
     val evenRowColor: String = "#FAFAFA",
     val oddRowColor: String = "#F0F0F0",
     val selectionColor: String = "#FFFDE1",
-    val gridColor: String = "#9CA9B5"
+    val gridColor: String = "#9CA9B5",
+    val rapidRiseColor: String = "#DDF5E3"
+)
+
+data class RapidMoveSettings(
+    val crashPercent: Double = 0.30,
+    val crashWindowMinutes: Int = 4,
+    val sustainedCrashPercent: Double = 0.60,
+    val sustainedCrashWindowMinutes: Int = 15,
+    val risePercent: Double = 1.5,
+    val riseWindowMinutes: Int = 4,
+    val minimumPrice: Double = 5.0,
+    val minimumTurnover: Double = 250_000.0
 )
 
 data class ScannerCriteria(
@@ -167,6 +179,7 @@ data class ScannerCriteria(
     val euronextRequestIntervalMillis: Long = 1_500,
     val stockSearchUrl: String = "https://www.wallstreet-online.de/suche/?suche=&q=&sa=Suche",
     val tableAppearance: TableAppearance = TableAppearance(),
+    val rapidMoves: RapidMoveSettings = RapidMoveSettings(),
     val symbols: List<String> = DefaultSymbolUniverse.symbols
 )
 

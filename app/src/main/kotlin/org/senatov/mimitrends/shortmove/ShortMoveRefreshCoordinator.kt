@@ -119,7 +119,10 @@ internal class ShortMoveEventRetainer {
         }
         return (retained + current.filter { it.symbol !in frozenSymbols })
             .distinctBy(ShortMove::symbol)
-            .sortedByDescending(ShortMove::opportunityScore)
+            .sortedWith(
+                compareBy<ShortMove>(::shortMoveAlertPriority)
+                    .thenByDescending(ShortMove::opportunityScore)
+            )
             .take(MAX_RETAINED_ROWS)
     }
 

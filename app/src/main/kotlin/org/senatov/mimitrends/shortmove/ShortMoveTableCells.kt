@@ -14,11 +14,13 @@ import java.util.Locale
 
 internal fun shortMoveAlertPriority(move: ShortMove): Int = when (move.pattern) {
     ShortMovePattern.RAPID_CRASH -> 0
-    ShortMovePattern.TRADABLE_CORRIDOR -> 1
+    ShortMovePattern.RAPID_RISE -> 1
+    ShortMovePattern.TRADABLE_CORRIDOR -> 2
 }
 
 internal fun shortMoveDirectionLabel(move: ShortMove): String = when (move.pattern) {
     ShortMovePattern.RAPID_CRASH -> retainedLabel(move, "‼ RAPID CRASH")
+    ShortMovePattern.RAPID_RISE -> retainedLabel(move, "↑ RAPID RISE")
     ShortMovePattern.TRADABLE_CORRIDOR -> retainedLabel(move, "▰ CORRIDOR")
 }
 
@@ -52,6 +54,8 @@ internal class ShortMoveDirectionCell(
         if (!empty && item != null && label != null) {
             if (item.pattern == ShortMovePattern.RAPID_CRASH) {
                 styleClass += "rapid-crash-cell"
+            } else if (item.pattern == ShortMovePattern.RAPID_RISE) {
+                styleClass += "short-move-up"
             } else {
                 styleClass += "short-move-down"
             }
@@ -67,6 +71,7 @@ internal class ShortMoveMovementCell : TableCell<ShortMove, ShortMove>() {
         styleClass.removeAll("short-move-up", "short-move-down")
         if (!empty && item != null) styleClass += when (item.pattern) {
             ShortMovePattern.RAPID_CRASH -> "short-move-down"
+            ShortMovePattern.RAPID_RISE -> "short-move-up"
             ShortMovePattern.TRADABLE_CORRIDOR -> "short-move-up"
         }
     }

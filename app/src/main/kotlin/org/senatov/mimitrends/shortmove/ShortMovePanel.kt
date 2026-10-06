@@ -35,6 +35,7 @@ import javafx.scene.layout.HBox
 import javafx.scene.layout.Priority
 import javafx.scene.layout.VBox
 import org.senatov.mimitrends.model.CompanyProfile
+import org.senatov.mimitrends.model.TableAppearance
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -79,8 +80,8 @@ class ShortMovePanel(
         isManaged = false
     }
     private val empty = WorkspaceEmptyState.create(
-        "No live corridor or crash alerts",
-        "Stable two-hour corridors and confirmed four-minute rapid crashes will appear here."
+        "No live corridor or rapid-move alerts",
+        "Stable two-hour corridors and confirmed rapid price moves will appear here."
     )
     private val noMatches = WorkspaceEmptyState.create(
         "No matching movements",
@@ -171,7 +172,7 @@ class ShortMovePanel(
         table.columns.setAll(company, direction, movement, price, age)
         listOf(
             direction to "Confirmed live event type. RECENT means it is retained but no longer confirmed.",
-            movement to "Four-minute decline for a crash, or corridor width and remaining room for a corridor.",
+            movement to "Price change and duration for a rapid move, or corridor width and remaining room.",
             price to "Latest observed price used by the focused radar.",
             age to "Time since the latest confirmed event observation."
         ).forEach { (column, description) -> TableColumnHelp.install(column, description) }
@@ -229,9 +230,10 @@ class ShortMovePanel(
 
                 override fun updateItem(item: ShortMove?, empty: Boolean) {
                     super.updateItem(item, empty)
-                    styleClass.removeAll("user-watchlist-row", "rapid-crash-row")
+                    styleClass.removeAll("user-watchlist-row", "rapid-crash-row", "rapid-rise-row")
                     if (!empty && item != null && watchlist.contains(item.symbol)) styleClass += "user-watchlist-row"
                     if (!empty && item?.pattern == ShortMovePattern.RAPID_CRASH) styleClass += "rapid-crash-row"
+                    if (!empty && item?.pattern == ShortMovePattern.RAPID_RISE) styleClass += "rapid-rise-row"
                     tooltip = if (!empty && item?.isRetained == true) javafx.scene.control.Tooltip(
                         "Recently detected · no longer confirmed by the latest scan"
                     ) else null
@@ -256,12 +258,12 @@ class ShortMovePanel(
     internal fun show(moves: Collection<ShortMove>, nowEpochSeconds: Long = Instant.now().epochSecond) {
         val selected = table.selectionModel.selectedItem?.identity()
         val current = moves.asSequence().filter { move ->
-            move.isActionableOpportunity() || move.pattern == ShortMovePattern.RAPID_CRASH
+            move.isActionableOpportunity() || move.pattern != ShortMovePattern.TRADABLE_CORRIDOR
         }.sortedWith(
             compareBy<ShortMove>(::shortMoveAlertPriority).thenByDescending(ShortMove::opportunityScore)
         ).take(MAX_VISIBLE_MOVES).toList()
         val displayed = eventRetainer.merge(current, nowEpochSeconds).filter { move ->
-            move.isActionableOpportunity() || move.pattern == ShortMovePattern.RAPID_CRASH
+            move.isActionableOpportunity() || move.pattern != ShortMovePattern.TRADABLE_CORRIDOR
         }
         rows.setAll(displayed)
         selected?.let { identity ->
@@ -277,6 +279,10 @@ class ShortMovePanel(
     }
 
     internal fun savedColumnLayout(): String = columnLayout.capture(autoFitter.manuallySizedColumnIds())
+    internal fun setAppearance(appearance: TableAppearance) {
+        table.style = "-mimi-rapid-rise: ${appearance.rapidRiseColor};"
+        table.refresh()
+    }
     internal fun focusSearch() = search.focusField()
 
     internal fun showScanProgress(completed: Int, cycleSize: Int, poolSize: Int) {

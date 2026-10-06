@@ -5,6 +5,7 @@ import java.util.Locale
 internal object ShortMovePresentation {
     fun movement(move: ShortMove): String = when (move.pattern) {
         ShortMovePattern.RAPID_CRASH -> "%+.2f%% / %dm".format(Locale.ROOT, move.changePercent, durationMinutes(move))
+        ShortMovePattern.RAPID_RISE -> "%+.2f%% / %dm".format(Locale.ROOT, move.changePercent, durationMinutes(move))
         ShortMovePattern.TRADABLE_CORRIDOR -> {
             val width = corridorWidthPercent(move)
             "%.2f%% wide · %+.2f%% room".format(Locale.ROOT, width, move.changePercent)
@@ -13,6 +14,7 @@ internal object ShortMovePresentation {
 
     fun currentPrice(move: ShortMove): Double = when (move.pattern) {
         ShortMovePattern.RAPID_CRASH -> move.close
+        ShortMovePattern.RAPID_RISE -> move.latestPrice ?: move.close
         ShortMovePattern.TRADABLE_CORRIDOR -> move.open
     }
 
@@ -24,6 +26,10 @@ internal object ShortMovePresentation {
     fun details(move: ShortMove): String = when (move.pattern) {
         ShortMovePattern.RAPID_CRASH ->
             "Confirmed close-to-close decline of ${"%+.2f".format(Locale.ROOT, move.changePercent)}% " +
+                    "in ${durationMinutes(move)} minutes."
+
+        ShortMovePattern.RAPID_RISE ->
+            "Confirmed rise to a minute-bar high of ${"%+.2f".format(Locale.ROOT, move.changePercent)}% " +
                     "in ${durationMinutes(move)} minutes."
 
         ShortMovePattern.TRADABLE_CORRIDOR -> move.opportunityDetails.substringBeforeLast('\n').ifBlank {
