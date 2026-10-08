@@ -30,14 +30,12 @@ class ScannerSettingsServiceTest {
     }
 
     @Test
-    fun `uses existing crash thresholds when rapid settings are absent`() {
+    fun `uses current rapid move defaults when settings are absent or invalid`() {
         val path = Files.createTempDirectory("mimitrends-legacy-rapid").resolve("scanner.properties")
         Files.writeString(path, "table.rapidRiseColor=invalid\nrapid.risePercent=invalid\n")
 
         val restored = ScannerSettingsService(path).load()
-        assertEquals(0.30, restored.rapidMoves.crashPercent)
-        assertEquals(0.60, restored.rapidMoves.sustainedCrashPercent)
-        assertEquals(1.5, restored.rapidMoves.risePercent)
+        assertEquals(RapidMoveSettings(), restored.rapidMoves)
         assertEquals("#DDF5E3", restored.tableAppearance.rapidRiseColor)
     }
 

@@ -23,6 +23,7 @@ class ScannerSettingsService(private val path: Path = Path.of(System.getProperty
         if (!Files.exists(path)) return ScannerCriteria()
         return runCatching {
             val p = Properties().also { Files.newInputStream(path).use(it::load) }
+            val rapidDefaults = RapidMoveSettings()
             ScannerCriteria(
                 anomalyWindow = enumValue(p.getProperty("anomalyWindow"), AnomalyWindow.HOUR),
                 marketRegion = enumValue(p.getProperty("marketRegion"), MarketRegion.BOTH),
@@ -65,14 +66,19 @@ class ScannerSettingsService(private val path: Path = Path.of(System.getProperty
                     rapidRiseColor = color(p.getProperty("table.rapidRiseColor"), "#DDF5E3")
                 ),
                 rapidMoves = RapidMoveSettings(
-                    crashPercent = p.doubleIn("rapid.crashPercent", 0.30, 0.05, 20.0),
-                    crashWindowMinutes = p.intIn("rapid.crashWindowMinutes", 4, 4, 15),
-                    sustainedCrashPercent = p.doubleIn("rapid.sustainedCrashPercent", 0.60, 0.05, 20.0),
-                    sustainedCrashWindowMinutes = p.intIn("rapid.sustainedCrashWindowMinutes", 15, 5, 30),
-                    risePercent = p.doubleIn("rapid.risePercent", 1.5, 0.05, 20.0),
-                    riseWindowMinutes = p.intIn("rapid.riseWindowMinutes", 4, 1, 15),
-                    minimumPrice = p.doubleIn("rapid.minimumPrice", 5.0, 0.0, 10_000.0),
-                    minimumTurnover = p.doubleIn("rapid.minimumTurnover", 250_000.0, 0.0, 10_000_000.0)
+                    crashPercent = p.doubleIn("rapid.crashPercent", rapidDefaults.crashPercent, 0.05, 20.0),
+                    crashWindowMinutes = p.intIn("rapid.crashWindowMinutes", rapidDefaults.crashWindowMinutes, 4, 15),
+                    sustainedCrashPercent = p.doubleIn("rapid.sustainedCrashPercent", rapidDefaults.sustainedCrashPercent, 0.05, 20.0),
+                    sustainedCrashWindowMinutes = p.intIn(
+                        "rapid.sustainedCrashWindowMinutes",
+                        rapidDefaults.sustainedCrashWindowMinutes,
+                        5,
+                        30
+                    ),
+                    risePercent = p.doubleIn("rapid.risePercent", rapidDefaults.risePercent, 0.05, 20.0),
+                    riseWindowMinutes = p.intIn("rapid.riseWindowMinutes", rapidDefaults.riseWindowMinutes, 1, 15),
+                    minimumPrice = p.doubleIn("rapid.minimumPrice", rapidDefaults.minimumPrice, 0.0, 10_000.0),
+                    minimumTurnover = p.doubleIn("rapid.minimumTurnover", rapidDefaults.minimumTurnover, 0.0, 10_000_000.0)
                 ),
                 symbols = normalizeSymbols(p.getProperty("symbols", ScannerCriteria().symbols.joinToString(","))).let { stored ->
                     // Extend prior standard installation profiles with the broader liquid

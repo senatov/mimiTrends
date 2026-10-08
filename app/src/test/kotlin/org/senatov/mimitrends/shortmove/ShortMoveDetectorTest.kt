@@ -9,12 +9,12 @@ import kotlin.test.assertTrue
 
 class ShortMoveDetectorTest {
     @Test
-    fun `detects rapid crash at zero point three percent threshold`() {
+    fun `detects rapid crash at zero point two five percent threshold`() {
         val now = 12_000L
-        val bars = prices("THRESHOLD", now, 100.0, 100.15, 99.90, 99.70)
+        val bars = prices("THRESHOLD", now, 100.0, 100.15, 99.90, 99.75)
         val result = ShortMoveDetector.rank(mapOf("THRESHOLD" to bars), now).single()
         assertEquals(ShortMovePattern.RAPID_CRASH, result.pattern)
-        assertEquals(-0.30, result.changePercent, 1e-9)
+        assertEquals(-0.25, result.changePercent, 1e-9)
     }
 
     @Test
@@ -22,7 +22,7 @@ class ShortMoveDetectorTest {
         val now = 13_000L
         val ranked = ShortMoveDetector.rank(
             mapOf(
-                "SMALL_DROP" to prices("SMALL_DROP", now, 100.0, 99.90, 99.80, 99.701),
+                "SMALL_DROP" to prices("SMALL_DROP", now, 100.0, 99.90, 99.80, 99.751),
                 "SMALL_RISE" to prices("SMALL_RISE", now, 100.0, 100.1, 100.2, 100.3)
             ), now
         )
@@ -51,6 +51,40 @@ class ShortMoveDetectorTest {
         assertEquals(ShortMovePattern.RAPID_RISE, result.pattern)
         assertEquals(172.6, result.close)
         assertEquals(170.47, ShortMovePresentation.currentPrice(result))
+    }
+
+    @Test
+    fun `detects a close confirmed rebound below the preceding high`() {
+        val now = 13_000L
+        val bars = listOf(
+            bar("REBOUND", now - 10 * 60L, 112.0),
+            bar("REBOUND", now - 5 * 60L, 110.0),
+            bar("REBOUND", now - 4 * 60L, 110.0),
+            bar("REBOUND", now - 3 * 60L, 110.2),
+            bar("REBOUND", now - 2 * 60L, 110.5),
+            bar("REBOUND", now - 60L, 111.0),
+            bar("REBOUND", now, 111.0)
+        )
+        val result = ShortMoveDetector.rank(mapOf("REBOUND" to bars), now).single()
+        assertEquals(ShortMovePattern.RAPID_RISE, result.pattern)
+        assertEquals(110.0, result.open)
+        assertEquals(111.0, result.close)
+    }
+
+    @Test
+    fun `does not report an unconfirmed wick below the preceding high`() {
+        val now = 13_000L
+        val bars = listOf(
+            bar("WICK", now - 10 * 60L, 112.0),
+            bar("WICK", now - 5 * 60L, 110.0),
+            bar("WICK", now - 4 * 60L, 110.0),
+            bar("WICK", now - 3 * 60L, 110.2),
+            bar("WICK", now - 2 * 60L, 110.3),
+            bar("WICK", now - 60L, 110.2).copy(high = 111.0),
+            bar("WICK", now, 110.2)
+        )
+
+        assertTrue(ShortMoveDetector.rank(mapOf("WICK" to bars), now).isEmpty())
     }
 
     @Test

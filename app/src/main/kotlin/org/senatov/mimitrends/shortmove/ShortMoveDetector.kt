@@ -114,7 +114,10 @@ internal object ShortMoveDetector {
                                 (start.minuteEpochSeconds - RISE_EVENT_LOOKBACK_MINUTES * 60L) until start.minuteEpochSeconds
                     }
                     .map(MinuteBar::high).maxOrNull()
-                if (precedingHigh != null && end.high <= precedingHigh) return@mapNotNull null
+                // A close-confirmed rebound is useful even before it reclaims the earlier high.
+                if (precedingHigh != null && end.high <= precedingHigh &&
+                    percent(start.close, end.close) < settings.risePercent - PERCENT_COMPARISON_EPSILON
+                ) return@mapNotNull null
                 ShortMove(
                     symbol, change, start.close, end.high, start.minuteEpochSeconds,
                     end.minuteEpochSeconds, eventBars.size, ShortMovePattern.RAPID_RISE,

@@ -155,9 +155,11 @@ The primary question is: “Which liquid stock has entered a useful corridor or 
 - ranks the rotating universe by recent session turnover and feed freshness so subsequent cycles spend
   more coverage on actively traded instruments;
 - detects stable two-hour intraday corridors with repeated edge touches and bounded drift;
-- detects a close-to-close decline of at least 0.30% within four minutes, or a sustained decline of at
-  least 0.60% within fifteen minutes, as `RAPID_CRASH`; recent qualifying windows remain discoverable
+- detects a close-to-close decline of at least 0.25% within four minutes, or a sustained decline of at
+  least 0.50% within fifteen minutes, as `RAPID_CRASH`; recent qualifying windows remain discoverable
   when their market data arrives after the event;
+- detects a rise of at least 0.80% within five minutes as `RAPID_RISE`, including a close-confirmed
+  rebound that has not yet exceeded an earlier high;
 - displays an animated message over the toolbar during startup until the first analytical pass completes; cached snapshots do not dismiss it;
 - shows a live textual countdown between analytical passes so the configured scan interval is visibly active;
 - labels analytical data age explicitly in minutes (for example, `801 min.`);
