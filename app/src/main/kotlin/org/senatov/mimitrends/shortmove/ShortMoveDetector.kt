@@ -15,6 +15,8 @@ import org.senatov.mimitrends.shared.*
 import org.senatov.mimitrends.model.MinuteBar
 import org.senatov.mimitrends.model.VolumeStatus
 import org.senatov.mimitrends.model.RapidMoveSettings
+import org.senatov.mimitrends.model.CurveCandidate
+import org.senatov.mimitrends.model.CurveDecision
 
 internal data class ShortMove(
     val symbol: String,
@@ -31,7 +33,9 @@ internal data class ShortMove(
     val isRetained: Boolean = false,
     val corridorLower: Double? = null,
     val corridorUpper: Double? = null,
-    val latestPrice: Double? = null
+    val latestPrice: Double? = null,
+    val curveCandidate: CurveCandidate? = null,
+    val reviewDecision: CurveDecision? = null
 )
 
 internal fun ShortMove.isActionableOpportunity(): Boolean =
@@ -64,9 +68,8 @@ internal object ShortMoveDetector {
         settings: RapidMoveSettings
     ): ShortMove? {
         val recent = bars.sortedBy(MinuteBar::minuteEpochSeconds)
-        val latest = recent.lastOrNull()
-            ?.takeIf { it.minuteEpochSeconds >= nowEpochSeconds - MAX_AGE_MINUTES * 60 }
-            ?: return null
+        val latestEpoch = recent.lastOrNull()?.minuteEpochSeconds ?: return null
+        if (latestEpoch < nowEpochSeconds - MAX_AGE_MINUTES * 60) return null
         val eligibleEnds = recent.filter {
             it.minuteEpochSeconds >= nowEpochSeconds - settings.sustainedCrashWindowMinutes * 60
         }
@@ -94,7 +97,8 @@ internal object ShortMoveDetector {
         settings: RapidMoveSettings
     ): ShortMove? {
         val recent = bars.sortedBy(MinuteBar::minuteEpochSeconds)
-        if (recent.lastOrNull()?.minuteEpochSeconds ?: 0L < nowEpochSeconds - MAX_AGE_MINUTES * 60) return null
+        val latestEpoch = recent.lastOrNull()?.minuteEpochSeconds ?: return null
+        if (latestEpoch < nowEpochSeconds - MAX_AGE_MINUTES * 60) return null
         return recent.asSequence()
             .filter { it.minuteEpochSeconds >= nowEpochSeconds - RISE_EVENT_LOOKBACK_MINUTES * 60L }
             .mapNotNull { end ->

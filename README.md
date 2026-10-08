@@ -160,6 +160,13 @@ The primary question is: “Which liquid stock has entered a useful corridor or 
   when their market data arrives after the event;
 - detects a rise of at least 0.80% within five minutes as `RAPID_RISE`, including a close-confirmed
   rebound that has not yet exceeded an earlier high;
+- records borderline curve breaks with their size, duration, volatility, acceleration, path efficiency,
+  reversal, volume coverage, turnover, and bar density. Uncertain moves appear in pale pink and ask
+  for a Yes/No review when opened. Reviews are saved with the curve features in SQLite; rejected
+  events are hidden and approved events appear as rapid moves. At startup, reviewed examples form a
+  separate rise/drop similarity model. It only auto-shows or hides a new borderline move when at
+  least three close examples across two symbols agree and opposing examples are sufficiently distant.
+  Model-approved rows can be corrected through **Review model decision** in the row context menu;
 - displays an animated message over the toolbar during startup until the first analytical pass completes; cached snapshots do not dismiss it;
 - shows a live textual countdown between analytical passes so the configured scan interval is visibly active;
 - labels analytical data age explicitly in minutes (for example, `801 min.`);

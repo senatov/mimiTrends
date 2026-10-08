@@ -1,5 +1,6 @@
 package org.senatov.mimitrends.shortmove
 
+import org.senatov.mimitrends.model.CurveDecision
 import java.util.Locale
 
 internal object ShortMovePresentation {
@@ -23,7 +24,17 @@ internal object ShortMovePresentation {
         return "%02d:%02d".format(Locale.ROOT, minutes / 60L, minutes % 60L)
     }
 
-    fun details(move: ShortMove): String = when (move.pattern) {
+    fun details(move: ShortMove): String = if (move.reviewDecision == CurveDecision.PENDING) {
+        "Possible curve break. Open this row to review the candidate."
+    } else if (move.reviewDecision == CurveDecision.APPROVED) {
+        "Rapid move approved by you. ${"%+.2f".format(Locale.ROOT, move.changePercent)}% in ${durationMinutes(move)} minutes."
+    } else if (move.reviewDecision == CurveDecision.MODEL_APPROVED) {
+        "Rapid move matched several approved curve examples. ${"%+.2f".format(Locale.ROOT, move.changePercent)}% in ${
+            durationMinutes(
+                move
+            )
+        } minutes."
+    } else when (move.pattern) {
         ShortMovePattern.RAPID_CRASH ->
             "Confirmed close-to-close decline of ${"%+.2f".format(Locale.ROOT, move.changePercent)}% " +
                     "in ${durationMinutes(move)} minutes."

@@ -13,13 +13,18 @@ import org.senatov.mimitrends.services.*
 import org.senatov.mimitrends.shared.*
 
 import org.senatov.mimitrends.db.MarketRepository
+import org.senatov.mimitrends.db.CurveCandidateStore
 import org.senatov.mimitrends.model.MinuteBar
 import org.senatov.mimitrends.model.ProviderMinuteBar
 import org.senatov.mimitrends.model.RapidMoveSettings
+import org.senatov.mimitrends.model.CurveDecision
+import org.senatov.mimitrends.model.CurveDirection
 
 internal class ShortMoveLoader(
     private val repository: MarketRepository,
     private val exchangeRates: ExchangeRateService,
+    private val curveCandidates: CurveCandidateStore,
+    private val curveModel: CurveCandidateModel,
     private val settings: () -> RapidMoveSettings = { RapidMoveSettings() }
 ) {
     fun load(symbols: Collection<String>, nowEpochSeconds: Long = java.time.Instant.now().epochSecond): List<ShortMove> {
@@ -33,7 +38,31 @@ internal class ShortMoveLoader(
                 nowEpochSeconds
             )
         }
-        val ranked = ShortMoveDetector.rank(bars, nowEpochSeconds, Int.MAX_VALUE, settings())
+        val confirmed = ShortMoveDetector.rank(bars, nowEpochSeconds, Int.MAX_VALUE, settings()).associateBy(ShortMove::symbol)
+        val ranked = bars.mapNotNull { (symbol, history) ->
+            val existing = confirmed[symbol]
+            if (existing?.pattern == ShortMovePattern.RAPID_CRASH || existing?.pattern == ShortMovePattern.RAPID_RISE) {
+                return@mapNotNull existing
+            }
+            val candidate = CurveCandidateDetector.detect(symbol, history, nowEpochSeconds)
+                ?: return@mapNotNull existing
+            val decision = curveCandidates.observe(candidate)
+            if (decision == CurveDecision.REJECTED) return@mapNotNull existing
+            val assessment = if (decision == CurveDecision.PENDING) curveModel.assess(candidate) else CurveAssessment.SHOW
+            if (assessment == CurveAssessment.HIDE) return@mapNotNull existing
+            val pattern = if (candidate.direction == CurveDirection.RISE) {
+                ShortMovePattern.RAPID_RISE
+            } else ShortMovePattern.RAPID_CRASH
+            ShortMove(
+                symbol, candidate.changePercent, candidate.startPrice, candidate.endPrice,
+                candidate.anchorEpochSeconds, candidate.endEpochSeconds, candidate.barCount, pattern,
+                latestPrice = history.lastOrNull()?.close,
+                curveCandidate = candidate,
+                reviewDecision = if (assessment == CurveAssessment.SHOW && decision == CurveDecision.PENDING) {
+                    CurveDecision.MODEL_APPROVED
+                } else decision
+            )
+        }.sortedWith(compareBy<ShortMove>(::shortMoveAlertPriority).thenByDescending { kotlin.math.abs(it.changePercent) })
         val companyName = { symbol: String -> repository.loadCompanyProfile(symbol)?.name }
         return ShortMoveCompanyRanking.distinct(ranked, MAX_RADAR_RESULTS, companyName)
     }

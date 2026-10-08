@@ -36,13 +36,23 @@ class MainController(
     private val log = LoggerFactory.getLogger(MainController::class.java)
     private val repository = MarketRepository()
     private val analytics = AnalyticsRepository()
+    private val curveCandidates = CurveCandidateStore()
+    private val curveModel = CurveCandidateModel(curveCandidates::loadReviewed)
+    private val curveReview by lazy {
+        CurveCandidateReviewCoordinator(
+            curveCandidates,
+            curveModel,
+            log
+        ) { shortMoveRefresh.request() }
+    }
     private val exchangeRates = ExchangeRateService()
     private val savedResultQuotes = SavedResultQuoteRefresher(repository)
     private val resultDeduplicator = InstrumentResultDeduplicator(
         repository::loadInstrumentIsin,
         { symbol -> repository.loadCompanyProfile(symbol)?.name }
     )
-    private val shortMoveLoader = ShortMoveLoader(repository, exchangeRates) { scannerCriteria.rapidMoves }
+    private val shortMoveLoader =
+        ShortMoveLoader(repository, exchangeRates, curveCandidates, curveModel) { scannerCriteria.rapidMoves }
     private var currentSymbol = initialSymbol
     private var currentSignal: ScanResult? = null
     private val actions = WorkspaceActionButtons()
@@ -76,7 +86,7 @@ class MainController(
     private val shortMovePanel: ShortMovePanel = ShortMovePanel(
         ::openShortMoveChart,
         shortMoveColumns, { symbol -> profileService.load(symbol) }, ClipboardText::copy,
-        stockPageOpener::open, userWatchlist.actions, openExternal
+        stockPageOpener::open, userWatchlist.actions, openExternal, curveReview::review
     )
     private val chartDrawer = ChartDrawer(trendChart, initialChartVisible)
     private val universeDialog = UniverseDialog { count -> actions.universe.text = "Pool $count" }
@@ -297,6 +307,7 @@ class MainController(
                 scalableProvider, langSchwarzProvider,
                 { finnhubClient?.close() }, batchScheduler, repository, analytics, log
             )
+            curveCandidates.close()
         } finally {
             observationBus.close()
         }
@@ -323,19 +334,17 @@ class MainController(
 
     private fun publishShortMoves(moves: List<ShortMove>) {
         if (closing.get()) return
-        priorityScanner.addUrgentSymbols(rapidCrashSymbols(moves))
+        priorityScanner.addUrgentSymbols(moves.filter {
+            it.pattern == ShortMovePattern.RAPID_CRASH &&
+                    it.reviewDecision != CurveDecision.PENDING
+        }
+            .map(ShortMove::symbol))
         Platform.runLater {
             if (!closing.get()) {
                 shortMovePanel.show(moves)
             }
         }
     }
-
-    private fun rapidCrashSymbols(moves: Collection<ShortMove>): List<String> = moves
-        .asSequence()
-        .filter { it.pattern == ShortMovePattern.RAPID_CRASH }
-        .map(ShortMove::symbol)
-        .toList()
 
     private fun openShortMoveChart(symbol: String, moveEpochSeconds: Long) {
         // Starting the load clears the previous instrument, so install its focus request afterwards.

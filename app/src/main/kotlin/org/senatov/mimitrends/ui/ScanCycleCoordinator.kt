@@ -229,6 +229,9 @@ internal class ScanCycleCoordinator(
 }
 
 private fun Collection<ShortMove>.rapidCrashSymbols(): List<String> = asSequence()
-    .filter { it.pattern == ShortMovePattern.RAPID_CRASH }
+    .filter {
+        it.pattern == ShortMovePattern.RAPID_CRASH &&
+                it.reviewDecision != org.senatov.mimitrends.model.CurveDecision.PENDING
+    }
     .map(ShortMove::symbol)
     .toList()

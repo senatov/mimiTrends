@@ -11,14 +11,19 @@ import javafx.scene.layout.Region
 import javafx.geometry.Pos
 import java.time.Instant
 import java.util.Locale
+import org.senatov.mimitrends.model.CurveDecision
+import org.senatov.mimitrends.model.CurveDirection
 
-internal fun shortMoveAlertPriority(move: ShortMove): Int = when (move.pattern) {
+internal fun shortMoveAlertPriority(move: ShortMove): Int =
+    if (move.reviewDecision == CurveDecision.PENDING) 2 else when (move.pattern) {
     ShortMovePattern.RAPID_CRASH -> 0
     ShortMovePattern.RAPID_RISE -> 1
-    ShortMovePattern.TRADABLE_CORRIDOR -> 2
+        ShortMovePattern.TRADABLE_CORRIDOR -> 3
 }
 
-internal fun shortMoveDirectionLabel(move: ShortMove): String = when (move.pattern) {
+internal fun shortMoveDirectionLabel(move: ShortMove): String = if (move.reviewDecision == CurveDecision.PENDING) {
+    if (move.curveCandidate?.direction == CurveDirection.RISE) "? REVIEW RISE" else "? REVIEW DROP"
+} else when (move.pattern) {
     ShortMovePattern.RAPID_CRASH -> retainedLabel(move, "‼ RAPID CRASH")
     ShortMovePattern.RAPID_RISE -> retainedLabel(move, "↑ RAPID RISE")
     ShortMovePattern.TRADABLE_CORRIDOR -> retainedLabel(move, "▰ CORRIDOR")

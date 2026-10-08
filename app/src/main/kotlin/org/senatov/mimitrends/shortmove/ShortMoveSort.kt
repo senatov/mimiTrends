@@ -1,5 +1,7 @@
 package org.senatov.mimitrends.shortmove
 
+import org.senatov.mimitrends.model.CurveDecision
+
 import org.senatov.mimitrends.application.*
 import org.senatov.mimitrends.ui.*
 import org.senatov.mimitrends.scanner.*
@@ -20,9 +22,10 @@ internal object ShortMoveSort {
         if (comparator != null) moves.sortWith(comparator)
     }
 
-    private fun directionPosition(move: ShortMove): Int = when (move.pattern) {
+    private fun directionPosition(move: ShortMove): Int =
+        if (move.reviewDecision == CurveDecision.PENDING) 2 else when (move.pattern) {
         ShortMovePattern.RAPID_CRASH -> 0
         ShortMovePattern.RAPID_RISE -> 1
-        ShortMovePattern.TRADABLE_CORRIDOR -> 2
+            ShortMovePattern.TRADABLE_CORRIDOR -> 3
     }
 }

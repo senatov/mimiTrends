@@ -428,6 +428,16 @@
     -fx-background-color: transparent;
 }
 
+.short-move-table .table-row-cell.curve-review-row,
+.short-move-table .table-row-cell.curve-review-row:odd,
+.short-move-table .table-row-cell.curve-review-row:selected {
+    -fx-background-color: #ffe2eb;
+}
+
+.short-move-table .table-row-cell.curve-review-row .table-cell {
+    -fx-background-color: transparent;
+}
+
 .short-move-table .table-cell.short-move-struggle { -fx-text-fill: #8a5600; -fx-font-weight: 600; }
 .short-move-table .table-cell.short-move-recurring-jump,
 .short-move-table .table-row-cell:selected .table-cell.short-move-recurring-jump {

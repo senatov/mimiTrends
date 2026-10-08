@@ -36,6 +36,8 @@ import javafx.scene.layout.Priority
 import javafx.scene.layout.VBox
 import org.senatov.mimitrends.model.CompanyProfile
 import org.senatov.mimitrends.model.TableAppearance
+import org.senatov.mimitrends.model.CurveDecision
+import org.senatov.mimitrends.model.CurveCandidate
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -47,7 +49,8 @@ class ShortMovePanel(
     private val copyText: (String) -> Unit = {},
     private val openExternalChart: (String) -> Unit = {},
     private val watchlist: InstrumentWatchlistActions = InstrumentWatchlistActions(),
-    openExternal: (String) -> Unit = {}
+    openExternal: (String) -> Unit = {},
+    private val onReview: (CurveCandidate, Boolean, (Throwable?) -> Unit) -> Unit = { _, _, _ -> }
 ) : VBox(5.0) {
     private val coverageWindow = ShortMoveCoverageWindow(openExternal)
     private val rows = FXCollections.observableArrayList<ShortMove>()
@@ -88,6 +91,7 @@ class ShortMovePanel(
         "Try another company, ticker, or event type.", "Clear search"
     ) { search.clear(); table.requestFocus() }
     private val eventRetainer = ShortMoveEventRetainer()
+    private val reviewing = mutableSetOf<Triple<String, String, Long>>()
     private val columnLayout: TableColumnLayout<ShortMove>
     private val autoFitter: TableColumnAutoFitter<ShortMove>
     private val profileUpdates by lazy {
@@ -200,11 +204,14 @@ class ShortMovePanel(
                 val removeItem = MenuItem("Remove from watchlist").apply {
                     setOnAction { contextItem?.symbol?.let(watchlist.remove) }
                 }
+                val reviewModelItem = MenuItem("Review model decision").apply {
+                    setOnAction { contextItem?.let(::reviewCandidate) }
+                }
 
                 init {
                     setOnMouseClicked { event ->
                         if (!isEmpty && event.button == MouseButton.PRIMARY && event.clickCount == 1) {
-                            onOpen(item.symbol, item.endedAtEpochSeconds)
+                            openOrReview(item)
                         }
                     }
                     contextMenu = ContextMenu(
@@ -217,11 +224,13 @@ class ShortMovePanel(
                             accelerator = KeyCodeCombination(KeyCode.O, KeyCombination.SHORTCUT_DOWN)
                             setOnAction { contextItem?.symbol?.let(openExternalChart) }
                         },
+                        reviewModelItem,
                         removeItem
                     ).apply {
                         setOnShowing {
                             contextItem = item.takeUnless { isEmpty }
                             removeItem.isVisible = contextItem?.symbol?.let(watchlist.contains) == true
+                            reviewModelItem.isVisible = contextItem?.reviewDecision == CurveDecision.MODEL_APPROVED
                             contextItem?.let { table.selectionModel.select(it) }
                         }
                         setOnHidden { contextItem = null }
@@ -230,11 +239,14 @@ class ShortMovePanel(
 
                 override fun updateItem(item: ShortMove?, empty: Boolean) {
                     super.updateItem(item, empty)
-                    styleClass.removeAll("user-watchlist-row", "rapid-crash-row", "rapid-rise-row")
+                    styleClass.removeAll("user-watchlist-row", "rapid-crash-row", "rapid-rise-row", "curve-review-row")
                     if (!empty && item != null && watchlist.contains(item.symbol)) styleClass += "user-watchlist-row"
-                    if (!empty && item?.pattern == ShortMovePattern.RAPID_CRASH) styleClass += "rapid-crash-row"
-                    if (!empty && item?.pattern == ShortMovePattern.RAPID_RISE) styleClass += "rapid-rise-row"
-                    tooltip = if (!empty && item?.isRetained == true) javafx.scene.control.Tooltip(
+                    if (!empty && item?.reviewDecision == CurveDecision.PENDING) styleClass += "curve-review-row"
+                    else if (!empty && item?.pattern == ShortMovePattern.RAPID_CRASH) styleClass += "rapid-crash-row"
+                    else if (!empty && item?.pattern == ShortMovePattern.RAPID_RISE) styleClass += "rapid-rise-row"
+                    tooltip = if (!empty && item?.reviewDecision == CurveDecision.PENDING) javafx.scene.control.Tooltip(
+                        "Possible rapid move · click to review"
+                    ) else if (!empty && item?.isRetained == true) javafx.scene.control.Tooltip(
                         "Recently detected · no longer confirmed by the latest scan"
                     ) else null
                 }
@@ -243,7 +255,7 @@ class ShortMovePanel(
         table.setOnKeyPressed { event ->
             val selected = table.selectionModel.selectedItem
             when {
-                event.code == KeyCode.ENTER -> selected?.let { onOpen(it.symbol, it.endedAtEpochSeconds) }
+                event.code == KeyCode.ENTER -> selected?.let(::openOrReview)
                 event.code == KeyCode.O && event.isShortcutDown -> selected?.symbol?.let(openExternalChart)
                 event.code == KeyCode.C && event.isShortcutDown -> selected?.let { copyText(searchKeyword(it)) }
                 event.code == KeyCode.ESCAPE && search.clear() -> Unit
@@ -284,6 +296,42 @@ class ShortMovePanel(
         table.refresh()
     }
     internal fun focusSearch() = search.focusField()
+
+    private fun openOrReview(move: ShortMove) {
+        if (move.reviewDecision != CurveDecision.PENDING) {
+            onOpen(move.symbol, move.endedAtEpochSeconds)
+            return
+        }
+        reviewCandidate(move)
+    }
+
+    private fun reviewCandidate(move: ShortMove) {
+        val candidate = move.curveCandidate ?: return
+        val key = Triple(candidate.symbol, candidate.direction.name, candidate.anchorEpochSeconds)
+        if (key in reviewing) return
+        val approved = CurveCandidateReviewDialog.ask(move) ?: return
+        reviewing += key
+        onReview(candidate, approved) { error ->
+            reviewing -= key
+            if (error != null) {
+                javafx.scene.control.Alert(
+                    javafx.scene.control.Alert.AlertType.ERROR,
+                    "Could not save this review. Please try again."
+                ).showAndWait()
+                return@onReview
+            }
+            val index = rows.indexOfFirst {
+                it.curveCandidate?.let { current ->
+                    current.symbol == candidate.symbol && current.direction == candidate.direction &&
+                            current.anchorEpochSeconds == candidate.anchorEpochSeconds
+                } == true
+            }
+            if (index >= 0) {
+                if (approved) rows[index] = rows[index].copy(reviewDecision = CurveDecision.APPROVED)
+                else rows.removeAt(index)
+            }
+        }
+    }
 
     internal fun showScanProgress(completed: Int, cycleSize: Int, poolSize: Int) {
         scanCaption.text = "Scan $completed/$cycleSize · pool $poolSize"
@@ -328,7 +376,7 @@ class ShortMovePanel(
             table.selectionModel.select(first)
             table.scrollTo(first)
             table.requestFocus()
-            onOpen(first.symbol, first.endedAtEpochSeconds)
+            openOrReview(first)
         }
     }
 
