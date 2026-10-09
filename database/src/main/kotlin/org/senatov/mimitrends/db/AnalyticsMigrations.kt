@@ -166,6 +166,9 @@ internal object AnalyticsMigrations {
             "DROP TABLE IF EXISTS price_points",
             "DROP TABLE IF EXISTS market_calendar_rules",
             "DROP TABLE IF EXISTS data_quality"
+        ),
+        20 to listOf(
+            "DROP INDEX IF EXISTS idx_outcomes_symbol_time"
         )
     )
 }

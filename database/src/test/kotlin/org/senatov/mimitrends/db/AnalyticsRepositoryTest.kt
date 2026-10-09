@@ -482,6 +482,9 @@ class AnalyticsRepositoryTest {
                     "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name IN " +
                         "('latest_quotes', 'price_points', 'market_calendar_rules', 'data_quality')"
                 ).use { it.next(); assertEquals(0, it.getInt(1)) }
+                statement.executeQuery(
+                    "SELECT COUNT(*) FROM sqlite_master WHERE type='index' AND name='idx_outcomes_symbol_time'"
+                ).use { it.next(); assertEquals(0, it.getInt(1)) }
                 statement.executeQuery("SELECT published FROM scan_candidates").use { it.next(); assertEquals(1, it.getInt(1)) }
                 statement.executeQuery("SELECT signal_epoch, entry_price, data_epoch FROM scan_candidates").use {
                     it.next(); assertEquals(signalEpoch, it.getLong(1)); assertEquals(100.0, it.getDouble(2))
