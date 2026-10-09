@@ -14,56 +14,43 @@ import org.senatov.mimitrends.shared.*
 
 import org.senatov.mimitrends.model.ScanResult
 
-/** Keeps recently published events visible without presenting them as active signals. */
-internal class RecentEventRetainer(
-    private val retentionMillis: Long = DEFAULT_RETENTION_MILLIS
-) {
-    private data class Event(val result: ScanResult, val lastActiveAtMillis: Long)
-
-    private val events = linkedMapOf<String, Event>()
+/** Keeps published signals until newer signals displace them from the table. */
+internal class RecentEventRetainer {
+    private val events = linkedMapOf<String, ScanResult>()
 
     @Synchronized
-    fun merge(active: Collection<ScanResult>, nowMillis: Long, resultLimit: Int): List<ScanResult> {
-        active.forEach { result -> retainActive(result, nowMillis) }
-        removeExpired(nowMillis)
-        return ranked(active.map(ScanResult::symbol).toSet(), nowMillis, resultLimit)
+    fun merge(active: Collection<ScanResult>, resultLimit: Int): List<ScanResult> {
+        val activeSymbols = active.mapTo(HashSet(), ScanResult::symbol)
+        events.replaceAll { symbol, result -> result.copy(isRetained = symbol !in activeSymbols) }
+        active.forEach(::retainActive)
+        return ranked(resultLimit)
     }
 
     @Synchronized
-    fun priorityUpdate(symbol: String, active: ScanResult?, nowMillis: Long): ScanResult? {
+    fun priorityUpdate(symbol: String, active: ScanResult?): ScanResult? {
         if (active != null) {
-            retainActive(active, nowMillis)
-            return events.getValue(symbol).result
+            retainActive(active)
+            return events[symbol]
         }
         val previous = events[symbol] ?: return null
-        return previous.result.takeIf { nowMillis - previous.lastActiveAtMillis < stabilityGraceMillis }
+        return previous.copy(isRetained = true).also { events[symbol] = it }
     }
 
     @Synchronized
     fun clear() = events.clear()
 
-    private fun retainActive(result: ScanResult, nowMillis: Long) {
-        val previous = events[result.symbol]?.result
+    private fun retainActive(result: ScanResult) {
+        val previous = events[result.symbol]
         val source = transitionSource(previous, result)
-        events[result.symbol] = Event(result.copy(signalSource = source), nowMillis)
+        events[result.symbol] = result.copy(signalSource = source, isRetained = false)
     }
 
-    private fun ranked(activeSymbols: Set<String>, nowMillis: Long, requestedLimit: Int): List<ScanResult> {
-        val limit = requestedLimit.coerceAtLeast(1)
-        val active = events.values.asSequence()
-            .filter { it.result.symbol in activeSymbols }
-            .map(Event::result)
-            .sortedByDescending(ScanResult::anomalyScore)
-            .toList()
-        val cooling = events.values.asSequence()
-            .filter { it.result.symbol !in activeSymbols && nowMillis - it.lastActiveAtMillis < stabilityGraceMillis }
-            .map(Event::result)
-            .sortedByDescending(ScanResult::anomalyScore)
-        return (active.asSequence() + cooling).take(limit).toList()
-    }
-
-    private fun removeExpired(nowMillis: Long) {
-        events.entries.removeIf { (_, event) -> nowMillis - event.lastActiveAtMillis >= retentionMillis }
+    private fun ranked(requestedLimit: Int): List<ScanResult> {
+        val displayed = events.values.sortedWith(ScannerResultOrder.newestFirst)
+            .take(requestedLimit.coerceAtLeast(1))
+        val visibleSymbols = displayed.mapTo(HashSet(), ScanResult::symbol)
+        events.keys.retainAll(visibleSymbols)
+        return displayed
     }
 
     private fun transitionSource(previous: ScanResult?, current: ScanResult): String {
@@ -85,9 +72,5 @@ internal class RecentEventRetainer(
 
     private companion object {
         const val V_REVERSAL = "V-Reversal"
-        const val DEFAULT_RETENTION_MILLIS = 20 * 60_000L
-        const val DEFAULT_STABILITY_GRACE_MILLIS = 2 * 60_000L
     }
-
-    private val stabilityGraceMillis = minOf(retentionMillis, DEFAULT_STABILITY_GRACE_MILLIS)
 }

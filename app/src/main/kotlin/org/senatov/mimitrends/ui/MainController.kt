@@ -172,7 +172,7 @@ class MainController(
     private val priorityScanner = PriorityScanCoordinator(
         { symbol -> marketData.loadPriorityResult(symbol, scannerCriteria) },
         { symbol, result ->
-            val retained = recentEvents.priorityUpdate(symbol, result, System.currentTimeMillis())
+            val retained = recentEvents.priorityUpdate(symbol, result)
             shortMoveRefresh.request()
             Platform.runLater {
                 scannerPanel.applyPriorityResult(symbol, retained)

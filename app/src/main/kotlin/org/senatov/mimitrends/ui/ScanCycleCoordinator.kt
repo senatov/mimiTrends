@@ -108,7 +108,7 @@ internal class ScanCycleCoordinator(
         ) ?: return
         val active = resultDeduplicator.deduplicate(batch.active)
         val shortMoves = updateScanState(symbols, active, batch.coverage)
-        val displayed = recentEvents.merge(active, System.currentTimeMillis(), criteria.resultLimit)
+        val displayed = recentEvents.merge(active, criteria.resultLimit)
         replaceProviderSymbols(displayed)
         priorityScanner.replaceCandidates(active)
         val elapsedMillis = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - cycleStartedNanos)
@@ -163,19 +163,21 @@ internal class ScanCycleCoordinator(
         val saved = resultDeduplicator.deduplicate(
             persisted.ifEmpty { marketData.closedMarketSnapshot(MarketUniverseSelector.select(criteria), criteria) }
         )
+        val retained = recentEvents.merge(emptyList(), criteria.resultLimit)
+        val displayed = retained.ifEmpty { saved }
         val userZone = ZoneId.systemDefault()
         val marketHours = MarketHoursFormatter.priceData(selectedSymbols, now, userZone)
         val brokerHours = MarketHoursFormatter.scalable(now, userZone)
         val localZoneName = DateTimeFormatter.ofPattern("z").format(now.atZone(userZone))
         Platform.runLater {
             scannerPanel.beginScan(1, 1, emptyList())
-            saved.forEach(scannerPanel::update)
+            displayed.forEach(scannerPanel::update)
             scannerPanel.completeScan(criteria.resultLimit)
             scannerPanel.showCountdown(delaySeconds, showIdleStatus = false)
             scannerPanel.showMarketClosed(
-                saved.size, persisted.isNotEmpty(), resumeText, localZoneName, marketHours, brokerHours
+                displayed.size, persisted.isNotEmpty(), resumeText, localZoneName, marketHours, brokerHours
             )
-            status.update(closedMarketStatus(saved.size, persisted.isNotEmpty(), resumeText))
+            status.update(closedMarketStatus(displayed.size, persisted.isNotEmpty(), resumeText))
         }
         return scheduler.schedule(
             { runCatching(scan).onFailure { log.error(LogTag.API, "scheduled market-open resume failed", it) } },

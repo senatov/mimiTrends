@@ -18,71 +18,61 @@ import kotlin.test.assertTrue
 
 class RecentEventRetainerTest {
     @Test
-    fun `keeps a briefly missing candidate stable between refreshes`() {
+    fun `keeps an inactive signal without a time limit`() {
         val retainer = RecentEventRetainer()
-        retainer.merge(listOf(result("SAP.DE", 8.0)), 0L, 15)
+        retainer.merge(listOf(result("SAP.DE", 8.0)), 30)
 
-        val displayed = retainer.merge(emptyList(), 30_000L, 15)
+        val displayed = retainer.merge(emptyList(), 30)
 
         assertEquals("SAP.DE", displayed.single().symbol)
+        assertTrue(displayed.single().isRetained)
     }
 
     @Test
-    fun `does not retain an inactive event as a candidate`() {
-        val retainer = RecentEventRetainer(retentionMillis = 20 * MINUTE)
-        retainer.merge(listOf(result("SAP.DE", 8.0)), 0L, 15)
-
-        val displayed = retainer.merge(emptyList(), 10 * MINUTE, 15)
-
-        assertTrue(displayed.isEmpty())
-    }
-
-    @Test
-    fun `expires event at retention boundary`() {
-        val retainer = RecentEventRetainer(retentionMillis = 20 * MINUTE)
-        retainer.merge(listOf(result("SAP.DE")), 0L, 15)
-
-        assertTrue(retainer.merge(emptyList(), 20 * MINUTE, 15).isEmpty())
-    }
-
-    @Test
-    fun `active results take available places before cooling events`() {
+    fun `returns a reactivated signal to the live section`() {
         val retainer = RecentEventRetainer()
-        retainer.merge(listOf(result("SAP.DE", 20.0)), 0L, 15)
+        retainer.merge(listOf(result("SAP.DE", epoch = 100L)), 30)
+        retainer.merge(emptyList(), 30)
+        val displayed = retainer.merge(listOf(result("SAP.DE", epoch = 200L)), 30)
+        assertEquals("SAP.DE", displayed.first().symbol)
+        assertTrue(!displayed.first().isRetained)
+    }
 
-        val displayed = retainer.merge(
-            listOf(result("AAPL", 1.0), result("MSFT", 2.0)), MINUTE, 2
-        )
-
-        assertEquals(listOf("MSFT", "AAPL"), displayed.map { it.symbol })
+    @Test
+    fun `live results precede grey results and oldest grey result leaves at capacity`() {
+        val retainer = RecentEventRetainer()
+        val first = (1..30).map { index -> result("STOCK$index", epoch = index.toLong()) }
+        retainer.merge(first, 30)
+        val displayed = retainer.merge(listOf(result("NEW", epoch = 31L)), 30)
+        assertEquals(30, displayed.size)
+        assertEquals("NEW", displayed.first().symbol)
+        assertEquals((30 downTo 2).map { "STOCK$it" }, displayed.drop(1).map { it.symbol })
+        assertTrue(displayed.drop(1).all { it.isRetained })
     }
 
     @Test
     fun `opposite v reversal updates the same episode`() {
         val retainer = RecentEventRetainer()
-        retainer.merge(listOf(result("SAP.DE", source = "V-Reversal ↑")), 0L, 15)
+        retainer.merge(listOf(result("SAP.DE", source = "V-Reversal ↑")), 30)
 
         val updated = retainer.merge(
-            listOf(result("SAP.DE", source = "V-Reversal ↓")), MINUTE, 15
+            listOf(result("SAP.DE", source = "V-Reversal ↓")), 30
         ).single()
 
         assertEquals("V-Reversal ↓ after ↑", updated.signalSource)
     }
 
     @Test
-    fun `priority miss removes the event`() {
+    fun `priority miss retains the signal in the grey section`() {
         val retainer = RecentEventRetainer()
-        retainer.merge(listOf(result("SAP.DE", 8.0)), 0L, 15)
+        retainer.merge(listOf(result("SAP.DE", 8.0)), 30)
 
-        val displayed = retainer.priorityUpdate("SAP.DE", null, 5 * MINUTE)
+        val displayed = retainer.priorityUpdate("SAP.DE", null)
 
-        assertEquals(null, displayed)
+        assertTrue(displayed!!.isRetained)
     }
 
-    private fun result(symbol: String, score: Double = 4.0, source: String = "Impulse ↑") =
+    private fun result(symbol: String, score: Double = 4.0, source: String = "Impulse ↑", epoch: Long = 100L) =
         TestScanResult.create(anomalyScore = score, signalSource = source, symbol = symbol)
-
-    private companion object {
-        const val MINUTE = 60_000L
-    }
+            .copy(signalEpochMillis = epoch, updatedAtMillis = epoch)
 }

@@ -28,7 +28,9 @@ class ScannerSettingsService(private val path: Path = Path.of(System.getProperty
                 anomalyWindow = enumValue(p.getProperty("anomalyWindow"), AnomalyWindow.HOUR),
                 marketRegion = enumValue(p.getProperty("marketRegion"), MarketRegion.BOTH),
                 scanIntervalSeconds = p.getProperty("scanIntervalSeconds", "180").toLong().coerceIn(60, 3_600),
-                resultLimit = p.getProperty("resultLimit", "15").toInt().coerceIn(5, 15),
+                resultLimit = p.getProperty("resultLimit", "15").toInt()
+                    .let { if (p.getProperty("resultLimitCapacityVersion") == "2") it else it * 2 }
+                    .coerceIn(5, 30),
                 minPrice = p.getProperty("minPrice", "2.0").toDouble(),
                 minSessionTurnover = p.getProperty("minSessionTurnover", "0").toDouble(),
                 baselineSessions = p.getProperty("baselineSessions", "5").toInt().coerceIn(3, 20),
@@ -103,6 +105,7 @@ class ScannerSettingsService(private val path: Path = Path.of(System.getProperty
         val p = Properties().apply {
             setProperty("anomalyWindow", value.anomalyWindow.name); setProperty("marketRegion", value.marketRegion.name)
             setProperty("scanIntervalSeconds", value.scanIntervalSeconds.toString()); setProperty("resultLimit", value.resultLimit.toString())
+            setProperty("resultLimitCapacityVersion", "2")
             setProperty("minPrice", value.minPrice.toString()); setProperty("minSessionTurnover", value.minSessionTurnover.toString())
             setProperty("baselineSessions", value.baselineSessions.toString())
             setProperty("maxSignalAgeMinutes", value.maxSignalAgeMinutes.toString())

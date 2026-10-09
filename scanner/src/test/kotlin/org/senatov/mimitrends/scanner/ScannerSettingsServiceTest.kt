@@ -12,6 +12,18 @@ import kotlin.test.assertTrue
 
 class ScannerSettingsServiceTest {
     @Test
+    fun `doubles saved table capacity once and preserves new settings`() {
+        val path = Files.createTempDirectory("mimitrends-table-capacity").resolve("scanner.properties")
+        Files.writeString(path, "resultLimit=15\n")
+        val service = ScannerSettingsService(path)
+
+        val migrated = service.load()
+        assertEquals(30, migrated.resultLimit)
+        service.save(migrated.copy(resultLimit = 15))
+        assertEquals(15, service.load().resultLimit)
+    }
+
+    @Test
     fun `persists rapid move thresholds and rise colour`() {
         val path = Files.createTempDirectory("mimitrends-rapid-settings").resolve("scanner.properties")
         val service = ScannerSettingsService(path)

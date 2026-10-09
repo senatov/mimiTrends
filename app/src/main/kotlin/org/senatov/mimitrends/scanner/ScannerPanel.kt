@@ -13,6 +13,7 @@ import org.senatov.mimitrends.services.*
 import org.senatov.mimitrends.shared.*
 
 import javafx.application.Platform
+import javafx.beans.binding.Bindings
 import javafx.collections.FXCollections
 import javafx.collections.ListChangeListener
 import javafx.collections.transformation.SortedList
@@ -67,6 +68,7 @@ class ScannerPanel(
     private val dataPulseBadge = Label("DATA waiting").apply { styleClass += "market-pulse-badge" }
     private val scanIndicator = ScanClockIndicator()
     private val stagedRows = linkedMapOf<String, ScanResult>()
+    private var resultLimit = 30
     private val refreshingStatuses = mutableMapOf<String, String>()
     private val observationOverlay = MarketObservationOverlay()
     private var scanning = false
@@ -102,7 +104,14 @@ class ScannerPanel(
             alignment = Pos.CENTER_LEFT
             styleClass += "table-section-header"
         }
-        sortedRows.comparatorProperty().bind(table.comparatorProperty())
+        sortedRows.comparatorProperty().bind(Bindings.createObjectBinding({
+            val selectedSort = table.comparator.takeIf { table.sortOrder.isNotEmpty() }
+            Comparator<ScanResult> { first, second ->
+                val section = first.isRetained.compareTo(second.isRetained)
+                if (section != 0) section else selectedSort?.compare(first, second)
+                    ?: ScannerResultOrder.newestFirst.compare(first, second)
+            }
+        }, table.comparatorProperty(), table.sortOrder))
         val freshness = columnFactory.freshness()
         val symbol = columnFactory.symbol()
         val signal = columnFactory.pattern()
@@ -194,8 +203,15 @@ class ScannerPanel(
         columnLayout.onReset = autoFitter::resetManualSizing
         rows.addListener(ListChangeListener<ScanResult> { updateFilterPresentation() })
         columnFactory.onContentChanged = { applyFilter(); autoFitter.request() }
-        signal.sortType = TableColumn.SortType.DESCENDING
-        table.sortOrder += signal
+        table.setRowFactory {
+            object : TableRow<ScanResult>() {
+                override fun updateItem(item: ScanResult?, empty: Boolean) {
+                    super.updateItem(item, empty)
+                    styleClass.remove("retained-signal-row")
+                    if (!empty && item?.isRetained == true) styleClass += "retained-signal-row"
+                }
+            }
+        }
         table.setOnSort {
             log.debug(
                 LogTag.UI, "tableSort(columns={})",
@@ -210,7 +226,7 @@ class ScannerPanel(
         )
         table.minHeight = 0.0
         table.maxHeight = Double.MAX_VALUE
-        table.styleClass += "scanner-table"
+        table.styleClass += listOf("scanner-table", "additional-signals-table")
         tableContainer.children.setAll(table)
         val scannerSection = VBox(5.0, header, tableContainer).apply {
             styleClass += "table-section"
@@ -296,6 +312,9 @@ class ScannerPanel(
         if (result == null && index >= 0) rows.removeAt(index)
         else if (result != null && index >= 0) rows[index] = observationOverlay.apply(result)
         else if (result != null) rows += observationOverlay.apply(result)
+        if (rows.size > resultLimit) {
+            rows.setAll(rows.sortedWith(ScannerResultOrder.newestFirst).take(resultLimit))
+        }
         autoFitter.request()
     }
 
@@ -331,7 +350,8 @@ class ScannerPanel(
     }
 
     fun showSnapshot(results: Collection<ScanResult>, resultLimit: Int) {
-        replaceRows(results.sortedByDescending(ScanResult::anomalyScore).take(resultLimit))
+        this.resultLimit = resultLimit
+        replaceRows(results.sortedWith(ScannerResultOrder.newestFirst).take(resultLimit))
         autoFitter.request()
     }
 
@@ -362,11 +382,11 @@ class ScannerPanel(
     }
 
     fun completeScan(resultLimit: Int = 50) {
+        this.resultLimit = resultLimit
         startupOverlay.finish()
         log.debug(LogTag.UI, "completeScan(results={})", stagedRows.size)
-        val ordered = stagedRows.values.sortedByDescending(ScanResult::anomalyScore)
-        val visible = (ordered.take(resultLimit) + ordered.filter { watchlist.contains(it.symbol) })
-            .distinctBy(ScanResult::symbol)
+        val ordered = stagedRows.values.sortedWith(ScannerResultOrder.newestFirst)
+        val visible = ordered.take(resultLimit).distinctBy(ScanResult::symbol)
         replaceRows(visible)
         stagedRows.clear(); scanning = false
         val freshest = rows.minOfOrNull { FeedFreshness.ageMinutes(it.analysisUpdatedAtMillis) }

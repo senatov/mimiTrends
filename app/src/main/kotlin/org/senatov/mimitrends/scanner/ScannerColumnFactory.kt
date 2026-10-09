@@ -135,10 +135,10 @@ internal class ScannerColumnFactory(
                     }
                     val content = SignalPatternText.parse(item.signalSource)
                     val watchScore = WatchScorePresentation.calculate(item)
-                    graphic = Label(watchScore.label).apply {
+                    graphic = if (watchScore.value < 20) null else Label(watchScore.label).apply {
                         styleClass += "pattern-watch-score"
                         style = "-fx-text-fill: ${watchScore.color}; " +
-                                "-fx-background-color: ${opportunityBackground(watchScore.value)}; " +
+                                "-fx-background-color: ${watchScore.background}; " +
                                 "-fx-background-radius: 999px; -fx-padding: 3px 8px; -fx-font-weight: 700;"
                     }
                     text = null
@@ -268,18 +268,14 @@ internal class ScannerColumnFactory(
         table.columns += this
     }
 
-    private fun opportunityBackground(value: Int): String = when {
-        value >= 80 -> "rgba(181,232,204,0.82)"
-        value >= 60 -> "rgba(210,239,221,0.82)"
-        value >= 40 -> "rgba(250,232,157,0.80)"
-        value >= 20 -> "rgba(249,213,174,0.82)"
-        else -> "rgba(244,199,204,0.82)"
-    }
-
     private fun signalVisual(result: ScanResult): SignalVisual {
         val down = result.signalSource.contains('↓')
         val directionalColor = if (down) "#a61f2d" else "#087443"
         return when {
+            result.isRetained -> SignalVisual(
+                TABLE_TEXT_COLOR, 400,
+                "Previously detected signal · no longer qualifies as active · kept until the table fills"
+            )
             result.signalSource.contains("· cooling") -> SignalVisual(
                 TABLE_TEXT_COLOR, 400,
                 "Recent event · no longer qualifies as an active signal · retained briefly for context"

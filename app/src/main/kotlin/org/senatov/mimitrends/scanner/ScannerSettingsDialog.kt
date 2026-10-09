@@ -48,7 +48,7 @@ class ScannerSettingsDialog(
     private val geometry = WindowGeometryService("settings", DEFAULT_WIDTH, DEFAULT_HEIGHT)
     private val marketRegion = ComboBox(FXCollections.observableArrayList(MarketRegion.entries)).apply { value = current.marketRegion }
     private val scanInterval = Spinner<Int>(60, 3_600, current.scanIntervalSeconds.toInt(), 30).apply { isEditable = true }
-    private val resultLimit = Spinner<Int>(5, 15, current.resultLimit.coerceIn(5, 15), 1).apply { isEditable = true }
+    private val resultLimit = Spinner<Int>(5, 30, current.resultLimit.coerceIn(5, 30), 1).apply { isEditable = true }
     private val price = Spinner<Double>(0.0, 10_000.0, current.minPrice, 0.5).apply { isEditable = true }
     private val turnover = Spinner<Double>(0.0, 10_000_000_000.0, current.minSessionTurnover, 100_000.0).apply { isEditable = true }
     private val sessions = Spinner<Int>(3, 20, current.baselineSessions, 1).apply { isEditable = true }

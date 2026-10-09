@@ -21,6 +21,13 @@ import java.time.Instant
 import java.time.LocalTime
 
 internal data class WatchScore(val value: Int, val color: String, val details: String) {
+    val background: String
+        get() = when {
+            value >= 80 -> "rgba(181,232,204,0.82)"
+            value >= 60 -> "rgba(210,239,221,0.82)"
+            value >= 40 -> "rgba(250,232,157,0.80)"
+            else -> "rgba(249,213,174,0.82)"
+        }
     val category: String
         get() = when {
             value >= BUY_THRESHOLD -> "buy"

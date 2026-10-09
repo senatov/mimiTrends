@@ -156,7 +156,7 @@ data class ScannerCriteria(
     val anomalyWindow: AnomalyWindow = AnomalyWindow.HOUR,
     val marketRegion: MarketRegion = MarketRegion.BOTH,
     val scanIntervalSeconds: Long = 180,
-    val resultLimit: Int = 15,
+    val resultLimit: Int = 30,
     val minPrice: Double = 2.0,
     val minSessionTurnover: Double = 0.0,
     val baselineSessions: Int = 5,
@@ -231,7 +231,8 @@ data class ScanResult(
     val entryCooldownMinutes: Int = 0,
     val entryQualityDetails: String = "Entry-quality inputs are unavailable.",
     val analysisUpdatedAtMillis: Long = updatedAtMillis,
-    val scanEvaluatedAtMillis: Long = updatedAtMillis
+    val scanEvaluatedAtMillis: Long = updatedAtMillis,
+    val isRetained: Boolean = false
 )
 
 data class CompanyProfile(

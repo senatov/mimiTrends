@@ -621,6 +621,12 @@
     -fx-border-insets: 0;
 }
 .scanner-table .table-row-cell:hover { -fx-background-color: derive(-mimi-selection, 22%); }
+.scanner-table.additional-signals-table .table-row-cell.retained-signal-row,
+.scanner-table.additional-signals-table .table-row-cell.retained-signal-row:odd,
+.scanner-table.additional-signals-table .table-row-cell.retained-signal-row:selected,
+.scanner-table.additional-signals-table .table-row-cell.retained-signal-row:hover {
+    -fx-background-color: #e9ecef;
+}
 .scanner-table .table-cell {
     -fx-text-fill: -mimi-table-text;
     -fx-font-size: 1em;
