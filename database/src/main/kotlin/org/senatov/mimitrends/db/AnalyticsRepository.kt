@@ -4,7 +4,6 @@ package org.senatov.mimitrends.db
 
 import org.senatov.mimitrends.log.LogTag
 import org.senatov.mimitrends.model.MinuteBar
-import org.senatov.mimitrends.model.MarketObservationQuality
 import org.senatov.mimitrends.model.ResearchFeatures
 import org.senatov.mimitrends.model.BrokerTrade
 import org.senatov.mimitrends.model.ScanResult
@@ -78,47 +77,6 @@ class AnalyticsRepository(
             s.setString(1, base); s.setString(2, quote); s.setLong(3, epochSeconds / 86_400 * 86_400)
             s.setDouble(4, rate); s.setString(5, source); s.executeUpdate()
             DatabaseCurrencyBackfill.run(connection)
-        }
-    }
-
-    fun recordDataQuality(symbol: String, source: String, status: String, latestEpoch: Long?, barCount: Int, note: String? = null) = locked {
-        recordDataQualityInternal(symbol, source, status, latestEpoch, barCount, note)
-    }
-
-    private fun recordDataQualityInternal(
-        symbol: String, source: String, status: String, latestEpoch: Long?, barCount: Int, note: String?
-    ) {
-        connection.prepareStatement("""INSERT INTO data_quality(symbol, source, observed_at, latest_bar_epoch, bar_count, status, note)
-            VALUES (?, ?, ?, ?, ?, ?, ?)""").use { s ->
-            s.setString(1, symbol.uppercase()); s.setString(2, source); s.setLong(3, Instant.now().epochSecond)
-            s.setObject(4, latestEpoch); s.setInt(5, barCount); s.setString(6, status); s.setString(7, note); s.executeUpdate()
-        }
-    }
-
-    fun recordMarketEvaluation(
-        metadata: InstrumentMetadata?,
-        corporateActions: Collection<CorporateAction>,
-        symbol: String,
-        historySource: String,
-        status: String,
-        bars: List<MinuteBar>,
-        latestObservedEpoch: Long? = bars.lastOrNull()?.minuteEpochSeconds,
-        observedSource: String = historySource,
-        observationQuality: MarketObservationQuality = MarketObservationQuality.FULL_OHLCV
-    ) = locked {
-        val clean = bars.filter(MinuteBar::isValidMinuteBar).sortedBy(MinuteBar::minuteEpochSeconds)
-        transaction {
-            metadata?.let(::upsertInstrumentInternal)
-            corporateActions.forEach(::upsertCorporateActionInternal)
-            recordDataQualityInternal(symbol, observedSource, status, latestObservedEpoch, clean.size,
-                observationQuality.name)
-            if (clean.isNotEmpty()) {
-                derivedAnalytics.upsert(symbol.uppercase(), clean, historySource)
-                clean.takeLast(OUTCOME_TRACKING_BARS).forEach {
-                    signalOutcomes.record(symbol, it.close, it.high, it.low, it.minuteEpochSeconds)
-                    researchSamples.recordOutcomes(symbol, it.close, it.high, it.low, it.minuteEpochSeconds)
-                }
-            }
         }
     }
 
@@ -283,7 +241,6 @@ class AnalyticsRepository(
         }
         duckAnalytics.applyRetention(nowEpoch)
         connection.prepareStatement("DELETE FROM scan_runs WHERE started_at < ?").use { it.setLong(1, nowEpoch - SCAN_RETENTION_DAYS * 86_400L); it.executeUpdate() }
-        connection.prepareStatement("DELETE FROM data_quality WHERE observed_at < ?").use { it.setLong(1, nowEpoch - DATA_QUALITY_RETENTION_DAYS * 86_400L); it.executeUpdate() }
         database.optimize()
         if (database.compactIfWorthwhile()) log.info(LogTag.DB, "SQLite storage compacted after DuckDB archival")
     }
@@ -341,6 +298,7 @@ class AnalyticsRepository(
                 s.setInt(1, version); s.executeQuery().use { it.next() }
             }
             if (!applied) {
+                if (version == OBSOLETE_TABLE_CLEANUP_MIGRATION) database.backupForMigration("obsolete-table-cleanup")
                 connection.autoCommit = false
                 try {
                     connection.createStatement().use { s -> statements.forEach(s::executeUpdate) }
@@ -389,11 +347,11 @@ class AnalyticsRepository(
 
     private companion object {
         const val CURRENCY_BACKFILL_MIGRATION = 16
+        const val OBSOLETE_TABLE_CLEANUP_MIGRATION = 19
         const val RAW_RETENTION_DAYS = 90
         const val PROVIDER_RETENTION_DAYS = 90
         const val SQLITE_AGGREGATE_TAIL_DAYS = 45L
         const val SCAN_RETENTION_DAYS = 180
-        const val DATA_QUALITY_RETENTION_DAYS = 14
         const val OUTCOME_TRACKING_BARS = 35
         const val UPSERT_INSTRUMENT = """INSERT INTO instrument_metadata(symbol, name, exchange, currency, timezone, isin, wkn, aliases, tradable, updated_at)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(symbol) DO UPDATE SET name=excluded.name, exchange=excluded.exchange,

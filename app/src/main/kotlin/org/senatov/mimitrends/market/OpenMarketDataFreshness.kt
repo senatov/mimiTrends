@@ -5,7 +5,6 @@ import org.senatov.mimitrends.ui.*
 import org.senatov.mimitrends.scanner.*
 import org.senatov.mimitrends.shortmove.*
 import org.senatov.mimitrends.signals.*
-import org.senatov.mimitrends.research.*
 import org.senatov.mimitrends.market.*
 import org.senatov.mimitrends.providers.*
 import org.senatov.mimitrends.company.*

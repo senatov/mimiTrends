@@ -160,6 +160,12 @@ internal object AnalyticsMigrations {
                 accepted_symbols=(SELECT COUNT(*) FROM scan_candidates WHERE run_id=scan_runs.id AND accepted=1),
                 published_symbols=(SELECT COUNT(*) FROM scan_candidates WHERE run_id=scan_runs.id AND published=1)
                 WHERE status='ABORTED'"""
+        ),
+        19 to listOf(
+            "DROP TABLE IF EXISTS latest_quotes",
+            "DROP TABLE IF EXISTS price_points",
+            "DROP TABLE IF EXISTS market_calendar_rules",
+            "DROP TABLE IF EXISTS data_quality"
         )
     )
 }

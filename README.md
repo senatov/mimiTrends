@@ -21,15 +21,13 @@ MiMiTrends is informational software. It does not place orders, provide investme
 
 ### Compact live radar
 
-The workspace places a live source activity table beside the radar. Its rows cover Yahoo, Finnhub,
-Tradegate, Euronext, Scalable, Lang & Schwarz, wallstreetONLINE, and TraderFox. `Last` shows the age
-of the most recent source operation (`3 min.`). When no request is due, it can instead show an explicit
-state such as `Disabled`, `No signals`, `Login needed`, or `Weekly cache`; a dash means no operation
-or state has been observed in this session. `Items (valid)` shows records returned by the latest
-operation and, in green parentheses, records that passed source validation or matching. The units
-vary by source (minute bars, trades, quotes, or discovery entries), and these counts are not scanner
-signal-filter results or session totals. A source failure is available in the row tooltip. The divider can be dragged to
-give either table more space; on narrow windows, the source table moves below the radar.
+The source telemetry panel beside the radar covers Yahoo, Finnhub, Tradegate, Euronext, Scalable,
+Lang & Schwarz, wallstreetONLINE, and TraderFox. Each source card shows its current health, the age
+of the last operation, the received and valid items in that operation, and cumulative operation and
+error counts for this app session. The contact tooltip gives exact last-operation and last-success
+times plus the source-specific unit (minute bars, trades, quotes, or discovery entries). These
+figures describe source activity, not scanner signal-filter results. The divider can be dragged to
+give either panel more space; on narrow windows, source telemetry moves below the radar.
 
 <img src="./Doc/LiveRadar.png" alt="MiMiTrends compact Live radar showing rapid-crash alerts" width="1043">
 
@@ -631,10 +629,8 @@ Minute bars use UPSERT semantics, allowing an incomplete or repeated provider ca
 | `schema_migrations` | Transactionally applied schema versions. |
 | `instrument_metadata` | Name, exchange, currency, time zone, aliases, and tradability. |
 | `corporate_actions` | Splits and dividends available for validation and future normalization. |
-| `market_calendar_rules` | Regular exchange hours and time zones. |
 | `trading_sessions` | Observed session boundaries, bar coverage, volume, and turnover. |
 | `fx_rates` | Dated currency conversion rates. |
-| `data_quality` | Feed source, freshness, bar count, status, and diagnostics. |
 | `aggregate_bars` | Locally produced 5-, 15-, and 60-minute OHLCV. |
 | `baseline_stats` | Median/MAD return and log-volume by instrument and local time of day. |
 | `scan_runs` | One durable record for every scanner pass. |

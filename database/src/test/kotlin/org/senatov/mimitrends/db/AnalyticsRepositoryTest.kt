@@ -66,7 +66,8 @@ class AnalyticsRepositoryTest {
                     "INSERT INTO research_samples(run_id,symbol,observed_epoch,entry_price,family,direction," +
                             "accepted,published,source) VALUES(1,'SAP.DE',1,100,'MOMENTUM',1,1,1,'TRADEGATE')"
                 )
-                statement.executeUpdate("DELETE FROM schema_migrations WHERE version=13")
+                statement.executeUpdate("CREATE TABLE data_quality(id INTEGER PRIMARY KEY, source TEXT, observed_at INTEGER)")
+                statement.executeUpdate("DELETE FROM schema_migrations WHERE version IN (13,19)")
             }
         }
 
@@ -203,7 +204,7 @@ class AnalyticsRepositoryTest {
             ).use { result -> buildSet { while (result.next()) add(result.getString(1)) } }
             assertTrue("idx_provider_bars_epoch" in indexes)
             assertTrue("idx_scan_runs_started" in indexes)
-            assertTrue("idx_quality_observed" in indexes)
+            assertTrue("idx_quality_observed" !in indexes)
             assertTrue("idx_candidates_published_latest" in indexes)
         }
     }
@@ -451,7 +452,6 @@ class AnalyticsRepositoryTest {
             MinuteBar("TEST", 1_800_000_000L + minute * 60L, open, open + 0.2, open - 0.1, open + 0.1, 1_000.0 + minute)
         }
         analytics.refreshDerived("TEST", bars, "TEST")
-        analytics.recordDataQuality("TEST", "TEST", "REALTIME", bars.last().minuteEpochSeconds, bars.size)
         assertTrue(analytics.loadAggregatedBars("TEST", 5, 0).isNotEmpty())
 
         val signalEpoch = Instant.now().epochSecond - 5 * 60L
@@ -478,7 +478,10 @@ class AnalyticsRepositoryTest {
             connection.createStatement().use { statement ->
                 statement.executeQuery("SELECT COUNT(*) FROM corporate_actions").use { it.next(); assertEquals(1, it.getInt(1)) }
                 statement.executeQuery("SELECT COUNT(*) FROM trading_sessions").use { it.next(); assertTrue(it.getInt(1) > 0) }
-                statement.executeQuery("SELECT COUNT(*) FROM market_calendar_rules").use { it.next(); assertEquals(4, it.getInt(1)) }
+                statement.executeQuery(
+                    "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name IN " +
+                        "('latest_quotes', 'price_points', 'market_calendar_rules', 'data_quality')"
+                ).use { it.next(); assertEquals(0, it.getInt(1)) }
                 statement.executeQuery("SELECT published FROM scan_candidates").use { it.next(); assertEquals(1, it.getInt(1)) }
                 statement.executeQuery("SELECT signal_epoch, entry_price, data_epoch FROM scan_candidates").use {
                     it.next(); assertEquals(signalEpoch, it.getLong(1)); assertEquals(100.0, it.getDouble(2))
