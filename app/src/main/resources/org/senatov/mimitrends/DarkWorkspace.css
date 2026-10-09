@@ -34,6 +34,20 @@
 .theme-dark .rumors-content .label { -fx-text-fill: -mimi-text; }
 .theme-dark .rumors-content .rumors-meta { -fx-text-fill: -mimi-text-secondary; -fx-opacity: 1; }
 
+.theme-dark .source-activity-panel.table-section { -fx-background-color: #17212b; -fx-border-color: #344758; }
+.theme-dark .source-panel-title, .theme-dark .source-card-name { -fx-text-fill: #e2eaf2; }
+.theme-dark .source-panel-summary, .theme-dark .source-card-contact,
+.theme-dark .source-card-metric-label { -fx-text-fill: #a2b4c5; }
+.theme-dark .source-card { -fx-background-color: #21303d; }
+.theme-dark .source-card-attention { -fx-background-color: #332b2a; }
+.theme-dark .source-card-value { -fx-text-fill: #f0f4f7; }
+.theme-dark .source-card-live .source-card-state, .theme-dark .source-card-live .source-card-led {
+    -fx-text-fill: #68d4a0;
+}
+.theme-dark .source-card-attention .source-card-state, .theme-dark .source-card-attention .source-card-led {
+    -fx-text-fill: #f39b83;
+}
+
 .theme-dark .title-toolbar,
 .theme-dark .chart-drawer-header,
 .theme-dark .request-status-bar,

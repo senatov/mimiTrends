@@ -247,9 +247,37 @@
 }
 
 .source-activity-panel {
-    -fx-padding: 8px;
+    -fx-padding: 9px;
+    -fx-background-color: #eaf0f5;
+    -fx-border-color: #b9c7d3;
 }
 
+.source-panel-header { -fx-padding: 2px 3px 5px 3px; }
+.source-panel-title { -fx-font-size: 12px; -fx-font-weight: 800; -fx-text-fill: #17365f; }
+.source-panel-summary { -fx-font-size: 10px; -fx-font-weight: 600; -fx-text-fill: #526b80; }
+.source-panel-scroll, .source-panel-scroll > .viewport { -fx-background-color: transparent; }
+.source-panel-scroll { -fx-padding: 0; -fx-background-insets: 0; }
+.source-card {
+    -fx-padding: 9px 11px;
+    -fx-background-color: linear-gradient(to bottom, #ffffff, #f6f9fb);
+    -fx-background-radius: 7px;
+    -fx-border-color: #cbd6df;
+    -fx-border-width: 0 0 0 3px;
+    -fx-border-radius: 7px;
+    -fx-effect: dropshadow(gaussian, rgba(26, 49, 69, 0.09), 5, 0.1, 0, 1);
+}
+.source-card-live { -fx-border-color: #16865a; }
+.source-card-quiet { -fx-border-color: #8295a4; }
+.source-card-waiting, .source-card-disabled { -fx-border-color: #aab5c0; }
+.source-card-attention { -fx-border-color: #c96043; -fx-background-color: #fff7f3; }
+.source-card-name { -fx-font-size: 13px; -fx-font-weight: 700; -fx-text-fill: #1d344a; }
+.source-card-state { -fx-font-size: 9px; -fx-font-weight: 800; -fx-text-fill: #607589; }
+.source-card-live .source-card-state, .source-card-live .source-card-led { -fx-text-fill: #16865a; }
+.source-card-attention .source-card-state, .source-card-attention .source-card-led { -fx-text-fill: #b64b32; }
+.source-card-led { -fx-font-size: 11px; -fx-text-fill: #8798a7; }
+.source-card-metric-label { -fx-font-size: 8px; -fx-font-weight: 700; -fx-text-fill: #667d91; }
+.source-card-value { -fx-font-size: 15px; -fx-font-weight: 700; -fx-text-fill: #20384f; }
+.source-card-contact { -fx-font-size: 9px; -fx-font-weight: 600; -fx-text-fill: #5b7083; }
 .source-login-button {
     -fx-font-size: 11px;
     -fx-min-height: 22px;
@@ -257,30 +285,12 @@
     -fx-padding: 1px 7px;
 }
 
-.short-move-table .table-cell,
-.source-activity-table .table-cell {
+.short-move-table .table-cell {
     -fx-font-size: 14px;
-}
-
-.source-activity-table .table-cell {
-    -fx-alignment: center-left;
 }
 
 .short-move-table .table-cell.status-column {
     -fx-alignment: center;
-}
-
-.source-selected-count {
-    -fx-text-fill: #17633b;
-    -fx-font-weight: 600;
-}
-
-.theme-dark .source-selected-count {
-    -fx-text-fill: #52c887;
-}
-
-.source-activity-table .table-cell.source-failed-age {
-    -fx-text-fill: -mimi-negative;
 }
 
 .radar-split-pane {

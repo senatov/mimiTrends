@@ -21,6 +21,9 @@ class SourceActivityTest {
         assertEquals(3, rows["Yahoo"]?.processed)
         assertEquals(0, rows["Yahoo"]?.accepted)
         assertTrue(rows["Yahoo"]?.failed == true)
+        assertEquals(2, rows["Yahoo"]?.operations)
+        assertEquals(1, rows["Yahoo"]?.failures)
+        assertNotNull(rows["Yahoo"]?.lastSuccessMillis)
         assertNotNull(rows["Yahoo"]?.lastContactMillis)
         assertEquals(1, rows["Tradegate"]?.accepted)
         assertFalse(rows["Tradegate"]?.failed ?: true)
@@ -39,5 +42,23 @@ class SourceActivityTest {
         assertNotNull(current.lastContactMillis)
         assertEquals(null, current.status)
         assertFalse(current.failed)
+        assertEquals(1, current.operations)
+        assertEquals(1, current.failures)
+    }
+
+    @Test
+    fun `health and age distinguish live quiet and attention states`() {
+        val now = 1_000_000L
+        assertEquals(SourceHealth.WAITING, SourceActivityPresentation.health(SourceActivitySnapshot("Yahoo"), now))
+        assertEquals(SourceHealth.LIVE, SourceActivityPresentation.health(
+            SourceActivitySnapshot("Yahoo", lastContactMillis = now - 60_000L), now
+        ))
+        assertEquals(SourceHealth.QUIET, SourceActivityPresentation.health(
+            SourceActivitySnapshot("Yahoo", lastContactMillis = now - 16 * 60_000L), now
+        ))
+        assertEquals(SourceHealth.ATTENTION, SourceActivityPresentation.health(
+            SourceActivitySnapshot("Yahoo", failed = true), now
+        ))
+        assertEquals("1 min ago", SourceActivityPresentation.age(now - 60_000L, now))
     }
 }

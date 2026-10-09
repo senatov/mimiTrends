@@ -8,7 +8,10 @@ internal data class SourceActivitySnapshot(
     val processed: Int? = null,
     val accepted: Int? = null,
     val failed: Boolean = false,
-    val status: String? = null
+    val status: String? = null,
+    val operations: Long = 0,
+    val failures: Long = 0,
+    val lastSuccessMillis: Long? = null
 )
 
 /** Keeps the outcome of the latest actual source operation, never a cumulative session total. */
@@ -21,14 +24,20 @@ internal class SourceActivity {
 
     fun record(source: String, processed: Int, accepted: Int, failed: Boolean = false, status: String? = null) {
         require(processed >= 0 && accepted in 0..processed)
-        latest[source] = SourceActivitySnapshot(
-            source, System.currentTimeMillis(), processed, accepted, failed, status
-        )
+        val now = System.currentTimeMillis()
+        latest.compute(source) { _, previous ->
+            SourceActivitySnapshot(
+                source, now, processed, accepted, failed, status,
+                operations = (previous?.operations ?: 0) + 1,
+                failures = (previous?.failures ?: 0) + if (failed) 1 else 0,
+                lastSuccessMillis = if (failed) previous?.lastSuccessMillis else now
+            )
+        }
     }
 
     fun markStatus(source: String, status: String, failed: Boolean = false) {
         latest.compute(source) { _, previous ->
-            SourceActivitySnapshot(source, previous?.lastContactMillis, failed = failed, status = status)
+            (previous ?: SourceActivitySnapshot(source)).copy(failed = failed, status = status)
         }
     }
 
