@@ -47,6 +47,19 @@ class SourceActivityTest {
     }
 
     @Test
+    fun `unavailable quotes count as contacts without errors or valid data`() {
+        val activity = SourceActivity()
+        activity.record("Euronext", 0, 0, status = "No fresh quote")
+
+        val current = activity.snapshot().first { it.source == "Euronext" }
+        assertEquals(1, current.operations)
+        assertEquals(0, current.failures)
+        assertEquals(0, current.accepted)
+        assertEquals(null, current.lastSuccessMillis)
+        assertEquals(SourceHealth.WAITING, SourceActivityPresentation.health(current, System.currentTimeMillis()))
+    }
+
+    @Test
     fun `health and age distinguish live quiet and attention states`() {
         val now = 1_000_000L
         assertEquals(SourceHealth.WAITING, SourceActivityPresentation.health(SourceActivitySnapshot("Yahoo"), now))

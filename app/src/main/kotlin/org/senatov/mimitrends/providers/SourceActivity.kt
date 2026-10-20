@@ -30,7 +30,7 @@ internal class SourceActivity {
                 source, now, processed, accepted, failed, status,
                 operations = (previous?.operations ?: 0) + 1,
                 failures = (previous?.failures ?: 0) + if (failed) 1 else 0,
-                lastSuccessMillis = if (failed) previous?.lastSuccessMillis else now
+                lastSuccessMillis = if (!failed && accepted > 0) now else previous?.lastSuccessMillis
             )
         }
     }

@@ -39,6 +39,7 @@ internal class TradegatePollingService(
         Thread(task, "mimitrends-tradegate-provider").apply { isDaemon = true }
     }
     private val unresolvedUntil = mutableMapOf<String, Long>()
+    private val reportedDataFailures = mutableSetOf<String>()
     private val backoff = ProviderBackoff()
     private var symbols = emptyList<String>()
     private var index = 0
@@ -83,22 +84,29 @@ internal class TradegatePollingService(
                 .onSuccess { backoff.success() }
                 .onFailure { error ->
                     if (error is InterruptedException) return@onFailure
-                    activity?.record(PROVIDER_LABEL, if (received) 1 else 0, 0, failed = true)
                     if (error is ProviderDataUnavailableException) {
                         backoff.success()
-                        log.debug(LogTag.API, "Tradegate quote unavailable symbol={} cause={}", symbol, error.message)
+                        activity?.record(PROVIDER_LABEL, if (received) 1 else 0, 0, status = "No fresh quote")
+                        val cause = error.message.orEmpty().substringBefore(" for ")
+                        if (reportedDataFailures.add(cause)) {
+                            log.info(LogTag.API, "Tradegate quote unavailable symbol={} cause={}", symbol, cause)
+                        } else {
+                            log.debug(LogTag.API, "Tradegate quote unavailable symbol={} cause={}", symbol, cause)
+                        }
                         return@onFailure
                     }
                     if (error is ProviderHttpException && isPermanentInstrumentStatus(error.statusCode)) {
                         repository.deleteProviderInstrument(PROVIDER, symbol)
                         unresolvedUntil[symbol] = System.currentTimeMillis() + UNRESOLVED_RETRY_MILLIS
                         backoff.success()
+                        activity?.record(PROVIDER_LABEL, 0, 0, status = "Listing unavailable")
                         log.warn(
                             LogTag.API, "Tradegate instrument disabled symbol={} status={} retryIn={}h",
                             symbol, error.statusCode, TimeUnit.MILLISECONDS.toHours(UNRESOLVED_RETRY_MILLIS)
                         )
                         return@onFailure
                     }
+                    activity?.record(PROVIDER_LABEL, if (received) 1 else 0, 0, failed = true)
                     val delay = backoff.failure(error)
                     log.warn(LogTag.API, "Tradegate request paused symbol={} delay={}ms cause={}", symbol, delay, error.toString())
                 }
@@ -119,7 +127,6 @@ internal class TradegatePollingService(
         val instrument = resolve(symbol) ?: return
         val quote = client.loadQuote(instrument.identifier)
         onQuote()
-        activity?.record(PROVIDER_LABEL, 1, 0)
         val executableMidpoint = quote.bid?.takeIf { it > 0.0 }?.let { bid ->
             quote.ask?.takeIf { it >= bid }?.let { ask -> (bid + ask) / 2.0 }
         } ?: throw ProviderDataUnavailableException("Tradegate returned no executable bid/ask for $symbol")
@@ -131,13 +138,14 @@ internal class TradegatePollingService(
             )
         )
         if (stored) {
-            activity?.record(PROVIDER_LABEL, 1, 1)
             observationSink.publish(MarketPriceObservation(PROVIDER, symbol, executableMidpoint, quote.observedAtMillis))
             log.debug(
                 LogTag.DB, "Tradegate quote stored symbol={} isin={} price={}",
                 symbol, instrument.identifier, quote.last
             )
         }
+        activity?.record(PROVIDER_LABEL, 1, if (stored) 1 else 0,
+            status = if (stored) null else "No fresh quote")
     }
 
     private fun resolve(symbol: String): ProviderInstrument? {

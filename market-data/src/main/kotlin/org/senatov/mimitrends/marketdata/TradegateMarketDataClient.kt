@@ -43,9 +43,10 @@ class TradegateMarketDataClient(
         .cookieHandler(cookieManager)
         .connectTimeout(Duration.ofSeconds(10))
         .followRedirects(HttpClient.Redirect.NORMAL)
-        .build()
+        .build(),
+    private val baseUrlProvider: () -> String = { ProviderUrls.get(ProviderUrl.TRADEGATE) }
 ) {
-    private val baseUrl: String get() = ProviderUrls.get(ProviderUrl.TRADEGATE)
+    private val baseUrl: String get() = baseUrlProvider()
     private val log = LoggerFactory.getLogger(javaClass)
 
     fun resolveInstrument(symbol: String, companyName: String): TradegateInstrument? {
@@ -98,6 +99,7 @@ class TradegateMarketDataClient(
     }
 
     internal fun parseQuote(isin: String, body: String, dateHeader: String?): TradegateQuote {
+        if (body.isBlank()) throw ProviderDataUnavailableException("Tradegate returned no quote for $isin")
         val json = mapper.readTree(body)
         val last = json.decimal("last") ?: throw ProviderDataUnavailableException("Tradegate returned no last price for $isin")
         require(last.isFinite() && last > 0.0) { "Tradegate returned invalid last price for $isin" }

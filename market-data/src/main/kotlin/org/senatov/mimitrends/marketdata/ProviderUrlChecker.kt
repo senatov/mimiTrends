@@ -46,7 +46,17 @@ class ProviderUrlChecker(
                 ?: throw ProviderDataUnavailableException("ASML equity was not found")
             val quote = provider.loadQuote(instrument)
             require(quote.last > 0 && quote.observedAtMillis > 0) { "No valid Euronext quote" }
-            return "Search and quote OK"
+            return "Search and ASML quote OK"
+        }
+        if (key == ProviderUrl.TRADEGATE) {
+            val provider = TradegateMarketDataClient(baseUrlProvider = { base })
+            val instrument = provider.resolveInstrument("SAP.DE", "SAP SE")
+                ?: throw ProviderDataUnavailableException("SAP equity was not found")
+            val quote = provider.loadQuote(instrument.isin)
+            require(quote.bid != null && quote.ask != null && quote.ask >= quote.bid) {
+                "SAP bid/ask were unavailable"
+            }
+            return "Search and SAP quote OK"
         }
         val uri = URI.create(base + key.probePath)
         val request = HttpRequest.newBuilder(uri).timeout(Duration.ofSeconds(12))

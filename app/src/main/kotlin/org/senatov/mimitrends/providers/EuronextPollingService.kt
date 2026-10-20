@@ -84,17 +84,18 @@ internal class EuronextPollingService(
                 .onSuccess { backoff.success() }
                 .onFailure { error ->
                     if (error is InterruptedException) return@onFailure
-                    activity?.record(PROVIDER_LABEL, if (received) 1 else 0, 0, failed = true)
                     if (error is ProviderDataUnavailableException) {
                         backoff.success()
+                        activity?.record(PROVIDER_LABEL, if (received) 1 else 0, 0, status = "No fresh quote")
                         val cause = error.message.orEmpty().substringBefore(" for ")
                         if (reportedDataFailures.add(cause)) {
-                            log.warn(LogTag.API, "Euronext quote unavailable symbol={} cause={}", symbol, cause)
+                            log.info(LogTag.API, "Euronext quote unavailable symbol={} cause={}", symbol, cause)
                         } else {
                             log.debug(LogTag.API, "Euronext quote unavailable symbol={} cause={}", symbol, cause)
                         }
                         return@onFailure
                     }
+                    activity?.record(PROVIDER_LABEL, if (received) 1 else 0, 0, failed = true)
                     val delay = backoff.failure(error)
                     log.warn(LogTag.API, "Euronext request paused symbol={} delay={}ms cause={}", symbol, delay, error.toString())
                 }
@@ -122,7 +123,6 @@ internal class EuronextPollingService(
         val source = EuronextInstrument(instrument.identifier, instrument.mic, instrument.resolvedName)
         val quote = client.loadQuote(source)
         onQuote()
-        activity?.record(PROVIDER_LABEL, 1, 0)
         val now = System.currentTimeMillis()
         if (quote.observedAtMillis !in (now - MAX_QUOTE_AGE_MILLIS)..(now + FUTURE_TOLERANCE_MILLIS)) {
             throw ProviderDataUnavailableException("Euronext quote is stale for $symbol")
@@ -134,13 +134,14 @@ internal class EuronextPollingService(
             )
         )
         if (stored) {
-            activity?.record(PROVIDER_LABEL, 1, 1)
             observationSink.publish(MarketPriceObservation(PROVIDER, symbol, quote.last, quote.observedAtMillis))
             log.debug(
                 LogTag.DB, "Euronext quote stored symbol={} isin={} mic={} price={}",
                 symbol, instrument.identifier, instrument.mic, quote.last
             )
         }
+        activity?.record(PROVIDER_LABEL, 1, if (stored) 1 else 0,
+            status = if (stored) null else "No fresh quote")
     }
 
     private fun resolve(symbol: String): ProviderInstrument? {

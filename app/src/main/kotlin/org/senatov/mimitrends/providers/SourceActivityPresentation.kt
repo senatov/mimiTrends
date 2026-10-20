@@ -19,6 +19,7 @@ internal object SourceActivityPresentation {
     fun health(snapshot: SourceActivitySnapshot, nowMillis: Long): SourceHealth = when {
         snapshot.failed || snapshot.status == "Login needed" -> SourceHealth.ATTENTION
         snapshot.status == "Disabled" -> SourceHealth.DISABLED
+        snapshot.status == "No fresh quote" || snapshot.status == "Listing unavailable" -> SourceHealth.WAITING
         snapshot.lastContactMillis == null -> SourceHealth.WAITING
         nowMillis - snapshot.lastContactMillis > QUIET_AFTER_MILLIS -> SourceHealth.QUIET
         else -> SourceHealth.LIVE

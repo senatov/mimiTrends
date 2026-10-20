@@ -69,4 +69,11 @@ class TradegateMarketDataClientTest {
             client.parseQuote("DE0006231004", "{\"bid\": 31.2}", null)
         }
     }
+
+    @Test
+    fun `treats an empty successful response as an unavailable listing`() {
+        assertFailsWith<ProviderDataUnavailableException> {
+            client.parseQuote("DE0005785604", "", "Tue, 20 Oct 2026 11:00:41 GMT")
+        }
+    }
 }
