@@ -40,6 +40,7 @@ class WallstreetOnlineMarketDataClient(
         .followRedirects(HttpClient.Redirect.NORMAL)
         .build()
 ) {
+    private val baseUrl: String get() = ProviderUrls.get(ProviderUrl.WALLSTREET_ONLINE)
     private val log = LoggerFactory.getLogger(javaClass)
 
     fun loadRankings(): List<WallstreetOnlineRankedMover> {
@@ -49,7 +50,7 @@ class WallstreetOnlineMarketDataClient(
         var failedPages = 0
         val rankings = try {
             val requests = WallstreetOnlineRankingPages.entries.map { page ->
-                Callable { page to parseMovers(send("$BASE_URL${page.path}")) }
+                Callable { page to parseMovers(send("$baseUrl${page.path}")) }
             }
             executor.invokeAll(requests, 30, TimeUnit.SECONDS).mapNotNull { future ->
                 runCatching { future.get() }.onFailure { failedPages++ }.getOrNull()
@@ -78,7 +79,7 @@ class WallstreetOnlineMarketDataClient(
 
     fun loadQuote(path: String): WallstreetOnlineQuote {
         require(DETAIL_PATH.matches(path)) { "Invalid wallstreetONLINE instrument path" }
-        return parseQuote(send("$BASE_URL$path"))
+        return parseQuote(send("$baseUrl$path"))
     }
 
     fun resolveStockUrl(searchUrl: String, isin: String): String {
@@ -179,7 +180,6 @@ class WallstreetOnlineMarketDataClient(
     private fun decode(value: String): String = value.replace("&amp;", "&").replace("&quot;", "\"")
 
     internal companion object {
-        const val BASE_URL = "https://www.wallstreet-online.de"
         const val USER_AGENT = "MiMiTrends/1.0 (personal desktop market viewer)"
         const val MAX_MOVERS_PER_PAGE = 50
         const val FUTURE_TOLERANCE_MILLIS = 5 * 60_000L

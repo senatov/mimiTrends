@@ -31,7 +31,8 @@ class LangSchwarzMarketDataClient(
         .followRedirects(HttpClient.Redirect.NORMAL)
         .build()
 ) {
-    fun loadEuropeanListings(): List<LangSchwarzListing> = URLS.flatMap { url ->
+    fun loadEuropeanListings(): List<LangSchwarzListing> = LISTING_URLS.flatMap { key ->
+        val url = ProviderUrls.get(key)
         val request = HttpRequest.newBuilder(URI.create(url))
             .timeout(Duration.ofSeconds(15))
             .header("User-Agent", USER_AGENT)
@@ -98,11 +99,8 @@ class LangSchwarzMarketDataClient(
         .toDoubleOrNull()
 
     private companion object {
-        val URLS = listOf(
-            "https://www.ls-tc.de/de/aktien/deutschland",
-            "https://www.ls-tc.de/de/aktien/europa/stoxx50",
-            "https://www.ls-tc.de/de/aktien/europa"
-        )
+        val LISTING_URLS = listOf(ProviderUrl.LANG_SCHWARZ_GERMANY, ProviderUrl.LANG_SCHWARZ_STOXX,
+            ProviderUrl.LANG_SCHWARZ_EUROPE)
         const val USER_AGENT = "MiMiTrends/1.0 (personal desktop market viewer)"
         val QUOTE_ZONE: ZoneId = ZoneId.of("Europe/Berlin")
         const val FUTURE_TOLERANCE_MILLIS = 30_000L

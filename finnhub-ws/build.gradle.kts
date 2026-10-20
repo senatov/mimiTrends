@@ -4,6 +4,7 @@ plugins {
 
 dependencies {
     implementation(project(":core"))
+    implementation(project(":market-data"))
     implementation(platform(libs.jackson.bom))
     implementation(libs.jackson.databind)
     testImplementation(platform(libs.junit.bom))

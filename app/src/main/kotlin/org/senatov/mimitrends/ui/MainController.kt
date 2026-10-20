@@ -368,6 +368,9 @@ class MainController(
 
     private fun showScannerSettings() {
         log.debug(LogTag.UI, "showScannerSettings()")
+        val previousFinnhubUrls = listOf(
+            ProviderUrls.get(ProviderUrl.FINNHUB_REST), ProviderUrls.get(ProviderUrl.FINNHUB_STREAM)
+        )
         ScannerSettingsDialog(
             actions.settings.scene?.window, scannerCriteria, scannerSettings,
             ApiKeyResolver.resolve() != null, wallstreetOnlineClient::validateStockSearchUrl
@@ -375,7 +378,12 @@ class MainController(
             .showAndWait()?.let { result ->
                 result.finnhubApiKey?.let { key ->
                     ApiKeyResolver.saveLocal(key, ApiKeyResolver.resolveWebhookSecret())
-                    restartFinnhubLive(key)
+                }
+                val currentFinnhubUrls = listOf(
+                    ProviderUrls.get(ProviderUrl.FINNHUB_REST), ProviderUrls.get(ProviderUrl.FINNHUB_STREAM)
+                )
+                if (result.finnhubApiKey != null || currentFinnhubUrls != previousFinnhubUrls) {
+                    restartFinnhubLive(result.finnhubApiKey ?: ApiKeyResolver.resolve().orEmpty())
                 }
                 scannerCriteria = result.criteria; scannerSettings.save(result.criteria)
                 tradegateProvider.configure(result.criteria)

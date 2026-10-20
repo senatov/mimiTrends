@@ -76,7 +76,7 @@ class RecentCoverageClient(
 
     private fun yahooSearch(query: String): List<CoverageItem> {
         val encoded = URLEncoder.encode(query, StandardCharsets.UTF_8)
-        val uri = URI.create("https://query1.finance.yahoo.com/v1/finance/search?q=$encoded&quotesCount=0&newsCount=20")
+        val uri = URI.create("${ProviderUrls.get(ProviderUrl.YAHOO_PRIMARY)}/v1/finance/search?q=$encoded&quotesCount=0&newsCount=20")
         return parseYahoo(request(uri))
     }
 
@@ -88,13 +88,13 @@ class RecentCoverageClient(
             .replace(Regex("[^a-z0-9]+"), "-").trim('-')
         val stockResult = if (slug.length >= 4 && slug != symbol.lowercase(Locale.ROOT)) {
             runCatching {
-                val url = URI.create("https://www.wallstreet-online.de/aktien/$slug-aktie/nachrichten")
+                val url = URI.create("${ProviderUrls.get(ProviderUrl.WALLSTREET_ONLINE)}/aktien/$slug-aktie/nachrichten")
                 parseWallstreetOnlineStockNews(request(url), symbol, companyName)
             }
         } else Result.success(emptyList())
         val feedResult = runCatching {
             parseWallstreetOnline(
-                request(URI.create("https://www.wallstreet-online.de/rss/nachrichten-alle.xml")),
+                request(URI.create("${ProviderUrls.get(ProviderUrl.WALLSTREET_ONLINE)}/rss/nachrichten-alle.xml")),
                 symbol, companyName
             )
         }
@@ -131,7 +131,7 @@ class RecentCoverageClient(
         parseRss(body, symbol, companyName, "wallstreetONLINE", "dc:date")
 
     internal fun parseWallstreetOnlineStockNews(body: String, symbol: String, companyName: String): List<CoverageItem> {
-        val document = Jsoup.parse(body, "https://www.wallstreet-online.de")
+        val document = Jsoup.parse(body, ProviderUrls.get(ProviderUrl.WALLSTREET_ONLINE))
         if (!matchesCompany(document.selectFirst("h1")?.text().orEmpty(), symbol, companyName)) return emptyList()
         val latest = document.selectFirst(".tabpanes .tab") ?: return emptyList()
         return latest.select(".newsListSubtitle").take(30).mapNotNull { subtitle ->

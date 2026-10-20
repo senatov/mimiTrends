@@ -3,6 +3,7 @@ package org.senatov.mimitrends.marketdata
 import com.fasterxml.jackson.core.JsonProcessingException
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.ObjectMapper
+import org.jsoup.Jsoup
 import java.net.CookieManager
 import java.net.CookiePolicy
 import java.net.URI
@@ -38,11 +39,13 @@ class EuronextMarketDataClient(
         .cookieHandler(cookieManager)
         .connectTimeout(Duration.ofSeconds(10))
         .followRedirects(HttpClient.Redirect.NORMAL)
-        .build()
+        .build(),
+    private val baseUrlProvider: () -> String = { ProviderUrls.get(ProviderUrl.EURONEXT) }
 ) {
+    private val baseUrl: String get() = baseUrlProvider()
     fun resolveInstrument(queryText: String, expectedIsin: String? = null): EuronextInstrument? {
         val query = URLEncoder.encode(queryText.trim(), StandardCharsets.UTF_8)
-        val response = send("$BASE_URL/en/instrumentSearch/searchJSON?q=$query")
+        val response = send("$baseUrl/en/instrumentSearch/searchJSON?q=$query")
         if (response.statusCode() != 200) {
             throw ProviderHttpException.from(response.statusCode(), response.headers(), "Euronext instrument search")
         }
@@ -69,7 +72,7 @@ class EuronextMarketDataClient(
     fun loadQuote(instrument: EuronextInstrument): EuronextQuote {
         require(instrument.isin.matches(VALID_ISIN) && instrument.mic.matches(VALID_MIC))
         val product = "${instrument.isin}-${instrument.mic}"
-        val response = send("$BASE_URL/en/ajax/getDetailedQuote/$product", "$BASE_URL/en/product/equities/$product/market-information")
+        val response = send("$baseUrl/en/ajax/getDetailedQuote/$product", "$baseUrl/en/product/equities/$product/market-information")
         if (response.statusCode() != 200) {
             throw ProviderHttpException.from(response.statusCode(), response.headers(), "Euronext quote for $product")
         }
@@ -106,7 +109,8 @@ class EuronextMarketDataClient(
         }
         val bid = labeledValue(html, "Best Bid")
         val ask = labeledValue(html, "Best Ask")
-        val timestamp = LAST_TRADE_TIME.find(html)?.groupValues?.get(1)?.replace("&nbsp;", " ")?.trim()
+        val timestamp = Jsoup.parse(html).selectFirst(".last-price-date-time")?.text()
+            ?.let { QUOTE_TIME_TEXT.find(it)?.value }
         val observedAt = timestamp?.let {
             runCatching { LocalDateTime.parse(it, QUOTE_TIME).atZone(EURONEXT_ZONE).toInstant().toEpochMilli() }.getOrNull()
         } ?: throw ProviderDataUnavailableException("Euronext returned no trustworthy quote timestamp")
@@ -176,7 +180,6 @@ class EuronextMarketDataClient(
     private fun String.hexBytes(): ByteArray = chunked(2).map { it.toInt(16).toByte() }.toByteArray()
 
     private companion object {
-        const val BASE_URL = "https://live.euronext.com"
         const val PASSWORD = "24ayqVo7yJma"
         const val AES_KEY_BYTES = 32
         const val WINDOWS_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) " +
@@ -185,7 +188,7 @@ class EuronextMarketDataClient(
         val VALID_MIC = Regex("[A-Z0-9]{4}")
         val EQUITY_LINK = Regex("/product/equities/", RegexOption.IGNORE_CASE)
         val MIC_PRIORITY = listOf("XPAR", "XAMS", "XBRU", "XLIS", "XOSL", "ETLX", "MTAH", "BGEM")
-        val LAST_TRADE_TIME = Regex("last-price-date-time[^>]*>\\s*([0-9]{2}/[0-9]{2}/[0-9]{4}\\s*-\\s*[0-9]{2}:[0-9]{2})")
+        val QUOTE_TIME_TEXT = Regex("[0-9]{2}/[0-9]{2}/[0-9]{4}\\s*-\\s*[0-9]{2}:[0-9]{2}")
         val QUOTE_TIME: DateTimeFormatter = DateTimeFormatter.ofPattern("dd/MM/yyyy - HH:mm")
         val EURONEXT_ZONE: ZoneId = ZoneId.of("Europe/Paris")
     }

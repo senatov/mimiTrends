@@ -45,6 +45,7 @@ class TradegateMarketDataClient(
         .followRedirects(HttpClient.Redirect.NORMAL)
         .build()
 ) {
+    private val baseUrl: String get() = ProviderUrls.get(ProviderUrl.TRADEGATE)
     private val log = LoggerFactory.getLogger(javaClass)
 
     fun resolveInstrument(symbol: String, companyName: String): TradegateInstrument? {
@@ -56,7 +57,7 @@ class TradegateMarketDataClient(
     private fun searchInstrument(searchTerm: String): TradegateInstrument? {
         val query = URLEncoder.encode(searchTerm, StandardCharsets.UTF_8)
         val response = send(
-            URI.create("$BASE_URL/kurssuche.php?suche=$query&lang=en"),
+            URI.create("$baseUrl/kurssuche.php?suche=$query&lang=en"),
             "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
         )
         if (response.statusCode() != 200) {
@@ -86,9 +87,9 @@ class TradegateMarketDataClient(
     fun loadQuote(isin: String): TradegateQuote {
         require(isin.matches(VALID_ISIN)) { "Invalid Tradegate ISIN" }
         val response = send(
-            URI.create("$BASE_URL/refresh.php?isin=$isin"),
+            URI.create("$baseUrl/refresh.php?isin=$isin"),
             "application/json, text/javascript, */*; q=0.01",
-            "$BASE_URL/orderbuch_umsaetze.php?isin=$isin&lang=en"
+            "$baseUrl/orderbuch_umsaetze.php?isin=$isin&lang=en"
         )
         if (response.statusCode() != 200) {
             throw ProviderHttpException.from(response.statusCode(), response.headers(), "Tradegate quote for $isin")
@@ -157,7 +158,6 @@ class TradegateMarketDataClient(
         !instrument.isin.startsWith("XS") && DEBT_MARKERS.none { instrument.name.contains(it, ignoreCase = true) }
 
     private companion object {
-        const val BASE_URL = "https://www.tradegatebsx.com"
         const val WINDOWS_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) " +
             "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
         val VALID_ISIN = Regex("[A-Z]{2}[A-Z0-9]{9}[0-9]")

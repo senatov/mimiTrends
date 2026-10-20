@@ -3,6 +3,8 @@ package org.senatov.mimitrends.ws
 import com.fasterxml.jackson.databind.ObjectMapper
 import org.senatov.mimitrends.log.LogTag
 import org.senatov.mimitrends.model.TradeTick
+import org.senatov.mimitrends.marketdata.ProviderUrl
+import org.senatov.mimitrends.marketdata.ProviderUrls
 import org.slf4j.LoggerFactory
 import java.net.URI
 import java.net.URLEncoder
@@ -38,7 +40,7 @@ class FinnhubWebSocketClient(
         val encodedToken = URLEncoder.encode(apiKey, StandardCharsets.UTF_8)
         return httpClient.newWebSocketBuilder()
             .connectTimeout(Duration.ofSeconds(10))
-            .buildAsync(URI.create("wss://ws.finnhub.io?token=$encodedToken"), this)
+            .buildAsync(URI.create("${ProviderUrls.get(ProviderUrl.FINNHUB_STREAM)}?token=$encodedToken"), this)
             .thenApply { socket ->
                 if (closed.get()) {
                     socket.sendClose(WebSocket.NORMAL_CLOSURE, "MiMiTrends closed")

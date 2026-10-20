@@ -47,7 +47,7 @@ class YahooFinanceClient(
     fun loadDayGainers(limit: Int = 25): List<YahooMarketLeader> {
         val safeLimit = limit.coerceIn(1, MAX_DISCOVERY_RESULTS)
         val uri = URI.create(
-            "https://$PRIMARY_HOST/v1/finance/screener/predefined/saved" +
+            "${ProviderUrls.get(ProviderUrl.YAHOO_PRIMARY)}/v1/finance/screener/predefined/saved" +
                 "?scrIds=day_gainers&count=$safeLimit&start=0"
         )
         val response = sendWithRetry(request(uri))
@@ -57,7 +57,7 @@ class YahooFinanceClient(
 
     fun resolveEquity(query: String): YahooResolvedEquity? {
         val encoded = URLEncoder.encode(query.trim(), StandardCharsets.UTF_8)
-        val uri = URI.create("https://$PRIMARY_HOST/v1/finance/search?q=$encoded&quotesCount=8&newsCount=0")
+        val uri = URI.create("${ProviderUrls.get(ProviderUrl.YAHOO_PRIMARY)}/v1/finance/search?q=$encoded&quotesCount=8&newsCount=0")
         val response = sendWithRetry(request(uri))
         check(response.statusCode() == 200) { "Yahoo Finance search HTTP ${response.statusCode()}" }
         return parseEquitySearch(response.body())
@@ -97,10 +97,10 @@ class YahooFinanceClient(
         val encoded = URLEncoder.encode(normalized, StandardCharsets.UTF_8)
         val pathAndQuery = "/v8/finance/chart/$encoded" +
                 "?$period&interval=1m&includePrePost=false&events=div%2Csplits"
-        var response = sendWithRetry(request(URI.create("https://$PRIMARY_HOST$pathAndQuery")))
+        var response = sendWithRetry(request(URI.create("${ProviderUrls.get(ProviderUrl.YAHOO_PRIMARY)}$pathAndQuery")))
         if (response.statusCode() == 404) {
             log.debug(LogTag.API, "Yahoo primary host returned 404; retrying alternate host symbol={}", normalized)
-            response = sendWithRetry(request(URI.create("https://$ALTERNATE_HOST$pathAndQuery")))
+            response = sendWithRetry(request(URI.create("${ProviderUrls.get(ProviderUrl.YAHOO_ALTERNATE)}$pathAndQuery")))
         }
         check(response.statusCode() == 200) { "Yahoo Finance HTTP ${response.statusCode()} for $normalized" }
         return parse(normalized, response.body())
@@ -182,8 +182,6 @@ class YahooFinanceClient(
 
     private companion object {
         const val USER_AGENT = "MiMiTrends/1.0 (personal desktop market viewer)"
-        const val PRIMARY_HOST = "query1.finance.yahoo.com"
-        const val ALTERNATE_HOST = "query2.finance.yahoo.com"
         const val MAX_SERVER_RETRIES = 2
         const val RETRY_DELAY_MILLIS = 250L
         const val MAX_DISCOVERY_RESULTS = 50

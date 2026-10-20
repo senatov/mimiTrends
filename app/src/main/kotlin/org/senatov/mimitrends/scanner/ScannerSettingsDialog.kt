@@ -74,6 +74,11 @@ class ScannerSettingsDialog(
         isEditable = true
     }
     private val stockSearchUrl = TextField(current.stockSearchUrl)
+    private val providerSettings by lazy {
+        ProviderSettingsPane(langSchwarzEnabled, tradegateEnabled, tradegateInterval,
+            euronextEnabled, euronextInterval, stockSearchUrl, validateStockSearchUrl,
+            { finnhubApiKey.text.trim().takeIf(String::isNotEmpty) ?: org.senatov.mimitrends.application.ApiKeyResolver.resolve() })
+    }
     private val finnhubApiKey = PasswordField().apply {
         promptText = if (finnhubConfigured) "Configured — leave blank to keep" else "Optional API key"
     }
@@ -178,58 +183,6 @@ class ScannerSettingsDialog(
         ).apply { padding = Insets(18.0) }
 
 
-        val providers = VBox(
-            14.0,
-            Label("Optional website collectors run independently from Yahoo and Finnhub. Each provider stores its observations in a separate database series.").apply {
-                isWrapText = true; styleClass += "settings-footnote"
-            },
-            section(
-                "Lang & Schwarz",
-                settingRow(
-                    "Personal-use quote fallback",
-                    "Disabled by default. Reads public bid/ask snapshots only when Scalable is unavailable. Enable only when your use complies with the website terms.",
-                    langSchwarzEnabled
-                )
-            ),
-            section(
-                "Tradegate",
-                settingRow(
-                    "Public quote collector",
-                    "Resolve company names to Tradegate instruments and collect EUR quotes during its weekday trading session.",
-                    tradegateEnabled
-                ),
-                settingRow(
-                    "Request interval",
-                    "Milliseconds between sequential instruments. A small timing jitter and automatic backoff are applied.",
-                    tradegateInterval
-                )
-            ),
-            section(
-                "Euronext",
-                settingRow(
-                    "Public quote collector",
-                    "Resolve ISIN and MIC through Euronext search and collect delayed market-information quotes.",
-                    euronextEnabled
-                ),
-                settingRow(
-                    "Request interval",
-                    "Milliseconds between sequential instruments. A small timing jitter and automatic backoff are applied.",
-                    euronextInterval
-                )
-            ),
-            section(
-                "External stock chart",
-                settingRow(
-                    "Stock search page",
-                    "Open Stock uses this HTTPS search page. Saving verifies that a Northern Data query returns a stock result.",
-                    stockSearchUrl
-                )
-            ),
-            Label("Collectors honor Retry-After responses, pause after access or throttling errors, and do not replace newer database observations with older quotes.").apply {
-                isWrapText = true; styleClass += "settings-footnote"
-            }
-        ).apply { padding = Insets(18.0) }
-
         val appearance = VBox(
             14.0,
             section(
@@ -261,12 +214,13 @@ class ScannerSettingsDialog(
         dialog.dialogPane.content = SettingsNavigation.create(
             listOf(
                 "Scanner" to scanner, "Rapid moves" to rapidMoveEditor.content,
-                "Market data providers" to providers, "Appearance" to appearance
+                "Market data providers" to providerSettings.content, "Appearance" to appearance
             )
         )
         dialog.dialogPane.prefWidth = DEFAULT_WIDTH
         dialog.dialogPane.prefHeight = DEFAULT_HEIGHT
         dialog.dialogPane.buttonTypes += listOf(restoreDefaults, ButtonType.CANCEL, saveSettings)
+        dialog.dialogPane.lookupButton(saveSettings).styleClass += "settings-primary-button"
         dialog.dialogPane.lookupButton(restoreDefaults).addEventFilter(javafx.event.ActionEvent.ACTION) { event ->
             event.consume()
             applyDefaults()
@@ -275,21 +229,27 @@ class ScannerSettingsDialog(
         dialog.dialogPane.lookupButton(saveSettings).addEventFilter(javafx.event.ActionEvent.ACTION) { event ->
             event.consume()
             val result = parse() ?: return@addEventFilter
+            val urls = providerSettings.currentUrls()
             val saveButton = dialog.dialogPane.lookupButton(saveSettings)
+            val cancelButton = dialog.dialogPane.lookupButton(ButtonType.CANCEL)
+            val defaultsButton = dialog.dialogPane.lookupButton(restoreDefaults)
             saveButton.isDisable = true
-            CompletableFuture.runAsync { validateStockSearchUrl(result.criteria.stockSearchUrl) }.whenComplete { _, error ->
-                Platform.runLater {
+            cancelButton.isDisable = true
+            defaultsButton.isDisable = true
+            CompletableFuture.runAsync { org.senatov.mimitrends.marketdata.ProviderUrls.save(urls) }
+                .whenComplete { _, error -> Platform.runLater {
                     saveButton.isDisable = false
+                    cancelButton.isDisable = false
+                    defaultsButton.isDisable = false
                     if (error == null) {
                         dialog.result = result
                         dialog.close()
-                    } else Alert(
-                        Alert.AlertType.ERROR,
-                        "Stock search URL is not relevant: searching for Northern Data did not return a stock page.",
-                        ButtonType.OK
-                    ).showAndWait()
-                }
-            }
+                    } else {
+                        Alert(Alert.AlertType.ERROR,
+                            error.cause?.message ?: error.message ?: "Could not save provider URLs", ButtonType.OK)
+                            .showAndWait()
+                    }
+                } }
         }
         geometry.attach(dialog)
     }
@@ -326,6 +286,7 @@ class ScannerSettingsDialog(
         euronextEnabled.isSelected = defaults.euronextEnabled
         euronextInterval.valueFactory.value = defaults.euronextRequestIntervalMillis.toInt()
         stockSearchUrl.text = defaults.stockSearchUrl
+        providerSettings.restoreDefaults()
         symbols.text = defaults.symbols.joinToString(", ")
         theme.value = defaults.tableAppearance.theme
         density.value = defaults.tableAppearance.density
@@ -366,7 +327,10 @@ class ScannerSettingsDialog(
             tradegateRequestIntervalMillis = tradegateInterval.value.toLong(),
             euronextEnabled = euronextEnabled.isSelected,
             euronextRequestIntervalMillis = euronextInterval.value.toLong(),
-            stockSearchUrl = stockSearchUrl.text.trim().also { require(it.isNotEmpty()) },
+            stockSearchUrl = stockSearchUrl.text.trim().also { url ->
+                val uri = java.net.URI.create(url)
+                require(uri.scheme.equals("https", ignoreCase = true) && !uri.host.isNullOrBlank())
+            },
             tableAppearance = TableAppearance(
                 theme = theme.value ?: UiTheme.LIGHT,
                 density = density.value ?: UiDensity.COMPACT,
@@ -382,7 +346,7 @@ class ScannerSettingsDialog(
             rapidMoves = rapidMoveEditor.value(),
             symbols = service.normalizeSymbols(symbols.text).also { require(it.isNotEmpty()) })
         ScannerSettingsResult(criteria, finnhubApiKey.text.trim().takeIf(String::isNotEmpty))
-    }.onFailure { Alert(Alert.AlertType.ERROR, "Check numeric values and enter at least one symbol.", ButtonType.OK).showAndWait() }
+    }.onFailure { Alert(Alert.AlertType.ERROR, "Check numeric values, stock search URL, and symbols.", ButtonType.OK).showAndWait() }
         .getOrNull()
 
     private fun hex(color: Color): String = "#%02X%02X%02X".format(
@@ -390,7 +354,7 @@ class ScannerSettingsDialog(
     )
 
     private companion object {
-        const val DEFAULT_WIDTH = 897.0
-        const val DEFAULT_HEIGHT = 720.0
+        const val DEFAULT_WIDTH = 1_020.0
+        const val DEFAULT_HEIGHT = 780.0
     }
 }

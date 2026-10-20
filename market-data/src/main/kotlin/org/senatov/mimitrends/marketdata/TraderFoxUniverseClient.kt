@@ -30,7 +30,7 @@ class TraderFoxUniverseClient(
     private val mapper: ObjectMapper = ObjectMapper()
 ) {
     fun load(list: TraderFoxList): List<TraderFoxEquity> {
-        val request = HttpRequest.newBuilder(URI.create("$BASE_URL${list.path}"))
+        val request = HttpRequest.newBuilder(URI.create("${ProviderUrls.get(ProviderUrl.TRADERFOX)}${list.path}"))
             .timeout(Duration.ofSeconds(20))
             .header("User-Agent", "Mozilla/5.0 MiMiTrends")
             .header("Accept", "text/html")
@@ -57,7 +57,6 @@ class TraderFoxUniverseClient(
     }
 
     private companion object {
-        const val BASE_URL = "https://markets.traderfox.com/aktien/"
         val EQUITIES = Regex("var\\s+equities\\s*=\\s*(\\{.*?});", RegexOption.DOT_MATCHES_ALL)
         val SYMBOL = Regex("[A-Z0-9][A-Z0-9-]{0,9}")
     }

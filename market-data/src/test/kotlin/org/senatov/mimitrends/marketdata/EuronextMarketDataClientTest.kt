@@ -105,4 +105,22 @@ class EuronextMarketDataClientTest {
             client.parseQuote("<span id=\"header-instrument-currency\">€</span>")
         }
     }
+
+    @Test
+    fun `parses timestamp nested in current Euronext header`() {
+        val quote = client.parseQuote("""
+            <span id="header-instrument-currency">€</span>
+            <span id="header-instrument-price">1,453.60</span>
+            <div class="data-header-last-price-date-time">
+                <div class="container"><div>Last traded price</div>
+                <div class="ml-2 last-price-date-time text-right">20/10/2026 - 12:34&nbsp;CET</div></div>
+            </div>
+        """.trimIndent())
+
+        assertEquals(1_453.60, quote.last)
+        assertEquals(
+            LocalDateTime.of(2026, 10, 20, 12, 34).atZone(ZoneId.of("Europe/Paris")).toInstant().toEpochMilli(),
+            quote.observedAtMillis
+        )
+    }
 }

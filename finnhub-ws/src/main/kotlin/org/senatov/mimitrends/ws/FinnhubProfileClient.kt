@@ -3,6 +3,8 @@ package org.senatov.mimitrends.ws
 import com.fasterxml.jackson.databind.ObjectMapper
 import org.senatov.mimitrends.log.LogTag
 import org.senatov.mimitrends.model.CompanyProfile
+import org.senatov.mimitrends.marketdata.ProviderUrl
+import org.senatov.mimitrends.marketdata.ProviderUrls
 import org.slf4j.LoggerFactory
 import java.net.URI
 import java.net.URLEncoder
@@ -36,7 +38,7 @@ class FinnhubProfileClient(
         val encodedSymbol = URLEncoder.encode(symbol, StandardCharsets.UTF_8)
         val encodedToken = URLEncoder.encode(apiKey, StandardCharsets.UTF_8)
         val request = HttpRequest.newBuilder(
-            URI.create("https://finnhub.io/api/v1/stock/profile2?symbol=$encodedSymbol&token=$encodedToken")
+            URI.create("${ProviderUrls.get(ProviderUrl.FINNHUB_REST)}/api/v1/stock/profile2?symbol=$encodedSymbol&token=$encodedToken")
         ).timeout(Duration.ofSeconds(10)).GET().build()
 
         return httpClient.sendAsync(request, HttpResponse.BodyHandlers.ofString())

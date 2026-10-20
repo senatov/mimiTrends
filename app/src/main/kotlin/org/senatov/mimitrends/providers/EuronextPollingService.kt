@@ -39,6 +39,7 @@ internal class EuronextPollingService(
         Thread(task, "mimitrends-euronext-provider").apply { isDaemon = true }
     }
     private val unresolvedUntil = mutableMapOf<String, Long>()
+    private val reportedDataFailures = mutableSetOf<String>()
     private val backoff = ProviderBackoff()
     private var symbols = emptyList<String>()
     private var index = 0
@@ -86,7 +87,12 @@ internal class EuronextPollingService(
                     activity?.record(PROVIDER_LABEL, if (received) 1 else 0, 0, failed = true)
                     if (error is ProviderDataUnavailableException) {
                         backoff.success()
-                        log.debug(LogTag.API, "Euronext quote unavailable symbol={} cause={}", symbol, error.message)
+                        val cause = error.message.orEmpty().substringBefore(" for ")
+                        if (reportedDataFailures.add(cause)) {
+                            log.warn(LogTag.API, "Euronext quote unavailable symbol={} cause={}", symbol, cause)
+                        } else {
+                            log.debug(LogTag.API, "Euronext quote unavailable symbol={} cause={}", symbol, cause)
+                        }
                         return@onFailure
                     }
                     val delay = backoff.failure(error)
