@@ -1,6 +1,9 @@
 package org.senatov.mimitrends.marketdata
 
 import org.junit.jupiter.api.Test
+import com.sun.net.httpserver.HttpServer
+import java.net.InetSocketAddress
+import java.util.concurrent.atomic.AtomicInteger
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 
@@ -74,6 +77,29 @@ class TradegateMarketDataClientTest {
     fun `treats an empty successful response as an unavailable listing`() {
         assertFailsWith<ProviderDataUnavailableException> {
             client.parseQuote("DE0005785604", "", "Tue, 20 Oct 2026 11:00:41 GMT")
+        }
+    }
+
+    @Test
+    fun `retries one intermittent bad request before accepting a quote`() {
+        val requests = AtomicInteger()
+        val server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0)
+        server.createContext("/refresh.php") { exchange ->
+            val attempt = requests.incrementAndGet()
+            val body = if (attempt == 1) "" else """{"last":43.35,"bid":43.34,"ask":43.35}"""
+            exchange.responseHeaders.set("Date", "Tue, 20 Oct 2026 13:03:07 GMT")
+            exchange.sendResponseHeaders(if (attempt == 1) 400 else 200, body.toByteArray().size.toLong())
+            exchange.responseBody.use { it.write(body.toByteArray()) }
+        }
+        server.start()
+        try {
+            val quote = TradegateMarketDataClient(baseUrlProvider = {
+                "http://127.0.0.1:${server.address.port}"
+            }).loadQuote("DE000BAY0017")
+            assertEquals(2, requests.get())
+            assertEquals(43.35, quote.last)
+        } finally {
+            server.stop(0)
         }
     }
 }

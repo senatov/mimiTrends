@@ -17,8 +17,11 @@ import javafx.scene.layout.HBox
 
 internal object ShortMoveCompanyGraphic {
     fun create(move: ShortMove, name: String, watchlist: InstrumentWatchlistActions): HBox {
-        val displayedName = if (move.pattern == ShortMovePattern.RAPID_CRASH) "⚠ $name" else name
-        val content = HBox(5.0, Label(displayedName)).apply { alignment = Pos.CENTER_LEFT }
+        val content = HBox(6.0).apply { alignment = Pos.CENTER_LEFT }
+        if (move.pattern == ShortMovePattern.RAPID_CRASH) {
+            content.children += Label("!").apply { styleClass += "short-move-warning-mark" }
+        }
+        content.children += Label(name).apply { styleClass += "short-move-company-name" }
         val venue = MarketVenuePresentation.forInstrument(move.symbol, watchlist.liveSource(move.symbol))
         content.children += MarketVenueFlag.create(venue)
         if (watchlist.contains(move.symbol)) {

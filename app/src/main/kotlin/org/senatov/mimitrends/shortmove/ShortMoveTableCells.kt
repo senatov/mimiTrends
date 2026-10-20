@@ -22,7 +22,7 @@ internal fun shortMoveAlertPriority(move: ShortMove): Int =
 }
 
 internal fun shortMoveDirectionLabel(move: ShortMove): String = if (move.reviewDecision == CurveDecision.PENDING) {
-    if (move.curveCandidate?.direction == CurveDirection.RISE) "? REVIEW RISE" else "? REVIEW DROP"
+    if (move.curveCandidate?.direction == CurveDirection.RISE) "↑ REVIEW RISE" else "↓ REVIEW DROP"
 } else when (move.pattern) {
     ShortMovePattern.RAPID_CRASH -> retainedLabel(move, "‼ RAPID CRASH")
     ShortMovePattern.RAPID_RISE -> retainedLabel(move, "↑ RAPID RISE")
@@ -42,7 +42,10 @@ internal class ShortMoveDirectionCell(
         graphic = if (empty || item == null || label == null) null else HBox(8.0).apply {
             alignment = Pos.CENTER_LEFT
             prefWidthProperty().bind(this@ShortMoveDirectionCell.widthProperty().subtract(12.0))
-            children += Label(label).apply { styleClass += "short-move-event-label" }
+            children += Label(label).apply {
+                styleClass += "short-move-event-label"
+                styleClass += if (item.isRise()) "short-move-event-rise" else "short-move-event-drop"
+            }
             children += Region().apply { HBox.setHgrow(this, Priority.ALWAYS) }
             val button = Button("Rumors").apply {
                 styleClass += "rumors-button"
@@ -57,9 +60,9 @@ internal class ShortMoveDirectionCell(
             "rapid-crash-cell"
         )
         if (!empty && item != null && label != null) {
-            if (item.pattern == ShortMovePattern.RAPID_CRASH) {
+            if (!item.isRise() && item.pattern == ShortMovePattern.RAPID_CRASH) {
                 styleClass += "rapid-crash-cell"
-            } else if (item.pattern == ShortMovePattern.RAPID_RISE) {
+            } else if (item.isRise()) {
                 styleClass += "short-move-up"
             } else {
                 styleClass += "short-move-down"
@@ -74,12 +77,13 @@ internal class ShortMoveMovementCell : TableCell<ShortMove, ShortMove>() {
         text = if (empty || item == null) null else ShortMovePresentation.movement(item)
         tooltip = if (empty || item == null) null else Tooltip(ShortMovePresentation.details(item))
         styleClass.removeAll("short-move-up", "short-move-down")
-        if (!empty && item != null) styleClass += when (item.pattern) {
-            ShortMovePattern.RAPID_CRASH -> "short-move-down"
-            ShortMovePattern.RAPID_RISE -> "short-move-up"
-            ShortMovePattern.TRADABLE_CORRIDOR -> "short-move-up"
-        }
+        if (!empty && item != null) styleClass += if (item.isRise()) "short-move-up" else "short-move-down"
     }
+}
+
+private fun ShortMove.isRise(): Boolean = when (reviewDecision) {
+    CurveDecision.PENDING -> curveCandidate?.direction == CurveDirection.RISE
+    else -> pattern != ShortMovePattern.RAPID_CRASH
 }
 
 internal class ShortMoveAgeCell : TableCell<ShortMove, ShortMove>() {

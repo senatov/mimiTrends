@@ -37,6 +37,7 @@ import org.senatov.mimitrends.model.CompanyProfile
 import org.senatov.mimitrends.model.TableAppearance
 import org.senatov.mimitrends.model.CurveDecision
 import org.senatov.mimitrends.model.CurveCandidate
+import org.senatov.mimitrends.model.CurveDirection
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -127,10 +128,6 @@ class ShortMovePanel(
                         text = null
                         graphic = if (empty || item == null || tableRow?.item == null) null else
                             ShortMoveCompanyGraphic.create(tableRow.item, item, watchlist)
-                        styleClass.remove("short-move-recurring-jump")
-                        if (!empty && tableRow?.item?.pattern == ShortMovePattern.RAPID_CRASH) {
-                            styleClass += "short-move-recurring-jump"
-                        }
                     }
                 }
             }
@@ -194,7 +191,7 @@ class ShortMovePanel(
         rows.addListener(ListChangeListener<ShortMove> { updateFilterPresentation() })
         table.placeholder = empty
         table.columnResizePolicy = TableView.UNCONSTRAINED_RESIZE_POLICY
-        table.fixedCellSize = 30.0
+        table.fixedCellSize = 36.0
         VBox.setVgrow(table, Priority.ALWAYS)
         table.styleClass += listOf("scanner-table", "short-move-table")
         table.setRowFactory {
@@ -238,9 +235,15 @@ class ShortMovePanel(
 
                 override fun updateItem(item: ShortMove?, empty: Boolean) {
                     super.updateItem(item, empty)
-                    styleClass.removeAll("user-watchlist-row", "rapid-crash-row", "rapid-rise-row", "curve-review-row")
+                    styleClass.removeAll(
+                        "user-watchlist-row", "rapid-crash-row", "rapid-rise-row",
+                        "curve-review-rise-row", "curve-review-drop-row"
+                    )
                     if (!empty && item != null && watchlist.contains(item.symbol)) styleClass += "user-watchlist-row"
-                    if (!empty && item?.reviewDecision == CurveDecision.PENDING) styleClass += "curve-review-row"
+                    if (!empty && item?.reviewDecision == CurveDecision.PENDING) {
+                        styleClass += if (item.curveCandidate?.direction == CurveDirection.RISE)
+                            "curve-review-rise-row" else "curve-review-drop-row"
+                    }
                     else if (!empty && item?.pattern == ShortMovePattern.RAPID_CRASH) styleClass += "rapid-crash-row"
                     else if (!empty && item?.pattern == ShortMovePattern.RAPID_RISE) styleClass += "rapid-rise-row"
                     tooltip = if (!empty && item?.reviewDecision == CurveDecision.PENDING) javafx.scene.control.Tooltip(

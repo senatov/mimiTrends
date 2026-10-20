@@ -495,6 +495,121 @@
     -fx-text-fill: #12263b;
 }
 
+.short-move-table.scanner-table {
+    -fx-font-family: "SF Pro Text", "Helvetica Neue", "System";
+    -fx-font-size: 12.5px;
+    -fx-background-color: #ffffff;
+    -fx-border-color: #d8e1e8;
+    -fx-border-radius: 8px;
+    -fx-background-radius: 8px;
+}
+
+.short-move-table.scanner-table .column-header-background,
+.short-move-table.scanner-table .column-header,
+.short-move-table.scanner-table .filler {
+    -fx-background-color: #f5f8fa;
+}
+
+.short-move-table.scanner-table .column-header {
+    -fx-border-color: transparent transparent #dce4eb transparent;
+    -fx-border-width: 0 0 1px 0;
+    -fx-padding: 4px 10px;
+}
+
+.short-move-table.scanner-table .column-header .label {
+    -fx-font-family: "SF Pro Text", "Helvetica Neue", "System";
+    -fx-font-size: 11px;
+    -fx-font-weight: 600;
+    -fx-text-fill: #53677a;
+}
+
+.short-move-table.scanner-table .table-cell {
+    -fx-font-size: 12.5px;
+    -fx-font-weight: 400;
+    -fx-border-color: transparent transparent #e6edf1 transparent;
+    -fx-border-width: 0 0 1px 0;
+    -fx-padding: 5px 10px;
+    -fx-effect: null;
+}
+
+.short-move-table.scanner-table .label {
+    -fx-font-family: "SF Pro Text", "Helvetica Neue", "System";
+    -fx-font-smoothing-type: gray;
+    -fx-effect: null;
+}
+
+.short-move-table.scanner-table .table-row-cell:even,
+.short-move-table.scanner-table .table-row-cell:odd {
+    -fx-background-color: #ffffff;
+}
+
+.short-move-table.scanner-table .table-row-cell.rapid-rise-row {
+    -fx-background-color: -mimi-rapid-rise;
+    -fx-border-color: transparent transparent transparent #46a778;
+    -fx-border-width: 0 0 0 3px;
+}
+
+.short-move-table.scanner-table .table-row-cell.curve-review-rise-row {
+    -fx-background-color: #edf8f1;
+    -fx-border-color: transparent transparent transparent #46a778;
+    -fx-border-width: 0 0 0 3px;
+}
+
+.short-move-table.scanner-table .table-row-cell.rapid-crash-row,
+.short-move-table.scanner-table .table-row-cell.curve-review-drop-row {
+    -fx-background-color: #fff1ef;
+    -fx-border-color: transparent transparent transparent #da786c;
+    -fx-border-width: 0 0 0 3px;
+}
+
+.short-move-table.scanner-table .table-row-cell:hover {
+    -fx-background-color: #e9f1f7;
+}
+
+.short-move-table.scanner-table .table-row-cell:selected,
+.short-move-table.scanner-table:focused .table-row-cell:selected {
+    -fx-background-color: #dceafa;
+    -fx-border-color: transparent transparent transparent #3982c5;
+    -fx-border-width: 0 0 0 3px;
+}
+
+.short-move-table .short-move-company-name {
+    -fx-font-weight: 400;
+    -fx-text-fill: #23384a;
+}
+
+.short-move-table .short-move-warning-mark {
+    -fx-font-size: 10px;
+    -fx-font-weight: 600;
+    -fx-text-fill: #ad4b42;
+    -fx-background-color: #fbe2dc;
+    -fx-background-radius: 8px;
+    -fx-alignment: center;
+    -fx-min-width: 16px;
+    -fx-min-height: 16px;
+}
+
+.short-move-table .short-move-event-label {
+    -fx-font-size: 10.5px;
+    -fx-font-weight: 600;
+    -fx-padding: 3px 7px;
+    -fx-background-radius: 5px;
+}
+
+.short-move-table .short-move-event-label.short-move-event-rise {
+    -fx-text-fill: #126a45;
+    -fx-background-color: #d7eee0;
+}
+
+.short-move-table .short-move-event-label.short-move-event-drop {
+    -fx-text-fill: #a83d3c;
+    -fx-background-color: #f9dbd8;
+}
+
+.short-move-table.scanner-table .table-cell.short-move-up { -fx-text-fill: #126a45; -fx-font-weight: 500; }
+.short-move-table.scanner-table .table-cell.short-move-down { -fx-text-fill: #a83d3c; -fx-font-weight: 500; }
+.short-move-table.scanner-table .table-row-cell.rapid-crash-row .table-cell.short-move-down { -fx-font-weight: 500; }
+
 .workspace-empty-state {
     -fx-padding: 24px;
     -fx-opacity: 0.92;

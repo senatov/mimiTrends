@@ -87,11 +87,14 @@ class TradegateMarketDataClient(
 
     fun loadQuote(isin: String): TradegateQuote {
         require(isin.matches(VALID_ISIN)) { "Invalid Tradegate ISIN" }
-        val response = send(
-            URI.create("$baseUrl/refresh.php?isin=$isin"),
-            "application/json, text/javascript, */*; q=0.01",
-            "$baseUrl/orderbuch_umsaetze.php?isin=$isin&lang=en"
-        )
+        val quoteUri = URI.create("$baseUrl/refresh.php?isin=$isin")
+        val referer = "$baseUrl/orderbuch_umsaetze.php?isin=$isin&lang=en"
+        fun requestQuote() = send(quoteUri, "application/json, text/javascript, */*; q=0.01", referer)
+        var response = requestQuote()
+        if (response.statusCode() == 400) {
+            Thread.sleep(400)
+            response = requestQuote()
+        }
         if (response.statusCode() != 200) {
             throw ProviderHttpException.from(response.statusCode(), response.headers(), "Tradegate quote for $isin")
         }

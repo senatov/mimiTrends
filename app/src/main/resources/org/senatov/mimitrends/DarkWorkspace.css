@@ -183,6 +183,46 @@
     -fx-text-fill: #f2f6fa;
 }
 
+.theme-dark .short-move-table.scanner-table {
+    -fx-background-color: #202b35;
+    -fx-border-color: #405060;
+}
+.theme-dark .short-move-table.scanner-table .column-header-background,
+.theme-dark .short-move-table.scanner-table .column-header,
+.theme-dark .short-move-table.scanner-table .filler { -fx-background-color: #263440; }
+.theme-dark .short-move-table.scanner-table .column-header .label { -fx-text-fill: #b9c9d7; }
+.theme-dark .short-move-table.scanner-table .table-cell {
+    -fx-border-color: transparent transparent #374653 transparent;
+    -fx-text-fill: #dce7ee;
+}
+.theme-dark .short-move-table.scanner-table .table-row-cell:even,
+.theme-dark .short-move-table.scanner-table .table-row-cell:odd { -fx-background-color: #202b35; }
+.theme-dark .short-move-table.scanner-table .table-row-cell.rapid-rise-row,
+.theme-dark .short-move-table.scanner-table .table-row-cell.curve-review-rise-row {
+    -fx-background-color: #203d35;
+    -fx-border-color: transparent transparent transparent #4fa982;
+}
+.theme-dark .short-move-table.scanner-table .table-row-cell.rapid-crash-row,
+.theme-dark .short-move-table.scanner-table .table-row-cell.curve-review-drop-row {
+    -fx-background-color: #472f34;
+    -fx-border-color: transparent transparent transparent #d68178;
+}
+.theme-dark .short-move-table.scanner-table .table-row-cell:hover { -fx-background-color: #30475b; }
+.theme-dark .short-move-table.scanner-table .table-row-cell:selected,
+.theme-dark .short-move-table.scanner-table:focused .table-row-cell:selected { -fx-background-color: #294b70; }
+.theme-dark .short-move-table .short-move-company-name { -fx-text-fill: #e0e9ef; }
+.theme-dark .short-move-table .short-move-warning-mark { -fx-text-fill: #ffd7d1; -fx-background-color: #70453f; }
+.theme-dark .short-move-table .short-move-event-label.short-move-event-rise {
+    -fx-text-fill: #b0e9cb;
+    -fx-background-color: #315b49;
+}
+.theme-dark .short-move-table .short-move-event-label.short-move-event-drop {
+    -fx-text-fill: #ffd2cc;
+    -fx-background-color: #714440;
+}
+.theme-dark .short-move-table.scanner-table .table-cell.short-move-up { -fx-text-fill: #88dcb0; }
+.theme-dark .short-move-table.scanner-table .table-cell.short-move-down { -fx-text-fill: #ffaaa3; }
+
 .theme-dark .workspace-empty-mark {
     -fx-border-color: #365978;
 }
