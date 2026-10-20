@@ -102,6 +102,7 @@ class YahooFinanceClient(
             log.debug(LogTag.API, "Yahoo primary host returned 404; retrying alternate host symbol={}", normalized)
             response = sendWithRetry(request(URI.create("${ProviderUrls.get(ProviderUrl.YAHOO_ALTERNATE)}$pathAndQuery")))
         }
+        if (response.statusCode() == 404) throw YahooSymbolNotFoundException(normalized)
         check(response.statusCode() == 200) { "Yahoo Finance HTTP ${response.statusCode()} for $normalized" }
         return parse(normalized, response.body())
     }
@@ -197,6 +198,13 @@ data class YahooResolvedEquity(val symbol: String, val name: String, val exchang
 
 internal class YahooEmptyOhlcvException(symbol: String) :
     RuntimeException("Yahoo Finance returned empty OHLCV data for $symbol") {
+    companion object {
+        private const val serialVersionUID: Long = 1L
+    }
+}
+
+class YahooSymbolNotFoundException(val symbol: String) :
+    RuntimeException("Yahoo Finance HTTP 404 for $symbol") {
     companion object {
         private const val serialVersionUID: Long = 1L
     }

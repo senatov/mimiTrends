@@ -75,6 +75,8 @@ class ScannerPanel(
     private var currency = DisplayCurrency.EUR
     private var convertPrice: (String, Double) -> Double = { _, value -> value }
     private val columnFactory = ScannerColumnFactory(table, loadProfile) { watchlist.contains(it) }
+
+    fun updateCompanyProfile(profile: CompanyProfile) = columnFactory.updateProfile(profile)
     private val search = TableSearchField.create(
         "Find signal…", ::applyFilter, ::openFirstMatch, table::requestFocus,
         watchlist.search, ::pinSuggestion

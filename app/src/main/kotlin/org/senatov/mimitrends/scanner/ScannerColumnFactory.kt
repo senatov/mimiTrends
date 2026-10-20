@@ -57,6 +57,8 @@ internal class ScannerColumnFactory(
         }
     }
 
+    fun updateProfile(profile: CompanyProfile) = profileUpdates.offer(profile.symbol, profile)
+
     fun companyName(result: ScanResult): String = companyNames[result.symbol] ?: result.symbol
 
     fun freshness(): TableColumn<ScanResult, Number> = TableColumn<ScanResult, Number>("Delay").apply {

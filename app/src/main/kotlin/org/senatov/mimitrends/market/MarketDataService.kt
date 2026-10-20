@@ -21,6 +21,7 @@ import org.senatov.mimitrends.model.ResearchFeatures
 import org.senatov.mimitrends.model.ScanResult
 import org.senatov.mimitrends.model.ScannerCriteria
 import org.senatov.mimitrends.providers.SourceActivity
+import org.senatov.mimitrends.marketdata.YahooSymbolNotFoundException
 import org.slf4j.LoggerFactory
 
 internal class MarketDataService(
@@ -30,6 +31,7 @@ internal class MarketDataService(
     private val sourceActivity: SourceActivity? = null
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
+    private val unavailableYahooSymbols = YahooSymbolCooldown()
 
     fun closedMarketSnapshot(symbols: List<String>, criteria: ScannerCriteria): List<ScanResult> = emptyList()
 
@@ -39,6 +41,9 @@ internal class MarketDataService(
         val latestLocal = cached.lastOrNull()?.minuteEpochSeconds
         val needsBootstrap = cached.isEmpty()
         val localFresh = !needsBootstrap && latestLocal != null && latestLocal >= now - criteria.scanIntervalSeconds
+        if (!localFresh && unavailableYahooSymbols.isCooling(symbol)) {
+            return ScanEvaluation(null, emptyList(), "YAHOO_SYMBOL_UNAVAILABLE", sourceStatus = "YAHOO")
+        }
         var source = MarketDataSource.SQLITE
         val bars = if (localFresh) cached else {
             source = MarketDataSource.YAHOO
@@ -54,6 +59,11 @@ internal class MarketDataService(
                 }
             } catch (error: Exception) {
                 sourceActivity?.record("Yahoo", 0, 0, failed = true)
+                if (error is YahooSymbolNotFoundException) {
+                    unavailableYahooSymbols.pause(symbol)
+                    log.info(LogTag.API, "Yahoo symbol unavailable symbol={} retryIn=15m", symbol)
+                    return ScanEvaluation(null, emptyList(), "YAHOO_SYMBOL_UNAVAILABLE", sourceStatus = "YAHOO")
+                }
                 throw error
             }
             series.bars.forEach(repository::upsertMinuteBar)

@@ -38,6 +38,8 @@ internal object ProviderInstrumentSelector {
         val candidate = normalizedCore(candidateName, symbol)
         if (expected.isBlank() || candidate.isBlank()) return false
         return expected == candidate ||
+                (candidate == symbol.uppercase() && expected.split(' ')
+                    .filter(String::isNotBlank).joinToString("") { it.take(1) } == candidate) ||
                 (expected.length >= MIN_CONTAINED_NAME_LENGTH && candidate.contains(expected)) ||
                 (candidate.length >= MIN_CONTAINED_NAME_LENGTH && expected.contains(candidate))
     }

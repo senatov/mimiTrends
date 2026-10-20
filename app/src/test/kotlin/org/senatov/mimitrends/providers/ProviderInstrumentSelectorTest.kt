@@ -40,6 +40,16 @@ class ProviderInstrumentSelectorTest {
     }
 
     @Test
+    fun `accepts exact ticker when provider uses the company initials`() {
+        assertEquals(
+            true, ProviderInstrumentSelector.matchesCompany(
+                "IBM", "International Business Machines", "IBM"
+            )
+        )
+        assertFalse(ProviderInstrumentSelector.matchesCompany("NVO", "Novo Nordisk A/S", "NVO"))
+    }
+
+    @Test
     fun `accepts Tradegate names containing html entities`() {
         assertEquals(
             true, ProviderInstrumentSelector.matchesCompany(

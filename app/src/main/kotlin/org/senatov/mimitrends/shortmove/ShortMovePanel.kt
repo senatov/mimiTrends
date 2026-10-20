@@ -65,6 +65,7 @@ class ShortMovePanel(
     }
     private val scanCaption = Label("Scan waiting").apply { styleClass += "short-move-caption" }
     private val companyNames = java.util.concurrent.ConcurrentHashMap<String, String>()
+    private val companyProfiles = java.util.concurrent.ConcurrentHashMap<String, CompanyProfile>()
     private val search = TableSearchField.create(
         "Find or track stock…", ::applyFilter, ::openFirstMatch, table::requestFocus,
         watchlist.search, ::pinSuggestion
@@ -96,7 +97,10 @@ class ShortMovePanel(
     private val autoFitter: TableColumnAutoFitter<ShortMove>
     private val profileUpdates by lazy {
         UiUpdateBatcher<String, CompanyProfile>({ task -> javafx.application.Platform.runLater(task) }) { profiles ->
-            profiles.forEach { companyNames[it.symbol] = CompanySearchTerm.normalizeDisplay(it.name) }
+            profiles.forEach {
+                companyProfiles[it.symbol] = it
+                companyNames[it.symbol] = CompanySearchTerm.normalizeDisplay(it.name)
+            }
             applyFilter()
             table.refresh()
             if (table.sortOrder.any { it.id == "company" }) table.sort()
@@ -127,7 +131,9 @@ class ShortMovePanel(
                         super.updateItem(item, empty)
                         text = null
                         graphic = if (empty || item == null || tableRow?.item == null) null else
-                            ShortMoveCompanyGraphic.create(tableRow.item, item, watchlist)
+                            ShortMoveCompanyGraphic.create(
+                                tableRow.item, item, companyProfiles[tableRow.item.symbol]?.logoBytes, watchlist
+                            )
                     }
                 }
             }
@@ -351,6 +357,8 @@ class ShortMovePanel(
             if (error == null && profile != null) profileUpdates.offer(move.symbol, profile)
         }
     }
+
+    fun updateCompanyProfile(profile: CompanyProfile) = profileUpdates.offer(profile.symbol, profile)
 
     private fun searchKeyword(move: ShortMove): String =
         CompanySearchTerm.from(companyNames[move.symbol] ?: move.symbol, move.symbol)

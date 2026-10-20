@@ -26,7 +26,8 @@ class CompanyProfileService(
     private val repository: MarketRepository,
     private val remote: FinnhubProfileClient?,
     private val logos: CompanyLogoClient,
-    private val maxAge: Duration = Duration.ofDays(7)
+    private val maxAge: Duration = Duration.ofDays(7),
+    private val onLogoLoaded: (CompanyProfile) -> Unit = {}
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
     private val requests = ConcurrentHashMap<String, CompletableFuture<CompanyProfile>>()
@@ -77,6 +78,7 @@ class CompanyProfileService(
                 )
                 repository.upsertCompanyProfile(enriched)
                 requests[symbol] = CompletableFuture.completedFuture(enriched)
+                onLogoLoaded(enriched)
             }
         }
         return profile

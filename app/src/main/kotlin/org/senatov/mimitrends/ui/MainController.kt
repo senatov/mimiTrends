@@ -75,7 +75,11 @@ class MainController(
     )
     private val userWatchlist: UserWatchlistController = UserWatchlistController(repository, dynamicUniverse, ::startScanner)
     private var profileService = CompanyProfileService(
-        repository, apiKey?.let(::FinnhubProfileClient), persistentCompanyLogoClient(repository)
+        repository, apiKey?.let(::FinnhubProfileClient), persistentCompanyLogoClient(repository),
+        onLogoLoaded = { profile ->
+            scannerPanel.updateCompanyProfile(profile)
+            shortMovePanel.updateCompanyProfile(profile)
+        }
     )
     private val stockPageOpener = StockPageOpener(
         repository, wallstreetOnlineClient, { scannerCriteria.stockSearchUrl }, openExternal,
@@ -402,7 +406,11 @@ class MainController(
         log.debug(LogTag.API, "restartFinnhubLive(keyPresent={})", key.isNotBlank())
         profileService = CompanyProfileService(
             repository, key.takeIf(String::isNotBlank)?.let(::FinnhubProfileClient),
-            persistentCompanyLogoClient(repository)
+            persistentCompanyLogoClient(repository),
+            onLogoLoaded = { profile ->
+                scannerPanel.updateCompanyProfile(profile)
+                shortMovePanel.updateCompanyProfile(profile)
+            }
         )
         finnhubClient = FinnhubLiveStarter.restart(
             key, finnhubClient, liveTicks,

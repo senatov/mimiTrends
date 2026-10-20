@@ -13,11 +13,21 @@ import org.senatov.mimitrends.shared.*
 
 import javafx.geometry.Pos
 import javafx.scene.control.Label
+import javafx.scene.image.Image
+import javafx.scene.image.ImageView
 import javafx.scene.layout.HBox
+import java.io.ByteArrayInputStream
 
 internal object ShortMoveCompanyGraphic {
-    fun create(move: ShortMove, name: String, watchlist: InstrumentWatchlistActions): HBox {
+    fun create(move: ShortMove, name: String, logoBytes: ByteArray?, watchlist: InstrumentWatchlistActions): HBox {
         val content = HBox(6.0).apply { alignment = Pos.CENTER_LEFT }
+        logoBytes?.let { bytes ->
+            val image = Image(ByteArrayInputStream(bytes))
+            if (!image.isError) content.children += ImageView(image).apply {
+                fitWidth = 18.0; fitHeight = 18.0; isPreserveRatio = true; isSmooth = true
+                styleClass += "company-logo"
+            }
+        }
         if (move.pattern == ShortMovePattern.RAPID_CRASH) {
             content.children += Label("!").apply { styleClass += "short-move-warning-mark" }
         }
