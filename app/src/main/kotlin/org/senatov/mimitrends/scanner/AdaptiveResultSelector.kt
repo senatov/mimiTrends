@@ -78,8 +78,12 @@ internal object AdaptiveResultSelector {
     }
 
     private fun attentionComparator(): Comparator<ScanResult> =
-        compareBy<ScanResult>(CandidateQualityGate::priorityTier)
+        compareByDescending<ScanResult> {
+            it.sessionTurnover >= LIQUID_MOVE_TURNOVER && it.signalSource in LIQUID_MOVE_SIGNALS
+        }
+            .thenBy(CandidateQualityGate::priorityTier)
             .thenByDescending(CandidateQualityGate::attentionScore)
+            .thenByDescending(ScanResult::sessionTurnover)
             .thenByDescending(ScanResult::anomalyScore)
 
     private const val MIN_RESULTS = 5
@@ -90,6 +94,8 @@ internal object AdaptiveResultSelector {
     private const val MARKET_PERCENTILE_FLOOR = 0.35
     private const val MAX_ADAPTIVE_RESULTS = 2
     private const val MIN_WATCH_ATTENTION_SCORE = 3.0
+    private const val LIQUID_MOVE_TURNOVER = 50_000_000.0
+    private val LIQUID_MOVE_SIGNALS = setOf("Rapid crash", "Rapid rise", "Sustained drop", "Sustained rise")
 }
 
 internal data class AdaptiveSelection(val results: List<ScanResult>, val adaptiveCount: Int)

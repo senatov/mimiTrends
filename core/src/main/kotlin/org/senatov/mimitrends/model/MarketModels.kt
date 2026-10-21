@@ -149,7 +149,10 @@ data class RapidMoveSettings(
     val risePercent: Double = 0.80,
     val riseWindowMinutes: Int = 5,
     val minimumPrice: Double = 5.0,
-    val minimumTurnover: Double = 250_000.0
+    val minimumTurnover: Double = 250_000.0,
+    val sustainedMovePercent: Double = 0.80,
+    val sustainedMoveWindowMinutes: Int = 180,
+    val sustainedMoveMinimumTurnover: Double = 50_000_000.0
 )
 
 data class ScannerCriteria(

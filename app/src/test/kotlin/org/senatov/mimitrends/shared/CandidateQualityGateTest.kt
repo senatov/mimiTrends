@@ -28,6 +28,22 @@ class CandidateQualityGateTest {
     }
 
     @Test
+    fun `publishes confirmed short moves without impulse anomaly fields`() {
+        val move = TestScanResult.create(signalSource = "Rapid crash").copy(
+            symbol = "MU", windowChangePercent = -1.70, priceAnomaly = Double.NaN,
+            rangeAnomaly = Double.NaN, volumeAnomaly = Double.NaN,
+            relativeVolume = Double.NaN, candleBodyRatio = 0.0,
+            sessionTurnover = 1_000_000_000.0
+        )
+
+        assertTrue(CandidateQualityGate.qualifies(move, adaptive = false))
+        assertTrue(CandidateQualityGate.qualifies(move.copy(signalSource = "Rapid rise", windowChangePercent = 1.1), adaptive = false))
+        assertTrue(CandidateQualityGate.qualifies(move.copy(signalSource = "Tradable corridor", anomalyScore = 75.0), adaptive = false))
+        assertFalse(CandidateQualityGate.qualifies(move.copy(signalAgeMinutes = 3), adaptive = false))
+        assertFalse(CandidateQualityGate.qualifies(move.copy(sessionTurnover = 100_000.0), adaptive = false))
+    }
+
+    @Test
     fun `rejects an impulse without volume unless price evidence is exceptional`() {
         val weak = TestScanResult.create().copy(
             symbol = "TEST.DE", windowChangePercent = 0.60, priceAnomaly = 4.0,

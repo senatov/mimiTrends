@@ -34,7 +34,8 @@ internal data class ShortMove(
     val corridorUpper: Double? = null,
     val latestPrice: Double? = null,
     val curveCandidate: CurveCandidate? = null,
-    val reviewDecision: CurveDecision? = null
+    val reviewDecision: CurveDecision? = null,
+    val sessionTurnover: Double = 0.0
 )
 
 internal fun ShortMove.isActionableOpportunity(): Boolean =
@@ -43,6 +44,8 @@ internal fun ShortMove.isActionableOpportunity(): Boolean =
 internal enum class ShortMovePattern {
     RAPID_CRASH,
     RAPID_RISE,
+    SUSTAINED_DROP,
+    SUSTAINED_RISE,
     TRADABLE_CORRIDOR
 }
 
@@ -55,9 +58,14 @@ internal object ShortMoveDetector {
         limit: Int = 10,
         settings: RapidMoveSettings = RapidMoveSettings()
     ): List<ShortMove> = barsBySymbol.mapNotNull { (symbol, bars) ->
-        detectRapidCrash(symbol, bars, nowEpochSeconds, settings)
+        val move = detectRapidCrash(symbol, bars, nowEpochSeconds, settings)
             ?: detectRapidRise(symbol, bars, nowEpochSeconds, settings)
+            ?: detectSustainedMove(symbol, bars, nowEpochSeconds, settings)
             ?: TradableCorridorDetector.detect(symbol, bars, nowEpochSeconds)
+        move?.copy(sessionTurnover = bars.asSequence()
+            .filter { it.minuteEpochSeconds in (nowEpochSeconds - 3 * 3_600L)..nowEpochSeconds &&
+                    it.volumeStatus == VolumeStatus.REPORTED && it.volume > 0.0 }
+            .sumOf { it.close * it.volume })
     }.sortedByDescending { rankingScore(it, nowEpochSeconds) }.take(limit)
 
     private fun detectRapidCrash(
@@ -179,6 +187,44 @@ internal object ShortMoveDetector {
     private fun percent(from: Double, to: Double): Double =
         if (from > 0.0 && to > 0.0) (to / from - 1.0) * 100.0 else Double.NaN
 
+    private fun detectSustainedMove(
+        symbol: String,
+        bars: List<MinuteBar>,
+        nowEpochSeconds: Long,
+        settings: RapidMoveSettings
+    ): ShortMove? {
+        val recent = bars.asSequence()
+            .filter { it.minuteEpochSeconds in
+                    (nowEpochSeconds - settings.sustainedMoveWindowMinutes * 60L)..nowEpochSeconds }
+            .sortedBy(MinuteBar::minuteEpochSeconds).toList()
+        val end = recent.lastOrNull() ?: return null
+        if (end.minuteEpochSeconds < nowEpochSeconds - MAX_AGE_MINUTES * 60L ||
+            end.close < settings.minimumPrice || recent.size < MIN_SUSTAINED_BARS) return null
+        val reported = recent.filter { it.volumeStatus == VolumeStatus.REPORTED && it.volume > 0.0 }
+        if (reported.size < MIN_SUSTAINED_REPORTED_BARS ||
+            reported.sumOf { it.close * it.volume } < settings.sustainedMoveMinimumTurnover) return null
+        val anchors = recent.dropLast(MIN_SUSTAINED_BARS - 1).filter {
+            end.minuteEpochSeconds - it.minuteEpochSeconds >= MIN_SUSTAINED_SPAN_MINUTES * 60L
+        }
+        val low = anchors.minByOrNull(MinuteBar::close) ?: return null
+        val high = anchors.maxByOrNull(MinuteBar::close) ?: return null
+        val rise = percent(low.close, end.close)
+        val drop = percent(high.close, end.close)
+        val candidate = if (rise >= -drop) low to ShortMovePattern.SUSTAINED_RISE
+            else high to ShortMovePattern.SUSTAINED_DROP
+        val start = candidate.first
+        val change = if (candidate.second == ShortMovePattern.SUSTAINED_RISE) rise else drop
+        if (kotlin.math.abs(change) < settings.sustainedMovePercent) return null
+        val eventBars = recent.filter { it.minuteEpochSeconds >= start.minuteEpochSeconds }
+        if (eventBars.size < MIN_SUSTAINED_BARS || eventBars.zipWithNext().any { (first, second) ->
+                second.minuteEpochSeconds - first.minuteEpochSeconds > MAX_SUSTAINED_GAP_SECONDS
+            }) return null
+        return ShortMove(
+            symbol, change, start.close, end.close, start.minuteEpochSeconds,
+            end.minuteEpochSeconds, eventBars.size, candidate.second, latestPrice = end.close
+        )
+    }
+
     private fun hasAcceleratingDrop(window: List<MinuteBar>, start: MinuteBar, end: MinuteBar, rapidWindowMinutes: Long): Boolean {
         val recentStart = window.lastOrNull {
             it.minuteEpochSeconds in
@@ -218,6 +264,7 @@ internal object ShortMoveDetector {
         val patternWeight = when (move.pattern) {
             ShortMovePattern.RAPID_CRASH -> RAPID_CRASH_WEIGHT
             ShortMovePattern.RAPID_RISE -> RAPID_CRASH_WEIGHT
+            ShortMovePattern.SUSTAINED_DROP, ShortMovePattern.SUSTAINED_RISE -> 2.5
             ShortMovePattern.TRADABLE_CORRIDOR -> 2.25
         }
         return kotlin.math.abs(move.changePercent) * freshness * patternWeight
@@ -237,4 +284,8 @@ internal object ShortMoveDetector {
     private const val FRESHNESS_DECAY_MINUTES = 15.0
     private const val MIN_FRESHNESS_WEIGHT = 0.35
     private const val RISE_EVENT_LOOKBACK_MINUTES = 15L
+    private const val MIN_SUSTAINED_BARS = 20
+    private const val MIN_SUSTAINED_REPORTED_BARS = 15
+    private const val MIN_SUSTAINED_SPAN_MINUTES = 20L
+    private const val MAX_SUSTAINED_GAP_SECONDS = 5 * 60L
 }

@@ -19,6 +19,7 @@ internal object CandidateQualityGate {
         if (!isCurrent(result) || result.signalSource.contains("watch") || isExtended(result) ||
             !hasExecutionQuality(result)
         ) return false
+        if (isConfirmedShortMove(result)) return true
         if (adaptive && !adaptiveQuality(result)) return false
         return structuralQuality(result, watch = false)
     }
@@ -141,6 +142,13 @@ internal object CandidateQualityGate {
                 result.signalSource.startsWith("Trend") || result.signalSource.startsWith("Early recovery")
 
     private fun isExtended(result: ScanResult): Boolean = result.signalSource.contains("wait for pullback")
+
+    private fun isConfirmedShortMove(result: ScanResult): Boolean = when (result.signalSource) {
+        "Rapid crash", "Rapid rise", "Sustained drop", "Sustained rise" -> result.windowChangePercent.isFinite() &&
+                result.windowChangePercent != 0.0
+        "Tradable corridor" -> result.anomalyScore >= 0.0 && result.windowChangePercent.isFinite()
+        else -> false
+    }
 
     internal fun hasExecutionQuality(result: ScanResult): Boolean {
         if (result.sessionTurnover.isFinite() && result.sessionTurnover < MIN_SESSION_TURNOVER) return false

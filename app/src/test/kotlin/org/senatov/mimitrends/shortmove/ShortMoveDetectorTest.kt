@@ -30,6 +30,31 @@ class ShortMoveDetectorTest {
     }
 
     @Test
+    fun `detects a gradual move in a highly traded share`() {
+        val now = 80_000L
+        val bars = (0..60).map { minute ->
+            bar("AAPL", now - (60 - minute) * 60L, 100.0 + minute * 0.02)
+                .copy(volume = 20_000.0)
+        }
+
+        val result = ShortMoveDetector.rank(mapOf("AAPL" to bars), now).single()
+
+        assertEquals(ShortMovePattern.SUSTAINED_RISE, result.pattern)
+        assertEquals(1.2, result.changePercent, 1e-9)
+    }
+
+    @Test
+    fun `does not promote the same gradual move without substantial turnover`() {
+        val now = 80_000L
+        val bars = (0..60).map { minute ->
+            bar("SMALL", now - (60 - minute) * 60L, 100.0 + minute * 0.02)
+                .copy(volume = 100.0)
+        }
+
+        assertTrue(ShortMoveDetector.rank(mapOf("SMALL" to bars), now).isEmpty())
+    }
+
+    @Test
     fun `detects a brief rise above the previous high after a pullback`() {
         val now = 13_000L
         val bars = prices("RISE", now, 100.0, 100.1, 101.8, 100.4)
@@ -262,6 +287,20 @@ class ShortMoveDetectorTest {
 
         val visible = ShortMoveEventRetainer().merge(corridors + rise, now)
         assertTrue(visible.any { it.symbol == "RISE" })
+    }
+
+    @Test
+    fun `retains a detected move briefly after it no longer qualifies`() {
+        val now = 100_000L
+        val rise = ShortMove(
+            "AAPL", 1.2, 100.0, 101.2, now - 3_600L, now, 60,
+            ShortMovePattern.SUSTAINED_RISE, sessionTurnover = 500_000_000.0
+        )
+        val retainer = ShortMoveEventRetainer()
+
+        retainer.merge(listOf(rise), now)
+        assertTrue(retainer.merge(emptyList(), now + 600L).single().isRetained)
+        assertTrue(retainer.merge(emptyList(), now + 1_201L).isEmpty())
     }
 
     @Test

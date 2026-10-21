@@ -18,6 +18,7 @@ internal fun shortMoveAlertPriority(move: ShortMove): Int =
     if (move.reviewDecision == CurveDecision.PENDING) 2 else when (move.pattern) {
     ShortMovePattern.RAPID_CRASH -> 0
     ShortMovePattern.RAPID_RISE -> 1
+    ShortMovePattern.SUSTAINED_DROP, ShortMovePattern.SUSTAINED_RISE -> 2
         ShortMovePattern.TRADABLE_CORRIDOR -> 3
 }
 
@@ -26,6 +27,8 @@ internal fun shortMoveDirectionLabel(move: ShortMove): String = if (move.reviewD
 } else when (move.pattern) {
     ShortMovePattern.RAPID_CRASH -> retainedLabel(move, "‼ RAPID CRASH")
     ShortMovePattern.RAPID_RISE -> retainedLabel(move, "↑ RAPID RISE")
+    ShortMovePattern.SUSTAINED_DROP -> retainedLabel(move, "↓ SUSTAINED DROP")
+    ShortMovePattern.SUSTAINED_RISE -> retainedLabel(move, "↑ SUSTAINED RISE")
     ShortMovePattern.TRADABLE_CORRIDOR -> retainedLabel(move, "▰ CORRIDOR")
 }
 
@@ -90,7 +93,7 @@ internal class ShortMoveMovementCell : TableCell<ShortMove, ShortMove>() {
 
 private fun ShortMove.isRise(): Boolean = when (reviewDecision) {
     CurveDecision.PENDING -> curveCandidate?.direction == CurveDirection.RISE
-    else -> pattern != ShortMovePattern.RAPID_CRASH
+    else -> pattern != ShortMovePattern.RAPID_CRASH && pattern != ShortMovePattern.SUSTAINED_DROP
 }
 
 internal class ShortMoveAgeCell : TableCell<ShortMove, ShortMove>() {

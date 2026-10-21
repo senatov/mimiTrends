@@ -80,7 +80,20 @@ class ScannerSettingsService(private val path: Path = Path.of(System.getProperty
                     risePercent = p.doubleIn("rapid.risePercent", rapidDefaults.risePercent, 0.05, 20.0),
                     riseWindowMinutes = p.intIn("rapid.riseWindowMinutes", rapidDefaults.riseWindowMinutes, 1, 15),
                     minimumPrice = p.doubleIn("rapid.minimumPrice", rapidDefaults.minimumPrice, 0.0, 10_000.0),
-                    minimumTurnover = p.doubleIn("rapid.minimumTurnover", rapidDefaults.minimumTurnover, 0.0, 10_000_000.0)
+                    minimumTurnover = p.doubleIn("rapid.minimumTurnover", rapidDefaults.minimumTurnover, 0.0, 10_000_000.0),
+                    sustainedMovePercent = p.doubleIn("rapid.sustainedMovePercent", rapidDefaults.sustainedMovePercent, 0.1, 20.0),
+                    sustainedMoveWindowMinutes = p.intIn(
+                        "rapid.sustainedMoveWindowMinutes",
+                        rapidDefaults.sustainedMoveWindowMinutes,
+                        30,
+                        360
+                    ),
+                    sustainedMoveMinimumTurnover = p.doubleIn(
+                        "rapid.sustainedMoveMinimumTurnover",
+                        rapidDefaults.sustainedMoveMinimumTurnover,
+                        0.0,
+                        10_000_000_000.0
+                    )
                 ),
                 symbols = normalizeSymbols(p.getProperty("symbols", ScannerCriteria().symbols.joinToString(","))).let { stored ->
                     // Extend prior standard installation profiles with the broader liquid
@@ -144,6 +157,9 @@ class ScannerSettingsService(private val path: Path = Path.of(System.getProperty
             setProperty("rapid.riseWindowMinutes", value.rapidMoves.riseWindowMinutes.toString())
             setProperty("rapid.minimumPrice", value.rapidMoves.minimumPrice.toString())
             setProperty("rapid.minimumTurnover", value.rapidMoves.minimumTurnover.toString())
+            setProperty("rapid.sustainedMovePercent", value.rapidMoves.sustainedMovePercent.toString())
+            setProperty("rapid.sustainedMoveWindowMinutes", value.rapidMoves.sustainedMoveWindowMinutes.toString())
+            setProperty("rapid.sustainedMoveMinimumTurnover", value.rapidMoves.sustainedMoveMinimumTurnover.toString())
             setProperty("symbols", normalizeSymbols(value.symbols.joinToString(",")).joinToString(","))
         }
         Files.newOutputStream(path).use { p.store(it, "MiMiTrends scanner settings") }

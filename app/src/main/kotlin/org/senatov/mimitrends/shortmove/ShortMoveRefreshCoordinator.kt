@@ -107,7 +107,9 @@ internal class ShortMoveEventRetainer {
             .filterValues { retained -> nowEpochSeconds - retained.lastSeenEpochSeconds > RETENTION_SECONDS }
             .keys
         expiredSymbols.forEach(retainedBySymbol::remove)
-        val active = current.asSequence().filter(ShortMove::isActionableOpportunity).toList()
+        val active = current.asSequence().filter { move ->
+            move.pattern != ShortMovePattern.TRADABLE_CORRIDOR || move.isActionableOpportunity()
+        }.toList()
         active.forEach { candidate ->
             retainedBySymbol[candidate.symbol] = RetainedMove(candidate.copy(isRetained = false), nowEpochSeconds)
         }
@@ -118,10 +120,7 @@ internal class ShortMoveEventRetainer {
         }
         return (retained + current.filter { it.symbol !in frozenSymbols })
             .distinctBy(ShortMove::symbol)
-            .sortedWith(
-                compareBy<ShortMove>(::shortMoveAlertPriority)
-                    .thenByDescending(ShortMove::opportunityScore)
-            )
+            .sortedWith(ShortMoveSort.relevance)
             .take(MAX_RETAINED_ROWS)
     }
 

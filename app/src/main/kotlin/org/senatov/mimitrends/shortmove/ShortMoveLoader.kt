@@ -40,7 +40,7 @@ internal class ShortMoveLoader(
         val confirmed = ShortMoveDetector.rank(bars, nowEpochSeconds, Int.MAX_VALUE, settings()).associateBy(ShortMove::symbol)
         val ranked = bars.mapNotNull { (symbol, history) ->
             val existing = confirmed[symbol]
-            if (existing?.pattern == ShortMovePattern.RAPID_CRASH || existing?.pattern == ShortMovePattern.RAPID_RISE) {
+            if (existing?.pattern != null && existing.pattern != ShortMovePattern.TRADABLE_CORRIDOR) {
                 return@mapNotNull existing
             }
             val candidate = CurveCandidateDetector.detect(symbol, history, nowEpochSeconds)
@@ -59,9 +59,22 @@ internal class ShortMoveLoader(
                 curveCandidate = candidate,
                 reviewDecision = if (assessment == CurveAssessment.SHOW && decision == CurveDecision.PENDING) {
                     CurveDecision.MODEL_APPROVED
-                } else decision
+                } else decision,
+                sessionTurnover = history.asSequence().filter {
+                    it.minuteEpochSeconds >= nowEpochSeconds - 3 * 3_600L &&
+                            it.volumeStatus == org.senatov.mimitrends.model.VolumeStatus.REPORTED && it.volume > 0.0
+                }.sumOf { it.close * it.volume }
             )
-        }.sortedWith(compareBy<ShortMove>(::shortMoveAlertPriority).thenByDescending { kotlin.math.abs(it.changePercent) })
+        }.filter { move ->
+            val quote = repository.loadLatestProviderQuote(move.symbol, (nowEpochSeconds - 120L) * 1_000L)
+                ?: return@filter true
+            val marketPrice = bars[move.symbol]?.lastOrNull()?.close ?: return@filter true
+            runCatching {
+                ShortMoveQuoteQuality.acceptable(quote, marketPrice) { midpoint ->
+                    exchangeRates.convertCurrency(midpoint, quote.currency, org.senatov.mimitrends.model.DisplayCurrency.EUR)
+                }
+            }.getOrDefault(true)
+        }.sortedWith(ShortMoveSort.relevance)
         val companyName = { symbol: String -> repository.loadCompanyProfile(symbol)?.name }
         return ShortMoveCompanyRanking.distinct(ranked, MAX_RADAR_RESULTS, companyName)
     }

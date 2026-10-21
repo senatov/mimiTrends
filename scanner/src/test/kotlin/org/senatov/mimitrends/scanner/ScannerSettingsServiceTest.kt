@@ -29,7 +29,11 @@ class ScannerSettingsServiceTest {
         val service = ScannerSettingsService(path)
         service.save(
             ScannerCriteria(
-                rapidMoves = RapidMoveSettings(crashPercent = 0.45, risePercent = 1.4, riseWindowMinutes = 3),
+                rapidMoves = RapidMoveSettings(
+                    crashPercent = 0.45, risePercent = 1.4, riseWindowMinutes = 3,
+                    sustainedMovePercent = 1.1, sustainedMoveWindowMinutes = 120,
+                    sustainedMoveMinimumTurnover = 80_000_000.0
+                ),
                 tableAppearance = TableAppearance(rapidRiseColor = "#BEEFD0")
             )
         )
@@ -38,6 +42,9 @@ class ScannerSettingsServiceTest {
         assertEquals(0.45, restored.rapidMoves.crashPercent)
         assertEquals(1.4, restored.rapidMoves.risePercent)
         assertEquals(3, restored.rapidMoves.riseWindowMinutes)
+        assertEquals(1.1, restored.rapidMoves.sustainedMovePercent)
+        assertEquals(120, restored.rapidMoves.sustainedMoveWindowMinutes)
+        assertEquals(80_000_000.0, restored.rapidMoves.sustainedMoveMinimumTurnover)
         assertEquals("#BEEFD0", restored.tableAppearance.rapidRiseColor)
     }
 

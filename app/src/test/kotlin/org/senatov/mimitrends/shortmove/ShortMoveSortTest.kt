@@ -22,4 +22,14 @@ class ShortMoveSortTest {
         assertEquals(listOf("CRASH", "CORRIDOR"), moves.sortedWith(ShortMoveSort.direction).map(ShortMove::symbol))
     }
 
+    @Test
+    fun `liquid sustained move sorts ahead of a larger thin move`() {
+        val liquid = shortMove("AAPL", ShortMovePattern.SUSTAINED_RISE, change = 1.2)
+            .copy(sessionTurnover = 500_000_000.0)
+        val thin = shortMove("SMALL", ShortMovePattern.RAPID_RISE, change = 5.0)
+            .copy(sessionTurnover = 500_000.0)
+
+        assertEquals(listOf("AAPL", "SMALL"), listOf(thin, liquid).sortedWith(ShortMoveSort.relevance).map(ShortMove::symbol))
+    }
+
 }

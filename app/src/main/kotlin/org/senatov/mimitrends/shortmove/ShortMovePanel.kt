@@ -83,8 +83,8 @@ class ShortMovePanel(
         isManaged = false
     }
     private val empty = WorkspaceEmptyState.create(
-        "No live corridor or rapid-move alerts",
-        "Stable two-hour corridors and confirmed rapid price moves will appear here."
+        "No live movement alerts",
+        "Confirmed rapid moves, liquid sustained moves, and stable corridors will appear here."
     )
     private val noMatches = WorkspaceEmptyState.create(
         "No matching movements",
@@ -177,7 +177,7 @@ class ShortMovePanel(
         table.columns.setAll(company, direction, movement, price, age)
         listOf(
             direction to "Confirmed live event type. RECENT means it is retained but no longer confirmed.",
-            movement to "Price change and duration for a rapid move, or corridor width and remaining room.",
+            movement to "Price change and duration for a move, or corridor width and remaining room.",
             price to "Latest observed price used by the focused radar.",
             age to "Time since the latest confirmed event observation."
         ).forEach { (column, description) -> TableColumnHelp.install(column, description) }
@@ -269,9 +269,7 @@ class ShortMovePanel(
         val selected = table.selectionModel.selectedItem?.identity()
         val current = moves.asSequence().filter { move ->
             move.isActionableOpportunity() || move.pattern != ShortMovePattern.TRADABLE_CORRIDOR
-        }.sortedWith(
-            compareBy<ShortMove>(::shortMoveAlertPriority).thenByDescending(ShortMove::opportunityScore)
-        ).take(MAX_VISIBLE_MOVES).toList()
+        }.sortedWith(ShortMoveSort.relevance).take(MAX_VISIBLE_MOVES).toList()
         val displayed = eventRetainer.merge(current, nowEpochSeconds).filter { move ->
             move.isActionableOpportunity() || move.pattern != ShortMovePattern.TRADABLE_CORRIDOR
         }

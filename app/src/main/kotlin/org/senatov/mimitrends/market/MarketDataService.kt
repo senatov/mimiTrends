@@ -174,6 +174,7 @@ internal class MarketDataService(
         val score = when (pattern) {
             ShortMovePattern.RAPID_CRASH -> 100.0
             ShortMovePattern.RAPID_RISE -> 100.0
+            ShortMovePattern.SUSTAINED_DROP, ShortMovePattern.SUSTAINED_RISE -> 90.0
             ShortMovePattern.TRADABLE_CORRIDOR -> opportunityScore.coerceAtLeast(0).toDouble()
         }
         return ScanResult(
@@ -193,6 +194,8 @@ internal class MarketDataService(
             signalSource = when (pattern) {
                 ShortMovePattern.RAPID_CRASH -> "Rapid crash"
                 ShortMovePattern.RAPID_RISE -> "Rapid rise"
+                ShortMovePattern.SUSTAINED_DROP -> "Sustained drop"
+                ShortMovePattern.SUSTAINED_RISE -> "Sustained rise"
                 ShortMovePattern.TRADABLE_CORRIDOR -> "Tradable corridor"
             },
             updatedAtMillis = endedAtEpochSeconds * 1_000L,

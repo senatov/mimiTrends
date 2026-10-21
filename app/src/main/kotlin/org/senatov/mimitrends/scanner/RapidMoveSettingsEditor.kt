@@ -15,6 +15,9 @@ internal class RapidMoveSettingsEditor(current: RapidMoveSettings) {
     private val riseWindow = Spinner<Int>(1, 15, current.riseWindowMinutes, 1).apply { isEditable = true }
     private val movePrice = Spinner<Double>(0.0, 10_000.0, current.minimumPrice, 0.5).apply { isEditable = true }
     private val moveTurnover = Spinner<Double>(0.0, 10_000_000.0, current.minimumTurnover, 25_000.0).apply { isEditable = true }
+    private val sustainedMovePercent = Spinner<Double>(0.1, 20.0, current.sustainedMovePercent, 0.1).apply { isEditable = true }
+    private val sustainedMoveWindow = Spinner<Int>(30, 360, current.sustainedMoveWindowMinutes, 15).apply { isEditable = true }
+    private val sustainedMoveTurnover = Spinner<Double>(0.0, 10_000_000_000.0, current.sustainedMoveMinimumTurnover, 5_000_000.0).apply { isEditable = true }
 
     val content = VBox(
         14.0,
@@ -33,6 +36,12 @@ internal class RapidMoveSettingsEditor(current: RapidMoveSettings) {
                 risePercent
             ),
             SettingsNavigation.row("Rise window (min)", "Maximum duration of the upward move.", riseWindow)
+        ),
+        SettingsNavigation.section(
+            "Liquid sustained moves",
+            SettingsNavigation.row("Move (%)", "Close-confirmed rise or decline over the longer window.", sustainedMovePercent),
+            SettingsNavigation.row("Window (min)", "Maximum duration of the sustained movement.", sustainedMoveWindow),
+            SettingsNavigation.row("Window turnover", "Minimum reported price × volume in the window; filters out thinly traded shares.", sustainedMoveTurnover)
         ),
         SettingsNavigation.section(
             "Shared quality checks",
@@ -54,10 +63,14 @@ internal class RapidMoveSettingsEditor(current: RapidMoveSettings) {
         riseWindow.valueFactory.value = defaults.riseWindowMinutes
         movePrice.valueFactory.value = defaults.minimumPrice
         moveTurnover.valueFactory.value = defaults.minimumTurnover
+        sustainedMovePercent.valueFactory.value = defaults.sustainedMovePercent
+        sustainedMoveWindow.valueFactory.value = defaults.sustainedMoveWindowMinutes
+        sustainedMoveTurnover.valueFactory.value = defaults.sustainedMoveMinimumTurnover
     }
 
     fun value(): RapidMoveSettings = RapidMoveSettings(
         crashPercent.value, crashWindow.value, sustainedCrashPercent.value, sustainedCrashWindow.value,
-        risePercent.value, riseWindow.value, movePrice.value, moveTurnover.value
+        risePercent.value, riseWindow.value, movePrice.value, moveTurnover.value,
+        sustainedMovePercent.value, sustainedMoveWindow.value, sustainedMoveTurnover.value
     )
 }

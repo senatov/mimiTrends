@@ -14,6 +14,12 @@ import org.senatov.mimitrends.services.*
 import org.senatov.mimitrends.shared.*
 
 internal object ShortMoveSort {
+    val relevance: Comparator<ShortMove> = compareByDescending<ShortMove> {
+        it.sessionTurnover >= 50_000_000.0
+    }.thenByDescending { kotlin.math.abs(it.changePercent) }
+        .thenByDescending(ShortMove::sessionTurnover)
+        .thenBy(::shortMoveAlertPriority)
+
     val direction = Comparator<ShortMove> { first, second ->
         directionPosition(first).compareTo(directionPosition(second))
     }
@@ -25,6 +31,7 @@ internal object ShortMoveSort {
         if (move.reviewDecision == CurveDecision.PENDING) 2 else when (move.pattern) {
         ShortMovePattern.RAPID_CRASH -> 0
         ShortMovePattern.RAPID_RISE -> 1
+        ShortMovePattern.SUSTAINED_DROP, ShortMovePattern.SUSTAINED_RISE -> 2
             ShortMovePattern.TRADABLE_CORRIDOR -> 3
     }
 }

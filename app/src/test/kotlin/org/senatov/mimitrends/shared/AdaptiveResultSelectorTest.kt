@@ -41,6 +41,26 @@ class AdaptiveResultSelectorTest {
     }
 
     @Test
+    fun `puts a liquid confirmed move ahead of thin moves`() {
+        val liquid = result("AAPL", 90.0, "Sustained rise").copy(
+            windowChangePercent = 1.2, sessionTurnover = 500_000_000.0,
+            priceAnomaly = Double.NaN, volumeAnomaly = Double.NaN,
+            rangeAnomaly = Double.NaN, relativeVolume = Double.NaN,
+            candleBodyRatio = 0.0
+        )
+        val thin = result("SMALL", 100.0, "Rapid rise").copy(
+            windowChangePercent = 4.0, sessionTurnover = 2_000_000.0,
+            priceAnomaly = Double.NaN, volumeAnomaly = Double.NaN,
+            rangeAnomaly = Double.NaN, relativeVolume = Double.NaN,
+            candleBodyRatio = 0.0
+        )
+
+        val selection = AdaptiveResultSelector.select(listOf(thin, liquid), emptyList(), 7, 15)
+
+        assertEquals(listOf("AAPL", "SMALL"), selection.results.map { it.symbol })
+    }
+
+    @Test
     fun `does not fill the target with weak adaptive candidates`() {
         val strict = listOf(result("STRICT", 8.0))
         val weak = (1..12).map { result("W$it", 1.0 + it / 100.0, "Impulse ↑ · relaxed") }
