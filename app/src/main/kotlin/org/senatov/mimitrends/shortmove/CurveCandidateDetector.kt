@@ -46,6 +46,12 @@ internal object CurveCandidateDetector {
         if (direction == CurveDirection.RISE && change < MIN_RISE_PERCENT ||
             direction == CurveDirection.DROP && change > -MIN_DROP_PERCENT
         ) return null
+        val latestClose = bars.last().close
+        if (latestClose <= 0.0) return null
+        val currentChange = (latestClose / start.close - 1.0) * 100.0
+        if (direction == CurveDirection.RISE && currentChange < MIN_RISE_PERCENT ||
+            direction == CurveDirection.DROP && currentChange > -MIN_DROP_PERCENT
+        ) return null
         val returns = segment.zipWithNext().map { (a, b) ->
             if (a.close > 0.0 && b.close > 0.0) ln(b.close / a.close) * 100.0 else 0.0
         }

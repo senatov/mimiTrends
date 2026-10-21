@@ -36,6 +36,24 @@ class CurveCandidateDetectorTest {
     }
 
     @Test
+    fun `does not report an earlier drop after the latest price recovers`() {
+        val now = 23_000L
+        val bars = prices("IFX.DE", now, 53.85, 53.87, 53.78, 53.69, 53.74, 53.81, 53.85)
+
+        assertNull(CurveCandidateDetector.detect("IFX.DE", bars, now))
+    }
+
+    @Test
+    fun `keeps a drop while the latest close still confirms it`() {
+        val now = 24_000L
+        val bars = prices("DROP", now, 100.0, 99.9, 99.7, 99.8, 99.75)
+
+        val candidate = assertNotNull(CurveCandidateDetector.detect("DROP", bars, now))
+
+        assertEquals(CurveDirection.DROP, candidate.direction)
+    }
+
+    @Test
     fun `rejects stale or gapped curves`() {
         val now = 22_000L
         val stale = prices("STALE", now - 11 * 60L, 100.0, 99.8, 99.6)

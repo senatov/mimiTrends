@@ -44,7 +44,11 @@ internal class ShortMoveDirectionCell(
             prefWidthProperty().bind(this@ShortMoveDirectionCell.widthProperty().subtract(12.0))
             children += Label(label).apply {
                 styleClass += "short-move-event-label"
-                styleClass += if (item.isRise()) "short-move-event-rise" else "short-move-event-drop"
+                styleClass += when {
+                    item.pattern == ShortMovePattern.TRADABLE_CORRIDOR -> "short-move-event-corridor"
+                    item.isRise() -> "short-move-event-rise"
+                    else -> "short-move-event-drop"
+                }
             }
             children += Region().apply { HBox.setHgrow(this, Priority.ALWAYS) }
             val button = Button("Rumors").apply {
@@ -57,9 +61,12 @@ internal class ShortMoveDirectionCell(
         }
         styleClass.removeAll(
             "short-move-up", "short-move-down", "short-move-struggle",
-            "rapid-crash-cell"
+            "rapid-crash-cell", "short-move-event-rise-cell", "short-move-event-drop-cell"
         )
         if (!empty && item != null && label != null) {
+            if (item.pattern != ShortMovePattern.TRADABLE_CORRIDOR) {
+                styleClass += if (item.isRise()) "short-move-event-rise-cell" else "short-move-event-drop-cell"
+            }
             if (!item.isRise() && item.pattern == ShortMovePattern.RAPID_CRASH) {
                 styleClass += "rapid-crash-cell"
             } else if (item.isRise()) {
