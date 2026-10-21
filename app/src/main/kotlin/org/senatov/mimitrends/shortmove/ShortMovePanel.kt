@@ -37,7 +37,6 @@ import org.senatov.mimitrends.model.CompanyProfile
 import org.senatov.mimitrends.model.TableAppearance
 import org.senatov.mimitrends.model.CurveDecision
 import org.senatov.mimitrends.model.CurveCandidate
-import org.senatov.mimitrends.model.CurveDirection
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -241,17 +240,8 @@ class ShortMovePanel(
 
                 override fun updateItem(item: ShortMove?, empty: Boolean) {
                     super.updateItem(item, empty)
-                    styleClass.removeAll(
-                        "user-watchlist-row", "rapid-crash-row", "rapid-rise-row",
-                        "curve-review-rise-row", "curve-review-drop-row"
-                    )
+                    styleClass.remove("user-watchlist-row")
                     if (!empty && item != null && watchlist.contains(item.symbol)) styleClass += "user-watchlist-row"
-                    if (!empty && item?.reviewDecision == CurveDecision.PENDING) {
-                        styleClass += if (item.curveCandidate?.direction == CurveDirection.RISE)
-                            "curve-review-rise-row" else "curve-review-drop-row"
-                    }
-                    else if (!empty && item?.pattern == ShortMovePattern.RAPID_CRASH) styleClass += "rapid-crash-row"
-                    else if (!empty && item?.pattern == ShortMovePattern.RAPID_RISE) styleClass += "rapid-rise-row"
                     tooltip = if (!empty && item?.reviewDecision == CurveDecision.PENDING) javafx.scene.control.Tooltip(
                         "Possible rapid move · click to review"
                     ) else if (!empty && item?.isRetained == true) javafx.scene.control.Tooltip(

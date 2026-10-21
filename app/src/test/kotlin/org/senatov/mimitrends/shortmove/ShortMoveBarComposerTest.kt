@@ -73,6 +73,23 @@ class ShortMoveBarComposerTest {
         assertEquals(listOf(41.31, 41.35), result.map(MinuteBar::close))
     }
 
+    @Test
+    fun `provider tail supplies the signal candle while primary history lags`() {
+        val now = 40_000L
+        val primary = listOf(bar(now - 900, 53.70), bar(now - 840, 53.72))
+        val providers = listOf(
+            observation("SCALABLE", now - 600, 53.87, 1_000L),
+            observation("SCALABLE", now - 540, 53.69, 2_000L),
+            observation("SCALABLE", now, 53.85, 3_000L)
+        )
+
+        val result = ShortMoveBarComposer.compose(primary, providers, now)
+
+        assertEquals(listOf(now - 900, now - 840, now - 600, now - 540, now),
+            result.map(MinuteBar::minuteEpochSeconds))
+        assertEquals(53.69, result.first { it.minuteEpochSeconds == now - 540 }.close)
+    }
+
     private fun observation(provider: String, minute: Long, close: Double, observedAt: Long) =
         ProviderMinuteBar(provider, "SAP.DE", "id", "mic", "EUR", bar(minute, close), observedAt)
 

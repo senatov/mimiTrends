@@ -16,6 +16,7 @@ import org.senatov.mimitrends.db.MarketRepository
 import org.senatov.mimitrends.model.BrokerTrade
 import org.senatov.mimitrends.model.DisplayCurrency
 import org.senatov.mimitrends.model.MinuteBar
+import java.time.Instant
 
 internal class ChartDataLoader(
     private val repository: MarketRepository,
@@ -23,11 +24,22 @@ internal class ChartDataLoader(
     private val exchangeRates: ExchangeRateService
 ) {
     fun load(symbol: String, range: String, targetCurrency: DisplayCurrency): ChartData {
-        val bars = repository.loadMinuteBars(symbol, ChartRange.fromEpochSeconds(range, symbol))
+        val from = ChartRange.fromEpochSeconds(range, symbol)
+        val now = Instant.now().epochSecond
+        val primary = repository.loadMinuteBars(symbol, from)
             .map { exchangeRates.convertBar(symbol, it, targetCurrency) }
+        val providerBars = repository.loadProviderMinuteBars(symbol, maxOf(from, now - PROVIDER_TAIL_SECONDS))
+            .map { observation ->
+                observation.copy(bar = exchangeRates.convertBar(observation.bar, observation.currency, targetCurrency))
+            }
+        val bars = ShortMoveBarComposer.compose(primary, providerBars, now)
         val companyName = CompanySearchTerm.from(repository.loadCompanyProfile(symbol)?.name.orEmpty(), symbol)
         val trades = analytics.loadBrokerTrades(symbol, companyName).map { it.convertTo(targetCurrency) }
         return ChartData(bars, companyName, trades)
+    }
+
+    private companion object {
+        const val PROVIDER_TAIL_SECONDS = 20 * 60L
     }
 
     private fun BrokerTrade.convertTo(target: DisplayCurrency): BrokerTrade = copy(

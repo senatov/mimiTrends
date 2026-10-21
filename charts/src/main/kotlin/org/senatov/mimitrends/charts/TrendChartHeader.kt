@@ -119,6 +119,14 @@ internal class TrendChartHeader(
         focus.isSelected = true
     }
 
+    fun setFocusAvailable(available: Boolean) {
+        focus.isDisable = !available
+        val help = if (available) "Show detailed candles around the selected signal"
+        else "Select an alert with a candle in the loaded chart range to use signal focus"
+        focus.tooltip = Tooltip(help)
+        focus.accessibleHelp = help
+    }
+
     fun selectHistory() {
         history.isSelected = true
     }
