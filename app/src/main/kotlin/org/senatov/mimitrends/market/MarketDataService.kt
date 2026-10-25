@@ -17,7 +17,6 @@ import org.senatov.mimitrends.marketdata.YahooFinanceClient
 import org.senatov.mimitrends.model.CompanyProfile
 import org.senatov.mimitrends.model.MarketDataSource
 import org.senatov.mimitrends.model.MinuteBar
-import org.senatov.mimitrends.model.ResearchFeatures
 import org.senatov.mimitrends.model.ScanResult
 import org.senatov.mimitrends.model.ScannerCriteria
 import org.senatov.mimitrends.providers.SourceActivity
@@ -286,7 +285,6 @@ internal data class ScanEvaluation(
     val fallback: List<ScanResult?>,
     val rejectionReason: String? = null,
     val longTerm: ScanResult? = null,
-    val researchFeatures: ResearchFeatures? = null,
     val sourceStatus: String = "UNKNOWN",
     val latestDataEpochSeconds: Long? = null,
     val context: ScanResult? = null,

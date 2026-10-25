@@ -36,6 +36,11 @@ internal object DatabaseCurrencyBackfill {
     fun run(connection: Connection) {
         val normalizer = DatabaseCurrencyNormalizer(connection)
         backfillCandidates(connection, normalizer)
+    }
+
+    fun runLegacyMigration(connection: Connection) {
+        val normalizer = DatabaseCurrencyNormalizer(connection)
+        backfillCandidates(connection, normalizer)
         backfillResearchSamples(connection, normalizer)
     }
 

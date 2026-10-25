@@ -51,8 +51,7 @@ internal object CandidateQualityGate {
     }
 
     fun attentionScore(result: ScanResult): Double {
-        val historical = result.rankingPercentile.takeIf(Double::isFinite)?.div(10.0)
-            ?: (result.anomalyScore / 8.0).coerceIn(0.0, 1.0)
+        val historical = (result.anomalyScore / 8.0).coerceIn(0.0, 1.0)
         val marketMove = minimumMove(result)
         val movement = (abs(result.windowChangePercent) / (marketMove * 2.5)).coerceIn(0.0, 1.0)
         val freshness = (1.0 - result.signalAgeMinutes / 3.0).coerceIn(0.0, 1.0)
@@ -126,16 +125,14 @@ internal object CandidateQualityGate {
                 result.anomalyScore >= MIN_GAP_SCORE
 
     private fun watchRankingQuality(result: ScanResult): Boolean =
-        result.rankingPercentile.takeIf(Double::isFinite)?.let { it >= MIN_WATCH_PERCENTILE }
-            ?: (result.anomalyScore >= if (isTrend(result)) MIN_WATCH_TREND_SCORE else MIN_WATCH_SCORE)
+        result.anomalyScore >= if (isTrend(result)) MIN_WATCH_TREND_SCORE else MIN_WATCH_SCORE
 
     private fun isCurrent(result: ScanResult): Boolean =
         result.signalAgeMinutes <= MAX_SIGNAL_AGE_MINUTES && !result.signalSource.contains("cooling")
 
     private fun adaptiveQuality(result: ScanResult): Boolean =
-        result.rankingPercentile.takeIf(Double::isFinite)?.let { it >= MIN_ADAPTIVE_PERCENTILE }
-            ?: (result.anomalyScore >= if (isTrend(result)) MIN_UNCALIBRATED_TREND_SCORE
-            else MIN_UNCALIBRATED_ADAPTIVE_SCORE)
+        result.anomalyScore >= if (isTrend(result)) MIN_UNCALIBRATED_TREND_SCORE
+        else MIN_UNCALIBRATED_ADAPTIVE_SCORE
 
     private fun isTrend(result: ScanResult): Boolean =
         result.signalSource.startsWith("Steady rise") || result.signalSource.startsWith("Recovery") ||
@@ -184,10 +181,8 @@ internal object CandidateQualityGate {
     private const val MIN_GAP_SCORE = 4.0
     private const val MIN_CONTEXT_RETURN = -0.10
     private const val MIN_CONTEXT_SCORE = 2.5
-    private const val MIN_ADAPTIVE_PERCENTILE = 8.0
     private const val MIN_UNCALIBRATED_ADAPTIVE_SCORE = 5.0
     private const val MIN_UNCALIBRATED_TREND_SCORE = 3.25
-    private const val MIN_WATCH_PERCENTILE = 5.5
     private const val MIN_WATCH_SCORE = 2.0
     private const val MIN_WATCH_TREND_SCORE = 2.5
     private const val WATCH_THRESHOLD_FACTOR = 0.75

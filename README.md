@@ -10,8 +10,8 @@
 **A local-first desktop radar for liquid US and European equities.**
 
 MiMiTrends watches a rotating universe of liquid equities and publishes only two setup families:
-`TRADABLE_CORRIDOR` and `RAPID_CRASH`. The active radar intentionally avoids long-horizon trend,
-entry-quality, downside-safety, predictive-model, and walk-forward research calculations.
+`TRADABLE_CORRIDOR` and `RAPID_CRASH`. It uses current candle structure and quote quality; it does
+not train predictive models or evaluate later returns.
 
 The application is written in Kotlin/JVM and JavaFX. It is designed as a cross-platform desktop application for macOS, Windows, and Linux. **The current builds and user interface have so far been tested only on macOS.** Windows and Linux packaging is implemented, but those distributions should be treated as unverified until they receive platform-specific testing.
 
@@ -202,20 +202,19 @@ It distinguishes active signals from recent context: a `Cooling` row records a s
 recently but no longer passes the current detector. It is not presented as a continuing impulse and expires
 automatically. A rapid opposite V-reversal updates the same visible episode instead of silently erasing it.
 
-| Column | Meaning |
-| --- | --- |
-| Delay | Age of the latest provider observation. It is numeric and sortable; the icon distinguishes a current quote from a stale one. |
-| Symbol | Instrument identity and cleaned cached company name. A bright-red `↻` marks a statistically repeating two- or three-minute price cycle; its tooltip shows cycle strength. The context menu copies either the ticker or the same short search-friendly company name. |
-| Pattern | Detected fresh impulse, relaxed impulse, or persistent trend. A bracketed value such as `[40%]` is the watch-priority score derived from structure, anomaly strength, entry timing, freshness, volume, and available outcomes. It is a ranking aid, not a predicted return or recommendation. |
-| Move 10m | Signed price change over the latest ten-minute display window. |
-| Price | Latest completed locally available price in the selected display currency. |
-| Anomaly | Composite anomaly ranking: `Low`, `Moderate`, `High`, or `Very high`. This measures how unusual and well-confirmed the detected move is; it is not a buy/sell recommendation or a prediction that the move will continue. |
-| Outcome | `Collecting` means that no completed independent episode is available. `Beta 60%` is a deliberately labelled preliminary, beta-smoothed probability from an incomplete or concentrated sample. With representative history it shows median directional return and the empirically profitable share, such as `+0.08% · 58%`; an accepted trained model is labelled `Model 60%`. Tooltips identify the state, horizon, sample count, uncertainty, and model metadata where available. |
-| Price action | Human-readable interpretation such as `Rare impulse ↑`, `Steady trend ↑`, or `Volatile / unstable`. Rare impulses receive a dark-green outline. |
-| Volume | `Normal`, `Elevated`, `Strong`, `Extreme`, or `Price-led`, with relative volume when available. |
-| Age | Signal window or retained publication age; this is separate from quote freshness. |
-| Turnover | Approximate current-session traded value. |
-| Updated | Provider observation time rendered in the user's local time zone. |
+| Column       | Meaning                                                                                                                                                                                                                                                                   |
+|--------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| Delay        | Age of the latest provider observation. It is numeric and sortable; the icon distinguishes a current quote from a stale one.                                                                                                                                              |
+| Symbol       | Instrument identity and cleaned cached company name. A bright-red `↻` marks a statistically repeating two- or three-minute price cycle; its tooltip shows cycle strength. The context menu copies either the ticker or the same short search-friendly company name.       |
+| Pattern      | Detected fresh impulse, relaxed impulse, or persistent trend. A bracketed value such as `[40%]` is the watch-priority score derived from structure, anomaly strength, entry timing, freshness, and volume. It is a ranking aid, not a predicted return or recommendation. |
+| Move 10m     | Signed price change over the latest ten-minute display window.                                                                                                                                                                                                            |
+| Price        | Latest completed locally available price in the selected display currency.                                                                                                                                                                                                |
+| Anomaly      | Composite anomaly ranking: `Low`, `Moderate`, `High`, or `Very high`. This measures how unusual and well-confirmed the detected move is; it is not a buy/sell recommendation or a prediction that the move will continue.                                                 |
+| Price action | Human-readable interpretation such as `Rare impulse ↑`, `Steady trend ↑`, or `Volatile / unstable`. Rare impulses receive a dark-green outline.                                                                                                                           |
+| Volume       | `Normal`, `Elevated`, `Strong`, `Extreme`, or `Price-led`, with relative volume when available.                                                                                                                                                                           |
+| Age          | Signal window or retained publication age; this is separate from quote freshness.                                                                                                                                                                                         |
+| Turnover     | Approximate current-session traded value.                                                                                                                                                                                                                                 |
+| Updated      | Provider observation time rendered in the user's local time zone.                                                                                                                                                                                                         |
 
 Hovering the derived columns reveals the exact jump, range, volume Z-scores, RVOL, composite score, and an explanation of the classification. This keeps the normal workflow readable without discarding analytical detail.
 
@@ -426,75 +425,10 @@ net progress / total travelled price path
 
 This allows reasonable pullbacks while rejecting a noisy sideways chart that merely ends slightly above its starting point.
 
-## Signal outcomes
+## Signal selection
 
-Published signals are evaluated later at target horizons of 5, 10, and 30 minutes. Outcome returns use the exact signal candle price and timestamp rather than the later scan-completion price.
-
-The scanner's `Outcome` column uses independent ten-minute episodes. Repeated publications for the same
-symbol and signal family within fifteen minutes count as one episode. Directional returns are reduced by a
-conservative 0.20% friction allowance before profitability is assessed, so a negligible move is not counted
-as a useful continuation. As soon as at least one completed episode exists, the column exposes a mild
-beta-smoothed estimate labelled `Beta`; this early number can change sharply and is not a validated model.
-A representative empirical distribution and its 95% Wilson interval require at least twelve independent
-episodes, five symbols, and three trading days. Until then return quartiles and excursion statistics remain
-hidden rather than being inferred from an inadequate sample.
-
-Calibration is walk-forward: a signal can use only outcomes recorded before its own signal time. When enough
-history exists, the first estimate is restricted to a comparable cohort by market region, strict versus
-relaxed detection, and realtime versus non-realtime feed quality. A broader signal-family estimate is used
-only while that cohort is too small. Detector scores are converted to a 0–10 historical percentile after at
-least thirty prior observations from the same signal family and direction, making unlike detectors safer to
-rank in one table.
-
-Adaptive selection uses three explicit quality tiers. Strict candidates remain first, at most two strong
-adaptive candidates may follow, and the scanner may fill the current list to seven or eight rows with
-structurally valid lower-confidence candidates marked `watch`. The watch tier still rejects stale, cooling,
-and statistically insignificant observations; it is not a blind row quota.
-
-Before publication, every result passes an additional attention-quality gate. Current impulses require a
-meaningful market-specific move, strong price or range deviation, a directional candle body, and either
-volume confirmation or exceptional price evidence when volume is unavailable. Signals older than two
-minutes and cooling context never qualify as current candidates. Trend candidates need at least a 15-minute
-formation window, 0.35% progress, and sufficient path efficiency. Calibrated adaptive results must rank at or above the
-80th historical percentile, and at most two preferred adaptive rows may be published in one scan. Watch rows
-use a lower score floor and are visibly labelled rather than presented as equivalent recommendations.
-
-The primary tier is intended for roughly thirty-minute long-candidate review. It rejects upward bounces that
-remain inside an intraday distribution regime: negative session structure, material distance below VWAP,
-repeated five-minute drops, repeated high-volume red candles, lower highs/lower lows, or excessive drawdown
-from the session high. A second, lower-priority downside-watch tier retains only genuinely sharp vertical
-falls (at least 0.75% with a price/range Z-score of 4.5 or more). These downside observations are useful for
-watching a possible reversal but are always ranked after qualifying long candidates. During open markets,
-cooling and previously saved rows are no longer used to fill an otherwise empty candidate table.
-
-An `Early recovery ↑ · watch` detector covers a different setup: a material intraday decline followed by
-a base, higher lows, positive recent slope, recovery of at least one quarter of the decline, and a controlled
-pullback from the recovery high. It is deliberately a watch signal because the original decline can resume.
-Rejected scans now retain a diagnostic such as `RECOVERY_TOO_SMALL`, `NO_HIGHER_LOW`, `WEAK_LAST_10M`,
-`RECOVERY_RETRACE`, or `STALE_DATA` instead of collapsing every failure into `NO_CURRENT_SIGNAL`.
-
-While an episode is active, observed candle highs and lows update its maximum favorable excursion (MFE) and
-maximum adverse excursion (MAE). These path metrics describe typical opportunity and drawdown after a signal;
-older outcomes created before this schema was introduced remain usable but have no excursion values.
-
-The database stores both the target horizon and the actual elapsed time. This avoids silently treating a delayed observation as an exact five-minute result. Outcome collection accepts only a small scheduling delay and records:
-
-- signal entry price;
-- observed price;
-- target horizon;
-- actual elapsed minutes;
-- realized percentage return;
-- maximum favorable and adverse movement observed before the horizon;
-- observation timestamp.
-
-This apparatus is intended for later empirical work: measuring continuation rates, evaluating thresholds, comparing signal classes, and detecting whether an apparently strong score has predictive value. The application does not yet present these records as a backtest or claim a validated trading edge.
-
-### Focused runtime and legacy data
-
-The active application no longer creates research samples, runs historical backfills, trains predictive
-models, or enriches rows with trend, safety, entry-quality, or model-calibration scores. Existing legacy
-analytics tables are left intact for database compatibility and are cleaned by the normal retention process;
-the focused radar does not read them during scanning.
+The scanner uses current candles, reported volume, price structure, and freshness to rank live moves.
+It keeps a short saved-signal window for display and does not train models or calculate later returns.
 
 ### Scan rotation and source diagnostics
 
@@ -611,7 +545,8 @@ All durable state is stored locally in:
 
 SQLite runs in WAL mode with foreign keys enabled, a busy timeout, batched prepared statements, and transactional schema migrations. It is a good fit for the application's local, append/upsert-heavy workload and avoids the lifecycle overhead of an ORM.
 
-`MarketRepository` owns operational minute bars and company profiles. `AnalyticsRepository` owns derived and historical analytics. Both use the same database but keep their responsibilities explicit.
+`MarketRepository` stores operational minute bars and company profiles. `AnalyticsRepository` stores scan records, reference data, and
+imported trades in the same SQLite database.
 
 ### Operational tables
 
@@ -622,20 +557,16 @@ SQLite runs in WAL mode with foreign keys enabled, a busy timeout, batched prepa
 
 Minute bars use UPSERT semantics, allowing an incomplete or repeated provider candle to be corrected without creating duplicates.
 
-### Analytical tables
+### Scan and reference tables
 
 | Table | Purpose |
 | --- | --- |
 | `schema_migrations` | Transactionally applied schema versions. |
 | `instrument_metadata` | Name, exchange, currency, time zone, aliases, and tradability. |
 | `corporate_actions` | Splits and dividends available for validation and future normalization. |
-| `trading_sessions` | Observed session boundaries, bar coverage, volume, and turnover. |
 | `fx_rates` | Dated currency conversion rates. |
-| `aggregate_bars` | Locally produced 5-, 15-, and 60-minute OHLCV. |
-| `baseline_stats` | Median/MAD return and log-volume by instrument and local time of day. |
 | `scan_runs` | One durable record for every scanner pass. |
 | `scan_candidates` | Accepted/rejected symbols, raw metrics, exact signal time and entry price, source, and publication state. |
-| `signal_outcomes` | Target and actual horizons, observed price, and realized return. |
 | `provider_instruments` | Persisted provider-specific symbol-to-ISIN mappings, MIC, currency, and resolved name. |
 | `provider_minute_bars` | Venue-specific observations with provider, ISIN, MIC, currency, and monotonic observation time. |
 | `provider_quotes` | Latest provider bid/ask, sizes, session totals, average, executions, range, and previous close. |
@@ -645,25 +576,21 @@ Candidate publication and scan completion occur in one transaction. This prevent
 
 ### Retention
 
-- raw minute bars: 90 days;
-- 5/15/60-minute aggregates: 730 days;
-- the SQLite aggregate tail: 45 days after it has been verified in DuckDB;
-- scan runs and their cascading candidates: 180 days;
-- data-quality diagnostics: 14 days;
-- instrument metadata, corporate actions, observed sessions, FX rates, baselines, and outcomes: retained.
+Minute bars, provider observations, scan runs, scan candidates, and curve-review history are kept for seven days.
+Static instrument mappings, corporate actions, FX rates, the watchlist, and imported broker transactions remain available.
+Retention runs at startup, daily while the application is open, and during shutdown. Old research tables are
+removed by schema migration; the application uses no DuckDB database.
 
-Retention is applied during startup and again during the asynchronous shutdown sequence. Shutdown maintenance also keeps only the three
-newest daily SQLite backups, preserves the newest migration rollback copy, removes additional migration backups and legacy DuckDB
-`.bak` files after 30 days, and removes abandoned `.tmp` files after one day. Active databases, current settings, broker transactions,
-and the newest recovery copy are not deleted.
+The three newest daily SQLite backups are retained. Startup maintenance checks database integrity and creates
+a backup when one is due.
 
-More detail is available in [Analytics storage](Doc/AnalyticsStorage.md).
+More detail is available in [SQLite storage](Doc/AnalyticsStorage.md).
 
 ## Project structure
 
 ```text
 core/         Domain models, market time-zone resolution, OHLCV validation, logging tags
-database/     SQLite cache, analytics repository, migrations, aggregation, outcome storage
+database/     SQLite market cache, scan history, trade imports, and migrations
 market-data/  Yahoo and provider-specific HTTP clients, parsers, and response mapping
 scanner/      Impulse/trend statistics, market calendar, scanner settings
 charts/       Reusable JFreeChart-FX candlestick and volume component

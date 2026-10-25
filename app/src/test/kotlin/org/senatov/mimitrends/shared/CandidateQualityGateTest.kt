@@ -67,11 +67,11 @@ class CandidateQualityGateTest {
     }
 
     @Test
-    fun `requires the eightieth percentile for a calibrated adaptive signal`() {
+    fun `requires the anomaly threshold for an adaptive signal`() {
         val result = TestScanResult.create(anomalyScore = 9.0, signalSource = "Impulse ↑ · relaxed")
 
-        assertFalse(CandidateQualityGate.qualifies(result.copy(rankingPercentile = 7.9), adaptive = true))
-        assertTrue(CandidateQualityGate.qualifies(result.copy(rankingPercentile = 8.0), adaptive = true))
+        assertFalse(CandidateQualityGate.qualifies(result.copy(anomalyScore = 4.9), adaptive = true))
+        assertTrue(CandidateQualityGate.qualifies(result.copy(anomalyScore = 5.0), adaptive = true))
     }
 
     @Test

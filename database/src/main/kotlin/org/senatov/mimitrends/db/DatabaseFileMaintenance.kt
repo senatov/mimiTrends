@@ -14,6 +14,11 @@ internal data class DatabaseCleanupResult(
 )
 
 internal object DatabaseFileMaintenance {
+    fun removeLegacyAnalyticsDatabase(databasePath: Path): Path? {
+        val legacy = databasePath.resolveSibling("mimitrends-analytics.duckdb")
+        return if (Files.deleteIfExists(legacy)) legacy else null
+    }
+
     fun clean(databasePath: Path, now: Instant = Instant.now()): DatabaseCleanupResult {
         val storageDirectory = databasePath.toAbsolutePath().normalize().parent
             ?: return DatabaseCleanupResult(0, 0, 0, 0)

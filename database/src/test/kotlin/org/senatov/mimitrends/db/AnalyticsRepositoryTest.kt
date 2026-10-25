@@ -3,7 +3,6 @@
 package org.senatov.mimitrends.db
 
 import org.junit.jupiter.api.Test
-import org.senatov.mimitrends.model.MinuteBar
 import org.senatov.mimitrends.model.ProviderInstrument
 import org.senatov.mimitrends.model.ScanResult
 import java.nio.file.Files
@@ -14,6 +13,49 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class AnalyticsRepositoryTest {
+    @Test
+    fun `removes legacy analytics tables and DuckDB while preserving trades`() {
+        val path = Files.createTempDirectory("mimitrends-remove-analytics").resolve("test.db")
+        AnalyticsRepository(path).close()
+        val legacyFile = path.resolveSibling("mimitrends-analytics.duckdb")
+        Files.writeString(legacyFile, "unused legacy analytics")
+        DriverManager.getConnection("jdbc:sqlite:$path").use { connection ->
+            connection.createStatement().use { statement ->
+                listOf(
+                    "aggregate_bars", "baseline_stats", "trading_sessions", "research_samples",
+                    "research_outcomes", "research_excursions", "predictive_models",
+                    "signal_outcomes", "signal_excursions"
+                ).forEach { table ->
+                    statement.executeUpdate("CREATE TABLE $table (id INTEGER)")
+                }
+                statement.executeUpdate("DELETE FROM schema_migrations WHERE version=21")
+                statement.executeUpdate(
+                    """INSERT INTO broker_transactions
+                    (source, fingerprint, occurred_at, status, description, asset_type,
+                     transaction_type, shares, price, amount, fee, tax, currency, imported_at)
+                    VALUES ('TEST', 'trade-1', 1, 'Executed', 'Apple', 'Security',
+                            'Buy', 1, 10, -10, 0, 0, 'EUR', 1)"""
+                )
+            }
+        }
+
+        AnalyticsRepository(path).close()
+        assertFalse(Files.exists(legacyFile))
+        DriverManager.getConnection("jdbc:sqlite:$path").use { connection ->
+            connection.createStatement().use { statement ->
+                statement.executeQuery("SELECT COUNT(*) FROM broker_transactions").use {
+                    it.next(); assertEquals(1, it.getInt(1))
+                }
+                statement.executeQuery(
+                    """SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name IN
+                    ('aggregate_bars', 'baseline_stats', 'trading_sessions', 'research_samples',
+                     'research_outcomes', 'research_excursions', 'predictive_models',
+                     'signal_outcomes', 'signal_excursions')"""
+                ).use { it.next(); assertEquals(0, it.getInt(1)) }
+            }
+        }
+    }
+
     @Test
     fun `repairs mismatched adr identifiers and removes their scalable quotes`() {
         val path = Files.createTempDirectory("mimitrends-isin-repair").resolve("test.db")
@@ -42,49 +84,6 @@ class AnalyticsRepositoryTest {
                 }
                 statement.executeQuery("SELECT isin FROM instrument_metadata WHERE symbol='XOM'").use { result ->
                     assertTrue(result.next()); assertEquals("US30231G1022", result.getString(1))
-                }
-            }
-        }
-    }
-
-    @Test
-    fun `removes analytics derived from quote-only pseudo bars`() {
-        val path = Files.createTempDirectory("mimitrends-quote-only-migration").resolve("test.db")
-        AnalyticsRepository(path).close()
-        DriverManager.getConnection("jdbc:sqlite:$path").use { connection ->
-            connection.createStatement().use { statement ->
-                statement.executeUpdate(
-                    "INSERT INTO scan_runs(id,started_at,region,requested_symbols,evaluated_symbols," +
-                            "accepted_symbols,published_symbols,failures,interval_seconds,status) " +
-                            "VALUES(1,1,'EUROPE',1,1,1,1,0,180,'COMPLETED')"
-                )
-                statement.executeUpdate(
-                    "INSERT INTO scan_candidates(run_id,symbol,evaluated_at,accepted,published,source) " +
-                            "VALUES(1,'SAP.DE',1,1,1,'TRADEGATE')"
-                )
-                statement.executeUpdate(
-                    "INSERT INTO research_samples(run_id,symbol,observed_epoch,entry_price,family,direction," +
-                            "accepted,published,source) VALUES(1,'SAP.DE',1,100,'MOMENTUM',1,1,1,'TRADEGATE')"
-                )
-                statement.executeUpdate("CREATE TABLE data_quality(id INTEGER PRIMARY KEY, source TEXT, observed_at INTEGER)")
-                statement.executeUpdate("DELETE FROM schema_migrations WHERE version IN (13,19)")
-            }
-        }
-
-        AnalyticsRepository(path).close()
-
-        DriverManager.getConnection("jdbc:sqlite:$path").use { connection ->
-            connection.createStatement().use { statement ->
-                statement.executeQuery("SELECT COUNT(*) FROM scan_candidates").use {
-                    it.next(); assertEquals(0, it.getInt(1))
-                }
-                statement.executeQuery("SELECT COUNT(*) FROM research_samples").use {
-                    it.next(); assertEquals(0, it.getInt(1))
-                }
-                statement.executeQuery(
-                    "SELECT evaluated_symbols,accepted_symbols,published_symbols FROM scan_runs WHERE id=1"
-                ).use {
-                    it.next(); assertEquals(0, it.getInt(1)); assertEquals(0, it.getInt(2)); assertEquals(0, it.getInt(3))
                 }
             }
         }
@@ -421,7 +420,6 @@ class AnalyticsRepositoryTest {
         assertEquals(0, first.duplicates)
         assertEquals(0, second.imported)
         assertEquals(2, second.duplicates)
-        assertEquals(2, analytics.stats().brokerTransactions)
         analytics.close()
 
         DriverManager.getConnection("jdbc:sqlite:$database").use { connection ->
@@ -458,26 +456,24 @@ class AnalyticsRepositoryTest {
             val result = analytics.importScalableTransactions(csv)
 
             assertEquals(1, result.parsed)
-            assertEquals(1, result.imported)
+            DriverManager.getConnection("jdbc:sqlite:$database").use { connection ->
+                connection.createStatement().executeQuery("SELECT COUNT(*) FROM broker_transactions").use {
+                    it.next(); assertEquals(1, it.getInt(1))
+                }
+            }
             assertEquals(1, result.rejected)
-            assertEquals(1, analytics.stats().brokerTransactions)
+            assertEquals(1, result.imported)
         }
     }
 
-    @Test fun `migrates and stores derived analytics and scan history`() {
+    @Test
+    fun `migrates and stores scan history without research databases`() {
         val path = Files.createTempDirectory("mimitrends-analytics").resolve("test.db")
         MarketRepository(path).close()
         val analytics = AnalyticsRepository(path)
         analytics.upsertInstrument(InstrumentMetadata("TEST", "Test Corp", "NASDAQ", "USD", "America/New_York"))
         analytics.upsertCorporateAction(CorporateAction("TEST", "SPLIT", 1_000, ratio = 2.0, source = "TEST"))
         analytics.recordFxRate("EUR", "USD", 1.15, "TEST", 86_400)
-
-        val bars = (0 until 180).map { minute ->
-            val open = 100.0 + minute * 0.01
-            MinuteBar("TEST", 1_800_000_000L + minute * 60L, open, open + 0.2, open - 0.1, open + 0.1, 1_000.0 + minute)
-        }
-        analytics.refreshDerived("TEST", bars, "TEST")
-        assertTrue(analytics.loadAggregatedBars("TEST", 5, 0).isNotEmpty())
 
         val signalEpoch = Instant.now().epochSecond - 5 * 60L
         val run = analytics.beginScan("US", 1, 180)
@@ -487,22 +483,20 @@ class AnalyticsRepositoryTest {
         assertEquals("TEST", saved.symbol)
         assertEquals("TEST", saved.dataStatus)
         assertEquals(result(signalEpoch).updatedAtMillis, saved.updatedAtMillis)
-        analytics.recordSignalOutcomes("TEST", 103.0, signalEpoch + 2 * 60L)
-        analytics.recordSignalOutcomes("TEST", 99.0, signalEpoch + 4 * 60L)
-        analytics.recordSignalOutcomes("TEST", 102.0, signalEpoch + 5 * 60L)
-        val stats = analytics.stats()
-        assertEquals(1, stats.instruments)
-        assertEquals(1, stats.scanRuns)
-        assertEquals(1, stats.scanCandidates)
-        assertTrue(stats.aggregateBars > 0)
-        assertTrue(stats.baselines > 0)
-        assertTrue(stats.outcomes > 0)
         analytics.close()
+        assertFalse(Files.exists(path.resolveSibling("mimitrends-analytics.duckdb")))
 
         DriverManager.getConnection("jdbc:sqlite:$path").use { connection ->
             connection.createStatement().use { statement ->
                 statement.executeQuery("SELECT COUNT(*) FROM corporate_actions").use { it.next(); assertEquals(1, it.getInt(1)) }
-                statement.executeQuery("SELECT COUNT(*) FROM trading_sessions").use { it.next(); assertTrue(it.getInt(1) > 0) }
+                statement.executeQuery("SELECT COUNT(*) FROM scan_runs").use { it.next(); assertEquals(1, it.getInt(1)) }
+                statement.executeQuery("SELECT COUNT(*) FROM scan_candidates").use { it.next(); assertEquals(1, it.getInt(1)) }
+                statement.executeQuery(
+                    """SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name IN
+                    ('aggregate_bars', 'baseline_stats', 'trading_sessions', 'research_samples',
+                     'research_outcomes', 'research_excursions', 'predictive_models',
+                     'signal_outcomes', 'signal_excursions')"""
+                ).use { it.next(); assertEquals(0, it.getInt(1)) }
                 statement.executeQuery(
                     "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name IN " +
                         "('latest_quotes', 'price_points', 'market_calendar_rules', 'data_quality')"
@@ -521,14 +515,6 @@ class AnalyticsRepositoryTest {
                     assertEquals(101.0 / 1.15, it.getDouble(3), 0.000_001)
                     assertEquals(100.0 / 1.15, it.getDouble(4), 0.000_001)
                     assertEquals(1.15, it.getDouble(5), 0.000_001)
-                }
-                statement.executeQuery("""SELECT entry_price, observed_price, return_percent, elapsed_minutes,
-                    maximum_return_percent, minimum_return_percent FROM signal_outcomes""").use {
-                    it.next(); assertEquals(100.0, it.getDouble(1)); assertEquals(102.0, it.getDouble(2))
-                    assertEquals(2.0, it.getDouble(3), 0.000_001)
-                    assertEquals(5.0, it.getDouble(4), 0.000_001)
-                    assertEquals(3.0, it.getDouble(5), 0.000_001)
-                    assertEquals(-1.0, it.getDouble(6), 0.000_001)
                 }
             }
         }

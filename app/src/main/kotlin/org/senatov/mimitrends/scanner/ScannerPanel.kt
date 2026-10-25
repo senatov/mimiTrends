@@ -122,7 +122,6 @@ class ScannerPanel(
         val move = columnFactory.number("10m move", ScanResult::windowChangePercent, ScannerValueFormat::percent)
         val price = columnFactory.number("Price", { convertPrice(it.symbol, it.price) }) { "${currency.symbol}%,.2f".format(it) }
         val scoreColumn = columnFactory.metric("Anomaly", ScanResult::anomalyScore, SignalMetricPresentation::strength)
-        val outcome = columnFactory.metric("Outcome", SignalMetricPresentation::outcomeSeverity, SignalMetricPresentation::outcome)
         val priceAction =
             columnFactory.metric("Direction", SignalMetricPresentation::priceActionSeverity, SignalMetricPresentation::priceAction)
         val volume = columnFactory.metric("Volume", SignalMetricPresentation::volumeSeverity, SignalMetricPresentation::volume)
@@ -134,11 +133,11 @@ class ScannerPanel(
             { convertPrice(it.symbol, it.sessionTurnover) },
             { ScannerValueFormat.money(it, currency) })
         val updated = columnFactory.updated { time.format(Instant.ofEpochMilli(it)) }
-        listOf(scoreColumn, outcome, priceAction, volume, age, turnover).forEach { it.isVisible = false }
-        listOf(freshness, symbol, signal, entryQuality, move, price, scoreColumn, outcome, priceAction, volume, age, turnover, updated)
+        listOf(scoreColumn, priceAction, volume, age, turnover).forEach { it.isVisible = false }
+        listOf(freshness, symbol, signal, entryQuality, move, price, scoreColumn, priceAction, volume, age, turnover, updated)
             .zip(
                 listOf(
-                    "delay", "company", "pattern", "entry_quality", "move", "price", "anomaly", "outcome", "price_action",
+                    "delay", "company", "pattern", "entry_quality", "move", "price", "anomaly", "price_action",
                     "volume", "age", "turnover", "updated"
                 )
             )
@@ -149,7 +148,6 @@ class ScannerPanel(
             entryQuality to "Entry timing assessment based on extension, confirmation, and freshness.",
             move to "Price change measured across the latest ten-minute analysis window.",
             scoreColumn to "Composite rarity and confirmation strength of the detected anomaly.",
-            outcome to "Observed continuation after comparable historical signals.",
             priceAction to "Current price direction derived from the latest market observations.",
             volume to "Reported or estimated trading activity available for this instrument.",
             age to "Elapsed time since the signal was first detected.",
@@ -178,7 +176,6 @@ class ScannerPanel(
                     reserveWidth = 4.0
                 ),
                 TableColumnAutoFitter.Spec(scoreColumn, { SignalMetricPresentation.strength(it).label }, 68.0, 115.0),
-                TableColumnAutoFitter.Spec(outcome, { SignalMetricPresentation.outcome(it).label }, 78.0, 135.0),
                 TableColumnAutoFitter.Spec(priceAction, { SignalMetricPresentation.priceAction(it).label }, 72.0, 100.0),
                 TableColumnAutoFitter.Spec(volume, { SignalMetricPresentation.volume(it).label }, 64.0, 125.0),
                 TableColumnAutoFitter.Spec(age, { SignalAgePresentation.label(it.signalAgeMinutes) }, 64.0, 90.0),

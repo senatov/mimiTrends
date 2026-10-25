@@ -3,11 +3,8 @@
 package org.senatov.mimitrends.db
 
 import org.senatov.mimitrends.log.LogTag
-import org.senatov.mimitrends.model.MinuteBar
-import org.senatov.mimitrends.model.ResearchFeatures
 import org.senatov.mimitrends.model.BrokerTrade
 import org.senatov.mimitrends.model.ScanResult
-import org.senatov.mimitrends.model.isValidMinuteBar
 import org.slf4j.LoggerFactory
 import java.nio.file.Path
 import java.sql.Connection
@@ -23,28 +20,20 @@ class AnalyticsRepository(
     private val log = LoggerFactory.getLogger(javaClass)
     private val connection: Connection = database.connection
     private val brokerTransactions: BrokerTransactionStore
-    private val signalOutcomes: SignalOutcomeStore
-    private val researchSamples: ResearchSampleStore
     private val scanCandidates: ScanCandidateStore
-    private val predictionAnalytics: PredictionAnalyticsStore
-    private val duckAnalytics: DuckDbAnalyticsStore
-    private val derivedAnalytics: DerivedMarketAnalyticsStore
     private val todayDetections: TodayDetectionStore
 
     init {
         migrate()
         recoverInterruptedScans()
-        duckAnalytics = DuckDbAnalyticsStore.open(database.path)
-        derivedAnalytics = DerivedMarketAnalyticsStore(connection, duckAnalytics)
+        runCatching { DatabaseFileMaintenance.removeLegacyAnalyticsDatabase(database.path) }
+            .onSuccess { removed ->
+                if (removed != null) log.info(LogTag.DB, "removed legacy analytics database path={}", removed)
+            }
+            .onFailure { error -> log.warn(LogTag.DB, "unable to remove legacy analytics database", error) }
         brokerTransactions = BrokerTransactionStore(connection)
-        signalOutcomes = SignalOutcomeStore(connection)
-        researchSamples = ResearchSampleStore(connection)
-        scanCandidates = ScanCandidateStore(connection, researchSamples)
-        predictionAnalytics = PredictionAnalyticsStore(connection)
+        scanCandidates = ScanCandidateStore(connection)
         todayDetections = TodayDetectionStore(connection)
-        duckAnalytics.stats().also { stats -> log.info(LogTag.DB,
-            "DuckDB analytics opened size={}MiB aggregateBars={} researchSamples={} researchOutcomes={}",
-            stats.databaseBytes / 1_048_576L, stats.aggregateBars, stats.researchSamples, stats.researchOutcomes) }
     }
 
     fun upsertInstrument(value: InstrumentMetadata) = locked { upsertInstrumentInternal(value) }
@@ -80,18 +69,6 @@ class AnalyticsRepository(
         }
     }
 
-    fun refreshDerived(symbol: String, bars: List<MinuteBar>, source: String) {
-        if (bars.isEmpty()) return
-        val normalized = symbol.uppercase()
-        val clean = bars.filter(MinuteBar::isValidMinuteBar).sortedBy(MinuteBar::minuteEpochSeconds)
-        if (clean.isEmpty()) return
-        locked {
-            transaction {
-                derivedAnalytics.upsert(normalized, clean, source)
-            }
-        }
-    }
-
     fun beginScan(region: String, requestedSymbols: Int, intervalSeconds: Long): Long = locked {
         connection.prepareStatement("""INSERT INTO scan_runs(started_at, region, requested_symbols, interval_seconds, status)
             VALUES (?, ?, ?, ?, 'RUNNING')""", Statement.RETURN_GENERATED_KEYS).use { s ->
@@ -118,47 +95,10 @@ class AnalyticsRepository(
         symbol: String,
         result: ScanResult?,
         rejectionReason: String?,
-        source: String,
-        researchFeatures: ResearchFeatures? = null
-    ) = locked { scanCandidates.record(runId, symbol, result, rejectionReason, source, researchFeatures) }
-
-    fun recordSignalOutcomes(symbol: String, currentPrice: Double, observedEpoch: Long,
-        highPrice: Double = currentPrice, lowPrice: Double = currentPrice
-    ) = locked { transaction {
-        signalOutcomes.record(symbol, currentPrice, highPrice, lowPrice, observedEpoch)
-        researchSamples.recordOutcomes(symbol, currentPrice, highPrice, lowPrice, observedEpoch)
-    } }
-
-    fun recordSignalOutcomes(symbol: String, bars: List<MinuteBar>) = locked { transaction {
-        bars.takeLast(OUTCOME_TRACKING_BARS).forEach {
-            signalOutcomes.record(symbol, it.close, it.high, it.low, it.minuteEpochSeconds)
-            researchSamples.recordOutcomes(symbol, it.close, it.high, it.low, it.minuteEpochSeconds)
-        }
-    } }
-
-    fun withCalibration(result: ScanResult): ScanResult = locked { predictionAnalytics.enrich(result) }
-    fun trainPredictiveModels(): List<PredictiveTrainingResult> = locked { transaction { predictionAnalytics.train() } }
-
-    fun needsResearchBackfill(): Boolean = locked { researchSamples.needsHistoricalBackfill() }
-
-    fun downsideSafetyCalibration(european: Boolean): DownsideSafetyCalibration =
-        locked {
-            if (duckAnalytics.stats().researchOutcomes > 0L) {
-                duckAnalytics.downsideSafetyCalibration(european)
-            } else {
-                DownsideSafetyStore(connection).calibration(european)
-            }
-        }
-
-    fun walkForwardResearchReport(horizonMinutes: Int = 10, frictionPercent: Double = 0.20): WalkForwardResearchReport =
-        locked { predictionAnalytics.report(horizonMinutes, frictionPercent) }
-
-    fun recordResearchBackfill(symbol: String, samples: Collection<ResearchBackfillSample>) = locked {
-        transaction { samples.forEach { researchSamples.recordHistorical(symbol, it.result, it.features, it.outcomes) } }
-    }
+        source: String
+    ) = locked { scanCandidates.record(runId, symbol, result, rejectionReason, source) }
     fun completeScan(runId: Long, publishedSymbols: Collection<String>, failures: Int) = locked {
         transaction {
-            researchSamples.markPublished(runId, publishedSymbols)
             if (publishedSymbols.isNotEmpty()) connection.prepareStatement(
                 "UPDATE scan_candidates SET published=1 WHERE run_id=? AND symbol=?"
             ).use { s -> publishedSymbols.forEach { s.setLong(1, runId); s.setString(2, it.uppercase()); s.addBatch() }; s.executeBatch() }
@@ -182,12 +122,6 @@ class AnalyticsRepository(
             statement.setLong(2, runId); statement.setLong(3, runId); statement.setLong(4, runId)
             statement.setLong(5, runId)
             statement.executeUpdate()
-        }
-    }
-
-    fun loadAggregatedBars(symbol: String, resolutionMinutes: Int, fromEpoch: Long): List<AggregatedBar> = locked {
-        duckAnalytics.loadAggregatedBars(symbol, resolutionMinutes, fromEpoch).ifEmpty {
-            derivedAnalytics.loadAggregatedBars(symbol, resolutionMinutes, fromEpoch)
         }
     }
 
@@ -235,8 +169,6 @@ class AnalyticsRepository(
             deleteBefore("minute_bars", "minute_epoch", cutoff)
             deleteBefore("provider_minute_bars", "minute_epoch", cutoff)
             deleteBefore("provider_quotes", "observed_at", cutoff)
-            deleteBefore("aggregate_bars", "bucket_epoch", cutoff)
-            deleteBefore("research_samples", "observed_epoch", cutoff)
             connection.prepareStatement(
                 """UPDATE broker_transactions SET linked_run_id=NULL
                 WHERE linked_run_id IN (SELECT id FROM scan_runs WHERE started_at < ?)"""
@@ -246,12 +178,8 @@ class AnalyticsRepository(
             }
             deleteBefore("scan_runs", "started_at", cutoff)
             deleteBefore("curve_candidates", "end_epoch", cutoff)
-            deleteBefore("trading_sessions", "close_epoch", cutoff)
             deleteBefore("universe_membership", "selection_date", cutoff, date = true)
-            deleteBefore("baseline_stats", "updated_at", cutoff)
-            deleteBefore("predictive_models", "trained_at", cutoff)
         }
-        duckAnalytics.applyRetention(nowEpoch)
         database.optimize()
         if (database.compactIfWorthwhile()) log.info(LogTag.DB, "SQLite storage compacted after history retention")
     }
@@ -268,24 +196,6 @@ class AnalyticsRepository(
             if (date) statement.setString(1, Instant.ofEpochSecond(cutoff).atZone(ZoneId.of("UTC")).toLocalDate().toString())
             else statement.setLong(1, cutoff)
             statement.executeUpdate()
-        }
-    }
-
-    fun stats(): AnalyticsStats = locked {
-        connection.createStatement().use { statement ->
-            statement.executeQuery("""SELECT
-                (SELECT COUNT(*) FROM instrument_metadata),
-                (SELECT COUNT(*) FROM aggregate_bars),
-                (SELECT COUNT(*) FROM scan_runs),
-                (SELECT COUNT(*) FROM scan_candidates),
-                (SELECT COUNT(*) FROM baseline_stats),
-                (SELECT COUNT(*) FROM signal_outcomes),
-                (SELECT COUNT(*) FROM broker_transactions),
-                (SELECT COUNT(*) FROM broker_transactions WHERE linked_run_id IS NOT NULL)""").use { result ->
-                check(result.next())
-                AnalyticsStats(result.getLong(1), result.getLong(2), result.getLong(3),
-                    result.getLong(4), result.getLong(5), result.getLong(6), result.getLong(7), result.getLong(8))
-            }
         }
     }
 
@@ -314,7 +224,6 @@ class AnalyticsRepository(
     }
 
     override fun close() {
-        duckAnalytics.close()
         database.close()
     }
     private fun migrate() = locked {
@@ -328,7 +237,7 @@ class AnalyticsRepository(
                 connection.autoCommit = false
                 try {
                     connection.createStatement().use { s -> statements.forEach(s::executeUpdate) }
-                    if (version == CURRENCY_BACKFILL_MIGRATION) DatabaseCurrencyBackfill.run(connection)
+                    if (version == CURRENCY_BACKFILL_MIGRATION) DatabaseCurrencyBackfill.runLegacyMigration(connection)
                     connection.prepareStatement("INSERT INTO schema_migrations(version, applied_at) VALUES (?, ?)").use { s ->
                         s.setInt(1, version); s.setLong(2, Instant.now().epochSecond); s.executeUpdate()
                     }
@@ -375,7 +284,6 @@ class AnalyticsRepository(
         const val CURRENCY_BACKFILL_MIGRATION = 16
         const val OBSOLETE_TABLE_CLEANUP_MIGRATION = 19
         const val HISTORY_RETENTION_DAYS = 7L
-        const val OUTCOME_TRACKING_BARS = 35
         const val UPSERT_INSTRUMENT = """INSERT INTO instrument_metadata(symbol, name, exchange, currency, timezone, isin, wkn, aliases, tradable, updated_at)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(symbol) DO UPDATE SET name=excluded.name, exchange=excluded.exchange,
             currency=excluded.currency, timezone=excluded.timezone, isin=COALESCE(excluded.isin, instrument_metadata.isin),

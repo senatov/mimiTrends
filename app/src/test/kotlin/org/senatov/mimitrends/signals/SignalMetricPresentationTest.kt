@@ -13,7 +13,6 @@ import org.senatov.mimitrends.shared.*
 
 import org.junit.jupiter.api.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class SignalMetricPresentationTest {
@@ -34,64 +33,12 @@ class SignalMetricPresentationTest {
     }
 
     @Test
-    fun `shows validated model metadata instead of beta interval`() {
-        val result = TestScanResult.create().copy(
-            continuationProbability = 0.64,
-            predictionSource = "LOGISTIC",
-            predictionModelVersion = 7,
-            predictionSamples = 420
-        )
-
-        val metric = SignalMetricPresentation.outcome(result)
-
-        assertEquals("Model 64%", metric.label)
-        assertTrue(metric.details.contains("model #7", ignoreCase = true))
-        assertTrue(metric.details.contains("420"))
-        assertFalse(metric.details.contains("95% interval"))
-    }
-
-    @Test
     fun `high anomaly is not presented as a trading recommendation`() {
         val metric = SignalMetricPresentation.strength(TestScanResult.create(anomalyScore = 4.2))
 
-        assertTrue(metric.label.endsWith("%"))
+        assertEquals("4.2", metric.label)
         assertTrue(metric.details.contains("not a buy/sell recommendation"))
         assertTrue(metric.details.contains("does not predict direction"))
-    }
-
-    @Test
-    fun `outcome combines net return probability and uncertainty`() {
-        val result = TestScanResult.create().copy(
-            continuationProbability = 0.58,
-            calibrationSamples = 67,
-            continuationLowerBound = 0.46,
-            continuationUpperBound = 0.69,
-            medianNetReturnPercent = 0.08,
-            lowerQuartileNetReturnPercent = -0.24,
-            upperQuartileNetReturnPercent = 0.31,
-            medianFavorableExcursionPercent = 0.42,
-            medianAdverseExcursionPercent = -0.27
-        )
-
-        val metric = SignalMetricPresentation.outcome(result)
-
-        assertEquals("+0.08% · 58%", metric.label)
-        assertTrue(metric.details.contains("95% interval 46–69%"))
-        assertTrue(metric.details.contains("Median adverse excursion: -0.27%"))
-    }
-
-    @Test
-    fun `shows a preliminary beta percentage before the sample is representative`() {
-        val result = TestScanResult.create().copy(
-            continuationProbability = 0.60,
-            calibrationSamples = 3,
-            calibrationHorizonMinutes = 10
-        )
-
-        val metric = SignalMetricPresentation.outcome(result)
-
-        assertEquals("Beta 60%", metric.label)
-        assertTrue(metric.details.contains("not a validated model"))
     }
 
     @Test

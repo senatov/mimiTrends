@@ -57,7 +57,6 @@ internal object AboutDialog {
                     JFreeChart 1.5.6 — LGPL 2.1 or later
                     JFreeChart-FX 2.0.2 — LGPL 2.1 or later
                     SQLite JDBC 3.50.3.0 — Apache License 2.0
-                    Smile Core 6.2.5 — Apache License 2.0
                     Jackson Databind 2.22.1 — Apache License 2.0
                     SLF4J API 2.0.17 — MIT License
                     Apache Log4j 2.26.1 — Apache License 2.0

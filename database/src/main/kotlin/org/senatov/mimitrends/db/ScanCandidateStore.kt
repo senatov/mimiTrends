@@ -2,23 +2,18 @@
 
 package org.senatov.mimitrends.db
 
-import org.senatov.mimitrends.model.ResearchFeatures
 import org.senatov.mimitrends.model.ScanResult
 import java.sql.Connection
 import java.sql.Types
 import java.time.Instant
 
-internal class ScanCandidateStore(
-    private val connection: Connection,
-    private val researchSamples: ResearchSampleStore
-) {
+internal class ScanCandidateStore(private val connection: Connection) {
     fun record(
         runId: Long,
         symbol: String,
         result: ScanResult?,
         rejectionReason: String?,
-        source: String,
-        researchFeatures: ResearchFeatures?
+        source: String
     ) {
         val evaluatedAt = Instant.now().epochSecond
         val currency = result?.let {
@@ -55,7 +50,6 @@ internal class ScanCandidateStore(
             if (currency != null) statement.setLong(24, currency.fxRateEpoch) else statement.setNull(24, Types.INTEGER)
             statement.executeUpdate()
         }
-        researchFeatures?.let { researchSamples.record(runId, symbol, result, it, source) }
     }
 
     private fun metric(statement: java.sql.PreparedStatement, index: Int, value: Double?) {

@@ -48,23 +48,15 @@ internal object WatchScorePresentation {
         val freshness = exp(-result.signalAgeMinutes.coerceAtLeast(0) / FRESHNESS_DECAY_MINUTES)
         val timing = entryTiming(result)
         val volume = volumeConfirmation(result)
-        val outcome = outcomeEvidence(result)
-        val components = Components(structure, strength, freshness, timing, volume, outcome)
+        val components = Components(structure, strength, freshness, timing, volume)
         var value = (components.weightedTotal * 100.0).roundToInt().coerceIn(0, 100)
 
         val volumeConfirmed = hasSupportiveVolume(result)
-        val outcomeConfirmed = hasRepresentativeOutcome(result)
-        if (!volumeConfirmed && !outcomeConfirmed) value = value.coerceAtMost(59)
+        if (!volumeConfirmed) value = value.coerceAtMost(59)
         val spread = executableSpreadPercent(result)
         if (spread == null) value = value.coerceAtMost(59)
         else if (spread >= PROHIBITIVE_SPREAD_PERCENT) value = value.coerceAtMost(29)
         else if (spread >= EXPENSIVE_SPREAD_PERCENT) value = value.coerceAtMost(49)
-        if (result.lowerQuartileNetReturnPercent.isFinite() && result.lowerQuartileNetReturnPercent <= 0.0) {
-            value = value.coerceAtMost(59)
-        }
-        if (outcomeConfirmed && result.continuationLowerBound < MIN_BUY_OUTCOME_LOWER_BOUND) {
-            value = value.coerceAtMost(59)
-        }
         if (isBullish(result) && result.recentThreeMinutePercent.isFinite()) {
             if (result.recentThreeMinutePercent <= NEGATIVE_THREE_MINUTE_PERCENT) value = value.coerceAtMost(29)
             else if (result.recentThreeMinutePercent <= 0.0) value = value.coerceAtMost(49)
@@ -103,7 +95,7 @@ internal object WatchScorePresentation {
             value >= 35 -> "#c06b22"
             else -> "#b23b48"
         }
-        return WatchScore(value, color, details(result, value, components, volumeConfirmed, outcomeConfirmed, spread))
+        return WatchScore(value, color, details(result, value, components, volumeConfirmed, spread))
     }
 
     private fun structureScore(source: String): Double = when {
@@ -121,8 +113,7 @@ internal object WatchScorePresentation {
     }
 
     private fun historicalStrength(result: ScanResult): Double =
-        if (result.rankingPercentile.isFinite()) (result.rankingPercentile / 10.0).coerceIn(0.0, 1.0)
-        else result.anomalyScore.coerceAtLeast(0.0).let { it / (it + ANOMALY_HALF_SATURATION) }
+        result.anomalyScore.coerceAtLeast(0.0).let { it / (it + ANOMALY_HALF_SATURATION) }
 
     private fun entryTiming(result: ScanResult): Double {
         val excessMove = (result.windowChangePercent - FREE_ENTRY_MOVE_PERCENT).coerceAtLeast(0.0)
@@ -141,35 +132,21 @@ internal object WatchScorePresentation {
         return listOfNotNull(relative, anomaly).maxOrNull() ?: MISSING_EVIDENCE_SCORE
     }
 
-    private fun outcomeEvidence(result: ScanResult): Double =
-        if (hasRepresentativeOutcome(result)) {
-            result.continuationLowerBound.takeIf(Double::isFinite)
-                ?: result.continuationProbability.coerceIn(0.0, 1.0)
-        } else MISSING_EVIDENCE_SCORE
-
     private fun hasSupportiveVolume(result: ScanResult): Boolean =
         result.relativeVolume.takeIf(Double::isFinite)?.let { it >= MIN_SUPPORTIVE_RELATIVE_VOLUME } == true ||
                 result.volumeAnomaly.takeIf(Double::isFinite)?.let { it >= MIN_SUPPORTIVE_VOLUME_Z } == true
-
-    private fun hasRepresentativeOutcome(result: ScanResult): Boolean =
-        result.continuationProbability.isFinite() && (
-                result.continuationLowerBound.isFinite() && result.continuationUpperBound.isFinite() ||
-                        result.predictionSource == "LOGISTIC" && result.predictionSamples >= MIN_MODEL_SAMPLES
-                )
 
     private fun details(
         result: ScanResult,
         value: Int,
         components: Components,
         volumeConfirmed: Boolean,
-        outcomeConfirmed: Boolean,
         spreadPercent: Double?
     ): String = "Entry readiness: $value% (heuristic, not profit probability).\n" +
-            "Structure %.0f%% · strength %.0f%% · freshness %.0f%% · timing %.0f%% · volume %.0f%% · outcomes %.0f%%\n".format(
+            "Structure %.0f%% · strength %.0f%% · freshness %.0f%% · timing %.0f%% · volume %.0f%%\n".format(
                 components.structure * 100, components.strength * 100, components.freshness * 100,
-                components.timing * 100, components.volume * 100, components.outcome * 100
-            ) + "Volume confirmed: ${if (volumeConfirmed) "yes" else "no"} · representative outcomes: " +
-            (if (outcomeConfirmed) "yes" else "no") + " · executable spread: " +
+                components.timing * 100, components.volume * 100
+            ) + "Volume confirmed: ${if (volumeConfirmed) "yes" else "no"} · executable spread: " +
             (spreadPercent?.let { "%.2f%%".format(it) } ?: "unavailable") + recentDynamicsText(result) +
             entryQualityText(result)
 
@@ -209,12 +186,11 @@ internal object WatchScorePresentation {
         val strength: Double,
         val freshness: Double,
         val timing: Double,
-        val volume: Double,
-        val outcome: Double
+        val volume: Double
     ) {
         val weightedTotal: Double
-            get() = structure * 0.30 + strength * 0.20 + freshness * 0.15 +
-                    timing * 0.15 + volume * 0.10 + outcome * 0.10
+            get() = structure * 0.34 + strength * 0.22 + freshness * 0.17 +
+                    timing * 0.16 + volume * 0.11
     }
 
     private const val ANOMALY_HALF_SATURATION = 3.0
@@ -224,7 +200,6 @@ internal object WatchScorePresentation {
     private const val MISSING_EVIDENCE_SCORE = 0.40
     private const val MIN_SUPPORTIVE_RELATIVE_VOLUME = 1.20
     private const val MIN_SUPPORTIVE_VOLUME_Z = 1.0
-    private const val MIN_MODEL_SAMPLES = 30
     private const val POOR_TIMING_THRESHOLD = 0.50
     private const val FAIR_TIMING_THRESHOLD = 0.70
     private const val AGING_SIGNAL_MINUTES = 10
@@ -232,7 +207,6 @@ internal object WatchScorePresentation {
     private const val EARLY_REVERSAL_MINUTES = 30L
     private const val EXPENSIVE_SPREAD_PERCENT = 0.12
     private const val PROHIBITIVE_SPREAD_PERCENT = 0.30
-    private const val MIN_BUY_OUTCOME_LOWER_BOUND = 0.50
     private const val NEGATIVE_THREE_MINUTE_PERCENT = -0.05
     private const val NEGATIVE_FIVE_MINUTE_PERCENT = -0.08
     private const val CYCLICAL_DIRECTION_CHANGES = 3

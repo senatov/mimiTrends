@@ -23,28 +23,6 @@ data class CorporateAction(
     val source: String
 )
 
-data class AggregatedBar(
-    val symbol: String,
-    val resolutionMinutes: Int,
-    val bucketEpochSeconds: Long,
-    val open: Double,
-    val high: Double,
-    val low: Double,
-    val close: Double,
-    val volume: Double
-)
-
-data class AnalyticsStats(
-    val instruments: Long,
-    val aggregateBars: Long,
-    val scanRuns: Long,
-    val scanCandidates: Long,
-    val baselines: Long,
-    val outcomes: Long,
-    val brokerTransactions: Long,
-    val linkedBrokerTransactions: Long
-)
-
 data class TodayDetection(
     val symbol: String,
     val signal: String,
@@ -53,60 +31,6 @@ data class TodayDetection(
     val publishedCycles: Int,
     val bestScore: Double,
     val largestMovePercent: Double
-)
-
-data class WalkForwardResearchReport(
-    val horizonMinutes: Int,
-    val frictionPercent: Double,
-    val outcomeSamples: Int,
-    val evaluatedSamples: Int,
-    val metrics: List<WalkForwardMetric>
-)
-
-data class WalkForwardMetric(
-    val family: String,
-    val direction: Int,
-    val samples: Int,
-    val distinctDays: Int,
-    val predictedWinRate: Double,
-    val actualWinRate: Double,
-    val brierScore: Double,
-    val averageNetReturnPercent: Double
-)
-
-data class ResearchBackfillOutcome(
-    val horizonMinutes: Int,
-    val observedPrice: Double,
-    val returnPercent: Double,
-    val elapsedMinutes: Double,
-    val maximumReturnPercent: Double,
-    val minimumReturnPercent: Double,
-    val observedEpochSeconds: Long
-)
-
-data class ResearchBackfillSample(
-    val result: org.senatov.mimitrends.model.ScanResult?,
-    val features: org.senatov.mimitrends.model.ResearchFeatures,
-    val outcomes: List<ResearchBackfillOutcome>
-)
-
-data class DownsideSafetyCalibration(
-    val probability: Double,
-    val confidence: Int,
-    val samples: Int,
-    val distinctDays: Int,
-    val horizonMinutes: Int,
-    val maximumAcceptableDrawdownPercent: Double
-)
-
-data class PredictiveTrainingResult(
-    val horizonMinutes: Int,
-    val status: String,
-    val trainingSamples: Int,
-    val validationSamples: Int,
-    val modelBrier: Double,
-    val baselineBrier: Double,
-    val reason: String? = null
 )
 
 data class BrokerTransaction(

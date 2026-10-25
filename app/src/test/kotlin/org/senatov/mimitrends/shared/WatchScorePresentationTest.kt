@@ -54,14 +54,12 @@ class WatchScorePresentationTest {
     }
 
     @Test
-    fun `strong rise without volume or outcome confirmation remains wait`() {
+    fun `strong rise without volume confirmation remains wait`() {
         val score = WatchScorePresentation.calculate(
             TestScanResult.create(anomalyScore = 4.56, signalSource = "Steady rise ↑").copy(
                 windowChangePercent = 0.94,
                 relativeVolume = Double.NaN,
-                volumeAnomaly = Double.NaN,
-                continuationProbability = Double.NaN,
-                calibrationSamples = 0
+                volumeAnomaly = Double.NaN
             )
         )
 
@@ -90,11 +88,7 @@ class WatchScorePresentationTest {
         val score = WatchScorePresentation.calculate(
             TestScanResult.create(anomalyScore = 6.0, signalSource = "Steady rise ↑").copy(
                 windowChangePercent = 1.10,
-                relativeVolume = 3.0,
-                continuationProbability = 0.70,
-                continuationLowerBound = 0.60,
-                continuationUpperBound = 0.78,
-                calibrationSamples = 40
+                relativeVolume = 3.0
             )
         )
 
@@ -164,21 +158,6 @@ class WatchScorePresentationTest {
 
         assertTrue(score.value <= 29)
         assertTrue(score.value < 35)
-    }
-
-    @Test
-    fun `weak calibrated downside cannot be presented as buy`() {
-        val score = WatchScorePresentation.calculate(
-            TestScanResult.create(signalSource = "Steady rise ↑").copy(
-                relativeVolume = 3.0, bidPrice = 100.0, askPrice = 100.04,
-                continuationProbability = 0.62, continuationLowerBound = 0.44,
-                continuationUpperBound = 0.74, calibrationSamples = 40,
-                lowerQuartileNetReturnPercent = -0.08
-            )
-        )
-
-        assertTrue(score.value <= 59)
-        assertTrue(score.value < 67)
     }
 
     @Test

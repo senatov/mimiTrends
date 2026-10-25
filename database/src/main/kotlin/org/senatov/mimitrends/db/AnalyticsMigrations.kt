@@ -169,6 +169,17 @@ internal object AnalyticsMigrations {
         ),
         20 to listOf(
             "DROP INDEX IF EXISTS idx_outcomes_symbol_time"
+        ),
+        21 to listOf(
+            "DROP TABLE IF EXISTS research_excursions",
+            "DROP TABLE IF EXISTS research_outcomes",
+            "DROP TABLE IF EXISTS research_samples",
+            "DROP TABLE IF EXISTS predictive_models",
+            "DROP TABLE IF EXISTS signal_excursions",
+            "DROP TABLE IF EXISTS signal_outcomes",
+            "DROP TABLE IF EXISTS aggregate_bars",
+            "DROP TABLE IF EXISTS baseline_stats",
+            "DROP TABLE IF EXISTS trading_sessions"
         )
     )
 }
