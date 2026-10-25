@@ -99,9 +99,15 @@ internal class DuckDbAnalyticsStore private constructor(
     }
 
     fun applyRetention(nowEpoch: Long) = lock.withLock {
-        connection.prepareStatement("DELETE FROM aggregate_bars WHERE bucket_epoch<?").use { statement ->
-            statement.setLong(1, nowEpoch - DUCK_AGGREGATE_RETENTION_DAYS * 86_400L)
-            statement.executeUpdate()
+        val cutoff = nowEpoch - HISTORY_RETENTION_DAYS * 86_400L
+        listOf(
+            "aggregate_bars" to "bucket_epoch", "research_samples" to "observed_epoch",
+            "research_outcomes" to "observed_at"
+        ).forEach { (table, column) ->
+            connection.prepareStatement("DELETE FROM $table WHERE $column < ?").use { statement ->
+                statement.setLong(1, cutoff)
+                statement.executeUpdate()
+            }
         }
         connection.createStatement().use { it.execute("CHECKPOINT") }
     }
@@ -199,7 +205,7 @@ internal class DuckDbAnalyticsStore private constructor(
         private const val BATCH_SIZE = 2_000
         private const val RESEARCH_SYNC_INTERVAL_MILLIS = 60_000L
         private const val OUTCOME_RESYNC_SECONDS = 300L
-        private const val DUCK_AGGREGATE_RETENTION_DAYS = 730L
+        private const val HISTORY_RETENTION_DAYS = 7L
         private const val RESEARCH_SAMPLE_COLUMN_COUNT = 33
         private const val RESEARCH_OUTCOME_COLUMN_COUNT = 8
         private const val AGGREGATE_BAR_COUNT = "SELECT COUNT(*) FROM aggregate_bars"

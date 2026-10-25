@@ -10,7 +10,12 @@ internal const val UPSERT_SQL = """INSERT INTO minute_bars(symbol, minute_epoch,
     source_currency, currency_status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(symbol, minute_epoch) DO UPDATE SET open=excluded.open, high=excluded.high, low=excluded.low,
     close=excluded.close, volume=excluded.volume, volume_status=excluded.volume_status,
-    source_currency=excluded.source_currency, currency_status=excluded.currency_status"""
+    source_currency=excluded.source_currency, currency_status=excluded.currency_status
+    WHERE minute_bars.open IS NOT excluded.open OR minute_bars.high IS NOT excluded.high
+       OR minute_bars.low IS NOT excluded.low OR minute_bars.close IS NOT excluded.close
+       OR minute_bars.volume IS NOT excluded.volume OR minute_bars.volume_status IS NOT excluded.volume_status
+       OR minute_bars.source_currency IS NOT excluded.source_currency
+       OR minute_bars.currency_status IS NOT excluded.currency_status"""
 internal const val UPSERT_PROFILE_SQL = """INSERT INTO company_profiles(symbol, name, exchange, logo_url, logo, updated_at)
     VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(symbol) DO UPDATE SET name=excluded.name, exchange=excluded.exchange,
     logo_url=excluded.logo_url, logo=excluded.logo, updated_at=excluded.updated_at"""

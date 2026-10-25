@@ -279,7 +279,6 @@ class MainController(
         WorkspaceAppearance.apply(appLayers, scannerCriteria.tableAppearance)
         trendChart.setDarkTheme(scannerCriteria.tableAppearance.theme == UiTheme.DARK)
         apiKey?.takeIf(String::isNotBlank)?.let(::restartFinnhubLive)
-        analytics.applyRetention()
         DatabaseStartupMaintenance.schedule(analytics, batchScheduler, log)
         batchScheduler.execute {
             val saved = resultDeduplicator.deduplicate(
@@ -310,6 +309,7 @@ class MainController(
         observationUiBridge.close()
         try {
             shortMoveRefresh.close()
+            shortMovePanel.close()
             scalableLogin.close()
             importExecutor.shutdownNow()
             lookupExecutor.shutdownNow()

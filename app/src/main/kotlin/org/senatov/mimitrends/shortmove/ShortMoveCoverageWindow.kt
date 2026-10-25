@@ -17,7 +17,7 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.concurrent.Executors
 
-internal class ShortMoveCoverageWindow(private val openExternal: (String) -> Unit) {
+internal class ShortMoveCoverageWindow(private val openExternal: (String) -> Unit) : AutoCloseable {
     private val geometry = WindowGeometryService(
         "recent-coverage", 520.0, 390.0, minWidth = 360.0, minHeight = 240.0
     )
@@ -27,6 +27,11 @@ internal class ShortMoveCoverageWindow(private val openExternal: (String) -> Uni
     }
     private val clock = DateTimeFormatter.ofPattern("dd MMM yy HH:mm")
         .withZone(ZoneId.systemDefault())
+
+    override fun close() {
+        executor.shutdownNow()
+    }
+
     fun show(anchor: javafx.scene.Node, symbol: String, companyName: String) {
         val content = VBox(8.0).apply {
             padding = Insets(12.0)

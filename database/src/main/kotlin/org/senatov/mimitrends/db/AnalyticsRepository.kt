@@ -230,19 +230,45 @@ class AnalyticsRepository(
     ): List<TodayDetection> = locked { todayDetections.load(now, zone) }
 
     fun applyRetention(nowEpoch: Long = Instant.now().epochSecond) = locked {
-        connection.prepareStatement("DELETE FROM minute_bars WHERE minute_epoch < ?").use { it.setLong(1, nowEpoch - RAW_RETENTION_DAYS * 86_400L); it.executeUpdate() }
-        connection.prepareStatement("DELETE FROM provider_minute_bars WHERE minute_epoch < ?").use { it.setLong(1, nowEpoch - PROVIDER_RETENTION_DAYS * 86_400L); it.executeUpdate() }
-        if (duckAnalytics.aggregateArchiveVerified(connection)) {
-            database.backupForMigration("duckdb-aggregate-archive")
-            connection.prepareStatement("DELETE FROM aggregate_bars WHERE bucket_epoch < ?").use {
-                it.setLong(1, nowEpoch - SQLITE_AGGREGATE_TAIL_DAYS * 86_400L)
-                it.executeUpdate()
+        val cutoff = nowEpoch - HISTORY_RETENTION_DAYS * 86_400L
+        transaction {
+            deleteBefore("minute_bars", "minute_epoch", cutoff)
+            deleteBefore("provider_minute_bars", "minute_epoch", cutoff)
+            deleteBefore("provider_quotes", "observed_at", cutoff)
+            deleteBefore("aggregate_bars", "bucket_epoch", cutoff)
+            deleteBefore("research_samples", "observed_epoch", cutoff)
+            connection.prepareStatement(
+                """UPDATE broker_transactions SET linked_run_id=NULL
+                WHERE linked_run_id IN (SELECT id FROM scan_runs WHERE started_at < ?)"""
+            ).use { statement ->
+                statement.setLong(1, cutoff)
+                statement.executeUpdate()
             }
+            deleteBefore("scan_runs", "started_at", cutoff)
+            deleteBefore("curve_candidates", "end_epoch", cutoff)
+            deleteBefore("trading_sessions", "close_epoch", cutoff)
+            deleteBefore("universe_membership", "selection_date", cutoff, date = true)
+            deleteBefore("baseline_stats", "updated_at", cutoff)
+            deleteBefore("predictive_models", "trained_at", cutoff)
         }
         duckAnalytics.applyRetention(nowEpoch)
-        connection.prepareStatement("DELETE FROM scan_runs WHERE started_at < ?").use { it.setLong(1, nowEpoch - SCAN_RETENTION_DAYS * 86_400L); it.executeUpdate() }
         database.optimize()
-        if (database.compactIfWorthwhile()) log.info(LogTag.DB, "SQLite storage compacted after DuckDB archival")
+        if (database.compactIfWorthwhile()) log.info(LogTag.DB, "SQLite storage compacted after history retention")
+    }
+
+    private fun deleteBefore(table: String, column: String, cutoff: Long, date: Boolean = false) {
+        if (table == "curve_candidates") {
+            val exists = connection.prepareStatement("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?").use { statement ->
+                statement.setString(1, table)
+                statement.executeQuery().use { it.next() }
+            }
+            if (!exists) return
+        }
+        connection.prepareStatement("DELETE FROM $table WHERE $column < ?").use { statement ->
+            if (date) statement.setString(1, Instant.ofEpochSecond(cutoff).atZone(ZoneId.of("UTC")).toLocalDate().toString())
+            else statement.setLong(1, cutoff)
+            statement.executeUpdate()
+        }
     }
 
     fun stats(): AnalyticsStats = locked {
@@ -348,10 +374,7 @@ class AnalyticsRepository(
     private companion object {
         const val CURRENCY_BACKFILL_MIGRATION = 16
         const val OBSOLETE_TABLE_CLEANUP_MIGRATION = 19
-        const val RAW_RETENTION_DAYS = 90
-        const val PROVIDER_RETENTION_DAYS = 90
-        const val SQLITE_AGGREGATE_TAIL_DAYS = 45L
-        const val SCAN_RETENTION_DAYS = 180
+        const val HISTORY_RETENTION_DAYS = 7L
         const val OUTCOME_TRACKING_BARS = 35
         const val UPSERT_INSTRUMENT = """INSERT INTO instrument_metadata(symbol, name, exchange, currency, timezone, isin, wkn, aliases, tradable, updated_at)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(symbol) DO UPDATE SET name=excluded.name, exchange=excluded.exchange,

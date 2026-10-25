@@ -20,6 +20,57 @@ import kotlin.test.assertTrue
 
 class MarketRepositoryTest {
     @Test
+    fun `unchanged minute bars do not rewrite SQLite rows`() {
+        val database = Files.createTempDirectory("mimitrends-bar-write-audit").resolve("test.db")
+        MarketRepository(database).use { repository ->
+            DriverManager.getConnection("jdbc:sqlite:$database").use { connection ->
+                connection.createStatement().use { statement ->
+                    statement.execute("CREATE TABLE write_audit(updates INTEGER NOT NULL)")
+                    statement.execute("INSERT INTO write_audit VALUES (0)")
+                    statement.execute(
+                        """CREATE TRIGGER count_bar_updates AFTER UPDATE ON minute_bars
+                        BEGIN UPDATE write_audit SET updates=updates+1; END"""
+                    )
+                }
+            }
+            val original = MinuteBar("AAPL", 60L, 100.0, 101.0, 99.0, 100.5, 1_000.0)
+            repository.upsertMinuteBar(original)
+            repository.flushPending()
+            repository.upsertMinuteBar(original)
+            repository.flushPending()
+            repository.upsertMinuteBar(original.copy(close = 100.7))
+            repository.flushPending()
+            DriverManager.getConnection("jdbc:sqlite:$database").use { connection ->
+                connection.createStatement().use { statement ->
+                    statement.executeQuery("SELECT updates FROM write_audit").use { rows ->
+                        assertTrue(rows.next())
+                        assertEquals(1, rows.getInt(1))
+                    }
+                }
+            }
+        }
+    }
+
+    @Test
+    fun `pending minute bars flush after a write`() {
+        val database = Files.createTempDirectory("mimitrends-bar-flush").resolve("test.db")
+        MarketRepository(database).use { repository ->
+            repository.upsertMinuteBar(MinuteBar("AAPL", 60L, 100.0, 100.0, 100.0, 100.0, 1.0))
+            val deadline = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(5)
+            var stored = false
+            while (!stored && System.nanoTime() < deadline) {
+                DriverManager.getConnection("jdbc:sqlite:$database").use { connection ->
+                    connection.createStatement().use { statement ->
+                        statement.executeQuery("SELECT 1 FROM minute_bars WHERE symbol='AAPL'").use { stored = it.next() }
+                    }
+                }
+                if (!stored) Thread.sleep(50)
+            }
+            assertTrue(stored)
+        }
+    }
+
+    @Test
     fun `searches the stored instrument catalog and persists the user watchlist`() {
         val database = Files.createTempDirectory("mimitrends-instrument-search").resolve("test.db")
         MarketRepository(database).use { repository ->

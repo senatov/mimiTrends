@@ -12,6 +12,7 @@ import org.senatov.mimitrends.services.*
 import org.senatov.mimitrends.shared.*
 
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.receiveAsFlow
 import org.senatov.mimitrends.model.ScannerCriteria
@@ -32,7 +33,7 @@ internal fun interface MarketObservationSink {
 }
 
 internal class MarketObservationBus : MarketObservationSink, AutoCloseable {
-    private val channel = Channel<MarketPriceObservation>(Channel.UNLIMITED)
+    private val channel = Channel<MarketPriceObservation>(256, onBufferOverflow = BufferOverflow.DROP_OLDEST)
 
     val observations: Flow<MarketPriceObservation> = channel.receiveAsFlow()
 

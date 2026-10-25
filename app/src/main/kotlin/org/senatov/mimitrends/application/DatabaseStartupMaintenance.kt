@@ -14,12 +14,14 @@ import org.senatov.mimitrends.shared.*
 import org.senatov.mimitrends.db.AnalyticsRepository
 import org.senatov.mimitrends.log.LogTag
 import org.slf4j.Logger
-import java.util.concurrent.Executor
+import java.util.concurrent.ScheduledExecutorService
+import java.util.concurrent.TimeUnit
 
 internal object DatabaseStartupMaintenance {
-    fun schedule(analytics: AnalyticsRepository, executor: Executor, log: Logger) {
+    fun schedule(analytics: AnalyticsRepository, executor: ScheduledExecutorService, log: Logger) {
         executor.execute {
             runCatching {
+                analytics.applyRetention()
                 val integrity = analytics.quickCheck()
                 check(integrity.equals("ok", ignoreCase = true)) { "SQLite quick_check failed: $integrity" }
                 log.info(LogTag.DB, "database integrity check completed result={}", integrity)
@@ -36,5 +38,9 @@ internal object DatabaseStartupMaintenance {
                 log.error(LogTag.DB, "database startup maintenance failed", error)
             }
         }
+        executor.scheduleWithFixedDelay({
+            runCatching { analytics.applyRetention() }
+                .onFailure { error -> log.error(LogTag.DB, "daily history retention failed", error) }
+        }, 1, 1, TimeUnit.DAYS)
     }
 }

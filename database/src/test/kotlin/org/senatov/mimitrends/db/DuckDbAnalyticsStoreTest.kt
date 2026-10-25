@@ -9,6 +9,25 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 class DuckDbAnalyticsStoreTest {
+    @Test
+    fun `retains only the last seven days of archived analytics`() {
+        val directory = Files.createTempDirectory("duckdb-retention")
+        val sqlitePath = directory.resolve("source.db")
+        DriverManager.getConnection("jdbc:sqlite:$sqlitePath").use { source ->
+            createSourceSchema(source)
+            source.createStatement().use { statement ->
+                statement.execute("INSERT INTO aggregate_bars VALUES('AAPL',60,1000,10,12,9,11,5000)")
+                statement.execute("INSERT INTO aggregate_bars VALUES('AAPL',60,1000000,10,12,9,11,5000)")
+            }
+            DuckDbAnalyticsStore.open(sqlitePath).use { duck ->
+                duck.synchronize(source)
+                duck.applyRetention(1_000_000)
+                assertEquals(1, duck.stats().aggregateBars)
+                assertEquals(1_000_000, duck.loadAggregatedBars("AAPL", 60, 0).single().bucketEpochSeconds)
+            }
+        }
+    }
+
     @Test fun `copies SQLite analytics and serves aggregate and downside queries`() {
         val directory = Files.createTempDirectory("duckdb-analytics")
         val sqlitePath = directory.resolve("source.db")

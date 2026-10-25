@@ -209,7 +209,8 @@ class AnalyticsRepositoryTest {
         }
     }
 
-    @Test fun `recovers interrupted scans and expires old provider observations`() {
+    @Test
+    fun `recovers interrupted scans and expires history after seven days`() {
         val path = Files.createTempDirectory("mimitrends-recovery").resolve("test.db")
         MarketRepository(path).close()
         AnalyticsRepository(path).close()
@@ -223,23 +224,47 @@ class AnalyticsRepositoryTest {
                      volume, volume_status, observed_at)
                     VALUES ('TRADEGATE', 'TEST.DE', 'DE0000000001', 'XGAT', 'EUR', 100,
                             10, 10, 10, 10, 0, 'MISSING', 100000)""")
+                statement.executeUpdate(
+                    """INSERT INTO scan_candidates
+                    (run_id, symbol, evaluated_at, accepted, published, source)
+                    VALUES (1, 'TEST.DE', 100, 1, 1, 'TEST')"""
+                )
+                statement.executeUpdate(
+                    """INSERT INTO broker_transactions
+                    (source, fingerprint, occurred_at, status, description, asset_type,
+                     transaction_type, shares, price, amount, fee, tax, currency, imported_at,
+                     linked_run_id, linked_symbol)
+                    VALUES ('TEST', 'one', 100, 'Executed', 'Test', 'Security', 'Buy',
+                            1, 10, -10, 0, 0, 'EUR', 100, 1, 'TEST.DE')"""
+                )
             }
         }
 
         val analytics = AnalyticsRepository(path)
-        analytics.applyRetention(nowEpoch = 100 + 91L * 86_400L)
+        DriverManager.getConnection("jdbc:sqlite:$path").use { connection ->
+            connection.createStatement().executeQuery("SELECT status, completed_at FROM scan_runs").use { result ->
+                assertTrue(result.next())
+                assertEquals("ABORTED", result.getString(1))
+                assertTrue(result.getLong(2) > 0L)
+            }
+        }
+        analytics.applyRetention(nowEpoch = 100 + 8L * 86_400L)
         analytics.close()
 
         DriverManager.getConnection("jdbc:sqlite:$path").use { connection ->
             connection.createStatement().use { statement ->
-                statement.executeQuery("SELECT status, completed_at FROM scan_runs").use { result ->
+                statement.executeQuery("SELECT COUNT(*) FROM scan_runs").use { result ->
                     assertTrue(result.next())
-                    assertEquals("ABORTED", result.getString(1))
-                    assertTrue(result.getLong(2) > 0L)
+                    assertEquals(0, result.getInt(1))
                 }
                 statement.executeQuery("SELECT COUNT(*) FROM provider_minute_bars").use { result ->
                     assertTrue(result.next())
                     assertEquals(0, result.getInt(1))
+                }
+                statement.executeQuery("SELECT linked_run_id, linked_symbol FROM broker_transactions").use { result ->
+                    assertTrue(result.next())
+                    assertEquals(null, result.getObject(1))
+                    assertEquals("TEST.DE", result.getString(2))
                 }
             }
         }

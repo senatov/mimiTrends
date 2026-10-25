@@ -50,7 +50,7 @@ class ShortMovePanel(
     private val watchlist: InstrumentWatchlistActions = InstrumentWatchlistActions(),
     openExternal: (String) -> Unit = {},
     private val onReview: (CurveCandidate, Boolean, (Throwable?) -> Unit) -> Unit = { _, _, _ -> }
-) : VBox(5.0) {
+) : VBox(5.0), AutoCloseable {
     private val coverageWindow = ShortMoveCoverageWindow(openExternal)
     private val rows = FXCollections.observableArrayList<ShortMove>()
     private val filteredRows = FilteredList(rows)
@@ -287,6 +287,7 @@ class ShortMovePanel(
     }
 
     internal fun savedColumnLayout(): String = columnLayout.capture(autoFitter.manuallySizedColumnIds())
+    override fun close() = coverageWindow.close()
     internal fun setAppearance(appearance: TableAppearance) {
         table.style = "-mimi-rapid-rise: ${appearance.rapidRiseColor};"
         table.refresh()

@@ -13,6 +13,8 @@ import org.senatov.mimitrends.shared.*
 
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.take
+import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.Test
 import kotlin.test.assertEquals
@@ -27,6 +29,19 @@ class MarketObservationBusTest {
         val received = async { bus.observations.first() }.await()
 
         assertEquals(observation, received)
+        bus.close()
+    }
+
+    @Test
+    fun `keeps recent UI observations when producer outruns collector`() = runBlocking {
+        val bus = MarketObservationBus()
+        repeat(300) { index ->
+            bus.publish(MarketPriceObservation("TRADEGATE", "HEN3.DE", index.toDouble(), index.toLong()))
+        }
+
+        val received = bus.observations.take(256).toList()
+        assertEquals(44L, received.first().observedAtMillis)
+        assertEquals(299L, received.last().observedAtMillis)
         bus.close()
     }
 

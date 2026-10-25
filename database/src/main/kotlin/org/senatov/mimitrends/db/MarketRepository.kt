@@ -13,8 +13,6 @@ import org.senatov.mimitrends.model.ProviderQuoteSnapshot
 import org.slf4j.LoggerFactory
 import java.nio.file.Path
 import java.sql.Connection
-import java.util.concurrent.Executors
-import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 
 class MarketRepository(
@@ -26,8 +24,8 @@ class MarketRepository(
     private val pendingLock = Any()
     private val pending = linkedMapOf<Pair<String, Long>, MinuteBar>()
     private val closed = AtomicBoolean(false)
-    private val writer = Executors.newSingleThreadScheduledExecutor { task ->
-        Thread(task, "mimitrends-sqlite-writer").apply { isDaemon = true }
+    private val barFlush = MinuteBarFlushScheduler(::flushSafely) {
+        synchronized(pendingLock) { pending.isNotEmpty() }
     }
     private val connection: Connection = database.connection
     private val companyProfiles = CompanyProfileStore(database)
@@ -36,14 +34,17 @@ class MarketRepository(
     init {
         log.debug(LogTag.DB, "init()")
         database.locked { migrate(it) }
-        writer.scheduleWithFixedDelay(::flushSafely, 1, 1, TimeUnit.SECONDS)
     }
 
     fun upsertMinuteBar(bar: MinuteBar) {
         log.trace(LogTag.DB, "upsertMinuteBar(symbol={}, minute={})", bar.symbol, bar.minuteEpochSeconds)
         check(!closed.get()) { "MarketRepository is closed" }
         val normalized = bar.copy(symbol = bar.symbol.trim().uppercase())
-        synchronized(pendingLock) { pending[normalized.symbol to normalized.minuteEpochSeconds] = normalized }
+        synchronized(pendingLock) {
+            check(!closed.get()) { "MarketRepository is closed" }
+            pending[normalized.symbol to normalized.minuteEpochSeconds] = normalized
+            barFlush.request()
+        }
     }
 
     fun loadMinuteBars(symbol: String, fromEpochSeconds: Long): List<MinuteBar> {
@@ -290,7 +291,7 @@ class MarketRepository(
     override fun close() {
         log.debug(LogTag.DB, "close()")
         if (!closed.compareAndSet(false, true)) return
-        writer.shutdown()
+        barFlush.close()
         runCatching { flushPending() }.onFailure { log.error(LogTag.DB, "final database flush failed", it) }
         database.close()
     }
