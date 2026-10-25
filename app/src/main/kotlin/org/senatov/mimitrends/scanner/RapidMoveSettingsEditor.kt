@@ -32,7 +32,7 @@ internal class RapidMoveSettingsEditor(current: RapidMoveSettings) {
             "Rapid rises",
             SettingsNavigation.row(
                 "Rise (%)",
-                "Minimum gain from a recent close to a minute-bar high. A rebound below the preceding high must also close above this threshold.",
+                "Minimum close-confirmed gain from a recent close; an isolated upper wick does not qualify.",
                 risePercent
             ),
             SettingsNavigation.row("Rise window (min)", "Maximum duration of the upward move.", riseWindow)
@@ -48,7 +48,7 @@ internal class RapidMoveSettingsEditor(current: RapidMoveSettings) {
             SettingsNavigation.row("Minimum price", "Reject low-priced instruments.", movePrice),
             SettingsNavigation.row("30-minute turnover", "Minimum reported price × volume across the last 30 minutes.", moveTurnover)
         ),
-        Label("Crashes require three continuous bars, two reported-volume bars, and acceleration for longer drops. Rises require two reported-volume bars; rebounds below an earlier high must close strongly. Both require three active bars in 30 minutes.").apply {
+        Label("Crashes require three continuous bars, two reported-volume bars, and acceleration for longer drops. Rises must close beyond the configured threshold. Both require three active bars in 30 minutes.").apply {
             isWrapText = true; styleClass += "settings-footnote"
         }
     ).apply { padding = Insets(18.0) }

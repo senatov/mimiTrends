@@ -56,14 +56,21 @@ class YahooFinanceClient(
     }
 
     fun resolveEquity(query: String): YahooResolvedEquity? {
+        return searchEquities(query).firstOrNull()
+    }
+
+    fun searchEquities(query: String): List<YahooResolvedEquity> {
         val encoded = URLEncoder.encode(query.trim(), StandardCharsets.UTF_8)
         val uri = URI.create("${ProviderUrls.get(ProviderUrl.YAHOO_PRIMARY)}/v1/finance/search?q=$encoded&quotesCount=8&newsCount=0")
         val response = sendWithRetry(request(uri))
         check(response.statusCode() == 200) { "Yahoo Finance search HTTP ${response.statusCode()}" }
-        return parseEquitySearch(response.body())
+        return parseEquitySearchResults(response.body())
     }
 
     internal fun parseEquitySearch(body: String): YahooResolvedEquity? =
+        parseEquitySearchResults(body).firstOrNull()
+
+    internal fun parseEquitySearchResults(body: String): List<YahooResolvedEquity> =
         mapper.readTree(body).path("quotes").mapNotNull { quote ->
             val symbol = quote.path("symbol").asText().trim().uppercase()
             val exchange = quote.path("exchange").asText().trim().uppercase()
@@ -71,7 +78,7 @@ class YahooFinanceClient(
             if (quote.path("quoteType").asText() != "EQUITY" || symbol.isBlank() ||
                 !isSupportedDiscoveryExchange(symbol, exchange)) null
             else YahooResolvedEquity(symbol, name.ifBlank { symbol }, exchange)
-        }.firstOrNull()
+        }.distinctBy(YahooResolvedEquity::symbol)
 
     private fun isSupportedDiscoveryExchange(symbol: String, exchange: String): Boolean =
         exchange in DISCOVERY_EXCHANGES && BLOCKED_SUFFIXES.none(symbol::endsWith)

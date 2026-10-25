@@ -15,8 +15,10 @@ import javafx.scene.control.TextField
 import javafx.scene.control.Button
 import javafx.scene.control.ContextMenu
 import javafx.scene.control.MenuItem
+import javafx.animation.PauseTransition
 import javafx.scene.input.KeyCode
 import javafx.scene.layout.HBox
+import javafx.util.Duration
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.atomic.AtomicLong
 
@@ -47,6 +49,7 @@ internal class TableSearchControl(
     private val clear = Button("×")
     private val suggestionMenu = ContextMenu()
     private val suggestionGeneration = AtomicLong()
+    private val suggestionDelay = PauseTransition(Duration.millis(300.0))
     val text: String get() = input.text.orEmpty()
 
     init {
@@ -82,20 +85,27 @@ internal class TableSearchControl(
             setOnAction { input.clear(); input.requestFocus() }
         }
         children += listOf(input, clear)
+        suggestionDelay.setOnFinished { requestSuggestions(input.text.orEmpty(), suggestionGeneration.get()) }
     }
 
     private fun updateSuggestions(value: String) {
-        val provider = suggestions ?: return
+        if (suggestions == null) return
         val query = value.trim()
-        val generation = suggestionGeneration.incrementAndGet()
+        suggestionGeneration.incrementAndGet()
+        suggestionDelay.stop()
         if (query.length < 2) {
             suggestionMenu.hide()
             return
         }
-        provider(query).whenComplete { matches, error ->
+        suggestionDelay.playFromStart()
+    }
+
+    private fun requestSuggestions(query: String, generation: Long) {
+        val provider = suggestions ?: return
+        provider(query.trim()).whenComplete { matches, error ->
             javafx.application.Platform.runLater {
-                if (generation != suggestionGeneration.get() || error != null || !input.isFocused) return@runLater
-                suggestionMenu.items.setAll(matches.orEmpty().map { match ->
+                if (generation != suggestionGeneration.get() || !input.isFocused) return@runLater
+                val available = matches.orEmpty().map { match ->
                     MenuItem(
                         "${match.name}  ·  ${match.symbol}" +
                                 match.exchange.takeIf(String::isNotBlank)?.let { "  ·  $it" }.orEmpty()
@@ -105,9 +115,13 @@ internal class TableSearchControl(
                             onSuggestionSelected(match)
                         }
                     }
+                }
+                suggestionMenu.items.setAll(available.ifEmpty {
+                    listOf(
+                        MenuItem(if (error == null) "No supported stock found" else "Stock lookup unavailable")
+                            .apply { isDisable = true })
                 })
-                if (suggestionMenu.items.isEmpty()) suggestionMenu.hide()
-                else if (!suggestionMenu.isShowing) suggestionMenu.show(input, javafx.geometry.Side.BOTTOM, 0.0, 3.0)
+                if (!suggestionMenu.isShowing) suggestionMenu.show(input, javafx.geometry.Side.BOTTOM, 0.0, 3.0)
             }
         }
     }

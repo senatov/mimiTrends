@@ -73,7 +73,14 @@ class MainController(
         discover = { weeklyMarketUniverse.symbols() + wallstreetOnlineDiscovery.discover() },
         categories = wallstreetOnlineDiscovery::categories
     )
-    private val userWatchlist: UserWatchlistController = UserWatchlistController(repository, dynamicUniverse, ::startScanner)
+    private val lookupExecutor = Executors.newSingleThreadExecutor { task ->
+        Thread(task, "mimitrends-instrument-lookup").apply { isDaemon = true }
+    }
+    private val userWatchlist: UserWatchlistController = UserWatchlistController(
+        repository, dynamicUniverse, ::startScanner,
+        { query -> yahooFinance.searchEquities(query).map { TableSearchSuggestion(it.symbol, it.name, it.exchange) } },
+        lookupExecutor
+    )
     private var profileService = CompanyProfileService(
         repository, apiKey?.let(::FinnhubProfileClient), persistentCompanyLogoClient(repository),
         onLogoLoaded = { profile ->
@@ -305,6 +312,7 @@ class MainController(
             shortMoveRefresh.close()
             scalableLogin.close()
             importExecutor.shutdownNow()
+            lookupExecutor.shutdownNow()
             ApplicationResourceCloser.close(
                 focusedSignals, priorityScanner, tradegateProvider, euronextProvider,
                 scalableProvider, langSchwarzProvider,

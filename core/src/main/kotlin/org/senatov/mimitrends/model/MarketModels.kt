@@ -142,11 +142,11 @@ data class TableAppearance(
 )
 
 data class RapidMoveSettings(
-    val crashPercent: Double = 0.25,
-    val crashWindowMinutes: Int = 4,
-    val sustainedCrashPercent: Double = 0.50,
+    val crashPercent: Double = 0.35,
+    val crashWindowMinutes: Int = 5,
+    val sustainedCrashPercent: Double = 0.55,
     val sustainedCrashWindowMinutes: Int = 15,
-    val risePercent: Double = 0.80,
+    val risePercent: Double = 0.60,
     val riseWindowMinutes: Int = 5,
     val minimumPrice: Double = 5.0,
     val minimumTurnover: Double = 250_000.0,

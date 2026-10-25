@@ -336,6 +336,8 @@ class ShortMovePanel(
     private fun pinSuggestion(suggestion: TableSearchSuggestion) {
         watchlist.add(suggestion.symbol)
         search.clear()
+        updateCaption.text = "Tracking ${suggestion.symbol} · waiting for a matching alert"
+        updateCaption.tooltip?.text = updateCaption.text
     }
 
     private fun requestCompanyName(move: ShortMove) {

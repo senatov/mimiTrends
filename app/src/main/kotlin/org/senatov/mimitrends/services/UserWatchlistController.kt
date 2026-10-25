@@ -13,11 +13,15 @@ import org.senatov.mimitrends.shared.*
 
 import org.senatov.mimitrends.db.MarketRepository
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.CompletableFuture
+import java.util.concurrent.Executor
 
 internal class UserWatchlistController(
     private val repository: MarketRepository,
     private val universe: DynamicMarketUniverse,
-    private val onChanged: () -> Unit
+    private val onChanged: () -> Unit,
+    private val searchRemote: (String) -> List<TableSearchSuggestion>,
+    private val lookupExecutor: Executor
 ) {
     val symbols: MutableSet<String> = ConcurrentHashMap.newKeySet<String>().apply {
         addAll(repository.loadUserWatchlist())
@@ -26,7 +30,7 @@ internal class UserWatchlistController(
     private val searchIndex = InstrumentSearchIndex(repository.loadInstrumentCatalog())
 
     val actions = InstrumentWatchlistActions(
-        search = { query -> java.util.concurrent.CompletableFuture.completedFuture(searchIndex.search(query)) },
+        search = ::search,
         add = ::add,
         remove = ::remove,
         contains = symbols::contains,
@@ -40,6 +44,14 @@ internal class UserWatchlistController(
     fun observe(observation: MarketPriceObservation) {
         liveSources[observation.symbol] = observation.provider
     }
+
+    private fun search(query: String): CompletableFuture<List<TableSearchSuggestion>> =
+        CompletableFuture.supplyAsync({
+            val local = searchIndex.search(query)
+            if (local.isNotEmpty()) return@supplyAsync local
+            val remote = searchRemote(query)
+            remote.distinctBy(TableSearchSuggestion::symbol).take(12)
+        }, lookupExecutor)
 
     private fun add(symbol: String) {
         val normalized = symbol.trim().uppercase()

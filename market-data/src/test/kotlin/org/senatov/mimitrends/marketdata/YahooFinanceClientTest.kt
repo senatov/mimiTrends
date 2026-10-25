@@ -68,4 +68,16 @@ class YahooFinanceClientTest {
 
         assertEquals("RACE", YahooFinanceClient().parseEquitySearch(json)?.symbol)
     }
+
+    @Test
+    fun `returns distinct supported equity suggestions`() {
+        val json = """{"quotes":[
+            {"symbol":"IFX.DE","quoteType":"EQUITY","exchange":"GER","longname":"Infineon Technologies"},
+            {"symbol":"IFX.DE","quoteType":"EQUITY","exchange":"GER","shortname":"Infineon"},
+            {"symbol":"IFX","quoteType":"EQUITY","exchange":"NMS","shortname":"Infineon ADR"},
+            {"symbol":"IFX-OPTION","quoteType":"OPTION","exchange":"NMS"}
+        ]}"""
+
+        assertEquals(listOf("IFX.DE", "IFX"), YahooFinanceClient().parseEquitySearchResults(json).map { it.symbol })
+    }
 }

@@ -114,23 +114,13 @@ internal object ShortMoveDetector {
                     it.minuteEpochSeconds in (end.minuteEpochSeconds - settings.riseWindowMinutes * 60L) until end.minuteEpochSeconds
                 }
                 val start = window.minByOrNull(MinuteBar::close) ?: return@mapNotNull null
-                if (start.close <= 0.0 || end.high <= 0.0) return@mapNotNull null
-                val change = percent(start.close, end.high)
+                if (start.close <= 0.0 || end.close <= 0.0) return@mapNotNull null
+                val change = percent(start.close, end.close)
                 if (change < settings.risePercent - PERCENT_COMPARISON_EPSILON) return@mapNotNull null
                 val eventBars = recent.filter { it.minuteEpochSeconds in start.minuteEpochSeconds..end.minuteEpochSeconds }
                 if (!hasReliableActivity(recent, eventBars, end, settings, MIN_RISE_EVENT_BARS)) return@mapNotNull null
-                val precedingHigh = recent.asSequence()
-                    .filter {
-                        it.minuteEpochSeconds in
-                                (start.minuteEpochSeconds - RISE_EVENT_LOOKBACK_MINUTES * 60L) until start.minuteEpochSeconds
-                    }
-                    .map(MinuteBar::high).maxOrNull()
-                // A close-confirmed rebound is useful even before it reclaims the earlier high.
-                if (precedingHigh != null && end.high <= precedingHigh &&
-                    percent(start.close, end.close) < settings.risePercent - PERCENT_COMPARISON_EPSILON
-                ) return@mapNotNull null
                 ShortMove(
-                    symbol, change, start.close, end.high, start.minuteEpochSeconds,
+                    symbol, change, start.close, end.close, start.minuteEpochSeconds,
                     end.minuteEpochSeconds, eventBars.size, ShortMovePattern.RAPID_RISE,
                     latestPrice = recent.last().close
                 )
@@ -151,11 +141,10 @@ internal object ShortMoveDetector {
     ): ShortMove? {
         val windowStart = end.minuteEpochSeconds - windowMinutes * 60L
         val window = bars.filter { it.minuteEpochSeconds in windowStart..end.minuteEpochSeconds }
-        val minimumStartEpoch = end.minuteEpochSeconds - (windowMinutes - 1L) * 60L
         val start = if (anchorAtPeak) {
             window.maxByOrNull(MinuteBar::close)
         } else {
-            window.lastOrNull { it.minuteEpochSeconds <= minimumStartEpoch }
+            window.firstOrNull()
         }
         if (start == null) return null
         val elapsedMinutes = (end.minuteEpochSeconds - start.minuteEpochSeconds) / 60L

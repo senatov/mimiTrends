@@ -9,12 +9,12 @@ import kotlin.test.assertTrue
 
 class ShortMoveDetectorTest {
     @Test
-    fun `detects rapid crash at zero point two five percent threshold`() {
+    fun `detects rapid crash at default close threshold`() {
         val now = 12_000L
-        val bars = prices("THRESHOLD", now, 100.0, 100.15, 99.90, 99.75)
+        val bars = prices("THRESHOLD", now, 100.0, 100.15, 99.90, 99.65)
         val result = ShortMoveDetector.rank(mapOf("THRESHOLD" to bars), now).single()
         assertEquals(ShortMovePattern.RAPID_CRASH, result.pattern)
-        assertEquals(-0.25, result.changePercent, 1e-9)
+        assertEquals(-0.35, result.changePercent, 1e-9)
     }
 
     @Test
@@ -65,17 +65,14 @@ class ShortMoveDetectorTest {
     }
 
     @Test
-    fun `detects an intraminute peak after the close falls back`() {
+    fun `ignores an intraminute upper wick without a confirming close`() {
         val now = 13_000L
-        val ordinary = prices("PLTR", now, 169.5, 169.7, 170.47)
+        val ordinary = prices("PLTR", now, 169.5, 169.7, 169.9)
         val bars = ordinary.toMutableList().apply {
             this[2] = this[2].copy(high = 172.6)
         }
 
-        val result = ShortMoveDetector.rank(mapOf("PLTR" to bars), now).single()
-        assertEquals(ShortMovePattern.RAPID_RISE, result.pattern)
-        assertEquals(172.6, result.close)
-        assertEquals(170.47, ShortMovePresentation.currentPrice(result))
+        assertTrue(ShortMoveDetector.rank(mapOf("PLTR" to bars), now).isEmpty())
     }
 
     @Test
@@ -232,7 +229,9 @@ class ShortMoveDetectorTest {
             bar("NEM.DE", now, 63.375)
         )
 
-        assertTrue(ShortMoveDetector.rank(mapOf("NEM.DE" to bars), now).isEmpty())
+        assertTrue(
+            ShortMoveDetector.rank(mapOf("NEM.DE" to bars), now)
+                .none { it.pattern == ShortMovePattern.RAPID_CRASH })
     }
 
     @Test
